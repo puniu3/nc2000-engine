@@ -408,9 +408,8 @@ impl Battle {
                 if let ChosenAction::Move { pokemon, target_loc, move_id, .. } = &action {
                     if dex
                         .move_static(*move_id)
-                        .callbacks
-                        .iter()
-                        .any(|c| c == "beforeTurnCallback")
+                        .cb_mask
+                        .has(dex.known.before_turn_callback)
                     {
                         let speed = self.get_pokemon_action_speed(dex, *pokemon) as f64;
                         let mut btm_loc = *target_loc;

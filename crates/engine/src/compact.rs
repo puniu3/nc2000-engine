@@ -735,6 +735,12 @@ pub struct StaticMonSpec {
     pub is_leftovers: bool,
     pub is_brightpowder: bool,
     pub is_focusband: bool,
+    pub is_mintberry: bool,
+    pub is_miracleberry: bool,
+    pub is_goldberry: bool,
+    pub is_berry: bool,
+    pub is_mysteryberry: bool,
+    pub is_scope_lens: bool,
     pub moves: [MoveId; 4],
     pub max_pp: [u8; 4],
     pub num_moves: u8,
@@ -766,6 +772,28 @@ pub struct CompactMoveSpec {
     pub is_substitute: bool,
     pub drain_half: bool,
     pub recoil_quarter: bool,
+    /// Primary status inflicted on target (`0` = None, else `Status as u8`).
+    pub primary_status: u8,
+    /// Primary volatile inflicted on target (`vol_bit` mask).
+    pub primary_vol: u16,
+    /// Secondary chance out of 256 (`0` = None).
+    pub sec_chance_256: u8,
+    /// Secondary status inflicted on target (`0` = None, else `Status as u8`).
+    pub sec_status: u8,
+    /// Secondary volatile inflicted on target (`vol_bit` mask).
+    pub sec_vol: u16,
+    /// Secondary stat stage delta (`(stat_idx, delta)` or `(0xFF, 0)`).
+    pub sec_boost: (u8, i8),
+    /// Self-targeted or target-applied stat boosts (`[(stat_idx_or_ff, delta); 3]`).
+    pub boosts: [(u8, i8); 3],
+    pub boosts_self: bool,
+    /// Special move effect tag (`0` = None, `1` = Reflect, `2` = LightScreen, `3` = Safeguard,
+    /// `4` = Spikes, `5` = Curse, `6` = BellyDrum, `7` = Roar/Whirlwind, `8` = Encore,
+    /// `9` = Disable, `10` = SleepTalk, `11` = Counter, `12` = MirrorCoat, `13` = Flail/Reversal,
+    /// `14` = SeismicToss/NightShade, `15` = SuperFang, `16` = Thief, `17` = PainSplit,
+    /// `18` = BatonPass, `19` = PerishSong, `20` = DestinyBond, `21` = HealBell,
+    /// `22` = Haze/PsychUp, `23` = RainDance, `24` = SunnyDay, `25` = Sandstorm).
+    pub special_kind: u8,
 }
 
 /// Static match context shared across all `CompactBattle` nodes in a search tree.
@@ -940,6 +968,92 @@ impl CompactBattle {
                         Accuracy::AlwaysHits => (100, true),
                         Accuracy::Pct(a) => (a.clamp(0, 100) as u8, ms.always_hit),
                     };
+                    let parse_status_code = |s: Option<&str>| -> u8 {
+                        match s {
+                            Some("slp") => Status::Slp as u8,
+                            Some("psn") => Status::Psn as u8,
+                            Some("brn") => Status::Brn as u8,
+                            Some("frz") => Status::Frz as u8,
+                            Some("par") => Status::Par as u8,
+                            Some("tox") => Status::Tox as u8,
+                            _ => 0,
+                        }
+                    };
+                    let parse_vol_code = |s: Option<&str>| -> u16 {
+                        match s {
+                            Some("confusion") => vol_bit::CONFUSION,
+                            Some("flinch") => vol_bit::FLINCH,
+                            Some("leechseed") => vol_bit::LEECH_SEED,
+                            Some("nightmare") => vol_bit::NIGHTMARE,
+                            Some("curse") => vol_bit::CURSE,
+                            Some("foresight") => vol_bit::FORESIGHT,
+                            Some("encore") => vol_bit::ENCORE,
+                            Some("disable") => vol_bit::DISABLE,
+                            Some("perishsong") => vol_bit::PERISH_SONG,
+                            Some("destinybond") => vol_bit::DESTINY_BOND,
+                            _ => 0,
+                        }
+                    };
+                    let primary_status = parse_status_code(ms.status);
+                    let primary_vol = parse_vol_code(ms.volatile_status);
+                    let mut sec_chance_256 = 0u8;
+                    let mut sec_status = 0u8;
+                    let mut sec_vol = 0u16;
+                    let mut sec_boost = (0xFFu8, 0i8);
+                    if let Some(sec) = ms.secondaries.first() {
+                        let ch = sec.chance.unwrap_or(100).clamp(0, 100);
+                        sec_chance_256 = (ch * 255 / 100).clamp(1, 255) as u8;
+                        sec_status = parse_status_code(sec.status);
+                        sec_vol = parse_vol_code(sec.volatile_status);
+                        if let Some(&(st_i, d)) = sec.boosts.first() {
+                            sec_boost = (st_i as u8, d);
+                        } else if let Some(se) = sec.self_effect.as_ref() {
+                            if let Some(&(st_i, d)) = se.boosts.first() {
+                                sec_boost = ((st_i as u8) | 0x80, d);
+                            }
+                        }
+                    }
+                    let mut boosts = [(0xFFu8, 0i8); 3];
+                    let mut boosts_self = matches!(ms.target, "self" | "allySide" | "adjacentAllyOrSelf");
+                    let src_boosts = if !ms.boosts.is_empty() {
+                        &ms.boosts[..]
+                    } else if let Some(se) = ms.self_effect.as_ref() {
+                        boosts_self = true;
+                        &se.boosts[..]
+                    } else {
+                        &[][..]
+                    };
+                    for (b_i, &(st_i, d)) in src_boosts.iter().take(3).enumerate() {
+                        boosts[b_i] = (st_i as u8, d);
+                    }
+                    let special_kind = match mkey {
+                        "reflect" => 1,
+                        "lightscreen" => 2,
+                        "safeguard" => 3,
+                        "spikes" => 4,
+                        "curse" => 5,
+                        "bellydrum" => 6,
+                        "roar" | "whirlwind" => 7,
+                        "encore" => 8,
+                        "disable" => 9,
+                        "sleeptalk" => 10,
+                        "counter" => 11,
+                        "mirrorcoat" => 12,
+                        "flail" | "reversal" => 13,
+                        "seismictoss" | "nightshade" => 14,
+                        "superfang" => 15,
+                        "thief" => 16,
+                        "painsplit" => 17,
+                        "batonpass" => 18,
+                        "perishsong" => 19,
+                        "destinybond" => 20,
+                        "healbell" => 21,
+                        "haze" | "psychup" => 22,
+                        "raindance" => 23,
+                        "sunnyday" => 24,
+                        "sandstorm" => 25,
+                        _ => 0,
+                    };
                     move_specs[c_idx][m_i] = CompactMoveSpec {
                         id: slot.id,
                         base_power: bp,
@@ -964,6 +1078,15 @@ impl CompactBattle {
                         is_substitute: mkey == "substitute",
                         drain_half: ms.drain.is_some(),
                         recoil_quarter: ms.recoil.is_some(),
+                        primary_status,
+                        primary_vol,
+                        sec_chance_256,
+                        sec_status,
+                        sec_vol,
+                        sec_boost,
+                        boosts,
+                        boosts_self,
+                        special_kind,
                     };
                 }
 
@@ -990,6 +1113,12 @@ impl CompactBattle {
                     is_leftovers: item_key == "leftovers",
                     is_brightpowder: item_key == "brightpowder",
                     is_focusband: item_key == "focusband",
+                    is_mintberry: item_key == "mintberry",
+                    is_miracleberry: item_key == "miracleberry",
+                    is_goldberry: item_key == "goldberry",
+                    is_berry: item_key == "berry" || item_key == "berryjuice",
+                    is_mysteryberry: item_key == "mysteryberry",
+                    is_scope_lens: item_key == "scopelens",
                     moves,
                     max_pp,
                     num_moves,
@@ -1512,63 +1641,152 @@ impl CompactBattle {
             }
         }
 
-        if !mspec.is_status && mspec.base_power > 0 {
-            const CRIT_DEN: [u32; 6] = [0, 16, 8, 4, 3, 2];
-            let c_stage = (mspec.crit_ratio as usize).min(5);
-            let is_crit = c_stage > 0 && rng.random_chance(1, CRIT_DEN[c_stage]);
-
-            let atk_stat = if mspec.is_physical { 0 } else { 2 };
-            let def_stat = if mspec.is_physical { 1 } else { 3 };
-            let ignore_boosts =
-                is_crit & (self.mons[att_idx].boosts[atk_stat] <= self.mons[def_idx].boosts[def_stat]);
-            let atk = self.active_stat(table, side, atk_stat, ignore_boosts, ignore_boosts);
-            let def = self.active_stat(table, foe_side, def_stat, ignore_boosts, false);
-
-            let (type_mod, is_immune) = table.effectiveness(mspec.move_type, &table.mons[def_idx]);
-            let weather = match self.weather_kind {
-                1 => CompactWeather::Rain,
-                2 => CompactWeather::Sun,
-                3 => CompactWeather::Sandstorm,
-                _ => CompactWeather::None,
-            };
-            let has_type_boost = (self.mons[att_idx].item != 0)
-                & (table.mons[att_idx].item_boost_type == mspec.move_type);
-
-            let base_dmg = get_damage_base_branchless(
-                table.mons[att_idx].level as i32,
-                mspec.base_power as i32,
-                atk,
-                def,
-                mspec.is_physical,
-                mspec.is_selfdestruct,
-                is_crit,
-                has_type_boost,
-                weather,
-                mspec.is_water,
-                mspec.is_fire,
-                mspec.is_solarbeam,
-                mspec.move_type,
-                table.mons[att_idx].type_mask,
-                type_mod,
-                is_immune,
-            );
-            if base_dmg > 0 {
-                let roll = 217 + rng.random(39);
-                let final_dmg = apply_roll_branchless(base_dmg, roll, false) as i16;
-                let dealt = self.mons[def_idx].apply_damage_branchless(final_dmg, mspec.bypasses_sub);
-                self.hurt_damage_this_turn[foe_side] = dealt.max(0) as u16;
-                self.hurt_cat_this_turn[foe_side] = if mspec.is_physical { 1 } else { 2 };
-
-                if mspec.drain_half && dealt > 0 {
-                    let drain = (dealt / 2).max(1);
-                    let maxhp = table.mons[att_idx].maxhp;
-                    self.mons[att_idx].hp_pool[0] = (self.mons[att_idx].hp() + drain).min(maxhp);
+        if !mspec.is_status && (mspec.base_power > 0 || matches!(mspec.special_kind, 11..=15)) {
+            let mut dealt = 0i16;
+            if mspec.special_kind == 11 {
+                // Counter: double last physical damage taken this turn.
+                if self.hurt_cat_this_turn[side] == 1 && self.hurt_damage_this_turn[side] > 0 {
+                    let dmg = (self.hurt_damage_this_turn[side] as i32 * 2).min(9999) as i16;
+                    dealt = self.mons[def_idx].apply_damage_branchless(dmg, mspec.bypasses_sub);
                 }
-                if mspec.recoil_quarter && dealt > 0 && self.mons[att_idx].hp() > 0 {
-                    let recoil = (dealt / 4).max(1);
-                    self.mons[att_idx].apply_damage_branchless(recoil, true);
+            } else if mspec.special_kind == 12 {
+                // Mirror Coat: double last special damage taken this turn.
+                if self.hurt_cat_this_turn[side] == 2 && self.hurt_damage_this_turn[side] > 0 {
+                    let dmg = (self.hurt_damage_this_turn[side] as i32 * 2).min(9999) as i16;
+                    dealt = self.mons[def_idx].apply_damage_branchless(dmg, mspec.bypasses_sub);
+                }
+            } else if mspec.special_kind == 14 {
+                // Seismic Toss / Night Shade: damage equals attacker's level.
+                let (_, is_immune) = table.effectiveness(mspec.move_type, &table.mons[def_idx]);
+                if !is_immune {
+                    let dmg = table.mons[att_idx].level as i16;
+                    dealt = self.mons[def_idx].apply_damage_branchless(dmg, mspec.bypasses_sub);
+                }
+            } else if mspec.special_kind == 15 {
+                // Super Fang: halves target's current HP (min 1).
+                let (_, is_immune) = table.effectiveness(mspec.move_type, &table.mons[def_idx]);
+                if !is_immune {
+                    let dmg = (self.mons[def_idx].hp() / 2).max(1);
+                    dealt = self.mons[def_idx].apply_damage_branchless(dmg, mspec.bypasses_sub);
+                }
+            } else {
+                const CRIT_DEN: [u32; 6] = [0, 16, 8, 4, 3, 2];
+                let scope_bonus = ((self.mons[att_idx].item != 0) & table.mons[att_idx].is_scope_lens) as usize;
+                let c_stage = (mspec.crit_ratio as usize + scope_bonus).min(5);
+                let is_crit = (mspec.special_kind != 13)
+                    && c_stage > 0
+                    && rng.random_chance(1, CRIT_DEN[c_stage]);
+
+                let atk_stat = if mspec.is_physical { 0 } else { 2 };
+                let def_stat = if mspec.is_physical { 1 } else { 3 };
+                let ignore_boosts =
+                    is_crit & (self.mons[att_idx].boosts[atk_stat] <= self.mons[def_idx].boosts[def_stat]);
+                let atk = self.active_stat(table, side, atk_stat, ignore_boosts, ignore_boosts);
+                let def = self.active_stat(table, foe_side, def_stat, ignore_boosts, false);
+
+                let bp = if mspec.special_kind == 13 {
+                    // Flail / Reversal 6-band HP power table.
+                    let ratio = (self.mons[att_idx].hp() as i32 * 48) / (table.mons[att_idx].maxhp.max(1) as i32);
+                    if ratio <= 1 {
+                        200
+                    } else if ratio <= 4 {
+                        150
+                    } else if ratio <= 9 {
+                        100
+                    } else if ratio <= 16 {
+                        80
+                    } else if ratio <= 32 {
+                        40
+                    } else {
+                        20
+                    }
+                } else {
+                    mspec.base_power as i32
+                };
+
+                let (type_mod, is_immune) = table.effectiveness(mspec.move_type, &table.mons[def_idx]);
+                let weather = match self.weather_kind {
+                    1 => CompactWeather::Rain,
+                    2 => CompactWeather::Sun,
+                    3 => CompactWeather::Sandstorm,
+                    _ => CompactWeather::None,
+                };
+                let has_type_boost = (self.mons[att_idx].item != 0)
+                    & (table.mons[att_idx].item_boost_type == mspec.move_type);
+
+                let base_dmg = get_damage_base_branchless(
+                    table.mons[att_idx].level as i32,
+                    bp,
+                    atk,
+                    def,
+                    mspec.is_physical,
+                    mspec.is_selfdestruct,
+                    is_crit,
+                    has_type_boost,
+                    weather,
+                    mspec.is_water,
+                    mspec.is_fire,
+                    mspec.is_solarbeam,
+                    mspec.move_type,
+                    table.mons[att_idx].type_mask,
+                    type_mod,
+                    is_immune,
+                );
+                if base_dmg > 0 {
+                    let no_var = mspec.special_kind == 13;
+                    let roll = if no_var { 255 } else { 217 + rng.random(39) };
+                    let final_dmg = apply_roll_branchless(base_dmg, roll, no_var) as i16;
+                    dealt = self.mons[def_idx].apply_damage_branchless(final_dmg, mspec.bypasses_sub);
+                    self.hurt_damage_this_turn[foe_side] = dealt.max(0) as u16;
+                    self.hurt_cat_this_turn[foe_side] = if mspec.is_physical { 1 } else { 2 };
+
+                    if mspec.drain_half && dealt > 0 {
+                        let drain = (dealt / 2).max(1);
+                        let maxhp = table.mons[att_idx].maxhp;
+                        self.mons[att_idx].hp_pool[0] = (self.mons[att_idx].hp() + drain).min(maxhp);
+                    }
+                    if mspec.recoil_quarter && dealt > 0 && self.mons[att_idx].hp() > 0 {
+                        let recoil = (dealt / 4).max(1);
+                        self.mons[att_idx].apply_damage_branchless(recoil, true);
+                    }
                 }
             }
+
+            // Secondary effects on target (when target survived and has no Substitute).
+            if dealt > 0
+                && self.mons[def_idx].hp() > 0
+                && self.mons[def_idx].sub_hp() == 0
+                && mspec.sec_chance_256 > 0
+                && rng.random_chance(mspec.sec_chance_256 as u32, 256)
+            {
+                if mspec.sec_status != 0 && self.mons[def_idx].status_raw() == 0 && self.sides[foe_side].safeguard_turns == 0 {
+                    self.try_inflict_status(table, foe_side, mspec.sec_status, rng);
+                }
+                if mspec.sec_vol != 0 {
+                    self.mons[def_idx].vol_flags |= mspec.sec_vol;
+                    if (mspec.sec_vol & vol_bit::CONFUSION) != 0 {
+                        self.mons[def_idx].timers[0] = (2 + rng.random(4)) as u8;
+                    }
+                }
+                if mspec.sec_boost.0 != 0xFF {
+                    let is_self_boost = (mspec.sec_boost.0 & 0x80) != 0;
+                    let b_idx = if is_self_boost { att_idx } else { def_idx };
+                    let st_i = (mspec.sec_boost.0 & 0x7F) as usize;
+                    if st_i < 7 {
+                        self.mons[b_idx].boosts[st_i] =
+                            (self.mons[b_idx].boosts[st_i] + mspec.sec_boost.1).clamp(-6, 6);
+                    }
+                }
+            }
+            if mspec.special_kind == 16 && self.mons[att_idx].item == 0 && self.mons[def_idx].item != 0 {
+                // Thief steals target's held item.
+                self.mons[att_idx].item = self.mons[def_idx].item;
+                self.mons[def_idx].item = 0;
+            }
+            self.check_berry_triggers(table, foe_side);
+            self.check_berry_triggers(table, side);
+        } else if mspec.is_status {
+            self.exec_status_move(table, side, foe_side, att_idx, def_idx, &mspec, rng);
         }
 
         if !mspec.is_selfdestruct && self.mons[att_idx].hp() > 0 && self.mons[def_idx].hp() > 0 {
@@ -1601,6 +1819,232 @@ impl CompactBattle {
             if self.mons[foe_idx].hp() > 0 {
                 let foe_max = table.mons[foe_idx].maxhp;
                 self.mons[foe_idx].hp_pool[0] = (self.mons[foe_idx].hp() + dealt).min(foe_max);
+            }
+        }
+        if self.mons[idx].hp() > 0
+            && (self.mons[idx].vol_flags & vol_bit::NIGHTMARE) != 0
+            && self.mons[idx].status_raw() == Status::Slp as u8
+        {
+            let slip = (table.mons[idx].maxhp / 4).max(1);
+            self.mons[idx].apply_damage_branchless(slip, true);
+        }
+        if self.mons[idx].hp() > 0 && (self.mons[idx].vol_flags & vol_bit::CURSE) != 0 {
+            let slip = (table.mons[idx].maxhp / 4).max(1);
+            self.mons[idx].apply_damage_branchless(slip, true);
+        }
+        self.check_berry_triggers(table, side);
+    }
+
+    #[inline]
+    fn try_inflict_status(
+        &mut self,
+        table: &MatchTable,
+        target_side: usize,
+        status_code: u8,
+        rng: &mut Prng,
+    ) {
+        let idx = target_side * 3 + self.sides[target_side].active_idx as usize;
+        if self.mons[idx].status_raw() != 0 || self.mons[idx].sub_hp() > 0 || self.sides[target_side].safeguard_turns > 0 {
+            return;
+        }
+        // Stadium Sleep Clause & Freeze Clause checks.
+        if status_code == Status::Slp as u8 {
+            for p_i in 0..3usize {
+                let m = &self.mons[target_side * 3 + p_i];
+                if m.hp() > 0 && m.status_raw() == Status::Slp as u8 {
+                    return;
+                }
+            }
+            let turns = (2 + rng.random(6)) as u8;
+            self.mons[idx].set_status(Status::Slp as u8, turns);
+        } else if status_code == Status::Frz as u8 {
+            for p_i in 0..3usize {
+                let m = &self.mons[target_side * 3 + p_i];
+                if m.hp() > 0 && m.status_raw() == Status::Frz as u8 {
+                    return;
+                }
+            }
+            self.mons[idx].set_status(Status::Frz as u8, 0);
+        } else if status_code == Status::Par as u8 {
+            self.mons[idx].set_status(Status::Par as u8, 0);
+            self.mons[idx].vol_flags |= vol_bit::PAR_SPEED_DROP;
+        } else if status_code == Status::Brn as u8 {
+            self.mons[idx].set_status(Status::Brn as u8, 0);
+            self.mons[idx].vol_flags |= vol_bit::BRN_ATK_DROP;
+        } else if status_code == Status::Tox as u8 {
+            self.mons[idx].set_status(Status::Tox as u8, 0);
+        } else if status_code == Status::Psn as u8 {
+            self.mons[idx].set_status(Status::Psn as u8, 0);
+        }
+        self.check_berry_triggers(table, target_side);
+    }
+
+    #[inline]
+    fn check_berry_triggers(&mut self, table: &MatchTable, side: usize) {
+        let idx = side * 3 + self.sides[side].active_idx as usize;
+        let mon = &mut self.mons[idx];
+        if mon.hp() <= 0 || mon.item == 0 {
+            return;
+        }
+        let spec = &table.mons[idx];
+        let st = mon.status_raw();
+        if spec.is_mintberry && st == Status::Slp as u8 {
+            mon.set_status(Status::None as u8, 0);
+            mon.item = 0;
+        } else if spec.is_miracleberry && (st != 0 || (mon.vol_flags & vol_bit::CONFUSION) != 0) {
+            mon.set_status(Status::None as u8, 0);
+            mon.vol_flags &= !(vol_bit::CONFUSION | vol_bit::PAR_SPEED_DROP | vol_bit::BRN_ATK_DROP);
+            mon.timers[0] = 0;
+            mon.item = 0;
+        } else if spec.is_goldberry && mon.hp() <= spec.maxhp / 2 {
+            mon.hp_pool[0] = (mon.hp() + 30).min(spec.maxhp);
+            mon.item = 0;
+        } else if spec.is_berry && mon.hp() <= spec.maxhp / 2 {
+            mon.hp_pool[0] = (mon.hp() + 10).min(spec.maxhp);
+            mon.item = 0;
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    #[inline]
+    fn exec_status_move(
+        &mut self,
+        table: &MatchTable,
+        side: usize,
+        foe_side: usize,
+        att_idx: usize,
+        def_idx: usize,
+        mspec: &CompactMoveSpec,
+        rng: &mut Prng,
+    ) {
+        match mspec.special_kind {
+            1 => {
+                if self.sides[side].reflect_turns == 0 {
+                    self.sides[side].reflect_turns = 5;
+                }
+            }
+            2 => {
+                if self.sides[side].lightscreen_turns == 0 {
+                    self.sides[side].lightscreen_turns = 5;
+                }
+            }
+            3 => {
+                if self.sides[side].safeguard_turns == 0 {
+                    self.sides[side].safeguard_turns = 5;
+                }
+            }
+            4 => {
+                self.sides[foe_side].side_flags |= 1;
+            }
+            5 => {
+                // Curse: non-Ghost (+1 Atk, +1 Def, -1 Spe), Ghost (-50% HP, inflicts Curse).
+                let is_ghost = table.mons[att_idx].types[0] == 8
+                    || (table.mons[att_idx].num_types > 1 && table.mons[att_idx].types[1] == 8);
+                if !is_ghost {
+                    self.mons[att_idx].boosts[0] = (self.mons[att_idx].boosts[0] + 1).clamp(-6, 6);
+                    self.mons[att_idx].boosts[1] = (self.mons[att_idx].boosts[1] + 1).clamp(-6, 6);
+                    self.mons[att_idx].boosts[4] = (self.mons[att_idx].boosts[4] - 1).clamp(-6, 6);
+                } else if self.mons[def_idx].sub_hp() == 0 && (self.mons[def_idx].vol_flags & vol_bit::CURSE) == 0 {
+                    let cost = (table.mons[att_idx].maxhp / 2).max(1);
+                    self.mons[att_idx].apply_damage_branchless(cost, true);
+                    self.mons[def_idx].vol_flags |= vol_bit::CURSE;
+                }
+            }
+            6 => {
+                // Belly Drum: costs 50% maxhp and sets Attack stage to +6.
+                let cost = table.mons[att_idx].maxhp / 2;
+                if self.mons[att_idx].hp() > cost && self.mons[att_idx].boosts[0] < 6 {
+                    self.mons[att_idx].hp_pool[0] -= cost;
+                    self.mons[att_idx].boosts[0] = 6;
+                    self.check_berry_triggers(table, side);
+                }
+            }
+            7 => {
+                // Roar / Whirlwind: force-switch foe to a random alive bench member.
+                let mask = self.sides[foe_side].alive_mask & !(1 << self.sides[foe_side].active_idx);
+                if mask != 0 {
+                    let slot = if mask.count_ones() == 1 || rng.random(2) == 0 {
+                        mask.trailing_zeros() as u8
+                    } else {
+                        (7 - mask.leading_zeros()) as u8
+                    };
+                    self.exec_switch(foe_side, slot.min(2));
+                    if (self.sides[foe_side].side_flags & 1) != 0 {
+                        let new_def = foe_side * 3 + slot.min(2) as usize;
+                        let spike_dmg = table.mons[new_def].quantum_1_8;
+                        self.mons[new_def].apply_damage_branchless(spike_dmg, true);
+                    }
+                }
+            }
+            17 => {
+                // Pain Split: average HP when target has no Substitute.
+                if self.mons[def_idx].sub_hp() == 0 {
+                    let avg = ((self.mons[att_idx].hp() + self.mons[def_idx].hp()) / 2).max(1);
+                    self.mons[att_idx].hp_pool[0] = avg.min(table.mons[att_idx].maxhp);
+                    self.mons[def_idx].hp_pool[0] = avg.min(table.mons[def_idx].maxhp);
+                }
+            }
+            19 => {
+                // Perish Song
+                if self.sides[side].alive_mask.count_ones() > 1 {
+                    for &idx in &[att_idx, def_idx] {
+                        if (self.mons[idx].vol_flags & vol_bit::PERISH_SONG) == 0 {
+                            self.mons[idx].vol_flags |= vol_bit::PERISH_SONG;
+                            self.mons[idx].timers[3] = 4;
+                        }
+                    }
+                }
+            }
+            20 => {
+                if self.sides[side].alive_mask.count_ones() > 1 {
+                    self.mons[att_idx].vol_flags |= vol_bit::DESTINY_BOND;
+                }
+            }
+            21 => {
+                // Heal Bell cures party statuses.
+                for p_i in 0..3usize {
+                    let m = &mut self.mons[side * 3 + p_i];
+                    if m.hp() > 0 {
+                        m.set_status(Status::None as u8, 0);
+                        m.vol_flags &= !(vol_bit::PAR_SPEED_DROP | vol_bit::BRN_ATK_DROP);
+                    }
+                }
+            }
+            22 => {
+                // Haze / Psych Up
+                self.mons[att_idx].boosts = self.mons[def_idx].boosts;
+            }
+            23 => {
+                self.weather_kind = CompactWeather::Rain as u8;
+                self.weather_turns = 5;
+            }
+            24 => {
+                self.weather_kind = CompactWeather::Sun as u8;
+                self.weather_turns = 5;
+            }
+            25 => {
+                self.weather_kind = CompactWeather::Sandstorm as u8;
+                self.weather_turns = 5;
+            }
+            _ => {}
+        }
+
+        if mspec.primary_status != 0 {
+            self.try_inflict_status(table, foe_side, mspec.primary_status, rng);
+        }
+        if mspec.primary_vol != 0 && self.mons[def_idx].sub_hp() == 0 {
+            self.mons[def_idx].vol_flags |= mspec.primary_vol;
+            if (mspec.primary_vol & vol_bit::CONFUSION) != 0 {
+                self.mons[def_idx].timers[0] = (2 + rng.random(4)) as u8;
+            }
+        }
+        let b_target = if mspec.boosts_self { att_idx } else { def_idx };
+        if mspec.boosts_self || self.mons[def_idx].sub_hp() == 0 {
+            for &(st_i, delta) in &mspec.boosts {
+                if (st_i as usize) < 7 {
+                    self.mons[b_target].boosts[st_i as usize] =
+                        (self.mons[b_target].boosts[st_i as usize] + delta).clamp(-6, 6);
+                }
             }
         }
     }
@@ -1671,15 +2115,186 @@ impl CompactBattle {
         } else if a1 == 0 {
             self.outcome = 1; // P1Win
         } else {
-            // Auto-send next alive bench Pokemon when active faints.
+            // Auto-send next alive bench Pokemon when only 1 alive Pokemon remains,
+            // or set request = 2 (forced Switch choice) when 2 bench Pokemon remain.
+            let mut any_forced_switch = false;
             for side in 0..2usize {
                 let p_idx = self.sides[side].active_idx as usize;
                 if (self.sides[side].alive_mask & (1 << p_idx)) == 0 {
-                    let next_slot = (self.sides[side].alive_mask.trailing_zeros() as u8).min(2);
-                    self.exec_switch(side, next_slot);
+                    if self.sides[side].alive_mask.count_ones() == 1 {
+                        let next_slot = (self.sides[side].alive_mask.trailing_zeros() as u8).min(2);
+                        self.exec_switch(side, next_slot);
+                        self.sides[side].request = 1;
+                    } else {
+                        self.sides[side].request = 2; // Forced Switch request
+                        any_forced_switch = true;
+                    }
+                } else {
+                    self.sides[side].request = 1;
+                }
+            }
+            if any_forced_switch {
+                for side in 0..2usize {
+                    if self.sides[side].request != 2 {
+                        self.sides[side].request = 0; // Wait
+                    }
                 }
             }
         }
+    }
+
+    /// Resolve a forced switch phase when one or both active Pokemon fainted
+    /// with 2 bench options remaining (`request == 2`).
+    pub fn step_switch(&mut self, table: &MatchTable, switch_actions: [u8; 2]) {
+        for side in 0..2usize {
+            if self.sides[side].request == 2 {
+                let act = switch_actions[side];
+                let slot = if act >= 4 {
+                    (act - 4).min(2)
+                } else {
+                    (self.sides[side].alive_mask.trailing_zeros() as u8).min(2)
+                };
+                if (self.sides[side].alive_mask & (1 << slot)) != 0 {
+                    self.exec_switch(side, slot);
+                    if (self.sides[side].side_flags & 1) != 0 {
+                        let new_idx = side * 3 + slot as usize;
+                        let spike_dmg = table.mons[new_idx].quantum_1_8;
+                        self.mons[new_idx].apply_damage_branchless(spike_dmg, true);
+                    }
+                }
+            }
+            self.sides[side].request = 1;
+        }
+        self.check_faints();
+    }
+
+    /// Enumerate legal compact action codes for `side` (`0` or `1`) into a stack buffer.
+    /// Action codes:
+    /// - `0..4`: move slot `0..4`
+    /// - `4..7`: switch to party slot `0..3` (`action - 4`)
+    /// - `7`: `"pass"` (when waiting for opponent's forced switch)
+    #[inline]
+    pub fn legal_actions(&self, table: &MatchTable, side: usize, out: &mut [u8; 7]) -> usize {
+        if self.outcome != 0 {
+            return 0;
+        }
+        let side_st = &self.sides[side];
+        if side_st.request == 0 {
+            out[0] = 7; // pass
+            return 1;
+        }
+        if side_st.request == 2 {
+            let mut n = 0;
+            for slot in 0..3u8 {
+                if slot != side_st.active_idx && (side_st.alive_mask & (1 << slot)) != 0 {
+                    out[n] = 4 + slot;
+                    n += 1;
+                }
+            }
+            return n;
+        }
+        let mut n = 0;
+        let idx = side * 3 + side_st.active_idx as usize;
+        let mon = &self.mons[idx];
+        let num_moves = table.mons[idx].num_moves as usize;
+        for m in 0..num_moves {
+            if mon.pp[m] > 0 {
+                out[n] = m as u8;
+                n += 1;
+            }
+        }
+        if n == 0 {
+            out[0] = 0; // Struggle fallback
+            n = 1;
+        }
+        if (mon.vol_flags & vol_bit::TRAPPED_OR_LOCKED) == 0 {
+            for slot in 0..3u8 {
+                if slot != side_st.active_idx && (side_st.alive_mask & (1 << slot)) != 0 {
+                    out[n] = 4 + slot;
+                    n += 1;
+                }
+            }
+        }
+        n
+    }
+
+    /// Format a compact action code (`0..=7`) as a Showdown protocol string
+    /// (`"move 1"`, `"switch 2"`, `"pass"`).
+    #[inline]
+    pub const fn action_to_str(action_code: u8) -> &'static str {
+        match action_code {
+            0 => "move 1",
+            1 => "move 2",
+            2 => "move 3",
+            3 => "move 4",
+            4 => "switch 1",
+            5 => "switch 2",
+            6 => "switch 3",
+            _ => "pass",
+        }
+    }
+
+    /// Parse a Showdown choice string (`"move 1"`, `"switch 2"`, `"pass"`) into a
+    /// compact action code (`0..=7`).
+    #[inline]
+    pub fn parse_action_str(choice: &str) -> u8 {
+        match choice.trim() {
+            "move 1" => 0,
+            "move 2" => 1,
+            "move 3" => 2,
+            "move 4" => 3,
+            "switch 1" => 4,
+            "switch 2" => 5,
+            "switch 3" => 6,
+            _ => 7,
+        }
+    }
+
+    /// Apply a pair of action codes `[p1_action, p2_action]`, handling both normal
+    /// turns and forced-switch phases.
+    #[inline]
+    pub fn apply_actions(&mut self, table: &MatchTable, actions: [u8; 2]) {
+        if self.sides[0].request == 2 || self.sides[1].request == 2 {
+            self.step_switch(table, actions);
+        } else {
+            self.step_turn(table, actions);
+        }
+    }
+
+    /// Fast branchless heuristic evaluation of the current `CompactBattle` from
+    /// `perspective` (`0` = P1, `1` = P2) in `[0.0, 1.0]`.
+    #[inline]
+    pub fn eval_leaf(&self, table: &MatchTable, perspective: usize) -> f64 {
+        match self.outcome {
+            1 => return if perspective == 0 { 1.0 } else { 0.0 },
+            2 => return if perspective == 1 { 1.0 } else { 0.0 },
+            3 => return 0.5,
+            _ => {}
+        }
+        let mut score = [0.0f64; 2];
+        for side in 0..2usize {
+            for slot in 0..3usize {
+                if (self.sides[side].alive_mask & (1 << slot)) == 0 {
+                    continue;
+                }
+                let idx = side * 3 + slot;
+                let mon = &self.mons[idx];
+                let spec = &table.mons[idx];
+                let hp_frac = (mon.hp().max(0) as f64) / (spec.maxhp.max(1) as f64);
+                let status_mult = match mon.status_raw() {
+                    0 => 1.0,
+                    x if x == Status::Slp as u8 => 0.72,
+                    x if x == Status::Frz as u8 => 0.35,
+                    x if x == Status::Par as u8 => 0.78,
+                    x if x == Status::Brn as u8 => 0.75,
+                    _ => 0.82,
+                };
+                let sub_bonus = (mon.sub_hp().max(0) as f64) / (spec.maxhp.max(1) as f64) * 0.5;
+                score[side] += 0.35 + 0.65 * hp_frac * status_mult + sub_bonus;
+            }
+        }
+        let diff = score[perspective] - score[perspective ^ 1];
+        (0.5 + 0.18 * diff).clamp(0.01, 0.99)
     }
 }
 

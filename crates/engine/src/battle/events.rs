@@ -109,10 +109,14 @@ impl Ev {
             side_name: Box::leak(format!("Side{name}").into_boxed_str()),
             field_name: Box::leak(format!("Field{name}").into_boxed_str()),
             possible: dex.possible_mask.intersects(&mask),
-            prefixed: !matches!(
-                name,
-                "BeforeTurn" | "Update" | "Weather" | "WeatherChange" | "TerrainChange"
-            ),
+            prefixed: (on_ally.exists()
+                || on_any.exists()
+                || on_foe.exists()
+                || on_source.exists())
+                && !matches!(
+                    name,
+                    "BeforeTurn" | "Update" | "Weather" | "WeatherChange" | "TerrainChange"
+                ),
             ltr: matches!(name, "Invulnerability" | "TryHit" | "DamagingHit" | "EntryHazard"),
         }
     }
@@ -514,6 +518,9 @@ impl Battle {
         get_key_duration: bool,
         handlers: &mut Vec<Listener>,
     ) {
+        if !get_key_duration && !cb.exists() {
+            return;
+        }
         let p = self.poke(pokemon);
         debug_assert_eq!(
             p.handler_mask,
@@ -642,6 +649,9 @@ impl Battle {
         custom_holder: Option<PokeId>,
         handlers: &mut Vec<Listener>,
     ) {
+        if !get_key_duration && !cb.exists() {
+            return;
+        }
         debug_assert_eq!(
             self.sides[side_n as usize].handler_mask,
             self.recompute_side_mask(dex, side_n),
@@ -686,30 +696,35 @@ impl Battle {
         custom_holder: Option<PokeId>,
         handlers: &mut Vec<Listener>,
     ) {
-        for (c, state) in &self.field.pseudo_weather {
-            let has_cb = dex.cond(*c).mask.has(cb);
-            if has_cb || (get_key_duration && state.duration.is_some()) {
-                handlers.push(self.resolve_priority(
-                    dex,
-                    Listener {
-                        effect: EffectHandle::Cond(*c),
-                        has_callback: has_cb,
-                        state: StateLoc::PseudoWeather(*c),
-                        holder: match custom_holder {
-                            Some(p) => Holder::Poke(p),
-                            None => Holder::Field,
+        if !get_key_duration && !cb.exists() {
+            return;
+        }
+        if get_key_duration || cb == dex.known.on_set_status || self.field.pseudo_weather.len() > 3 {
+            for (c, state) in &self.field.pseudo_weather {
+                let has_cb = dex.cond(*c).mask.has(cb);
+                if has_cb || (get_key_duration && state.duration.is_some()) {
+                    handlers.push(self.resolve_priority(
+                        dex,
+                        Listener {
+                            effect: EffectHandle::Cond(*c),
+                            has_callback: has_cb,
+                            state: StateLoc::PseudoWeather(*c),
+                            holder: match custom_holder {
+                                Some(p) => Holder::Poke(p),
+                                None => Holder::Field,
+                            },
+                            end_kind: if custom_holder.is_some() { EndKind::None } else { EndKind::RemovePseudoWeather },
+                            order: None,
+                            priority: 0.0,
+                            sub_order: 0.0,
+                            speed: 0.0,
+                            effect_order: 0.0,
+                            state_token: state.effect_order,
+                            cb: Cb::NONE,
                         },
-                        end_kind: if custom_holder.is_some() { EndKind::None } else { EndKind::RemovePseudoWeather },
-                        order: None,
-                        priority: 0.0,
-                        sub_order: 0.0,
-                        speed: 0.0,
-                        effect_order: 0.0,
-                        state_token: state.effect_order,
-                        cb: Cb::NONE,
-                    },
-                    cb,
-                ));
+                        cb,
+                    ));
+                }
             }
         }
         if let Some(w) = self.field.weather {
@@ -869,6 +884,17 @@ impl Battle {
         if !cb.exists() {
             return relay.unwrap_or(RV::True);
         }
+        let has_cb = match effect {
+            EffectHandle::Cond(c) => dex.cond(c).mask.has(cb),
+            EffectHandle::MoveEff(m) => {
+                super::moveexec::active_move_has_callback(self, dex, m, cb)
+            }
+            EffectHandle::Item(i) => dex.items.get(i).mask.has(cb),
+            _ => false,
+        };
+        if !has_cb {
+            return relay.unwrap_or(RV::True);
+        }
         self.single_event_cb(dex, ev.name, cb, effect, state, target, source, source_effect, relay)
     }
 
@@ -900,18 +926,6 @@ impl Battle {
             }
         }
 
-        let has_cb = match effect {
-            EffectHandle::Cond(c) => dex.cond(c).mask.has(cb),
-            EffectHandle::MoveEff(m) => {
-                super::moveexec::active_move_has_callback(self, dex, m, cb)
-            }
-            EffectHandle::Item(i) => dex.items.get(i).mask.has(cb),
-            _ => false,
-        };
-        if !has_cb {
-            return relay;
-        }
-
         self.effect_stack.push(EffectFrame { effect, state });
         self.event_stack.push(EventFrame {
             id: event_name,
@@ -931,7 +945,7 @@ impl Battle {
             target,
             source,
             source_effect,
-            relay.clone(),
+            relay,
             has_relay,
         );
 
@@ -1045,15 +1059,22 @@ impl Battle {
             }
         }
 
-        if cbs.ltr {
-            // stable sort by compareLeftToRightOrder
-            handlers.sort_by(|a, b| {
-                compare_left_to_right(a, b).partial_cmp(&0.0).unwrap()
-            });
-        } else if fast_exit {
-            handlers.sort_by(|a, b| compare_redirect_order(a, b).partial_cmp(&0.0).unwrap());
-        } else {
-            self.speed_sort(&mut handlers, compare_priority);
+        if handlers.is_empty() {
+            self.put_scratch(handlers);
+            return relay.unwrap_or(RV::True);
+        }
+
+        if handlers.len() > 1 {
+            if cbs.ltr {
+                // stable sort by compareLeftToRightOrder
+                handlers.sort_by(|a, b| {
+                    compare_left_to_right(a, b).partial_cmp(&0.0).unwrap()
+                });
+            } else if fast_exit {
+                handlers.sort_by(|a, b| compare_redirect_order(a, b).partial_cmp(&0.0).unwrap());
+            } else {
+                self.speed_sort(&mut handlers, compare_priority);
+            }
         }
 
         let has_relay = relay.is_some();
@@ -1090,7 +1111,7 @@ impl Battle {
                 target,
                 source,
                 source_effect,
-                relay.clone(),
+                relay,
                 has_relay,
             );
             self.effect_stack.pop();

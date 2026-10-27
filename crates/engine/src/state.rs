@@ -507,11 +507,34 @@ impl EffectState {
     }
 
     #[inline(always)]
+    pub(crate) fn hash_empty_payload<H: std::hash::Hasher>(effect_order: u32, h: &mut H) {
+        use std::hash::Hash;
+        false.hash(h);
+        None::<i32>.hash(h);
+        None::<(u8, u8)>.hash(h);
+        None::<PokeId>.hash(h);
+        None::<crate::battle::EffectHandle>.hash(h);
+        LinkedPokes { p: [None, None], n: 0 }.hash(h);
+        None::<CondId>.hash(h);
+        None::<PokeId>.hash(h);
+        None::<usize>.hash(h);
+        None::<u64>.hash(h);
+        4usize.hash(h);
+        None::<()>.hash(h);
+        None::<()>.hash(h);
+        None::<()>.hash(h);
+        None::<()>.hash(h);
+        0u8.hash(h);
+        effect_order.hash(h);
+    }
+
+    #[inline(always)]
     pub(crate) fn hash_state<H: crate::fxhash::StateHasher>(&self, h: &mut H) {
         use std::hash::Hash;
         self.id.hash(h);
         if self.is_empty_payload() {
-            h.hash_batch::<24>(|b| self.hash_payload(b), |h| self.hash_payload(h));
+            let eo = self.effect_order;
+            h.hash_batch::<24>(|b| Self::hash_empty_payload(eo, b), |h| Self::hash_empty_payload(eo, h));
             return;
         }
         self.hash_payload(h);
@@ -1050,23 +1073,16 @@ impl Pokemon {
             times_attacked,
             speed,
         } = self;
-        h.hash_batch::<24>(
+        h.hash_batch::<64>(
             |b| {
                 (species, base_species, name, level, gender, happiness).hash(b);
-                (set_ivs, set_evs).hash(b);
-            },
-            |h| {
-                (species, base_species, name, level, gender, happiness).hash(h);
-                (set_ivs, set_evs).hash(h);
-            },
-        );
-        base_move_slots.hash_state(h);
-        h.hash_batch::<20>(
-            |b| {
+                (set_ivs, set_evs, base_move_slots).hash(b);
                 (hp_type, hp_power, base_hp_type, base_hp_power).hash(b);
                 (base_stored_stats, stored_stats, base_maxhp, maxhp).hash(b);
             },
             |h| {
+                (species, base_species, name, level, gender, happiness).hash(h);
+                (set_ivs, set_evs, base_move_slots).hash(h);
                 (hp_type, hp_power, base_hp_type, base_hp_power).hash(h);
                 (base_stored_stats, stored_stats, base_maxhp, maxhp).hash(h);
             },
@@ -1093,19 +1109,36 @@ impl Pokemon {
             (None, true) => hp.hash(h),
             (Some(b), true) => ((*hp as i64) * b / (*maxhp).max(1) as i64).hash(h),
         }
-        status.hash(h);
-        status_state.hash_state(h);
-        boosts.hash(h);
-        move_slots.hash_state(h);
+        if status_state.id == EffId::None && status_state.is_empty_payload() {
+            let eo = status_state.effect_order;
+            h.hash_batch::<52>(
+                |b| {
+                    status.hash(b);
+                    EffId::None.hash(b);
+                    EffectState::hash_empty_payload(eo, b);
+                    boosts.hash(b);
+                    move_slots.hash(b);
+                },
+                |h| {
+                    status.hash(h);
+                    EffId::None.hash(h);
+                    EffectState::hash_empty_payload(eo, h);
+                    boosts.hash(h);
+                    move_slots.hash(h);
+                },
+            );
+        } else {
+            status.hash(h);
+            status_state.hash_state(h);
+            boosts.hash(h);
+            move_slots.hash_state(h);
+        }
         item.hash(h);
         last_item.hash(h);
-        item_state.hash_state(h);
-        types.hash(h);
-        volatiles.hash(h);
-        macro_rules! tail_fields {
-            ($h:expr) => {{
+        macro_rules! fast_tail {
+            ($h:expr, $with_times:literal) => {{
                 handler_mask.hash($h);
-                (transformed, fainted, faint_queued).hash($h);
+                (false, fainted, false).hash($h);
                 (
                     is_active,
                     is_started,
@@ -1116,34 +1149,34 @@ impl Pokemon {
                     .hash($h);
                 (
                     newly_switched,
-                    being_called_back,
-                    dragged_in,
+                    false,
+                    None::<u16>,
                     previously_switched_in,
                 )
                     .hash($h);
-                (switch_flag, force_switch_flag, skip_before_switch_out).hash($h);
-                (trapped, maybe_trapped).hash($h);
+                (SwitchFlag::No, false, false).hash($h);
+                (false, false).hash($h);
                 (
-                    last_move,
-                    last_move_encore,
-                    last_move_used,
-                    last_move_target_loc,
+                    None::<MoveId>,
+                    None::<MoveId>,
+                    None::<MoveId>,
+                    None::<i8>,
                 )
                     .hash($h);
-                (move_this_turn, move_this_turn_result, move_last_turn_result).hash($h);
+                (None::<MoveId>, move_this_turn_result, move_last_turn_result).hash($h);
                 (
                     stats_raised_this_turn,
                     stats_lowered_this_turn,
                     used_item_this_turn,
                 )
                     .hash($h);
-                if !omit_damage_bookkeeping {
+                if $with_times {
                     times_attacked.hash($h);
                 }
                 speed.hash($h);
             }};
         }
-        if !*transformed
+        let fast_flags = !*transformed
             && !*faint_queued
             && !*being_called_back
             && dragged_in.is_none()
@@ -1156,12 +1189,91 @@ impl Pokemon {
             && last_move_encore.is_none()
             && last_move_used.is_none()
             && last_move_target_loc.is_none()
-            && move_this_turn.is_none()
-        {
-            h.hash_batch::<40>(|b| tail_fields!(b), |h| tail_fields!(h));
+            && move_this_turn.is_none();
+        if fast_flags && item_state.is_empty_payload() && volatiles.is_empty() {
+            item_state.id.hash(h);
+            let ieo = item_state.effect_order;
+            if omit_damage_bookkeeping {
+                h.hash_batch::<60>(
+                    |b| {
+                        EffectState::hash_empty_payload(ieo, b);
+                        types.hash(b);
+                        0usize.hash(b);
+                        fast_tail!(b, false);
+                    },
+                    |h| {
+                        EffectState::hash_empty_payload(ieo, h);
+                        types.hash(h);
+                        0usize.hash(h);
+                        fast_tail!(h, false);
+                    },
+                );
+            } else {
+                h.hash_batch::<60>(
+                    |b| {
+                        EffectState::hash_empty_payload(ieo, b);
+                        types.hash(b);
+                        0usize.hash(b);
+                        fast_tail!(b, true);
+                    },
+                    |h| {
+                        EffectState::hash_empty_payload(ieo, h);
+                        types.hash(h);
+                        0usize.hash(h);
+                        fast_tail!(h, true);
+                    },
+                );
+            }
             return;
         }
-        tail_fields!(h);
+        item_state.hash_state(h);
+        types.hash(h);
+        volatiles.hash(h);
+        if fast_flags {
+            if omit_damage_bookkeeping {
+                h.hash_batch::<40>(|b| fast_tail!(b, false), |h| fast_tail!(h, false));
+            } else {
+                h.hash_batch::<40>(|b| fast_tail!(b, true), |h| fast_tail!(h, true));
+            }
+            return;
+        }
+        handler_mask.hash(h);
+        (transformed, fainted, faint_queued).hash(h);
+        (
+            is_active,
+            is_started,
+            position,
+            active_turns,
+            active_move_actions,
+        )
+            .hash(h);
+        (
+            newly_switched,
+            being_called_back,
+            dragged_in,
+            previously_switched_in,
+        )
+            .hash(h);
+        (switch_flag, force_switch_flag, skip_before_switch_out).hash(h);
+        (trapped, maybe_trapped).hash(h);
+        (
+            last_move,
+            last_move_encore,
+            last_move_used,
+            last_move_target_loc,
+        )
+            .hash(h);
+        (move_this_turn, move_this_turn_result, move_last_turn_result).hash(h);
+        (
+            stats_raised_this_turn,
+            stats_lowered_this_turn,
+            used_item_this_turn,
+        )
+            .hash(h);
+        if !omit_damage_bookkeeping {
+            times_attacked.hash(h);
+        }
+        speed.hash(h);
     }
 
     pub fn volatile(&self, id: CondId) -> Option<&EffectState> {
@@ -1496,11 +1608,11 @@ pub struct ActiveMove {
     pub target: &'static str,
     pub crit_ratio: i32,
     pub will_crit: Option<bool>,
-    pub status: Option<String>,
-    pub volatile_status: Option<String>,
-    pub side_condition: Option<String>,
-    pub weather: Option<String>,
-    pub pseudo_weather: Option<String>,
+    pub status: Option<&'static str>,
+    pub volatile_status: Option<&'static str>,
+    pub side_condition: Option<&'static str>,
+    pub weather: Option<&'static str>,
+    pub pseudo_weather: Option<&'static str>,
     pub boosts: SparseBoosts,
     pub has_boosts: bool,
     pub heal: Option<(i32, i32)>,
@@ -1508,12 +1620,12 @@ pub struct ActiveMove {
     pub recoil: Option<(i32, i32)>,
     pub struggle_recoil: bool,
     pub multihit: Option<Multihit>,
-    pub secondaries: Vec<HitEffect>,
+    pub secondaries: smallvec::SmallVec<[HitEffect; 2]>,
     pub self_effect: Option<HitEffect>,
     pub damage: Option<FixedDamage>,
     pub ohko: bool,
     pub selfdestruct: bool,
-    pub self_switch: Option<String>,
+    pub self_switch: Option<&'static str>,
     pub force_switch: bool,
     pub ignore_immunity: bool,
     pub ignore_accuracy: bool,
@@ -1541,13 +1653,13 @@ pub struct ActiveMove {
     /// beatup ally roster (mutated by getDamage).
     pub allies: Option<Vec<PokeId>>,
     /// triattack move.statusRoll.
-    pub status_roll: Option<String>,
+    pub status_roll: Option<&'static str>,
     /// curse's `delete move.onHit`.
     pub on_hit_suppressed: bool,
     /// present's `move.infiltrates = true`.
     pub infiltrates: bool,
-    /// Per-target-slot hit data ("p1a" → (crit, typeMod)).
-    pub move_hit_data: Vec<(String, (bool, i32))>,
+    /// Per-target-slot hit data (indexed by target side 0/1 → (crit, typeMod)).
+    pub move_hit_data: [(bool, i32); 2],
 }
 
 impl ActiveMove {
@@ -1555,24 +1667,19 @@ impl ActiveMove {
         self.flags & dex.flag_bit(flag) != 0
     }
 
-    pub fn hit_data_mut(&mut self, slot: String) -> &mut (bool, i32) {
-        if !self.move_hit_data.iter().any(|(s, _)| *s == slot) {
-            self.move_hit_data.push((slot.clone(), (false, 0)));
-        }
-        &mut self
-            .move_hit_data
-            .iter_mut()
-            .find(|(s, _)| *s == slot)
-            .unwrap()
-            .1
+    #[inline]
+    pub fn hit_data_mut_side(&mut self, side: u8) -> &mut (bool, i32) {
+        &mut self.move_hit_data[(side & 1) as usize]
+    }
+
+    pub fn hit_data_mut(&mut self, slot: impl AsRef<str>) -> &mut (bool, i32) {
+        let idx = usize::from(slot.as_ref().as_bytes().get(1).copied() == Some(b'2'));
+        &mut self.move_hit_data[idx]
     }
 
     pub fn hit_data(&self, slot: &str) -> (bool, i32) {
-        self.move_hit_data
-            .iter()
-            .find(|(s, _)| s == slot)
-            .map(|(_, d)| *d)
-            .unwrap_or((false, 0))
+        let idx = usize::from(slot.as_bytes().get(1).copied() == Some(b'2'));
+        self.move_hit_data[idx]
     }
 }
 
@@ -1618,7 +1725,7 @@ pub struct Battle {
     pub active_target: Option<PokeId>,
     pub last_move_id: Option<MoveId>,
     /// The boost table flowing through a TryBoost event (mist mutates it).
-    pub pending_boosts: Option<Vec<(usize, i8)>>,
+    pub pending_boosts: Option<SparseBoosts>,
     /// Reusable listener buffers (never state; clones start empty).
     pub listener_pool: crate::battle::events::ScratchPool,
     /// Union of every handler mask in the battle (all roster pokemon, side +

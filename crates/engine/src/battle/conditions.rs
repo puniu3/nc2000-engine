@@ -453,7 +453,7 @@ fn dispatch_cond(
             b.add(&["-mustrecharge", &ts]);
             RV::Undef
         }
-        ("mustrecharge", "onLockMove") => RV::Str("recharge".to_string()),
+        ("mustrecharge", "onLockMove") => RV::Str("recharge"),
         // --------------------------------------------------------- trapped
         ("trapped", "onTrapPokemon") => {
             let t = tpoke.unwrap();
@@ -499,7 +499,7 @@ fn dispatch_cond(
             if b.effective_weather(t) != crate::cond_id!(dex, "sunnyday") {
                 return RV::Undef;
             }
-            if relay == RV::Str("frz".to_string()) {
+            if relay == RV::Str("frz") {
                 return RV::False;
             }
             RV::Undef
@@ -539,7 +539,7 @@ fn dispatch_cond(
                     return RV::Undef;
                 }
             }
-            if relay == RV::Str("slp".to_string()) {
+            if relay == RV::Str("slp") {
                 let side = t.side as usize;
                 let foe_sourced_slp = b.sides[side]
                     .party
@@ -568,7 +568,7 @@ fn dispatch_cond(
                     return RV::Undef;
                 }
             }
-            if relay == RV::Str("frz".to_string()) {
+            if relay == RV::Str("frz") {
                 let side = t.side as usize;
                 let any_frz = b.sides[side]
                     .party
@@ -637,7 +637,7 @@ fn dispatch_cond(
                     return RV::Null;
                 }
             } else {
-                let is_confusion = relay == RV::Str("confusion".to_string());
+                let is_confusion = relay == RV::Str("confusion");
                 if is_confusion && t != src {
                     if is_move && !move_eff_has_secondaries(b, dex, source_effect) {
                         let ts = b.poke_str(t);
@@ -842,7 +842,7 @@ fn dispatch_cond(
             if dex.move_static(locked).has_flag(dex, "failencore") || !has_slot {
                 return RV::False;
             }
-            let locked_key = dex.moves.key(locked).to_string();
+            let locked_key = dex.moves.key(locked);
             if let Some(st) = b.state_at_mut(state) {
                 st.set(crate::state::DK::Move, Scalar::MoveK(locked));
             }
@@ -855,14 +855,14 @@ fn dispatch_cond(
         }
         ("encore", "onOverrideAction") => {
             let move_key = match source_effect {
-                EffectHandle::MoveEff(m) => dex.moves.key(m).to_string(),
-                _ => String::new(),
+                EffectHandle::MoveEff(m) => dex.moves.key(m),
+                _ => "",
             };
             let locked = b
                 .state_at(state)
                 .and_then(|s| s.get_move())
-                .map(|m| dex.moves.key(m).to_string())
-                .unwrap_or_default();
+                .map(|m| dex.moves.key(m))
+                .unwrap_or("");
             if !locked.is_empty() && move_key != locked {
                 return RV::Str(locked);
             }
@@ -873,11 +873,11 @@ fn dispatch_cond(
             let locked = b
                 .state_at(state)
                 .and_then(|s| s.get_move())
-                .map(|m| dex.moves.key(m).to_string())
-                .unwrap_or_default();
+                .map(|m| dex.moves.key(m))
+                .unwrap_or("");
             let pp_left = dex
                 .moves
-                .id(&locked)
+                .id(locked)
                 .and_then(|mid| b.poke(t).get_move_slot(mid).map(|s| s.pp))
                 .unwrap_or(0);
             if pp_left <= 0 {
@@ -896,9 +896,9 @@ fn dispatch_cond(
             let locked = b
                 .state_at(state)
                 .and_then(|s| s.get_move())
-                .map(|m| dex.moves.key(m).to_string())
-                .unwrap_or_default();
-            let Some(mid) = dex.moves.id(&locked) else { return RV::Undef };
+                .map(|m| dex.moves.key(m))
+                .unwrap_or("");
+            let Some(mid) = dex.moves.id(locked) else { return RV::Undef };
             if b.poke(t).get_move_slot(mid).is_none() {
                 return RV::Undef;
             }
@@ -948,14 +948,14 @@ fn dispatch_cond(
             let locked = b
                 .state_at(state)
                 .and_then(|s| s.get_move())
-                .map(|m| dex.moves.key(m).to_string())
-                .unwrap_or_default();
+                .map(|m| dex.moves.key(m))
+                .unwrap_or("");
             let cur = b
                 .active_move
                 .as_ref()
                 .and_then(|m| m.id)
-                .map(|m| dex.moves.key(m).to_string())
-                .unwrap_or_default();
+                .map(|m| dex.moves.key(m))
+                .unwrap_or("");
             if !locked.is_empty() && cur == locked {
                 let ts = b.poke_str(t);
                 let name = b.active_move_name(dex);
@@ -969,9 +969,9 @@ fn dispatch_cond(
             let locked = b
                 .state_at(state)
                 .and_then(|s| s.get_move())
-                .map(|m| dex.moves.key(m).to_string())
-                .unwrap_or_default();
-            if let Some(mid) = dex.moves.id(&locked) {
+                .map(|m| dex.moves.key(m))
+                .unwrap_or("");
+            if let Some(mid) = dex.moves.id(locked) {
                 if b.poke(t).get_move_slot(mid).is_some() {
                     b.pokemon_disable_move(t, mid);
                 }
@@ -1038,10 +1038,10 @@ fn dispatch_cond(
                     am.stalling_move,
                     am.drain.is_some(),
                     am.category,
-                    am.id.map(|m| dex.moves.key(m).to_string()).unwrap_or_default(),
+                    am.id.map(|m| dex.moves.key(m)).unwrap_or(""),
                     am.status.is_some(),
                     am.has_boosts,
-                    am.volatile_status.clone(),
+                    am.volatile_status,
                     am.recoil.is_some(),
                 )
             };
@@ -1076,8 +1076,8 @@ fn dispatch_cond(
                 }
                 if has_status
                     || (has_boosts && move_key != "swagger")
-                    || vs.as_deref() == Some("confusion")
-                    || SUB_BLOCKED.contains(&move_key.as_str())
+                    || vs == Some("confusion")
+                    || SUB_BLOCKED.contains(&move_key)
                 {
                     let ts = b.poke_str(t);
                     let name = b.active_move_name(dex);
@@ -1197,7 +1197,7 @@ fn dispatch_cond(
                 fake.priority = 0;
                 fake.target = "normal".into();
                 fake.volatile_status = None;
-                fake.secondaries = Vec::new();
+                fake.secondaries = smallvec::SmallVec::new();
                 fake.self_effect = None;
                 fake.flags = dex.flag_bit("contact") | dex.flag_bit("protect");
                 fake.cb_mask = crate::dex::CbMask::EMPTY;
@@ -1229,7 +1229,7 @@ fn dispatch_cond(
             b.add(&["-end", &ts, "move: Bide", "[silent]"]);
             RV::Undef
         }
-        ("bide", "onSemiLockMove") => RV::Str("bide".to_string()),
+        ("bide", "onSemiLockMove") => RV::Str("bide"),
         // ------------------------------------------------------------ rage
         ("rage", "onStart") => {
             let t = tpoke.unwrap();
@@ -1273,7 +1273,7 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("rollout", "onLockMove") => RV::Str("rollout".to_string()),
+        ("rollout", "onLockMove") => RV::Str("rollout"),
         // ------------------------------------------------------ furycutter
         ("furycutter", "onStart") => {
             if let Some(st) = b.state_at_mut(state) {
@@ -1451,11 +1451,11 @@ fn dispatch_cond(
         ("twoturnmove", "onStart") => {
             let t = tpoke.unwrap();
             let EffectHandle::MoveEff(mv) = source_effect else { return RV::Undef };
-            let move_key = dex.moves.key(mv).to_string();
+            let move_key = dex.moves.key(mv);
             if let Some(st) = b.state_at_mut(state) {
                 st.set(crate::state::DK::Move, Scalar::MoveK(mv));
             }
-            b.add_volatile(dex, t, &move_key, None, EffectHandle::None);
+            b.add_volatile(dex, t, move_key, None, EffectHandle::None);
             // gen2 runMove's moveUsed() never passes targetLoc, so this is
             // None for directly-used charge moves...
             let mut move_target_loc = b.poke(t).last_move_target_loc;
@@ -1479,7 +1479,7 @@ fn dispatch_cond(
                     move_target_loc = Some(if d.side == t.side { -1 } else { 1 });
                 }
             }
-            let mvc = dex.conds_id(&move_key).unwrap();
+            let mvc = dex.conds_id(move_key).unwrap();
             if let Some(loc) = move_target_loc {
                 if let Some(vs) = b.poke_mut(t).volatile_mut(mvc) {
                     vs.set_int(crate::state::DK::TargetLoc, loc as i64);
@@ -1494,10 +1494,10 @@ fn dispatch_cond(
             let locked = b
                 .state_at(state)
                 .and_then(|s| s.get_move())
-                .map(|m| dex.moves.key(m).to_string())
-                .unwrap_or_default();
+                .map(|m| dex.moves.key(m))
+                .unwrap_or("");
             if !locked.is_empty() {
-                b.remove_volatile(dex, t, &locked);
+                b.remove_volatile(dex, t, locked);
             }
             RV::Undef
         }
@@ -1505,8 +1505,8 @@ fn dispatch_cond(
             let locked = b
                 .state_at(state)
                 .and_then(|s| s.get_move())
-                .map(|m| dex.moves.key(m).to_string())
-                .unwrap_or_default();
+                .map(|m| dex.moves.key(m))
+                .unwrap_or("");
             RV::Str(locked)
         }
         ("twoturnmove", "onMoveAborted") => {
@@ -1516,7 +1516,7 @@ fn dispatch_cond(
         }
         // ---------------------------------------------- dig / fly volatiles
         ("dig", "onImmunity") => {
-            if relay == RV::Str("sandstorm".to_string()) || relay == RV::Str("hail".to_string()) {
+            if relay == RV::Str("sandstorm") || relay == RV::Str("hail") {
                 return RV::False;
             }
             RV::Undef
@@ -1526,22 +1526,22 @@ fn dispatch_cond(
                 .active_move
                 .as_ref()
                 .and_then(|m| m.id)
-                .map(|m| dex.moves.key(m).to_string())
-                .unwrap_or_default();
+                .map(|m| dex.moves.key(m))
+                .unwrap_or("");
             if cond == "dig" {
-                if matches!(move_key.as_str(), "earthquake" | "magnitude" | "fissure") {
+                if matches!(move_key, "earthquake" | "magnitude" | "fissure") {
                     return RV::Undef;
                 }
             } else {
-                if matches!(move_key.as_str(), "gust" | "twister" | "thunder" | "whirlwind") {
+                if matches!(move_key, "gust" | "twister" | "thunder" | "whirlwind") {
                     return RV::Undef;
                 }
-                if matches!(move_key.as_str(), "earthquake" | "magnitude" | "fissure") {
+                if matches!(move_key, "earthquake" | "magnitude" | "fissure") {
                     return RV::False;
                 }
             }
             if matches!(
-                move_key.as_str(),
+                move_key,
                 "attract" | "curse" | "foresight" | "meanlook" | "mimic" | "nightmare"
                     | "spiderweb" | "transform"
             ) {
@@ -1567,12 +1567,12 @@ fn dispatch_cond(
                 .active_move
                 .as_ref()
                 .and_then(|m| m.id)
-                .map(|m| dex.moves.key(m).to_string())
-                .unwrap_or_default();
+                .map(|m| dex.moves.key(m))
+                .unwrap_or("");
             let doubled = if cond == "dig" {
-                matches!(move_key.as_str(), "earthquake" | "magnitude")
+                matches!(move_key, "earthquake" | "magnitude")
             } else {
-                matches!(move_key.as_str(), "gust" | "twister")
+                matches!(move_key, "gust" | "twister")
             };
             if doubled {
                 b.chain_modify(2.0, 1.0);
@@ -1623,8 +1623,8 @@ fn dispatch_cond(
             let locked = b
                 .state_at(state)
                 .and_then(|s| s.get_move())
-                .map(|m| dex.moves.key(m).to_string())
-                .unwrap_or_default();
+                .map(|m| dex.moves.key(m))
+                .unwrap_or("");
             RV::Str(locked)
         }
         ("lockedmove", "onMoveAborted") => {

@@ -38,7 +38,7 @@ impl Battle {
                 EvTarget::Poke(src),
                 Some(src),
                 EffectHandle::Cond(cond),
-                Some(RV::Str(status.to_string())),
+                Some(RV::Str(dex.conds_key(cond))),
                 false,
                 false,
             );

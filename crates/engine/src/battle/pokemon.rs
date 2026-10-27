@@ -41,7 +41,9 @@ impl Battle {
         }
         let (has_reflect, has_lightscreen) = if !unboosted && (stat == 1 || stat == 3) {
             let side = &self.sides[id.side as usize];
-            if stat == 1 {
+            if side.side_conditions.is_empty() {
+                (false, false)
+            } else if stat == 1 {
                 (
                     crate::cond_id!(dex, "reflect").map(|c| side.has_side_condition(c)).unwrap_or(false),
                     false,
@@ -196,8 +198,8 @@ impl Battle {
         }
 
         // sourceEffect move `status` field checks (fail messages)
-        let se_status: Option<String> = match source_effect {
-            EffectHandle::MoveEff(m) => dex.move_static(m).status.clone(),
+        let se_status: Option<&'static str> = match source_effect {
+            EffectHandle::MoveEff(m) => dex.move_static(m).status,
             _ => None,
         };
 
@@ -231,7 +233,7 @@ impl Battle {
                 EvTarget::Poke(id),
                 source,
                 source_effect,
-                Some(RV::Str(status.to_string())),
+                Some(RV::str(status)),
                 false,
                 false,
             );
@@ -264,7 +266,7 @@ impl Battle {
                 EvTarget::Poke(id),
                 source,
                 source_effect,
-                Some(RV::Str(status.to_string())),
+                Some(RV::str(status)),
                 false,
                 false,
             );
@@ -440,7 +442,7 @@ impl Battle {
             EvTarget::Poke(id),
             source,
             source_effect,
-            Some(RV::Str(status.to_string())),
+            Some(RV::Str(dex.conds_key(cond))),
             false,
             false,
         );
@@ -720,7 +722,7 @@ impl Battle {
     }
 
     /// pokemon.getLockedMove: priorityEvent('LockMove').
-    pub fn get_locked_move(&mut self, dex: &Dex, id: PokeId) -> Option<String> {
+    pub fn get_locked_move(&mut self, dex: &Dex, id: PokeId) -> Option<&'static str> {
         let rv = self.priority_event(dex, &ev::LockMove, EvTarget::Poke(id), None, EffectHandle::None, None);
         match rv {
             RV::Str(s) => Some(s),
@@ -790,7 +792,7 @@ impl Battle {
     /// pokemon.clearVolatile(includeSwitchFlags).
     pub fn clear_volatile(&mut self, dex: &Dex, id: PokeId, include_switch_flags: bool) {
         // linked volatiles first (PS iterates this.volatiles)
-        let linked: Vec<(CondId, LinkedPokes)> = self
+        let linked: smallvec::SmallVec<[(CondId, LinkedPokes); 2]> = self
             .poke(id)
             .volatiles
             .iter()
@@ -860,7 +862,7 @@ impl Battle {
             EvTarget::Poke(id),
             None,
             EffectHandle::None,
-            Some(RV::Str(ty.to_string())),
+            Some(RV::str(ty)),
             false,
             false,
         );

@@ -113,13 +113,13 @@ pub fn dispatch_item(
                 .active_move
                 .as_ref()
                 .and_then(|m| m.id)
-                .map(|m| dex.moves.key(m).to_string())
-                .unwrap_or_default();
-            if KINGSROCK_MOVES.contains(&move_key.as_str()) {
+                .map(|m| dex.moves.key(m))
+                .unwrap_or("");
+            if KINGSROCK_MOVES.contains(&move_key) {
                 if let Some(am) = b.active_move.as_mut() {
                     am.secondaries.push(HitEffect {
                         chance: Some(12),
-                        volatile_status: Some("flinch".to_string()),
+                        volatile_status: Some("flinch"),
                         kingsrock: true,
                         ..Default::default()
                     });

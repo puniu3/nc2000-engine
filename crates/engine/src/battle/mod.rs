@@ -77,17 +77,62 @@ impl EffectHandle {
 
 /// Relay variable (PS runEvent relayVar):
 /// undefined | null | false | true | number | string (move ids from LockMove).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum RV {
     Undef,
     Null,
     False,
     True,
     Num(f64),
-    Str(String),
+    Str(&'static str),
 }
 
 impl RV {
+    #[inline]
+    pub fn str(s: &str) -> RV {
+        let interned = match s {
+            "" => "",
+            "brn" => "brn",
+            "par" => "par",
+            "slp" => "slp",
+            "frz" => "frz",
+            "psn" => "psn",
+            "tox" => "tox",
+            "confusion" => "confusion",
+            "sandstorm" => "sandstorm",
+            "raindance" => "raindance",
+            "sunnyday" => "sunnyday",
+            "hail" => "hail",
+            "powder" => "powder",
+            "trapped" => "trapped",
+            "partiallytrapped" => "partiallytrapped",
+            "flinch" => "flinch",
+            "recharge" => "recharge",
+            "bide" => "bide",
+            "rollout" => "rollout",
+            "Normal" => "Normal",
+            "Fire" => "Fire",
+            "Water" => "Water",
+            "Electric" => "Electric",
+            "Grass" => "Grass",
+            "Ice" => "Ice",
+            "Fighting" => "Fighting",
+            "Poison" => "Poison",
+            "Ground" => "Ground",
+            "Flying" => "Flying",
+            "Psychic" => "Psychic",
+            "Bug" => "Bug",
+            "Rock" => "Rock",
+            "Ghost" => "Ghost",
+            "Dragon" => "Dragon",
+            "Dark" => "Dark",
+            "Steel" => "Steel",
+            "???" => "???",
+            other => crate::dex::leak_intern(other),
+        };
+        RV::Str(interned)
+    }
+
     pub fn truthy(&self) -> bool {
         match self {
             RV::Undef | RV::Null | RV::False => false,

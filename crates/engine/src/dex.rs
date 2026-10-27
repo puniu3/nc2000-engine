@@ -164,9 +164,11 @@ pub struct KnownCbs {
     pub on_hit: Cb,
     pub on_after_hit: Cb,
     pub on_start: Cb,
+    pub on_set_status: Cb,
     pub damage_callback: Cb,
     pub base_power_callback: Cb,
     pub before_move_callback: Cb,
+    pub before_turn_callback: Cb,
     pub on_hit_field: Cb,
     pub on_hit_side: Cb,
 }
@@ -350,34 +352,41 @@ pub struct DexFile {
 /// Interned table: dense ids in sorted-key order (stable across loads).
 pub struct Table<I, T> {
     pub keys: Vec<String>,
+    interned_keys: Vec<&'static str>,
     pub values: Vec<T>,
-    index: BTreeMap<String, u16>,
+    index: crate::fxhash::FxHashMap<&'static str, u16>,
     _id: std::marker::PhantomData<I>,
 }
 
 impl<I: From<u16> + Into<u16> + Copy, T> Table<I, T> {
     fn build(map: BTreeMap<String, T>) -> Self {
-        let mut keys = Vec::new();
-        let mut values = Vec::new();
-        let mut index = BTreeMap::new();
+        let mut keys = Vec::with_capacity(map.len());
+        let mut interned_keys = Vec::with_capacity(map.len());
+        let mut values = Vec::with_capacity(map.len());
+        let mut index = crate::fxhash::FxHashMap::default();
         for (i, (k, v)) in map.into_iter().enumerate() {
-            index.insert(k.clone(), i as u16);
+            let ik = leak_intern(&k);
+            index.insert(ik, i as u16);
             keys.push(k);
+            interned_keys.push(ik);
             values.push(v);
         }
-        Table { keys, values, index, _id: std::marker::PhantomData }
+        Table { keys, interned_keys, values, index, _id: std::marker::PhantomData }
     }
 
+    #[inline]
     pub fn id(&self, key: &str) -> Option<I> {
         self.index.get(key).map(|&i| I::from(i))
     }
 
+    #[inline]
     pub fn get(&self, id: I) -> &T {
         &self.values[id.into() as usize]
     }
 
-    pub fn key(&self, id: I) -> &str {
-        &self.keys[id.into() as usize]
+    #[inline]
+    pub fn key(&self, id: I) -> &'static str {
+        self.interned_keys[id.into() as usize]
     }
 
     pub fn len(&self) -> usize {
@@ -430,7 +439,102 @@ pub enum Accuracy {
 /// that fixed order, which matches `for (boostName in boost)` in PS because
 /// the JSON preserves the original insertion order and PS data files list
 /// stats in canonical order).
-pub type SparseBoosts = Vec<(usize, i8)>; // (boost index, delta)
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+pub struct SparseBoosts {
+    entries: [(usize, i8); 7],
+    len: u8,
+}
+
+impl SparseBoosts {
+    pub const EMPTY: Self = Self {
+        entries: [(0, 0); 7],
+        len: 0,
+    };
+
+    #[inline]
+    pub const fn new() -> Self {
+        Self::EMPTY
+    }
+
+    #[inline]
+    pub fn from_slice(slice: &[(usize, i8)]) -> Self {
+        assert!(slice.len() <= 7, "SparseBoosts overflow");
+        let mut entries = [(0, 0); 7];
+        let mut i = 0;
+        while i < slice.len() {
+            entries[i] = slice[i];
+            i += 1;
+        }
+        Self {
+            entries,
+            len: slice.len() as u8,
+        }
+    }
+
+    #[inline]
+    pub fn push(&mut self, item: (usize, i8)) {
+        assert!((self.len as usize) < 7, "SparseBoosts overflow");
+        self.entries[self.len as usize] = item;
+        self.len += 1;
+    }
+
+    #[inline]
+    pub fn retain(&mut self, mut keep: impl FnMut(&(usize, i8)) -> bool) {
+        let mut n = 0usize;
+        for i in 0..self.len as usize {
+            let entry = self.entries[i];
+            if keep(&entry) {
+                self.entries[n] = entry;
+                n += 1;
+            }
+        }
+        self.len = n as u8;
+    }
+
+    #[inline]
+    pub fn as_slice(&self) -> &[(usize, i8)] {
+        &self.entries[..self.len as usize]
+    }
+}
+
+impl std::ops::Deref for SparseBoosts {
+    type Target = [(usize, i8)];
+    #[inline]
+    fn deref(&self) -> &[(usize, i8)] {
+        self.as_slice()
+    }
+}
+
+impl std::fmt::Debug for SparseBoosts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.as_slice().fmt(f)
+    }
+}
+
+impl std::hash::Hash for SparseBoosts {
+    #[inline]
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.as_slice().hash(state);
+    }
+}
+
+impl IntoIterator for SparseBoosts {
+    type Item = (usize, i8);
+    type IntoIter = std::iter::Take<std::array::IntoIter<(usize, i8), 7>>;
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        self.entries.into_iter().take(self.len as usize)
+    }
+}
+
+impl<'a> IntoIterator for &'a SparseBoosts {
+    type Item = &'a (usize, i8);
+    type IntoIter = std::slice::Iter<'a, (usize, i8)>;
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        self.as_slice().iter()
+    }
+}
 
 pub const BOOST_KEYS: [&str; 7] = ["atk", "def", "spa", "spd", "spe", "accuracy", "evasion"];
 
@@ -441,7 +545,7 @@ pub fn boost_index(key: &str) -> Option<usize> {
 fn parse_sparse_boosts(v: &Value) -> SparseBoosts {
     // serde_json is built with preserve_order, so iteration order here is the
     // JSON object's own key order == PS's `for (boostName in boost)` order.
-    let mut out = Vec::new();
+    let mut out = SparseBoosts::new();
     if let Value::Object(map) = v {
         for (key, val) in map {
             if let (Some(idx), Some(n)) = (boost_index(key), val.as_i64()) {
@@ -457,8 +561,8 @@ fn parse_sparse_boosts(v: &Value) -> SparseBoosts {
 pub struct HitEffect {
     pub chance: Option<i32>,
     pub boosts: SparseBoosts,
-    pub status: Option<String>,
-    pub volatile_status: Option<String>,
+    pub status: Option<&'static str>,
+    pub volatile_status: Option<&'static str>,
     pub self_effect: Option<Box<HitEffect>>,
     pub kingsrock: bool,
     /// Callback names inside this block (e.g. thief secondary.onHit).
@@ -472,8 +576,8 @@ fn parse_hit_effect(v: &Value) -> HitEffect {
         if let Some(b) = map.get("boosts") {
             h.boosts = parse_sparse_boosts(b);
         }
-        h.status = map.get("status").and_then(|x| x.as_str()).map(String::from);
-        h.volatile_status = map.get("volatileStatus").and_then(|x| x.as_str()).map(String::from);
+        h.status = map.get("status").and_then(|x| x.as_str()).map(leak_intern);
+        h.volatile_status = map.get("volatileStatus").and_then(|x| x.as_str()).map(leak_intern);
         if let Some(s) = map.get("self") {
             h.self_effect = Some(Box::new(parse_hit_effect(s)));
         }
@@ -483,13 +587,13 @@ fn parse_hit_effect(v: &Value) -> HitEffect {
     h
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FixedDamage {
     Level,
     Amount(i32),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Multihit {
     Fixed(i32),
     Range(i32, i32),
@@ -512,11 +616,11 @@ pub struct MoveStatic {
     pub will_crit: Option<bool>,
     /// Bitmask over `Dex::flag_bit` (move flags: contact/charge/protect/...).
     pub flags: u64,
-    pub status: Option<String>,
-    pub volatile_status: Option<String>,
-    pub side_condition: Option<String>,
-    pub weather: Option<String>,
-    pub pseudo_weather: Option<String>,
+    pub status: Option<&'static str>,
+    pub volatile_status: Option<&'static str>,
+    pub side_condition: Option<&'static str>,
+    pub weather: Option<&'static str>,
+    pub pseudo_weather: Option<&'static str>,
     pub boosts: SparseBoosts,
     pub has_boosts: bool,
     pub heal: Option<(i32, i32)>,
@@ -524,12 +628,12 @@ pub struct MoveStatic {
     pub recoil: Option<(i32, i32)>,
     pub struggle_recoil: bool,
     pub multihit: Option<Multihit>,
-    pub secondaries: Vec<HitEffect>,
+    pub secondaries: smallvec::SmallVec<[HitEffect; 2]>,
     pub self_effect: Option<HitEffect>,
     pub damage: Option<FixedDamage>,
     pub ohko: bool,
     pub selfdestruct: bool,
-    pub self_switch: Option<String>,
+    pub self_switch: Option<&'static str>,
     pub force_switch: bool,
     pub ignore_immunity: bool,
     pub ignore_accuracy: bool,
@@ -553,7 +657,7 @@ pub struct MoveStatic {
 }
 
 /// Intern a short string once, globally (move targets, flag names).
-fn leak_intern(s: &str) -> &'static str {
+pub(crate) fn leak_intern(s: &str) -> &'static str {
     use std::collections::HashSet;
     use std::sync::{Mutex, OnceLock};
     static TABLE: OnceLock<Mutex<HashSet<&'static str>>> = OnceLock::new();
@@ -571,8 +675,8 @@ fn leak_intern(s: &str) -> &'static str {
 impl MoveStatic {
     fn parse(
         d: &MoveData,
-        type_index: &std::collections::HashMap<String, u8>,
-        flag_bits: &std::collections::HashMap<String, u64>,
+        type_index: &crate::fxhash::FxHashMap<String, u8>,
+        flag_bits: &crate::fxhash::FxHashMap<String, u64>,
     ) -> MoveStatic {
         let x = |k: &str| d.extra.get(k);
         let xb = |k: &str| x(k).map(|v| v.as_bool() == Some(true) || v.is_string()).unwrap_or(false);
@@ -599,7 +703,7 @@ impl MoveStatic {
             Value::Number(n) => Some(FixedDamage::Amount(n.as_i64().unwrap() as i32)),
             _ => None,
         });
-        let mut secondaries: Vec<HitEffect> = d
+        let mut secondaries: smallvec::SmallVec<[HitEffect; 2]> = d
             .secondaries
             .as_ref()
             .and_then(|v| v.as_array())
@@ -631,11 +735,11 @@ impl MoveStatic {
             crit_ratio: d.crit_ratio.unwrap_or(1) as i32,
             will_crit: x("willCrit").and_then(|v| v.as_bool()),
             flags: d.flags.keys().map(|k| flag_bits.get(k).copied().unwrap_or(0)).fold(0, |a, b| a | b),
-            status: d.status.clone(),
-            volatile_status: d.volatile_status.clone(),
-            side_condition: d.side_condition.clone(),
-            weather: d.weather.clone(),
-            pseudo_weather: x("pseudoWeather").and_then(|v| v.as_str()).map(String::from),
+            status: d.status.as_deref().map(leak_intern),
+            volatile_status: d.volatile_status.as_deref().map(leak_intern),
+            side_condition: d.side_condition.as_deref().map(leak_intern),
+            weather: d.weather.as_deref().map(leak_intern),
+            pseudo_weather: x("pseudoWeather").and_then(|v| v.as_str()).map(leak_intern),
             boosts: x("boosts").map(parse_sparse_boosts).unwrap_or_default(),
             has_boosts: x("boosts").is_some(),
             heal: x("heal").and_then(|v| v.as_array()).map(|a| {
@@ -652,9 +756,9 @@ impl MoveStatic {
             selfdestruct: xb("selfdestruct"),
             self_switch: x("selfSwitch").and_then(|v| {
                 if v.as_bool() == Some(true) {
-                    Some("true".to_string())
+                    Some("true")
                 } else {
-                    v.as_str().map(String::from)
+                    v.as_str().map(leak_intern)
                 }
             }),
             force_switch: xb("forceSwitch"),
@@ -768,7 +872,7 @@ pub struct Dex {
     pub possible_callbacks: std::collections::HashSet<String>,
     /// Registered callback names, dense-id order (`Cb` indexes this).
     pub cb_names: Vec<String>,
-    cb_index: std::collections::HashMap<String, u16>,
+    cb_index: crate::fxhash::FxHashMap<String, u16>,
     /// Union of all condition + item masks (same universe as
     /// `possible_callbacks`; move callbacks excluded).
     pub possible_mask: CbMask,
@@ -782,18 +886,18 @@ pub struct Dex {
     /// Display names of interned types ("Fire", ..., "???"), TypeId order.
     pub type_names: Vec<String>,
     /// Keys: both display ("Fire") and toid ("fire") forms.
-    type_index: std::collections::HashMap<String, u8>,
+    type_index: crate::fxhash::FxHashMap<String, u8>,
     /// attacker-major NxN: +1 super effective, -1 resisted, 0 neutral/immune.
     eff_matrix: Vec<i8>,
     /// attacker-major NxN: damage_taken == 3 (immune).
     imm_matrix: Vec<bool>,
     /// Non-type damage_taken keys (psn/brn/trapped/sandstorm/...) → per-type
     /// immunity row.
-    status_imm: std::collections::HashMap<String, Box<[bool]>>,
+    status_imm: crate::fxhash::FxHashMap<String, Box<[bool]>>,
     /// Precomputed TypeList per species (SpeciesId order).
     species_types: Vec<TypeList>,
     /// Move-flag name → bitmask bit.
-    flag_bits: std::collections::HashMap<String, u64>,
+    flag_bits: crate::fxhash::FxHashMap<String, u64>,
     /// CondId of each `Status` discriminant ("", brn, par, slp, frz, psn,
     /// tox, fnt) — collection must not hit the string index per event.
     pub status_conds: [Option<CondId>; 8],
@@ -829,7 +933,7 @@ impl Dex {
         }
         // ---- type interning (typechart order is BTreeMap-sorted, then "???")
         let mut type_names: Vec<String> = Vec::new();
-        let mut type_index: std::collections::HashMap<String, u8> = Default::default();
+        let mut type_index: crate::fxhash::FxHashMap<String, u8> = Default::default();
         for (key, td) in &file.typechart {
             let i = type_names.len() as u8;
             type_names.push(td.name.clone());
@@ -848,7 +952,7 @@ impl Dex {
         // attacker-major matrices; the "???" row/col stays neutral/non-immune.
         let mut eff_matrix = vec![0i8; nt * nt];
         let mut imm_matrix = vec![false; nt * nt];
-        let mut status_imm: std::collections::HashMap<String, Vec<bool>> = Default::default();
+        let mut status_imm: crate::fxhash::FxHashMap<String, Vec<bool>> = Default::default();
         for (key, td) in &file.typechart {
             let def = tid(key).0 as usize;
             for (att_key, &code) in &td.damage_taken {
@@ -865,7 +969,7 @@ impl Dex {
                 }
             }
         }
-        let status_imm: std::collections::HashMap<String, Box<[bool]>> =
+        let status_imm: crate::fxhash::FxHashMap<String, Box<[bool]>> =
             status_imm.into_iter().map(|(k, v)| (k, v.into_boxed_slice())).collect();
         let known_types = KnownTypes {
             unknown: tid("???"),
@@ -881,7 +985,7 @@ impl Dex {
 
         let moves = Table::build(file.moves);
         // move-flag registry (gen2: ~20 distinct flags; bitmask capacity 64)
-        let mut flag_bits: std::collections::HashMap<String, u64> = Default::default();
+        let mut flag_bits: crate::fxhash::FxHashMap<String, u64> = Default::default();
         for d in &moves.values {
             for k in d.flags.keys() {
                 if !flag_bits.contains_key(k) {
@@ -1022,8 +1126,8 @@ impl Dex {
         // Registration order is deterministic (BTreeMap iteration + fixed
         // extras), so ids are stable across loads of the same data.
         let mut cb_names: Vec<String> = Vec::new();
-        let mut cb_index: std::collections::HashMap<String, u16> = Default::default();
-        let register = |name: &str, cb_names: &mut Vec<String>, cb_index: &mut std::collections::HashMap<String, u16>| -> Cb {
+        let mut cb_index: crate::fxhash::FxHashMap<String, u16> = Default::default();
+        let register = |name: &str, cb_names: &mut Vec<String>, cb_index: &mut crate::fxhash::FxHashMap<String, u16>| -> Cb {
             if let Some(&i) = cb_index.get(name) {
                 return Cb(i);
             }
@@ -1082,6 +1186,8 @@ impl Dex {
             "beforeMoveCallback",
             "onHitField",
             "onHitSide",
+            "onSetStatus",
+            "beforeTurnCallback",
         ] {
             register(builtin, &mut cb_names, &mut cb_index);
         }
@@ -1173,9 +1279,11 @@ impl Dex {
             on_hit: lookup("onHit"),
             on_after_hit: lookup("onAfterHit"),
             on_start: lookup("onStart"),
+            on_set_status: lookup("onSetStatus"),
             damage_callback: lookup("damageCallback"),
             base_power_callback: lookup("basePowerCallback"),
             before_move_callback: lookup("beforeMoveCallback"),
+            before_turn_callback: lookup("beforeTurnCallback"),
             on_hit_field: lookup("onHitField"),
             on_hit_side: lookup("onHitSide"),
         };
@@ -1315,7 +1423,8 @@ impl Dex {
         self.conds.id(key)
     }
 
-    pub fn conds_key(&self, id: CondId) -> &str {
+    #[inline]
+    pub fn conds_key(&self, id: CondId) -> &'static str {
         self.conds.key(id)
     }
 

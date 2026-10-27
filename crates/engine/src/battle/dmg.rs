@@ -401,7 +401,7 @@ impl Battle {
         // TryBoost event — relayVar is the boost table (mist deletes
         // negative entries in place).
         let saved_pending = self.pending_boosts.take();
-        self.pending_boosts = Some(boosts.to_vec());
+        self.pending_boosts = Some(crate::dex::SparseBoosts::from_slice(boosts));
         let rv = self.run_event(
             dex,
             &ev::TryBoost,

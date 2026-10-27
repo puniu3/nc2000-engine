@@ -129,11 +129,23 @@ impl<const CAP: usize> std::hash::Hasher for PolyBatch<CAP> {
 
     #[inline(always)]
     fn write(&mut self, bytes: &[u8]) {
-        let mut chunks = bytes.chunks_exact(8);
-        for c in &mut chunks {
-            self.push(u64::from_le_bytes(c.try_into().unwrap()));
+        let len = bytes.len();
+        let mut i = 0;
+        while i + 8 <= len {
+            let w = u64::from_le_bytes([
+                bytes[i],
+                bytes[i + 1],
+                bytes[i + 2],
+                bytes[i + 3],
+                bytes[i + 4],
+                bytes[i + 5],
+                bytes[i + 6],
+                bytes[i + 7],
+            ]);
+            self.push(w);
+            i += 8;
         }
-        let rem = chunks.remainder();
+        let rem = &bytes[i..];
         let rem_len = rem.len();
         if rem_len != 0 {
             let tail = match rem_len {
@@ -293,11 +305,23 @@ impl<const POLYNOMIAL: bool> std::hash::Hasher for WordHasher<POLYNOMIAL> {
 
     #[inline(always)]
     fn write(&mut self, bytes: &[u8]) {
-        let mut chunks = bytes.chunks_exact(8);
-        for c in &mut chunks {
-            self.add(u64::from_le_bytes(c.try_into().unwrap()));
+        let len = bytes.len();
+        let mut i = 0;
+        while i + 8 <= len {
+            let w = u64::from_le_bytes([
+                bytes[i],
+                bytes[i + 1],
+                bytes[i + 2],
+                bytes[i + 3],
+                bytes[i + 4],
+                bytes[i + 5],
+                bytes[i + 6],
+                bytes[i + 7],
+            ]);
+            self.add(w);
+            i += 8;
         }
-        let rem = chunks.remainder();
+        let rem = &bytes[i..];
         let rem_len = rem.len();
         if rem_len != 0 {
             let tail = match rem_len {
