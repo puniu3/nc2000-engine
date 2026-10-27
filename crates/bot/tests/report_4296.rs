@@ -30,10 +30,17 @@ fn ko_probabilities(dex: &Dex, b: &Battle, action: &str, reply: &str) -> (f64, f
     let target = b.active_id(0).unwrap();
     let mut joint = [None, None];
     for (side, input) in [(0, reply), (1, action)] {
+        let canonical = input
+            .strip_prefix("move ")
+            .and_then(|m| dex.moves.id(m))
+            .map(|id| format!("move {}", dex.moves.key(dex.canonical_move_id(id))));
         joint[side] = Some(
             *b.legal_choices(dex, side)
                 .iter()
-                .find(|a| a.to_input(dex) == input)
+                .find(|a| {
+                    let s = a.to_input(dex);
+                    s == input || canonical.as_deref() == Some(s.as_str())
+                })
                 .unwrap(),
         );
     }

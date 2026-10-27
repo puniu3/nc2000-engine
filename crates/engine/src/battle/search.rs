@@ -162,6 +162,13 @@ impl Battle {
         h.finish()
     }
 
+    pub fn type_key(&self) -> u64 {
+        use std::hash::Hasher;
+        let mut h = crate::fxhash::SearchHasher::default();
+        self.state_hash_into(&mut h, None, false, true);
+        h.finish()
+    }
+
     /// Two-independent-hash fingerprint (FxHash ‖ SipHash) for
     /// certificate-grade state identity (M17e): the 64-bit search key
     /// tolerates collisions (mis-aggregated statistics), a proof-carrying

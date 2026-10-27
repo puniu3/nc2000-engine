@@ -167,48 +167,14 @@ impl MctsAgent {
     }
 
     fn rollout(&mut self, sim: &mut Battle, dex: &Dex, turn_cap: u16) -> f64 {
-        let cutoff = match &self.cfg.playout {
-            Playout::Uniform => turn_cap,
-            Playout::Heavy { turns, .. } => turn_cap.min(sim.turn.saturating_add(*turns)),
-        };
-        loop {
-            if let Some(o) = sim.outcome() {
-                return outcome_reward(o);
-            }
-            if sim.turn > cutoff {
-                return self.leaf_eval(sim, dex);
-            }
-            let mut picks = [None, None];
-            for s in 0..2 {
-                let cs = sim.legal_choices(dex, s);
-                if !cs.is_empty() {
-                    picks[s] = Some(self.rollout_pick(sim, dex, s, &cs));
-                }
-            }
-            sim.apply_choices(dex, picks)
-                .expect("legal_choices produced an illegal choice");
-        }
-    }
-
-    fn rollout_pick(
-        &mut self,
-        sim: &Battle,
-        dex: &Dex,
-        side: usize,
-        cs: &[SearchChoice],
-    ) -> SearchChoice {
-        let eps = match &self.cfg.playout {
-            Playout::Uniform => return cs[self.rng.below(cs.len())],
-            Playout::Heavy { eps, .. } => *eps,
-        };
-        if cs.len() == 1 {
-            return cs[0];
-        }
-        if self.rng.next_f64() < eps {
-            return cs[self.rng.below(cs.len())];
-        }
-        // M5/M6 historical agents keep the no-switch rollout bit-identical.
-        greedy_pick(sim, dex, side, cs, &mut self.rng, RolloutRules::default())
+        playout_value(
+            sim,
+            dex,
+            &self.cfg.playout,
+            turn_cap,
+            &mut self.rng,
+            RolloutRules::default(),
+        )
     }
 
     fn leaf_eval(&self, sim: &Battle, dex: &Dex) -> f64 {
@@ -219,113 +185,14 @@ impl MctsAgent {
     }
 }
 
-/// One playout from `sim` to termination/cutoff under `playout`, returning
-/// the side-0 reward. Free-function twin of `MctsAgent::rollout` (same
-/// policy, same PRNG draw order) shared by the M7 agents; `MctsAgent` keeps
-/// its own methods so the M5/M6 gate references stay bit-identical.
-/// Rollout switch policy (M16c): when the active's best expected hit
-/// removes less than TRIGGER of the foe per turn, the rollout may switch to
-/// the bench mon with the strongest offense against the foe active, if that
-/// beats staying by MARGIN. Humans switch at 22% of decisions (570-battle
-/// corpus) and the no-switch rollout misvalued every such line — the tree's
-/// switch arms were evaluated by playouts in which nobody ever switches.
 const ROLLOUT_SWITCH_TRIGGER: f64 = 0.15;
 const ROLLOUT_SWITCH_MARGIN: f64 = 0.10;
 
-/// M16c-2 rollout pseudo-values for the format's core status moves, so the
-/// greedy rollout can prefer them over a weak attack instead of scoring
-/// every non-damaging move 0 (the corpus' top disagreement clusters: sleep,
-/// Spikes, Curse/Rest — M16b). Rough per-turn HP-fraction equivalents,
-/// accuracy-scaled, and 0 whenever the move would be a no-op (sleep clause,
-/// existing status, spikes already laid, healing near full, boosting past
-/// +2) — which also removes Rest-at-full-HP from greedy rollouts.
 const PSEUDO_SLEEP: f64 = 0.30;
 const PSEUDO_PAR: f64 = 0.10;
 const PSEUDO_SPIKES: f64 = 0.15;
 const PSEUDO_BOOST: f64 = 0.15;
 const PSEUDO_HEAL: f64 = 0.25;
-
-fn status_pseudo_score(
-    sim: &Battle,
-    dex: &Dex,
-    side: usize,
-    att: nc2000_engine::state::PokeId,
-    def: nc2000_engine::state::PokeId,
-    id: nc2000_engine::dex::MoveId,
-) -> f64 {
-    use nc2000_engine::dex::Accuracy;
-    use nc2000_engine::state::Status;
-    let ms = dex.move_static(id);
-    let acc = match ms.accuracy {
-        Accuracy::AlwaysHits => 1.0,
-        Accuracy::Pct(p) => p as f64 / 100.0,
-    };
-    match ms.status.as_deref() {
-        Some("slp") => {
-            let clause_free = !sim.has_sleeping_pokemon(1 - side);
-            if clause_free && sim.poke(def).status == Status::None {
-                return PSEUDO_SLEEP * acc;
-            }
-            return 0.0;
-        }
-        Some("par") => {
-            if sim.poke(def).status == Status::None {
-                return PSEUDO_PAR * acc;
-            }
-            return 0.0;
-        }
-        _ => {}
-    }
-    if ms.side_condition.as_deref() == Some("spikes") {
-        let foe = &sim.sides[1 - side];
-        let laid = dex.conds_id("spikes").is_some_and(|sid| foe.has_side_condition(sid));
-        if foe.pokemon_left > 1 && !laid {
-            return PSEUDO_SPIKES;
-        }
-        return 0.0;
-    }
-    if ms.heal.is_some() {
-        let me = sim.poke(att);
-        if (me.hp as f64) < 0.5 * me.maxhp as f64 {
-            return PSEUDO_HEAL;
-        }
-        return 0.0;
-    }
-    match dex.moves.key(id) {
-        "curse" => {
-            let me = sim.poke(att);
-            let ghost = dex.type_id("Ghost").is_some_and(|g| me.types.has(g));
-            if !ghost && me.boosts[0] < 2 {
-                PSEUDO_BOOST
-            } else {
-                0.0
-            }
-        }
-        "swordsdance" => {
-            if sim.poke(att).boosts[0] < 2 {
-                PSEUDO_BOOST
-            } else {
-                0.0
-            }
-        }
-        "amnesia" => {
-            if sim.poke(att).boosts[2] < 2 {
-                PSEUDO_BOOST
-            } else {
-                0.0
-            }
-        }
-        "bellydrum" => {
-            let me = sim.poke(att);
-            if me.boosts[0] < 6 && (me.hp as f64) > 0.6 * me.maxhp as f64 {
-                PSEUDO_BOOST + 0.10
-            } else {
-                0.0
-            }
-        }
-        _ => 0.0,
-    }
-}
 
 /// Optional rules layered over the heavy rollout's ε-greedy pick. The
 /// default is none of them; the shipped set is
@@ -360,7 +227,14 @@ pub fn playout_value(
         Playout::Uniform => turn_cap,
         Playout::Heavy { turns, .. } => turn_cap.min(sim.turn.saturating_add(*turns)),
     };
-    loop {
+    if let Some(o) = sim.outcome() {
+        return outcome_reward(o);
+    }
+    // If either side is still in TeamPreview, advance that single step on `Battle`
+    // before converting the 3v3 party state into the 256-byte `CompactBattle` kernel.
+    while sim.sides[0].request_state() == Some(nc2000_engine::state::RequestKind::TeamPreview)
+        || sim.sides[1].request_state() == Some(nc2000_engine::state::RequestKind::TeamPreview)
+    {
         if let Some(o) = sim.outcome() {
             return outcome_reward(o);
         }
@@ -380,42 +254,104 @@ pub fn playout_value(
         sim.apply_choices(dex, picks)
             .expect("legal_choices produced an illegal choice");
     }
+
+    let (table, mut cb) = nc2000_engine::compact::CompactBattle::from_battle(sim, dex);
+    compact_playout_value(&mut cb, &table, playout, cutoff, rng, rules)
 }
 
-pub fn playout_pick(
-    sim: &Battle,
-    dex: &Dex,
+/// Execute the rollout and cutoff leaf evaluation directly on the 256-byte `CompactBattle` kernel.
+#[inline]
+pub fn compact_playout_value(
+    cb: &mut nc2000_engine::compact::CompactBattle,
+    table: &nc2000_engine::compact::MatchTable,
     playout: &Playout,
-    side: usize,
-    cs: &[SearchChoice],
+    cutoff: u16,
     rng: &mut SplitMix64,
     rules: RolloutRules,
-) -> SearchChoice {
-    // The Perish rules override only after the ordinary pick has drawn its
-    // rng, so a rollout in which they never fire keeps its exact stream.
-    let pick = ordinary_pick(sim, dex, playout, side, cs, rng, rules);
+) -> f64 {
+    loop {
+        match cb.outcome {
+            1 => return 1.0,
+            2 => return 0.0,
+            3 => return 0.5,
+            _ => {}
+        }
+        if cb.turn > cutoff {
+            return match playout {
+                Playout::Uniform => compact_hp_eval(cb, table),
+                Playout::Heavy { weights, .. } => eval::compact_eval_leaf(cb, table, weights),
+            };
+        }
+        let mut picks = [7u8; 2];
+        for s in 0..2usize {
+            if cb.sides[s].request == 0 {
+                continue;
+            }
+            let mut cs = [0u8; 7];
+            let n = cb.legal_actions(table, s, &mut cs);
+            if n > 0 {
+                picks[s] = compact_playout_pick(cb, table, playout, s, &cs[..n], rng, rules);
+            }
+        }
+        cb.apply_actions(table, picks);
+    }
+}
+
+#[inline]
+fn compact_hp_eval(
+    cb: &nc2000_engine::compact::CompactBattle,
+    table: &nc2000_engine::compact::MatchTable,
+) -> f64 {
+    let f = |s: usize| {
+        let mut sum = 0.0;
+        let mut cnt = 0.0;
+        for slot in 0..3usize {
+            let idx = s * 3 + slot;
+            let maxhp = table.mons[idx].maxhp;
+            if maxhp > 0 {
+                sum += (cb.mons[idx].hp().max(0) as f64) / (maxhp as f64);
+                cnt += 1.0;
+            }
+        }
+        if cnt == 0.0 { 0.0 } else { sum / cnt }
+    };
+    0.5 + (f(0) - f(1)) * 0.25
+}
+
+#[inline]
+fn compact_playout_pick(
+    cb: &nc2000_engine::compact::CompactBattle,
+    table: &nc2000_engine::compact::MatchTable,
+    playout: &Playout,
+    side: usize,
+    cs: &[u8],
+    rng: &mut SplitMix64,
+    rules: RolloutRules,
+) -> u8 {
+    let pick = compact_ordinary_pick(cb, table, playout, side, cs, rng, rules);
     if rules.perish_escape || rules.perish_combo {
-        if let Some(escape) = perish_escape(sim, dex, side, cs) {
+        if let Some(escape) = compact_perish_escape(cb, table, side, cs) {
             return escape;
         }
     }
     if rules.perish_combo {
-        if let Some(combo) = perish_combo(sim, dex, side, cs) {
+        if let Some(combo) = compact_perish_combo(cb, table, side, cs) {
             return combo;
         }
     }
     pick
 }
 
-fn ordinary_pick(
-    sim: &Battle,
-    dex: &Dex,
+#[inline]
+fn compact_ordinary_pick(
+    cb: &nc2000_engine::compact::CompactBattle,
+    table: &nc2000_engine::compact::MatchTable,
     playout: &Playout,
     side: usize,
-    cs: &[SearchChoice],
+    cs: &[u8],
     rng: &mut SplitMix64,
     rules: RolloutRules,
-) -> SearchChoice {
+) -> u8 {
     let eps = match playout {
         Playout::Uniform => return cs[rng.below(cs.len())],
         Playout::Heavy { eps, .. } => *eps,
@@ -426,166 +362,257 @@ fn ordinary_pick(
     if rng.next_f64() < eps {
         return cs[rng.below(cs.len())];
     }
-    greedy_pick(sim, dex, side, cs, rng, rules)
+    compact_greedy_pick(cb, table, side, cs, rng, rules)
 }
 
-/// The switch a side makes when its active faints to Perish Song at the end
-/// of this turn (counter 1) and a switch is legal: the bench mon expected to
-/// keep the most HP through the foe active's best hit. `None` otherwise.
-///
-/// Without it no rollout ever leaves a Perish count, so every Perish line
-/// scores as both actives dying: Perish Song on a foe free to switch reads
-/// as a guaranteed trade, Mean Look adds nothing to it, and a trapper that
-/// escapes its own song is never on the board.
-pub fn perish_escape(
-    sim: &Battle,
-    dex: &Dex,
+#[inline]
+fn compact_perish_escape(
+    cb: &nc2000_engine::compact::CompactBattle,
+    table: &nc2000_engine::compact::MatchTable,
     side: usize,
-    cs: &[SearchChoice],
-) -> Option<SearchChoice> {
-    if !cs.iter().any(|c| matches!(c, SearchChoice::Move(_))) {
+    cs: &[u8],
+) -> Option<u8> {
+    use nc2000_engine::compact::vol_bit;
+    if !cs.iter().any(|&c| c < 4) {
         return None;
     }
-    let active = sim.active_id(side)?;
-    let cond = perishsong_id(dex)?;
-    if sim.poke(active).volatile(cond)?.duration != Some(1) {
+    let att_slot = cb.sides[side].active_idx as usize;
+    let att_idx = side * 3 + att_slot;
+    if (cb.mons[att_idx].vol_flags & vol_bit::PERISH_SONG) == 0 || cb.mons[att_idx].timers[3] != 1 {
         return None;
     }
-    let foe = sim.active_id(1 - side);
-    let kept = |c: &SearchChoice| {
-        let SearchChoice::Switch(pos) = *c else { return f64::NEG_INFINITY };
-        let s = &sim.sides[side];
-        let id = nc2000_engine::state::PokeId { side: side as u8, slot: s.party[(pos - 1) as usize] };
-        let p = sim.poke(id);
-        let incoming = foe.map_or(0.0, |foe| eval::best_hit_fraction(sim, dex, foe, id, true));
-        p.hp as f64 / p.maxhp as f64 * (1.0 - incoming).max(0.0)
-    };
-    cs.iter()
-        .copied()
-        .filter(|c| matches!(c, SearchChoice::Switch(_)))
-        .max_by(|a, b| kept(a).total_cmp(&kept(b)))
+    let foe_side = 1 - side;
+    let foe_slot = cb.sides[foe_side].active_idx as usize;
+    let foe_alive = (cb.sides[foe_side].alive_mask & (1 << foe_slot)) != 0
+        && cb.mons[foe_side * 3 + foe_slot].hp() > 0;
+
+    let mut best_act = None;
+    let mut best_kept = f64::NEG_INFINITY;
+    for &c in cs {
+        if (4..7).contains(&c) {
+            let slot = (c - 4) as usize;
+            let idx = side * 3 + slot;
+            let incoming = if foe_alive {
+                cb.best_hit_fraction(table, foe_side, foe_slot, side, slot, true)
+            } else {
+                0.0
+            };
+            let kept = (cb.mons[idx].hp() as f64) / (table.mons[idx].maxhp.max(1) as f64)
+                * (1.0 - incoming).max(0.0);
+            if best_act.is_none() || kept >= best_kept {
+                best_kept = kept;
+                best_act = Some(c);
+            }
+        }
+    }
+    best_act
 }
 
-/// The Perish trap as a rollout side plays it, and the standard answer to it.
-/// Greedy damage never selects a status move, so without this no rollout
-/// ever traps, sings or phazes, and the search can value the combo only
-/// where its own tree happens to reach every step of it.
-///
-/// - A trapped mon counting down (2 or more turns left) phazes the trapper
-///   away, which also ends the trap.
-/// - Otherwise, when this side has a bench to escape to, is not itself
-///   trapped, and cannot expect to KO the foe this turn: Perish Song if the
-///   foe cannot switch (trapped or benchless) and is not counting yet, else
-///   Mean Look / Spider Web when this mon also carries Perish Song.
-///
-/// `None` leaves the ordinary pick in place.
-pub fn perish_combo(
-    sim: &Battle,
-    dex: &Dex,
+#[inline]
+fn compact_perish_combo(
+    cb: &nc2000_engine::compact::CompactBattle,
+    table: &nc2000_engine::compact::MatchTable,
     side: usize,
-    cs: &[SearchChoice],
-) -> Option<SearchChoice> {
-    let ids = perish_moves(dex);
-    let usable = |m: Option<nc2000_engine::dex::MoveId>| {
-        m.map(SearchChoice::Move).filter(|c| cs.contains(c))
-    };
-    let song = usable(ids.song);
-    let phaze = ids.phazes.iter().find_map(|&m| usable(m));
+    cs: &[u8],
+) -> Option<u8> {
+    use nc2000_engine::compact::vol_bit;
+    let me_slot = cb.sides[side].active_idx as usize;
+    let me_idx = side * 3 + me_slot;
+    let mut song = None;
+    let mut phaze = None;
+    let mut trap = None;
+    for &c in cs {
+        if c < 4 {
+            let sk = table.move_specs[me_idx][c as usize].special_kind;
+            if sk == 19 && song.is_none() {
+                song = Some(c);
+            } else if sk == 7 && phaze.is_none() {
+                phaze = Some(c);
+            } else if sk == 26 && trap.is_none() {
+                trap = Some(c);
+            }
+        }
+    }
     if song.is_none() && phaze.is_none() {
         return None;
     }
-    let me_id = sim.active_id(side)?;
-    let foe_id = sim.active_id(1 - side)?;
-    let cond = perishsong_id(dex)?;
-    let me = sim.poke(me_id);
-    let foe = sim.poke(foe_id);
-    let foe_bench = sim.sides[1 - side].pokemon_left > 1;
-    if let Some(phaze) = phaze {
-        let counting = me.volatile(cond).and_then(|v| v.duration).is_some_and(|d| d >= 2);
-        if me.trapped && counting && foe_bench {
-            return Some(phaze);
+    let foe_side = 1 - side;
+    let foe_slot = cb.sides[foe_side].active_idx as usize;
+    let foe_idx = foe_side * 3 + foe_slot;
+    let me = &cb.mons[me_idx];
+    let foe = &cb.mons[foe_idx];
+    if me.hp() <= 0 || foe.hp() <= 0 {
+        return None;
+    }
+    let foe_bench = cb.sides[foe_side].alive_mask.count_ones() > 1;
+    let me_trapped = (me.vol_flags & vol_bit::TRAPPED_OR_LOCKED) != 0;
+    if let Some(phaze_act) = phaze {
+        let counting = (me.vol_flags & vol_bit::PERISH_SONG) != 0 && me.timers[3] >= 2;
+        if me_trapped && counting && foe_bench {
+            return Some(phaze_act);
         }
     }
-    let song = song?;
-    if me.trapped || sim.sides[side].pokemon_left < 2 || foe.has_volatile(cond) {
+    let song_act = song?;
+    if me_trapped
+        || cb.sides[side].alive_mask.count_ones() < 2
+        || (foe.vol_flags & vol_bit::PERISH_SONG) != 0
+    {
         return None;
     }
-    if eval::best_hit_fraction(sim, dex, me_id, foe_id, true) >= 1.0 {
+    if cb.best_hit_fraction(table, side, me_slot, foe_side, foe_slot, true) >= 1.0 {
         return None;
     }
-    if foe.trapped || !foe_bench {
-        return Some(song);
+    if (foe.vol_flags & vol_bit::TRAPPED_OR_LOCKED) != 0 || !foe_bench {
+        return Some(song_act);
     }
-    if foe.types.iter().any(|t| dex.status_key_immune("trapped", t)) {
-        return None;
-    }
-    ids.traps.iter().find_map(|&m| usable(m))
+    trap
 }
 
-struct PerishMoves {
-    song: Option<nc2000_engine::dex::MoveId>,
-    traps: [Option<nc2000_engine::dex::MoveId>; 2],
-    phazes: [Option<nc2000_engine::dex::MoveId>; 2],
-}
-
-fn perish_moves(dex: &Dex) -> &'static PerishMoves {
-    static IDS: std::sync::OnceLock<PerishMoves> = std::sync::OnceLock::new();
-    IDS.get_or_init(|| PerishMoves {
-        song: dex.moves.id("perishsong"),
-        traps: [dex.moves.id("meanlook"), dex.moves.id("spiderweb")],
-        phazes: [dex.moves.id("roar"), dex.moves.id("whirlwind")],
-    })
-}
-
-fn perishsong_id(dex: &Dex) -> Option<nc2000_engine::dex::CondId> {
-    static ID: std::sync::OnceLock<Option<nc2000_engine::dex::CondId>> = std::sync::OnceLock::new();
-    *ID.get_or_init(|| dex.conds_id("perishsong"))
-}
-
-/// Greedy rollout move: strongest expected hit (never a voluntary switch);
-/// forced switch → healthiest bench; team preview / all-zero scores →
-/// uniform random.
-fn greedy_pick(
-    sim: &Battle,
-    dex: &Dex,
+#[inline]
+fn compact_status_pseudo_score(
+    cb: &nc2000_engine::compact::CompactBattle,
+    table: &nc2000_engine::compact::MatchTable,
     side: usize,
-    cs: &[SearchChoice],
+    att_slot: usize,
+    def_side: usize,
+    def_slot: usize,
+    m_slot: usize,
+) -> f64 {
+    let att_idx = side * 3 + att_slot;
+    let def_idx = def_side * 3 + def_slot;
+    let mspec = &table.move_specs[att_idx][m_slot];
+    let acc = if mspec.always_hit {
+        1.0
+    } else {
+        mspec.base_acc_pct as f64 / 100.0
+    };
+    match mspec.pseudo_kind {
+        1 => {
+            if cb.mons[def_idx].status_raw() != 0 {
+                return 0.0;
+            }
+            for p_i in 0..3usize {
+                if (cb.sides[def_side].alive_mask & (1 << p_i)) != 0 {
+                    let m = &cb.mons[def_side * 3 + p_i];
+                    if m.hp() > 0 && m.status_raw() == nc2000_engine::state::Status::Slp as u8 {
+                        return 0.0;
+                    }
+                }
+            }
+            PSEUDO_SLEEP * acc
+        }
+        2 => {
+            if cb.mons[def_idx].status_raw() == 0 {
+                PSEUDO_PAR * acc
+            } else {
+                0.0
+            }
+        }
+        3 => {
+            let foe = &cb.sides[def_side];
+            if foe.alive_mask.count_ones() > 1 && (foe.side_flags & 0x03) == 0 {
+                PSEUDO_SPIKES
+            } else {
+                0.0
+            }
+        }
+        4 => {
+            let me = &cb.mons[att_idx];
+            let maxhp = table.mons[att_idx].maxhp;
+            if (me.hp() as f64) < 0.5 * (maxhp as f64) {
+                PSEUDO_HEAL
+            } else {
+                0.0
+            }
+        }
+        5 => {
+            let me = &cb.mons[att_idx];
+            let is_ghost =
+                (table.mons[att_idx].type_mask & (1u32 << (table.ghost_type & 31))) != 0;
+            if !is_ghost && me.boosts[0] < 2 {
+                PSEUDO_BOOST
+            } else {
+                0.0
+            }
+        }
+        6 => {
+            if cb.mons[att_idx].boosts[0] < 2 {
+                PSEUDO_BOOST
+            } else {
+                0.0
+            }
+        }
+        7 => {
+            if cb.mons[att_idx].boosts[2] < 2 {
+                PSEUDO_BOOST
+            } else {
+                0.0
+            }
+        }
+        8 => {
+            let me = &cb.mons[att_idx];
+            let maxhp = table.mons[att_idx].maxhp;
+            if me.boosts[0] < 6 && (me.hp() as f64) > 0.6 * (maxhp as f64) {
+                PSEUDO_BOOST + 0.10
+            } else {
+                0.0
+            }
+        }
+        _ => 0.0,
+    }
+}
+
+#[inline]
+fn compact_greedy_pick(
+    cb: &nc2000_engine::compact::CompactBattle,
+    table: &nc2000_engine::compact::MatchTable,
+    side: usize,
+    cs: &[u8],
     rng: &mut SplitMix64,
     rules: RolloutRules,
-) -> SearchChoice {
-    let att = sim.active_id(side);
-    let def = sim.active_id(1 - side);
-    // A self-KO move from the side's LAST mon is an unconditional immediate
-    // loss (the user faints even on a miss; the Stadium Self-KO clause rules
-    // the user the loser even when it takes the foe's last mon down), yet its
-    // bp 250 tops every expected-damage ranking — pre-guard, rollouts from a
-    // last-mon position suicided in EVERY playout and flattened the root to
-    // all-zeros (2026-07-21 last-mon-Explosion report; selfko_probe).
-    let last_mon = sim.sides[side].pokemon_left == 1;
-    let suicidal = |c: &SearchChoice| match c {
-        SearchChoice::Move(id) => last_mon && dex.move_static(*id).selfdestruct,
-        _ => false,
+) -> u8 {
+    let att_slot = cb.sides[side].active_idx as usize;
+    let att_idx = side * 3 + att_slot;
+    let def_side = 1 - side;
+    let def_slot = cb.sides[def_side].active_idx as usize;
+    let last_mon = cb.sides[side].alive_mask.count_ones() == 1;
+    let suicidal = |act: u8| -> bool {
+        act < 4 && last_mon && table.move_specs[att_idx][act as usize].is_selfdestruct
     };
-    let rand_non_suicidal = |rng: &mut SplitMix64| {
+    let rand_non_suicidal = |rng: &mut SplitMix64| -> u8 {
         if last_mon {
-            let safe: Vec<SearchChoice> = cs.iter().copied().filter(|c| !suicidal(c)).collect();
-            if !safe.is_empty() {
-                return safe[rng.below(safe.len())];
+            let mut safe = [0u8; 7];
+            let mut n_safe = 0usize;
+            for &c in cs {
+                if !suicidal(c) {
+                    safe[n_safe] = c;
+                    n_safe += 1;
+                }
+            }
+            if n_safe > 0 {
+                return safe[rng.below(n_safe)];
             }
         }
         cs[rng.below(cs.len())]
     };
-    if let (Some(att), Some(def)) = (att, def) {
-        let mut best: Option<(SearchChoice, f64, f64)> = None;
+
+    if cb.sides[side].request == 1
+        && (cb.sides[side].alive_mask & (1 << att_slot)) != 0
+        && (cb.sides[def_side].alive_mask & (1 << def_slot)) != 0
+    {
+        let mut best: Option<(u8, f64, f64)> = None;
         for &c in cs {
-            if let SearchChoice::Move(id) = c {
-                if suicidal(&c) {
+            if c < 4 {
+                if suicidal(c) {
                     continue;
                 }
-                // Rollout policy always couples evasion (the accurate estimate).
-                let raw_score = eval::expected_hit_fraction(sim, dex, att, def, id, true);
+                let m_slot = c as usize;
+                let raw_score = cb.expected_hit_fraction(
+                    table, side, att_slot, def_side, def_slot, m_slot, true,
+                );
                 let mut score = if rules.capped_damage {
-                    let accuracy = sim.hit_probability(dex, att, def, id);
+                    let accuracy =
+                        cb.hit_probability(table, side, att_slot, def_side, def_slot, m_slot);
                     if accuracy > 0.0 {
                         (raw_score / accuracy).min(1.0) * accuracy
                     } else {
@@ -595,7 +622,9 @@ fn greedy_pick(
                     raw_score
                 };
                 if score <= 0.0 && rules.status {
-                    score = status_pseudo_score(sim, dex, side, att, def, id);
+                    score = compact_status_pseudo_score(
+                        cb, table, side, att_slot, def_side, def_slot, m_slot,
+                    );
                 }
                 if best.map_or(true, |(_, old_score, old_raw)| {
                     score > old_score
@@ -605,22 +634,16 @@ fn greedy_pick(
                 }
             }
         }
-        // M16c voluntary switch: only from a bad matchup (weak best hit), to
-        // the bench mon with the strongest offense vs the foe active, and
-        // only when that clearly beats staying. Draws no rng, so rollouts
-        // where the trigger never fires keep their exact streams.
         if rules.switch {
             if let Some((_, stay, _)) = best {
                 if stay < ROLLOUT_SWITCH_TRIGGER {
-                    let mut sw: Option<(SearchChoice, f64)> = None;
+                    let mut sw: Option<(u8, f64)> = None;
                     for &c in cs {
-                        if let SearchChoice::Switch(pos) = c {
-                            let s0 = &sim.sides[side];
-                            let cand = nc2000_engine::state::PokeId {
-                                side: side as u8,
-                                slot: s0.party[(pos - 1) as usize],
-                            };
-                            let off = eval::best_hit_fraction(sim, dex, cand, def, true);
+                        if (4..7).contains(&c) {
+                            let cand_slot = (c - 4) as usize;
+                            let off = cb.best_hit_fraction(
+                                table, side, cand_slot, def_side, def_slot, true,
+                            );
                             if sw.as_ref().map_or(true, |&(_, b)| off > b) {
                                 sw = Some((c, off));
                             }
@@ -638,30 +661,142 @@ fn greedy_pick(
             if score > 0.0 {
                 return c;
             }
-            // only status/unknowable moves: fall through to random
             return rand_non_suicidal(rng);
         }
     }
-    // forced switch: healthiest bench target
-    let hp_frac = |pos: u8| {
-        let s = &sim.sides[side];
-        let p = &s.roster[s.party[(pos - 1) as usize] as usize];
-        p.hp as f64 / p.maxhp as f64
-    };
-    if cs.iter().any(|c| matches!(c, SearchChoice::Switch(_))) {
-        return cs
-            .iter()
-            .copied()
-            .max_by(|a, b| {
-                let f = |c: &SearchChoice| match c {
-                    SearchChoice::Switch(pos) => hp_frac(*pos),
-                    _ => -1.0,
-                };
-                f(a).total_cmp(&f(b))
-            })
-            .unwrap();
+
+    // Forced switch: healthiest bench target.
+    let mut best_sw = None;
+    let mut best_hp = -1.0f64;
+    for &c in cs {
+        if (4..7).contains(&c) {
+            let slot = (c - 4) as usize;
+            let idx = side * 3 + slot;
+            let frac = (cb.mons[idx].hp() as f64) / (table.mons[idx].maxhp.max(1) as f64);
+            if best_sw.is_none() || frac >= best_hp {
+                best_hp = frac;
+                best_sw = Some(c);
+            }
+        }
+    }
+    if let Some(sw) = best_sw {
+        return sw;
     }
     rand_non_suicidal(rng)
+}
+
+#[inline]
+fn encode_choices_to_compact(
+    table: &nc2000_engine::compact::MatchTable,
+    cb: &nc2000_engine::compact::CompactBattle,
+    side: usize,
+    cs: &[SearchChoice],
+) -> ([u8; 7], usize) {
+    let mut out = [0u8; 7];
+    let mut n = 0usize;
+    let act_slot = cb.sides[side].active_idx as usize;
+    let num_moves = if act_slot < 3 {
+        table.mons[side * 3 + act_slot].num_moves as usize
+    } else {
+        0
+    };
+    for &c in cs {
+        if n >= 7 {
+            break;
+        }
+        match c {
+            SearchChoice::Move(id) => {
+                if let Some(m_i) = (0..num_moves)
+                    .find(|&m_i| table.mons[side * 3 + act_slot].moves[m_i] == id)
+                {
+                    out[n] = m_i as u8;
+                    n += 1;
+                }
+            }
+            SearchChoice::Switch(pos) if (1..=3).contains(&pos) => {
+                out[n] = pos + 3;
+                n += 1;
+            }
+            _ => {}
+        }
+    }
+    (out, n)
+}
+
+#[inline]
+fn decode_compact_choice(
+    table: &nc2000_engine::compact::MatchTable,
+    cb: &nc2000_engine::compact::CompactBattle,
+    side: usize,
+    act: u8,
+) -> SearchChoice {
+    if act < 4 {
+        let act_slot = cb.sides[side].active_idx as usize;
+        SearchChoice::Move(table.mons[side * 3 + act_slot].moves[act as usize])
+    } else if (4..7).contains(&act) {
+        SearchChoice::Switch(act - 3)
+    } else {
+        SearchChoice::Pass
+    }
+}
+
+pub fn playout_pick(
+    sim: &Battle,
+    dex: &Dex,
+    playout: &Playout,
+    side: usize,
+    cs: &[SearchChoice],
+    rng: &mut SplitMix64,
+    rules: RolloutRules,
+) -> SearchChoice {
+    if cs.iter().any(|c| matches!(c, SearchChoice::Team(_) | SearchChoice::Pass)) {
+        let eps = match playout {
+            Playout::Uniform => return cs[rng.below(cs.len())],
+            Playout::Heavy { eps, .. } => *eps,
+        };
+        if cs.len() == 1 {
+            return cs[0];
+        }
+        if rng.next_f64() < eps {
+            return cs[rng.below(cs.len())];
+        }
+        return cs[rng.below(cs.len())];
+    }
+    let (table, cb) = nc2000_engine::compact::CompactBattle::from_battle(sim, dex);
+    let (compact_cs, n) = encode_choices_to_compact(&table, &cb, side, cs);
+    if n == 0 {
+        return cs[rng.below(cs.len())];
+    }
+    let act = compact_playout_pick(&cb, &table, playout, side, &compact_cs[..n], rng, rules);
+    decode_compact_choice(&table, &cb, side, act)
+}
+
+/// The switch a side makes when its active faints to Perish Song at the end
+/// of this turn (counter 1) and a switch is legal: the bench mon expected to
+/// keep the most HP through the foe active's best hit. `None` otherwise.
+pub fn perish_escape(
+    sim: &Battle,
+    dex: &Dex,
+    side: usize,
+    cs: &[SearchChoice],
+) -> Option<SearchChoice> {
+    let (table, cb) = nc2000_engine::compact::CompactBattle::from_battle(sim, dex);
+    let (compact_cs, n) = encode_choices_to_compact(&table, &cb, side, cs);
+    let act = compact_perish_escape(&cb, &table, side, &compact_cs[..n])?;
+    Some(decode_compact_choice(&table, &cb, side, act))
+}
+
+/// The Perish trap as a rollout side plays it, and the standard answer to it.
+pub fn perish_combo(
+    sim: &Battle,
+    dex: &Dex,
+    side: usize,
+    cs: &[SearchChoice],
+) -> Option<SearchChoice> {
+    let (table, cb) = nc2000_engine::compact::CompactBattle::from_battle(sim, dex);
+    let (compact_cs, n) = encode_choices_to_compact(&table, &cb, side, cs);
+    let act = compact_perish_combo(&cb, &table, side, &compact_cs[..n])?;
+    Some(decode_compact_choice(&table, &cb, side, act))
 }
 
 impl Agent for MctsAgent {

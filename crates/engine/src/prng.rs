@@ -14,8 +14,14 @@ pub struct Prng {
 }
 
 impl Prng {
-    pub fn new(seed: u64) -> Self {
+    #[inline(always)]
+    pub const fn new(seed: u64) -> Self {
         Prng { seed }
+    }
+
+    #[inline(always)]
+    pub const fn seed(&self) -> u64 {
+        self.seed
     }
 
     /// Parses both PS seed spellings:

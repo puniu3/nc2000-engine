@@ -13,9 +13,7 @@
 //! return/...) score their static value — same caveat as MaxDamage; hidden
 //! power uses the mon's real DV-derived type and power.
 
-use std::sync::OnceLock;
-
-use nc2000_engine::dex::{Accuracy, Category, Dex, FixedDamage, MoveId, Multihit, TypeId};
+use nc2000_engine::dex::{Dex, MoveId, TypeId};
 use nc2000_engine::state::{Battle, PokeId, Status};
 
 /// Tunable weights. All features are from the owning side's perspective
@@ -272,46 +270,15 @@ impl EvalWeights {
 
 /// Win-probability-shaped eval in (0, 1) from side 0's perspective.
 pub fn eval01(b: &Battle, dex: &Dex, w: &EvalWeights) -> f64 {
-    let mut diff = side_score(b, dex, w, 0) - side_score(b, dex, w, 1);
-    if w.race != 0.0 {
-        diff += w.race * race_margin(b, dex, w);
-    }
-    if w.exchange != 0.0 {
-        diff += w.exchange * exchange_margin(b, dex, w);
-    }
-    1.0 / (1.0 + (-w.scale * diff).exp())
+    let (table, cb) = CompactBattle::from_battle(b, dex);
+    compact_eval01(&cb, &table, w)
 }
 
 /// KO-race margin from side 0's perspective, in [-1, 1]; nonzero only in
 /// last-mon-vs-last-mon states (no switches — a pure race).
-///
-/// Turns-to-KO come from `best_hit_fraction` (expected per-use fraction of
-/// the foe's current HP, accuracy folded in), adjusted by the mechanical
-/// state the certified anchors proved decisive (the v1 estimate misfired
-/// on exactly these): a recharge lock wastes the locked side's turn, a
-/// Substitute absorbs one hit, sleep sidelines the sleeper for its
-/// remaining clock UNLESS it carries usable Sleep Talk, freeze (25/256
-/// thaw) pushes past the race window, and poison/burn residual caps a
-/// side's survival regardless of the foe's attacks. Speed order breaks
-/// ties: ±0.5 turn; a full one-turn advantage saturates the margin.
 pub fn race_margin(b: &Battle, dex: &Dex, w: &EvalWeights) -> f64 {
-    let alive = |s: usize| {
-        b.sides[s]
-            .party
-            .iter()
-            .filter(|&&sl| {
-                let p = &b.sides[s].roster[sl as usize];
-                !p.fainted && p.hp > 0
-            })
-            .count()
-    };
-    if alive(0) != 1 || alive(1) != 1 {
-        return 0.0;
-    }
-    let (Some(id0), Some(id1)) = (b.active_id(0), b.active_id(1)) else {
-        return 0.0;
-    };
-    pair_margin(b, dex, w, id0, id1)
+    let (table, cb) = CompactBattle::from_battle(b, dex);
+    compact_race_margin(&cb, &table, w)
 }
 
 /// The exchange between ONE pair of mons, from `id0`'s perspective, in
@@ -320,289 +287,104 @@ pub fn race_margin(b: &Battle, dex: &Dex, w: &EvalWeights) -> f64 {
 /// residual self-death clocks, speed order). Returns 0 — "no claim" — when the
 /// race runs past three turns, which is stall/heal territory where a
 /// turns-to-KO estimate lies.
-///
-/// Split out of `race_margin` so the same exchange can be read for pairs that
-/// are not both on the field: that is what `exchange_margin` needs.
 pub fn pair_margin(b: &Battle, dex: &Dex, w: &EvalWeights, id0: PokeId, id1: PokeId) -> f64 {
-    pair_margin_ctx(b, dex, w, id0, id1, [1.0, 1.0], [0.0, 0.0])
-}
-
-/// `pair_margin` for a pair that may not be on the field yet.
-///
-/// `hp_left[i]` is the fraction of its *current* HP that mon `i` brings to the
-/// exchange (1.0 on the field; less for a benched mon that owes entry damage),
-/// and `extra[i]` is the turns it spends getting there (1.0 for the switch).
-/// Both default to the on-field values through `pair_margin`, and at those
-/// values every expression below reduces to the original arithmetic — the
-/// Phase A / race term is unchanged bit-for-bit unless `exchange_v2` is set.
-fn pair_margin_ctx(
-    b: &Battle,
-    dex: &Dex,
-    w: &EvalWeights,
-    id0: PokeId,
-    id1: PokeId,
-    hp_left: [f64; 2],
-    extra: [f64; 2],
-) -> f64 {
-    let (p0, p1) = (b.poke(id0), b.poke(id1));
-    if p0.fainted || p0.hp <= 0 || p1.fainted || p1.hp <= 0 {
+    let (table, cb) = CompactBattle::from_battle(b, dex);
+    let s0 = id0.side as usize;
+    let s1 = id1.side as usize;
+    let Some(slot0) = (0..3usize).find(|&i| cb.sides[s0].party_roster[i] == id0.slot) else {
         return 0.0;
-    }
-    // A mon that cannot survive its own entry has lost the pairing before it
-    // gets a turn; both dying is no claim either way.
-    match (hp_left[0] <= 0.0, hp_left[1] <= 0.0) {
-        (true, true) => return 0.0,
-        (true, false) => return -1.0,
-        (false, true) => return 1.0,
-        _ => {}
-    }
-
-    let recharge = dex.conds_id("mustrecharge");
-    let sleeptalk = dex.moves.id("sleeptalk");
-    let heal_ids: Vec<MoveId> = ["rest", "recover", "softboiled", "milkdrink"]
-        .iter()
-        .filter_map(|k| dex.moves.id(k))
-        .collect();
-    let spd0 = b.get_pokemon_action_speed(dex, id0);
-    let spd1 = b.get_pokemon_action_speed(dex, id1);
-    // expected turns for `att` to KO `def` through the visible mechanics
-    let turns = |att: PokeId, def: PokeId, att_faster: bool, def_left: f64, att_extra: f64| -> f64 {
-        let mut e = best_hit_fraction(b, dex, att, def, w.couple_evasion);
-        // A confused attacker spends half its turns hitting itself, so the same
-        // race takes about twice as long (`conditions.rs`: the clock is
-        // decremented before the move and the self-hit is a 1-in-2 coin).
-        if w.exchange_v2 && confusion_attempts(b, dex, att) > 0.0 {
-            e *= 0.5;
-        }
-        if e <= 1e-9 {
-            return f64::INFINITY;
-        }
-        // A defender with a usable self-heal cannot be raced down unless
-        // the attacker out-damages the heal cycle (~half max HP per turn:
-        // Rest refills everything but donates two free turns) — the duel
-        // gate measured the heal-blind version losing 0.39, this format
-        // Rests everywhere. Exemption: a FASTER attacker with an expected
-        // one-shot kills before any heal resolves (threshold mining caught
-        // the un-exempted rule voiding Kadabra-vs-3HP-Articuno).
-        let d = b.poke(def);
-        if d.move_slots.iter().any(|m| m.pp > 0 && !m.disabled && heal_ids.contains(&m.id)) {
-            // Per-hit damage as a fraction of MAX hp, i.e. what the heal cycle
-            // is being out-raced. Deliberately NOT scaled by `def_left`: entry
-            // damage takes HP off the defender, it does not weaken the
-            // attacker, and scaling here made the term non-monotone (a Spikes
-            // tick could push the attacker under the heal threshold and hand it
-            // an INFINITY, so hazards read as *good* for the side that owns
-            // them — caught by `spikes_charges_the_bench_in_phase_b_only`).
-            let dmg_frac_max = e * d.hp as f64 / d.maxhp as f64;
-            // One-shot means the hit covers what is left after entry damage.
-            let kill_now = e >= def_left && att_faster;
-            if dmg_frac_max < 0.5 && !kill_now {
-                return f64::INFINITY;
-            }
-        }
-        let mut t = (def_left / e).ceil() + att_extra;
-        let a = b.poke(att);
-        // a standing Substitute eats one hit
-        if let Some(sub) = substitute_id(dex) {
-            if b.poke(def).has_volatile(sub) {
-                t += 1.0;
-            }
-        }
-        // recharge lock: the locked side spends a turn doing nothing
-        if let Some(rc) = recharge {
-            if a.has_volatile(rc) {
-                t += 1.0;
-            }
-        }
-        t += match a.status {
-            Status::Slp => {
-                let talks = sleeptalk
-                    .is_some_and(|st| a.move_slots.iter().any(|m| m.id == st && m.pp > 0));
-                if talks {
-                    0.0
-                } else {
-                    a.status_state.get_int(nc2000_engine::state::DK::Time).clamp(1, 4) as f64
-                }
-            }
-            Status::Frz => 4.0,
-            _ => 0.0,
-        };
-        t
     };
-    // residual (psn/tox/brn) self-death clock: 1/8 maxhp per turn (tox floor)
-    let surv = |x: PokeId, left: f64| -> f64 {
-        let p = b.poke(x);
-        if !matches!(p.status, Status::Psn | Status::Tox | Status::Brn) {
-            return f64::INFINITY;
-        }
-        let hp = p.hp as f64 * left;
-        if !w.exchange_v2 {
-            let tick = (p.maxhp as f64 / 8.0).max(1.0);
-            return (hp / tick).ceil();
-        }
-        // Engine parity (`conditions.rs::residualdmg`): once the toxic
-        // volatile is on the mon the tick is `floor(maxhp/16) × counter` with
-        // the counter incrementing every turn — and gen 2 keeps that counter
-        // for psn/brn too. So the clock ACCELERATES, which is the whole
-        // difference between "Toxic just landed" and "Toxic is on turn six"
-        // that the flat `tox` weight cannot express. Without the volatile it
-        // is the flat `floor(maxhp/8)` tick.
-        match residual_counter(b, dex, x) {
-            Some(c) => {
-                let unit = (p.maxhp as f64 / 16.0).floor().max(1.0);
-                let mut acc = 0.0;
-                for k in 1..=8u32 {
-                    acc += unit * (c + k as i64) as f64;
-                    if acc >= hp {
-                        return k as f64;
-                    }
-                }
-                f64::INFINITY // past the horizon this term is allowed to claim
-            }
-            None => {
-                let tick = (p.maxhp as f64 / 8.0).floor().max(1.0);
-                (hp / tick).ceil()
-            }
-        }
+    let Some(slot1) = (0..3usize).find(|&i| cb.sides[s1].party_roster[i] == id1.slot) else {
+        return 0.0;
     };
-    // A side's effective "foe down" time: its own kill plan — void if its
-    // residual kills it first (the b293 case: a toxed racer that dies on
-    // its own clock never finishes a 2-turn plan) — or the foe rotting on
-    // the foe's residual with no hit needed at all.
-    let (k0, k1) = (
-        turns(id0, id1, spd0 > spd1, hp_left[1], extra[0]),
-        turns(id1, id0, spd1 > spd0, hp_left[0], extra[1]),
-    );
-    let (v0, v1) = (surv(id0, hp_left[0]), surv(id1, hp_left[1]));
-    let k0 = if k0 <= v0 { k0 } else { f64::INFINITY };
-    let k1 = if k1 <= v1 { k1 } else { f64::INFINITY };
-    let t0 = k0.min(v1);
-    let t1 = k1.min(v0);
-    if t0.min(t1) > 3.0 {
-        return 0.0; // long race: healing/stall dominates, no claim
-    }
-    let diff = match (t0.is_finite(), t1.is_finite()) {
-        (true, false) => 2.0,
-        (false, true) => -2.0,
-        _ => {
-            let (s0, s1) = (spd0, spd1);
-            let edge = match s0.cmp(&s1) {
-                std::cmp::Ordering::Greater => 0.5,
-                std::cmp::Ordering::Less => -0.5,
-                std::cmp::Ordering::Equal => 0.0,
-            };
-            (t1 - t0) + edge
-        }
-    };
-    diff.clamp(-1.0, 1.0)
+    compact_pair_margin_ctx(&cb, &table, w, s0, slot0, s1, slot1, [1.0, 1.0], [0.0, 0.0])
 }
 
-/// Phase A of the exchange eval: the same trade computation as `race_margin`,
+/// Phase A / B of the exchange eval: the same trade computation as `race_margin`,
 /// read over EVERY living pair instead of only a last-mon-vs-last-mon race.
-///
-/// The additive material terms cannot see a matchup at all — which is why the
-/// eval has no opinion about switching (measured: the bot's root switch mass
-/// is at or below uniform, and its agreement on switch decisions matches
-/// winners and losers equally). A matchup is not a property of either mon; it
-/// is a property of the pair, and the position's value is what the two sides
-/// can force in the matrix of pairs.
-///
-/// Aggregation depends on `exchange_v2`. Phase A (default) takes the cheap
-/// proxy: the mean of maximin and minimax, exact when the matrix has a saddle
-/// point and erring toward the committed side otherwise. Phase B takes the
-/// matrix's real game value and charges entry costs — see `exchange_matrix`
-/// and `matrix_game_value`.
-///
-/// Pairs whose race is undecidable return 0 from `pair_margin`, so a position
-/// full of stall matchups scores neutral rather than inventing a claim.
 pub fn exchange_margin(b: &Battle, dex: &Dex, w: &EvalWeights) -> f64 {
-    let Some((mine, theirs, cells)) = exchange_matrix(b, dex, w) else {
-        return 0.0;
-    };
-    let (k0, k1) = (mine.len(), theirs.len());
-    let row = |i: usize| &cells[i * k1..(i + 1) * k1];
-    if w.exchange_v2 {
-        // Phase B: the actual game value.
-        return matrix_game_value(&cells, [k0, k1]);
-    }
-    // Phase A: maximin/minimax midpoint.
-    let maximin = (0..k0)
-        .map(|i| row(i).iter().cloned().fold(f64::INFINITY, f64::min))
-        .fold(f64::NEG_INFINITY, f64::max);
-    let minimax = (0..k1)
-        .map(|j| (0..k0).map(|i| cells[i * k1 + j]).fold(f64::NEG_INFINITY, f64::max))
-        .fold(f64::INFINITY, f64::min);
-    0.5 * (maximin + minimax)
+    let (table, cb) = CompactBattle::from_battle(b, dex);
+    compact_exchange_margin(&cb, &table, w)
 }
 
 /// The exchange matrix behind `exchange_margin`: side 0's living mons as rows,
 /// side 1's as columns, cells row-major in margin space [-1, 1]. `None` when
 /// either side has nothing living.
-///
-/// Under `exchange_v2` a cell for a mon that is not already on the field is
-/// charged what getting there costs — the switch turn, and the Spikes it eats
-/// on arrival — so an off-diagonal cell states the value of a switch rather
-/// than of a free rearrangement. That charge is the first channel through which
-/// switching reaches `eval01` at all.
-///
-/// Public because it is the term's diagnostic surface: a single number cannot
-/// be argued with, and the calibration work needs to see which pairing the eval
-/// thinks it is being paid for.
 pub fn exchange_matrix(
     b: &Battle,
     dex: &Dex,
     w: &EvalWeights,
 ) -> Option<(Vec<PokeId>, Vec<PokeId>, Vec<f64>)> {
-    let living = |s: usize| -> Vec<PokeId> {
-        b.sides[s]
-            .party
-            .iter()
-            .filter_map(|&sl| {
-                let p = &b.sides[s].roster[sl as usize];
-                (!p.fainted && p.hp > 0).then_some(PokeId { side: s as u8, slot: sl })
-            })
-            .collect()
-    };
-    let (mine, theirs) = (living(0), living(1));
+    let (table, cb) = CompactBattle::from_battle(b, dex);
+    let mut mine = Vec::with_capacity(3);
+    let mut mine_slots = Vec::with_capacity(3);
+    let mut theirs = Vec::with_capacity(3);
+    let mut their_slots = Vec::with_capacity(3);
+    for slot in 0..3usize {
+        if (cb.sides[0].alive_mask & (1 << slot)) != 0 && cb.mons[slot].hp() > 0 {
+            mine.push(PokeId { side: 0, slot: cb.sides[0].party_roster[slot] });
+            mine_slots.push(slot);
+        }
+        if (cb.sides[1].alive_mask & (1 << slot)) != 0 && cb.mons[3 + slot].hp() > 0 {
+            theirs.push(PokeId { side: 1, slot: cb.sides[1].party_roster[slot] });
+            their_slots.push(slot);
+        }
+    }
     if mine.is_empty() || theirs.is_empty() {
         return None;
     }
-    let active = [b.active_id(0).map(|i| i.slot), b.active_id(1).map(|i| i.slot)];
-    let on_field = |id: PokeId| active[id.side as usize] == Some(id.slot);
-    // Phase A read every pair as if it were already the matchup on the field.
-    let left = |id: PokeId| {
-        if !w.exchange_v2 || on_field(id) {
+    let flying_mask = 1u32 << (table.flying_type & 31);
+    let entry_left = |s: usize, slot: usize| -> f64 {
+        if !w.exchange_v2 || (slot as u8) == cb.sides[s].active_idx {
+            return 1.0;
+        }
+        let idx = s * 3 + slot;
+        if (table.mons[idx].type_mask & flying_mask) != 0 {
+            return 1.0;
+        }
+        let layers = (cb.sides[s].side_flags & 0x03) as usize;
+        if layers == 0 {
+            return 1.0;
+        }
+        const AMOUNTS: [f64; 4] = [0.0, 3.0, 4.0, 6.0];
+        let dmg = (AMOUNTS[layers] * (table.mons[idx].maxhp as f64) / 24.0)
+            .floor()
+            .max(1.0);
+        1.0 - dmg / (cb.mons[idx].hp().max(1) as f64)
+    };
+    let extra = |s: usize, slot: usize| -> f64 {
+        if w.exchange_v2 && (slot as u8) != cb.sides[s].active_idx {
             1.0
         } else {
-            1.0 - entry_loss(b, dex, id)
+            0.0
         }
     };
-    let extra = |id: PokeId| if w.exchange_v2 && !on_field(id) { 1.0 } else { 0.0 };
     let mut cells = Vec::with_capacity(mine.len() * theirs.len());
-    for &a in mine.iter() {
-        for &d in theirs.iter() {
-            cells.push(pair_margin_ctx(b, dex, w, a, d, [left(a), left(d)], [extra(a), extra(d)]));
+    for &a in &mine_slots {
+        let la = entry_left(0, a);
+        let ea = extra(0, a);
+        for &d in &their_slots {
+            cells.push(compact_pair_margin_ctx(
+                &cb,
+                &table,
+                w,
+                0,
+                a,
+                1,
+                d,
+                [la, entry_left(1, d)],
+                [ea, extra(1, d)],
+            ));
         }
     }
     Some((mine, theirs, cells))
 }
 
-/// RM+ sweeps for the exchange matrix. It is at most 3×3 and the payoffs are
-/// bounded in [0, 1], where RM+ converges in tens of iterations; the search
-/// spends orders of magnitude more per leaf inside `best_hit_fraction`, and the
-/// Phase A duel measured the 9-pair read at identical think time to the
-/// 1-pair one (278 vs 280 ms/move), so this is not the term's cost centre.
+/// RM+ sweeps for the exchange matrix.
 const EXCHANGE_SWEEPS: u32 = 128;
 
 /// Phase B's aggregation: the zero-sum **game value** of the pair matrix,
-/// instead of Phase A's maximin/minimax midpoint. Identical to the midpoint
-/// wherever the matrix has a saddle point (and to the single cell at 1×1);
-/// where it does not, the midpoint splits the difference between two pure
-/// commitments that neither side has to make, while the value is what the
-/// position is actually worth under mixing.
-///
-/// `solve_rm_plus` wants side-0 payoffs in [0, 1] (it reads side 1's payoff as
-/// `1 − u`), so margins are mapped in and the equilibrium value mapped back.
+/// instead of Phase A's maximin/minimax midpoint.
 fn matrix_game_value(cells: &[f64], k: [usize; 2]) -> f64 {
     let m: Vec<f64> = cells.iter().map(|v| 0.5 * (v + 1.0)).collect();
     let (s0, s1) = crate::smmcts::solve_rm_plus(&m, k, EXCHANGE_SWEEPS);
@@ -615,128 +397,11 @@ fn matrix_game_value(cells: &[f64], k: [usize; 2]) -> f64 {
     2.0 * u - 1.0
 }
 
-/// Fraction of a benched mon's *current* HP that switching in costs it: the
-/// Spikes tick on its own side, mirroring `conditions.rs` exactly (Flying
-/// immune, `AMOUNTS[layers]/24` of max HP). >= 1.0 means it faints on entry.
-fn entry_loss(b: &Battle, dex: &Dex, id: PokeId) -> f64 {
-    let p = b.poke(id);
-    if p.has_type(dex.known_types.flying) {
-        return 0.0;
-    }
-    let Some(sp) = spikes_id(dex) else { return 0.0 };
-    let Some(st) = b.sides[id.side as usize].side_condition(sp) else { return 0.0 };
-    const AMOUNTS: [f64; 4] = [0.0, 3.0, 4.0, 6.0];
-    let layers = st.get_int(nc2000_engine::state::DK::Layers).clamp(0, 3) as usize;
-    let dmg = (AMOUNTS[layers] * p.maxhp as f64 / 24.0).floor().max(1.0);
-    dmg / p.hp.max(1) as f64
-}
-
-/// Remaining *hindered* move attempts for a confused mon (0.0 when it is not
-/// confused, or when the clock runs out on its next move — `conditions.rs`
-/// decrements before the move and lets that move through at 0).
-fn confusion_attempts(b: &Battle, dex: &Dex, id: PokeId) -> f64 {
-    let Some(cf) = confusion_id(dex) else { return 0.0 };
-    let Some(vs) = b.poke(id).volatile(cf) else { return 0.0 };
-    (vs.get_int(nc2000_engine::state::DK::Time).clamp(0, 5) as f64 - 1.0).max(0.0)
-}
-
-/// The gen-2 toxic counter, when this mon carries the `residualdmg` volatile
-/// that makes its psn/brn/tox tick accelerate.
-fn residual_counter(b: &Battle, dex: &Dex, id: PokeId) -> Option<i64> {
-    let rd = residualdmg_id(dex)?;
-    b.poke(id).volatile(rd).map(|vs| vs.get_int(nc2000_engine::state::DK::Counter))
-}
-
 /// Leaf value for search cutoffs. The calibrated probability is backed up
 /// directly at alpha 1; smaller alpha shrinks it toward 0.5.
 pub fn eval_leaf(b: &Battle, dex: &Dex, w: &EvalWeights) -> f64 {
-    assert!((0.0..=1.0).contains(&w.leaf_alpha), "leaf alpha must be in [0,1]");
-    0.5 + w.leaf_alpha * (eval01(b, dex, w) - 0.5)
-}
-
-fn side_score(b: &Battle, dex: &Dex, w: &EvalWeights, s: usize) -> f64 {
-    let side = &b.sides[s];
-    let mut score = 0.0;
-    let mut pp_num = 0.0;
-    let mut pp_den = 0.0;
-    // Spikes is paid on switch-IN, so only living benched non-Flying mons owe
-    // it; the mon already on the field has paid or was never charged.
-    let active_slot = b.active_id(s).map(|id| id.slot);
-    let mut spikes_exposed = 0u32;
-    for &slot in side.party.iter() {
-        let p = &side.roster[slot as usize];
-        if p.fainted || p.hp <= 0 {
-            continue;
-        }
-        if active_slot != Some(slot) && !p.has_type(dex.known_types.flying) {
-            spikes_exposed += 1;
-        }
-        score += w.alive + w.hp * p.hp as f64 / p.maxhp as f64;
-        score -= match p.status {
-            Status::Brn => w.brn,
-            Status::Par => w.par,
-            Status::Slp => {
-                if w.slp_time_scale {
-                    // remaining sleep clock (engine DK::Time, decremented per
-                    // wake attempt): Rest = 3, natural = 2..=4 at onset
-                    let t = p.status_state.get_int(nc2000_engine::state::DK::Time).clamp(0, 4);
-                    w.slp * t as f64 / 3.0
-                } else {
-                    w.slp
-                }
-            }
-            Status::Frz => w.frz,
-            Status::Psn => w.psn,
-            Status::Tox => w.tox,
-            _ => 0.0,
-        };
-        for ms in p.move_slots.iter() {
-            pp_num += ms.pp as f64;
-            pp_den += ms.maxpp as f64;
-        }
-    }
-    if pp_den > 0.0 {
-        score += w.pp * pp_num / pp_den;
-    }
-    if w.spikes != 0.0 && spikes_exposed > 0 {
-        if let Some(sp) = spikes_id(dex) {
-            if let Some(st) = side.side_condition(sp) {
-                // Engine parity (`conditions.rs` "spikes"/"onEntryHazard").
-                const AMOUNTS: [f64; 4] = [0.0, 3.0, 4.0, 6.0];
-                let layers = st.get_int(nc2000_engine::state::DK::Layers).clamp(0, 3);
-                let frac = AMOUNTS[layers as usize] / 24.0;
-                score -= w.spikes * frac * spikes_exposed as f64;
-            }
-        }
-    }
-    if let Some(id) = b.active_id(s) {
-        let p = b.poke(id);
-        if !p.fainted && p.hp > 0 {
-            for i in 0..7 {
-                score += w.boost[i] * p.boosts[i] as f64;
-            }
-            if w.substitute != 0.0 {
-                if let Some(sub) = substitute_id(dex) {
-                    if p.has_volatile(sub) {
-                        score += w.substitute;
-                    }
-                }
-            }
-            // Confusion: the clock is what costs, not the label. See the
-            // `confusion` weight — `0.5 × remaining hindered attempts` is the
-            // expected number of turns the mon loses.
-            if w.confusion != 0.0 {
-                score -= w.confusion * 0.5 * confusion_attempts(b, dex, id);
-            }
-            if let Some(foe) = b.active_id(1 - s) {
-                if !b.poke(foe).fainted && b.poke(foe).hp > 0 {
-                    score +=
-                        w.threat * best_hit_fraction(b, dex, id, foe, w.couple_evasion).min(1.0);
-                }
-            }
-        }
-    }
-    score
+    let (table, cb) = CompactBattle::from_battle(b, dex);
+    compact_eval_leaf(&cb, &table, w)
 }
 
 /// Best expected hit fraction over the attacker's usable move slots
@@ -759,43 +424,21 @@ pub fn best_hit_fraction(
     best
 }
 
-fn hiddenpower_id(dex: &Dex) -> Option<MoveId> {
-    static ID: OnceLock<Option<MoveId>> = OnceLock::new();
-    *ID.get_or_init(|| dex.moves.id("hiddenpower"))
-}
-
-fn substitute_id(dex: &Dex) -> Option<nc2000_engine::dex::CondId> {
-    static ID: OnceLock<Option<nc2000_engine::dex::CondId>> = OnceLock::new();
-    *ID.get_or_init(|| dex.conds_id("substitute"))
-}
-
-fn spikes_id(dex: &Dex) -> Option<nc2000_engine::dex::CondId> {
-    static ID: OnceLock<Option<nc2000_engine::dex::CondId>> = OnceLock::new();
-    *ID.get_or_init(|| dex.conds_id("spikes"))
-}
-
-fn confusion_id(dex: &Dex) -> Option<nc2000_engine::dex::CondId> {
-    static ID: OnceLock<Option<nc2000_engine::dex::CondId>> = OnceLock::new();
-    *ID.get_or_init(|| dex.conds_id("confusion"))
-}
-
-fn residualdmg_id(dex: &Dex) -> Option<nc2000_engine::dex::CondId> {
-    static ID: OnceLock<Option<nc2000_engine::dex::CondId>> = OnceLock::new();
-    *ID.get_or_init(|| dex.conds_id("residualdmg"))
-}
-
 pub(crate) fn type_immune_to(b: &Battle, dex: &Dex, move_type: TypeId, def: PokeId) -> bool {
+    let dt = nc2000_engine::compact::dex_tables(dex);
     let d = b.poke(def);
-    if (move_type == dex.known_types.normal || move_type == dex.known_types.fighting)
+    let mt = move_type.0;
+    if (mt == dt.normal_type || mt == dt.fighting_type)
         && d.has_type(dex.known_types.ghost)
-        && dex.conds_id("foresight").is_some_and(|id| d.has_volatile(id))
+        && dt.fore_cond.is_some_and(|id| d.has_volatile(id))
     {
         return false;
     }
-    if move_type == dex.known_types.ground {
+    if mt == dt.ground_type {
         d.has_type(dex.known_types.flying)
     } else {
-        d.types.iter().any(|t| dex.type_immune(move_type, t))
+        let row = &dt.type_chart[(mt as usize).min(19)];
+        d.types.iter().any(|t| row[(t.0 as usize).min(19)] == -9)
     }
 }
 
@@ -817,52 +460,65 @@ pub fn expected_hit_fraction(
     move_id: MoveId,
     couple_evasion: bool,
 ) -> f64 {
-    let ms = dex.move_static(move_id);
+    let dt = nc2000_engine::compact::dex_tables(dex);
+    let mspec = &dt.move_specs[move_id.0 as usize];
     let a = b.poke(att);
     let d = b.poke(def);
 
-    let (move_type, base_power, category) = if Some(move_id) == hiddenpower_id(dex) {
-        let category = if matches!(
-            dex.type_name(a.hp_type),
-            "Fire" | "Water" | "Grass" | "Electric" | "Psychic" | "Ice" | "Dragon" | "Dark"
-        ) {
-            Category::Special
-        } else {
-            Category::Physical
-        };
-        (a.hp_type, a.hp_power, category)
-    } else {
-        (ms.move_type, ms.base_power, ms.category)
-    };
-    let base_power = if base_power > 0 {
-        base_power
-    } else {
-        match dex.moves.key(move_id) {
-            "return" => a.happiness as i32 * 10 / 25,
-            "frustration" => (255 - a.happiness as i32) * 10 / 25,
-            "flail" | "reversal" => {
-                let ratio = ((a.hp as f64 * 48.0 / a.maxhp as f64).floor() as i32).max(1);
-                match ratio {
-                    r if r < 2 => 200,
-                    r if r < 5 => 150,
-                    r if r < 10 => 100,
-                    r if r < 17 => 80,
-                    r if r < 33 => 40,
-                    _ => 20,
-                }
-            }
-            "magnitude" => 71,
-            "present" => 40,
-            _ => 0,
+    let (move_type, is_physical, is_status, base_power) = match mspec.var_bp_kind {
+        1 => (
+            TypeId(mspec.move_type),
+            mspec.is_physical,
+            mspec.is_status,
+            a.happiness as i32 * 10 / 25,
+        ),
+        2 => (
+            TypeId(mspec.move_type),
+            mspec.is_physical,
+            mspec.is_status,
+            (255 - a.happiness as i32) * 10 / 25,
+        ),
+        3 => {
+            let hpt = a.hp_type;
+            let is_phys = (dt.special_type_mask & (1u32 << (hpt.0 & 31))) == 0;
+            (hpt, is_phys, false, a.hp_power)
         }
+        4 => {
+            let ratio = ((a.hp as f64 * 48.0 / a.maxhp as f64).floor() as i32).max(1);
+            let bp = if ratio < 2 {
+                200
+            } else if ratio < 5 {
+                150
+            } else if ratio < 10 {
+                100
+            } else if ratio < 17 {
+                80
+            } else if ratio < 33 {
+                40
+            } else {
+                20
+            };
+            (TypeId(mspec.move_type), mspec.is_physical, mspec.is_status, bp)
+        }
+        _ => (
+            TypeId(mspec.move_type),
+            mspec.is_physical,
+            mspec.is_status,
+            mspec.base_power as i32,
+        ),
     };
+
+    if mspec.fixed_damage == 0 && (is_status || base_power <= 0) {
+        return 0.0;
+    }
 
     if type_immune_to(b, dex, move_type, def) {
         return 0.0;
     }
+    let row = &dt.type_chart[(move_type.0 as usize).min(19)];
     let mut eff = 1.0f64;
-    for dt in d.types.iter() {
-        match dex.eff(move_type, dt) {
+    for t in d.types.iter() {
+        match row[(t.0 as usize).min(19)] {
             1 => eff *= 2.0,
             -1 => eff *= 0.5,
             _ => {}
@@ -870,34 +526,32 @@ pub fn expected_hit_fraction(
     }
 
     let acc = if couple_evasion {
-        // Real gen-2 accuracy roll (attacker accuracy stage × defender evasion
-        // stage), matching how the engine actually rolls hits.
-        b.hit_probability(dex, att, def, move_id)
+        nc2000_engine::compact::hit_probability_branchless(
+            mspec.base_acc_pct,
+            mspec.always_hit,
+            a.boosts[5],
+            d.boosts[6],
+            mspec.ignore_accuracy,
+            mspec.ignore_evasion,
+            mspec.ignore_positive_evasion,
+        )
+    } else if mspec.always_hit {
+        1.0
     } else {
-        // Pre-fix: base move accuracy only, blind to evasion stages.
-        match ms.accuracy {
-            Accuracy::AlwaysHits => 1.0,
-            Accuracy::Pct(p) => p as f64 / 100.0,
-        }
+        mspec.base_acc_pct as f64 / 100.0
     };
 
-    let raw = if let Some(fd) = &ms.damage {
-        // Fixed damage: immunity applies (checked above), effectiveness does not.
-        match fd {
-            FixedDamage::Level => a.level as f64,
-            FixedDamage::Amount(n) => *n as f64,
+    let raw = if mspec.fixed_damage != 0 {
+        if mspec.fixed_damage < 0 {
+            a.level as f64
+        } else {
+            mspec.fixed_damage as f64
         }
     } else {
-        if category == Category::Status || base_power <= 0 {
-            return 0.0;
-        }
-        let (ai, di) = match category {
-            Category::Physical => (0, 1),
-            _ => (2, 3),
-        };
+        let (ai, di) = if is_physical { (0, 1) } else { (2, 3) };
         let atk = b.get_stat(dex, att, ai, false, false, false) as f64;
         let mut defense = b.get_stat(dex, def, di, false, false, false) as f64;
-        if ms.selfdestruct && di == 1 {
+        if mspec.is_selfdestruct && di == 1 {
             defense = (defense / 2.0).floor().max(1.0);
         }
         let core = ((a.level as f64 * 2.0 / 5.0 + 2.0).floor() * base_power as f64 * atk
@@ -906,14 +560,377 @@ pub fn expected_hit_fraction(
             .floor()
             + 2.0;
         let stab = if a.types.has(move_type) { 1.5 } else { 1.0 };
-        let hits = match &ms.multihit {
-            Some(Multihit::Fixed(n)) => *n as f64,
-            Some(Multihit::Range(2, 5)) => 3.0, // gen-2 hit-count distribution mean
-            Some(Multihit::Range(lo, hi)) => (*lo + *hi) as f64 / 2.0,
-            None => 1.0,
-        };
+        let hits = mspec.multihit_mean_x2 as f64 * 0.5;
         core * stab * eff * (236.0 / 255.0) * hits
     };
 
     raw * acc / d.hp.max(1) as f64
+}
+
+// =========================================================================
+// CompactBattle Leaf Evaluation (mirrors eval_leaf / eval01 on 256B kernel)
+// =========================================================================
+
+use nc2000_engine::compact::{vol_bit, CompactBattle, MatchTable};
+
+/// Leaf evaluation on `CompactBattle` mirroring [`eval_leaf`].
+#[inline]
+pub fn compact_eval_leaf(cb: &CompactBattle, table: &MatchTable, w: &EvalWeights) -> f64 {
+    assert!((0.0..=1.0).contains(&w.leaf_alpha), "leaf alpha must be in [0,1]");
+    0.5 + w.leaf_alpha * (compact_eval01(cb, table, w) - 0.5)
+}
+
+/// Win-probability-shaped eval in `(0, 1)` from side 0's perspective on `CompactBattle`.
+#[inline]
+pub fn compact_eval01(cb: &CompactBattle, table: &MatchTable, w: &EvalWeights) -> f64 {
+    let mut diff = compact_side_score(cb, table, w, 0) - compact_side_score(cb, table, w, 1);
+    if w.race != 0.0 {
+        diff += w.race * compact_race_margin(cb, table, w);
+    }
+    if w.exchange != 0.0 {
+        diff += w.exchange * compact_exchange_margin(cb, table, w);
+    }
+    1.0 / (1.0 + (-w.scale * diff).exp())
+}
+
+#[inline]
+fn compact_side_score(cb: &CompactBattle, table: &MatchTable, w: &EvalWeights, s: usize) -> f64 {
+    let side_st = &cb.sides[s];
+    let mut score = 0.0;
+    let mut pp_num = 0.0;
+    let mut pp_den = 0.0;
+    let active_slot = side_st.active_idx;
+    let mut spikes_exposed = 0u32;
+    let flying_mask = 1u32 << (table.flying_type & 31);
+
+    for slot in 0..3usize {
+        if (side_st.alive_mask & (1 << slot)) == 0 {
+            continue;
+        }
+        let idx = s * 3 + slot;
+        let mon = &cb.mons[idx];
+        let spec = &table.mons[idx];
+        if mon.hp() <= 0 {
+            continue;
+        }
+        if (slot as u8) != active_slot && (spec.type_mask & flying_mask) == 0 {
+            spikes_exposed += 1;
+        }
+        score += w.alive + w.hp * (mon.hp() as f64) / (spec.maxhp.max(1) as f64);
+        let st_raw = mon.status_raw();
+        score -= if st_raw == Status::Brn as u8 {
+            w.brn
+        } else if st_raw == Status::Par as u8 {
+            w.par
+        } else if st_raw == Status::Slp as u8 {
+            if w.slp_time_scale {
+                let t = mon.status_counter().clamp(0, 4);
+                w.slp * (t as f64) / 3.0
+            } else {
+                w.slp
+            }
+        } else if st_raw == Status::Frz as u8 {
+            w.frz
+        } else if st_raw == Status::Psn as u8 {
+            w.psn
+        } else if st_raw == Status::Tox as u8 {
+            w.tox
+        } else {
+            0.0
+        };
+        for m_i in 0..spec.num_moves as usize {
+            pp_num += mon.pp[m_i] as f64;
+            pp_den += spec.max_pp[m_i] as f64;
+        }
+    }
+    if pp_den > 0.0 {
+        score += w.pp * pp_num / pp_den;
+    }
+    if w.spikes != 0.0 && spikes_exposed > 0 {
+        let layers = (side_st.side_flags & 0x03) as usize;
+        if layers > 0 {
+            const AMOUNTS: [f64; 4] = [0.0, 3.0, 4.0, 6.0];
+            let frac = AMOUNTS[layers] / 24.0;
+            score -= w.spikes * frac * (spikes_exposed as f64);
+        }
+    }
+    let act_slot = active_slot as usize;
+    if (side_st.alive_mask & (1 << act_slot)) != 0 {
+        let act_idx = s * 3 + act_slot;
+        let act_mon = &cb.mons[act_idx];
+        if act_mon.hp() > 0 {
+            for i in 0..7 {
+                score += w.boost[i] * (act_mon.boosts[i] as f64);
+            }
+            if w.substitute != 0.0 && (act_mon.vol_flags & vol_bit::SUBSTITUTE) != 0 {
+                score += w.substitute;
+            }
+            if w.confusion != 0.0 && (act_mon.vol_flags & vol_bit::CONFUSION) != 0 {
+                let att = (act_mon.timers[0].clamp(0, 5) as f64 - 1.0).max(0.0);
+                score -= w.confusion * 0.5 * att;
+            }
+            let foe_s = 1 - s;
+            let foe_slot = cb.sides[foe_s].active_idx as usize;
+            if (cb.sides[foe_s].alive_mask & (1 << foe_slot)) != 0
+                && cb.mons[foe_s * 3 + foe_slot].hp() > 0
+            {
+                score += w.threat
+                    * cb.best_hit_fraction(table, s, act_slot, foe_s, foe_slot, w.couple_evasion)
+                        .min(1.0);
+            }
+        }
+    }
+    score
+}
+
+#[inline]
+pub fn compact_race_margin(cb: &CompactBattle, table: &MatchTable, w: &EvalWeights) -> f64 {
+    if cb.sides[0].alive_mask.count_ones() != 1 || cb.sides[1].alive_mask.count_ones() != 1 {
+        return 0.0;
+    }
+    let slot0 = cb.sides[0].active_idx as usize;
+    let slot1 = cb.sides[1].active_idx as usize;
+    compact_pair_margin_ctx(cb, table, w, 0, slot0, 1, slot1, [1.0, 1.0], [0.0, 0.0])
+}
+
+#[allow(clippy::too_many_arguments)]
+fn compact_pair_margin_ctx(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    w: &EvalWeights,
+    s0: usize,
+    slot0: usize,
+    s1: usize,
+    slot1: usize,
+    hp_left: [f64; 2],
+    extra: [f64; 2],
+) -> f64 {
+    let idx0 = s0 * 3 + slot0;
+    let idx1 = s1 * 3 + slot1;
+    let p0 = &cb.mons[idx0];
+    let p1 = &cb.mons[idx1];
+    if p0.hp() <= 0 || p1.hp() <= 0 {
+        return 0.0;
+    }
+    match (hp_left[0] <= 0.0, hp_left[1] <= 0.0) {
+        (true, true) => return 0.0,
+        (true, false) => return -1.0,
+        (false, true) => return 1.0,
+        _ => {}
+    }
+
+    let spd0 = cb.mon_action_speed(table, s0, slot0);
+    let spd1 = cb.mon_action_speed(table, s1, slot1);
+
+    let turns = |att_s: usize,
+                 att_slot: usize,
+                 def_s: usize,
+                 def_slot: usize,
+                 att_faster: bool,
+                 def_left: f64,
+                 att_extra: f64|
+     -> f64 {
+        let mut e =
+            cb.best_hit_fraction(table, att_s, att_slot, def_s, def_slot, w.couple_evasion);
+        let att_idx = att_s * 3 + att_slot;
+        let def_idx = def_s * 3 + def_slot;
+        let att_mon = &cb.mons[att_idx];
+        let def_mon = &cb.mons[def_idx];
+        let def_spec = &table.mons[def_idx];
+        if w.exchange_v2
+            && (att_mon.vol_flags & vol_bit::CONFUSION) != 0
+            && att_mon.timers[0] > 1
+        {
+            e *= 0.5;
+        }
+        if e <= 1e-9 {
+            return f64::INFINITY;
+        }
+        let def_dis = (def_mon.vol_flags & vol_bit::DISABLE) != 0;
+        let def_dis_slot = ((def_mon.slot_refs >> 4) & 0x03) as usize;
+        let mut has_heal = false;
+        for m_i in 0..def_spec.num_moves as usize {
+            if def_mon.pp[m_i] > 0
+                && !(def_dis && m_i == def_dis_slot)
+                && table.move_specs[def_idx][m_i].is_heal_cycle
+            {
+                has_heal = true;
+                break;
+            }
+        }
+        if has_heal {
+            let dmg_frac_max = e * (def_mon.hp() as f64) / (def_spec.maxhp.max(1) as f64);
+            let kill_now = e >= def_left && att_faster;
+            if dmg_frac_max < 0.5 && !kill_now {
+                return f64::INFINITY;
+            }
+        }
+        let mut t = (def_left / e).ceil() + att_extra;
+        if (def_mon.vol_flags & vol_bit::SUBSTITUTE) != 0 {
+            t += 1.0;
+        }
+        if (att_mon.slot_refs & 0x80) != 0 {
+            t += 1.0;
+        }
+        let st_raw = att_mon.status_raw();
+        if st_raw == Status::Slp as u8 {
+            let att_spec = &table.mons[att_idx];
+            let mut talks = false;
+            for m_i in 0..att_spec.num_moves as usize {
+                if att_mon.pp[m_i] > 0 && table.move_specs[att_idx][m_i].special_kind == 10 {
+                    talks = true;
+                    break;
+                }
+            }
+            if !talks {
+                t += att_mon.status_counter().clamp(1, 4) as f64;
+            }
+        } else if st_raw == Status::Frz as u8 {
+            t += 4.0;
+        }
+        t
+    };
+
+    let surv = |s: usize, slot: usize, left: f64| -> f64 {
+        let idx = s * 3 + slot;
+        let p = &cb.mons[idx];
+        let spec = &table.mons[idx];
+        let st = p.status_raw();
+        if st != Status::Psn as u8 && st != Status::Tox as u8 && st != Status::Brn as u8 {
+            return f64::INFINITY;
+        }
+        let hp = (p.hp() as f64) * left;
+        if !w.exchange_v2 {
+            let tick = (spec.maxhp as f64 / 8.0).max(1.0);
+            return (hp / tick).ceil();
+        }
+        let cnt_packed = p.status_counter();
+        if (cnt_packed & 0x10) != 0 {
+            let c = (cnt_packed & 0x0F) as i64;
+            let unit = (spec.maxhp as f64 / 16.0).floor().max(1.0);
+            let mut acc = 0.0;
+            for k in 1..=8u32 {
+                acc += unit * (c + k as i64) as f64;
+                if acc >= hp {
+                    return k as f64;
+                }
+            }
+            f64::INFINITY
+        } else {
+            let tick = (spec.maxhp as f64 / 8.0).floor().max(1.0);
+            (hp / tick).ceil()
+        }
+    };
+
+    let (k0, k1) = (
+        turns(s0, slot0, s1, slot1, spd0 > spd1, hp_left[1], extra[0]),
+        turns(s1, slot1, s0, slot0, spd1 > spd0, hp_left[0], extra[1]),
+    );
+    let (v0, v1) = (surv(s0, slot0, hp_left[0]), surv(s1, slot1, hp_left[1]));
+    let k0 = if k0 <= v0 { k0 } else { f64::INFINITY };
+    let k1 = if k1 <= v1 { k1 } else { f64::INFINITY };
+    let t0 = k0.min(v1);
+    let t1 = k1.min(v0);
+    if t0.min(t1) > 3.0 {
+        return 0.0;
+    }
+    let diff = match (t0.is_finite(), t1.is_finite()) {
+        (true, false) => 2.0,
+        (false, true) => -2.0,
+        _ => {
+            let edge = match spd0.cmp(&spd1) {
+                std::cmp::Ordering::Greater => 0.5,
+                std::cmp::Ordering::Less => -0.5,
+                std::cmp::Ordering::Equal => 0.0,
+            };
+            (t1 - t0) + edge
+        }
+    };
+    diff.clamp(-1.0, 1.0)
+}
+
+fn compact_exchange_margin(cb: &CompactBattle, table: &MatchTable, w: &EvalWeights) -> f64 {
+    let mut mine = [0usize; 3];
+    let mut k0 = 0usize;
+    let mut theirs = [0usize; 3];
+    let mut k1 = 0usize;
+    for slot in 0..3usize {
+        if (cb.sides[0].alive_mask & (1 << slot)) != 0 && cb.mons[slot].hp() > 0 {
+            mine[k0] = slot;
+            k0 += 1;
+        }
+        if (cb.sides[1].alive_mask & (1 << slot)) != 0 && cb.mons[3 + slot].hp() > 0 {
+            theirs[k1] = slot;
+            k1 += 1;
+        }
+    }
+    if k0 == 0 || k1 == 0 {
+        return 0.0;
+    }
+    let flying_mask = 1u32 << (table.flying_type & 31);
+    let entry_left = |s: usize, slot: usize| -> f64 {
+        if !w.exchange_v2 || (slot as u8) == cb.sides[s].active_idx {
+            return 1.0;
+        }
+        let idx = s * 3 + slot;
+        if (table.mons[idx].type_mask & flying_mask) != 0 {
+            return 1.0;
+        }
+        let layers = (cb.sides[s].side_flags & 0x03) as usize;
+        if layers == 0 {
+            return 1.0;
+        }
+        const AMOUNTS: [f64; 4] = [0.0, 3.0, 4.0, 6.0];
+        let dmg = (AMOUNTS[layers] * (table.mons[idx].maxhp as f64) / 24.0)
+            .floor()
+            .max(1.0);
+        1.0 - dmg / (cb.mons[idx].hp().max(1) as f64)
+    };
+    let extra = |s: usize, slot: usize| -> f64 {
+        if w.exchange_v2 && (slot as u8) != cb.sides[s].active_idx {
+            1.0
+        } else {
+            0.0
+        }
+    };
+    let mut cells = [0.0f64; 9];
+    for i in 0..k0 {
+        let a = mine[i];
+        let la = entry_left(0, a);
+        let ea = extra(0, a);
+        for j in 0..k1 {
+            let d = theirs[j];
+            cells[i * k1 + j] = compact_pair_margin_ctx(
+                cb,
+                table,
+                w,
+                0,
+                a,
+                1,
+                d,
+                [la, entry_left(1, d)],
+                [ea, extra(1, d)],
+            );
+        }
+    }
+    let slice = &cells[..k0 * k1];
+    if w.exchange_v2 {
+        return matrix_game_value(slice, [k0, k1]);
+    }
+    let maximin = (0..k0)
+        .map(|i| {
+            slice[i * k1..(i + 1) * k1]
+                .iter()
+                .copied()
+                .fold(f64::INFINITY, f64::min)
+        })
+        .fold(f64::NEG_INFINITY, f64::max);
+    let minimax = (0..k1)
+        .map(|j| {
+            (0..k0)
+                .map(|i| slice[i * k1 + j])
+                .fold(f64::NEG_INFINITY, f64::max)
+        })
+        .fold(f64::INFINITY, f64::min);
+    0.5 * (maximin + minimax)
 }

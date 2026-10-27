@@ -342,12 +342,8 @@ pub(crate) fn root_search_key(cfg: &RmConfig, dex: &Dex, battle: &mut Battle) ->
     key
 }
 
-fn root_type_key(battle: &mut Battle) -> u64 {
-    let coin = battle.quick_claw_roll;
-    battle.quick_claw_roll = false;
-    let key = battle.search_key(None, false);
-    battle.quick_claw_roll = coin;
-    key
+fn root_type_key(battle: &Battle) -> u64 {
+    battle.type_key()
 }
 
 /// Persistent, incrementally steppable blind search over ONE decision point
@@ -393,6 +389,7 @@ pub struct BlindSearch {
     joint: Vec<(usize, SearchChoice, u32, f64)>,
     joint_index: FxHashMap<(usize, SearchChoice), usize>,
     root_avail: FxHashMap<usize, Vec<usize>>,
+    root_node_type: FxHashMap<usize, usize>,
     root_types: Vec<RootTypeStats>,
     root_type_index: FxHashMap<u64, usize>,
     /// How often each opponent action was even LEGAL, across iterations.
@@ -485,6 +482,7 @@ impl BlindSearch {
             joint: Vec::new(),
             joint_index: FxHashMap::default(),
             root_avail: FxHashMap::default(),
+            root_node_type: FxHashMap::default(),
             root_types: Vec::new(),
             root_type_index: FxHashMap::default(),
             avail: Vec::new(),
@@ -495,6 +493,45 @@ impl BlindSearch {
     /// forced into the shared `run_iteration`. Returns the side-0 reward.
     pub fn step_one(&mut self, dex: &Dex, belief: &Belief, obs: &Observer) -> f64 {
         self.step_one_impl(dex, belief, obs, None, None)
+    }
+
+    fn resolve_root(&mut self, dex: &Dex, sim: &mut Battle) -> (usize, usize) {
+        let key = root_search_key(&self.cfg, dex, sim);
+        let root = match self.table.get(&key) {
+            Some(&i) => i,
+            None => {
+                let node = Node::at(sim, dex);
+                debug_assert_eq!(
+                    node.acts[self.side], self.my_acts,
+                    "determinization changed the observer's own root actions"
+                );
+                self.nodes.push(node);
+                let idx = self.nodes.len() - 1;
+                self.table.insert(key, idx);
+                idx
+            }
+        };
+        if !self.cfg.unseen_claw_root {
+            if let Some(&ti) = self.root_node_type.get(&root) {
+                return (root, ti);
+            }
+        }
+        let type_key = root_type_key(sim);
+        let opp = 1 - self.side;
+        let replies = self.nodes[root].acts[opp].len();
+        let my_len = self.my_acts.len();
+        let ti = *self.root_type_index.entry(type_key).or_insert_with(|| {
+            self.root_types.push(RootTypeStats {
+                samples: 0,
+                replies,
+                cells: vec![(0, 0.); my_len * replies],
+            });
+            self.root_types.len() - 1
+        });
+        if !self.cfg.unseen_claw_root {
+            self.root_node_type.insert(root, ti);
+        }
+        (root, ti)
     }
 
     fn step_one_impl(
@@ -516,21 +553,7 @@ impl BlindSearch {
         belief.determinize_in_place(dex, &mut sim, obs, pick, &mut self.rng);
         if self.cfg.unseen_claw_root && sim.is_idle_move_request() { sim.update_all_speeds(dex); }
         std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
-        let type_key = root_type_key(&mut sim);
-        let key = root_search_key(&self.cfg, dex, &mut sim);
-        let root = match self.table.get(&key) {
-            Some(&i) => i,
-            None => {
-                let node = Node::at(&mut sim, dex);
-                debug_assert_eq!(
-                    node.acts[self.side], self.my_acts,
-                    "determinization changed the observer's own root actions"
-                );
-                self.nodes.push(node);
-                self.table.insert(key, self.nodes.len() - 1);
-                self.nodes.len() - 1
-            }
-        };
+        let (root, type_index) = self.resolve_root(dex, &mut sim);
         let my_pick = if self.cfg.root_revisit_interval > 0 && !self.is_preview()
             && self.done > 0 && self.done % self.cfg.root_revisit_interval == 0
         {
@@ -607,7 +630,7 @@ impl BlindSearch {
         };
         std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
         self.scratch = Some(sim);
-        self.record_joint(root, type_key, my_pick, joint, r);
+        self.record_joint(root, type_index, my_pick, joint, r);
         self.my_w[my_pick] += if self.side == 0 { r } else { 1.0 - r };
         self.done += 1;
         r
@@ -717,21 +740,7 @@ impl BlindSearch {
         belief.determinize_in_place(dex, &mut sim, obs, pick, &mut self.rng);
         if self.cfg.unseen_claw_root && sim.is_idle_move_request() { sim.update_all_speeds(dex); }
         std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
-        let type_key = root_type_key(&mut sim);
-        let key = root_search_key(&self.cfg, dex, &mut sim);
-        let root = match self.table.get(&key) {
-            Some(&i) => i,
-            None => {
-                let node = Node::at(&mut sim, dex);
-                debug_assert_eq!(
-                    node.acts[self.side], self.my_acts,
-                    "determinization changed the observer's own root actions"
-                );
-                self.nodes.push(node);
-                self.table.insert(key, self.nodes.len() - 1);
-                self.nodes.len() - 1
-            }
-        };
+        let (root, type_index) = self.resolve_root(dex, &mut sim);
         let (my_pick, forced_reply, override_reply) = match forcing {
             ForcedRoot::Action { own, reply } => {
                 self.my_n[own] += 1;
@@ -739,11 +748,11 @@ impl BlindSearch {
             }
             ForcedRoot::TypeProbe => {
                 let replies = self.nodes[root].acts[1 - self.side].len();
-                let stats = self.root_type_index.get(&type_key).map(|&i| &self.root_types[i]);
+                let stats = &self.root_types[type_index];
                 let selected = (0..self.my_acts.len()).filter(|&own|
                     !self.my_dominated[own] && self.my_mask.as_ref().map_or(true, |mask| mask[own]))
                     .flat_map(|own| (0..replies).map(move |reply| (own, reply)))
-                    .min_by_key(|&(own, reply)| stats.map_or(0, |t| t.cells[own * replies + reply].0));
+                    .min_by_key(|&(own, reply)| stats.cells[own * replies + reply].0);
                 match selected {
                     Some((own, reply)) => {
                         self.my_n[own] += 1;
@@ -811,23 +820,15 @@ impl BlindSearch {
         ) };
         std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
         self.scratch = Some(sim);
-        self.record_joint(root, type_key, my_pick, joint, r);
+        self.record_joint(root, type_index, my_pick, joint, r);
         self.my_w[my_pick] += if self.side == 0 { r } else { 1.0 - r };
         self.done += 1;
         r
     }
 
-    fn record_joint(&mut self, root: usize, type_key: u64, my_pick: usize, joint: [usize; 2], r: f64) {
+    fn record_joint(&mut self, root: usize, type_index: usize, my_pick: usize, joint: [usize; 2], r: f64) {
         let opp = 1 - self.side;
         let acts = &self.nodes[root].acts[opp];
-        let type_index = *self.root_type_index.entry(type_key).or_insert_with(|| {
-            self.root_types.push(RootTypeStats {
-                samples: 0,
-                replies: acts.len(),
-                cells: vec![(0, 0.); self.my_acts.len() * acts.len()],
-            });
-            self.root_types.len() - 1
-        });
         let stats = &mut self.root_types[type_index];
         stats.samples += 1;
         if joint[opp] < stats.replies {
@@ -1361,9 +1362,25 @@ fn select_global(
 ) -> usize {
     let k = n.len();
     let ok = |a: usize| mask.map_or(true, |m| m[a]);
-    let untried: Vec<usize> = (0..k).filter(|&a| n[a] == 0 && ok(a)).collect();
-    let pick = if !untried.is_empty() {
-        untried[rng.below(untried.len())]
+    let mut n_untried = 0usize;
+    for a in 0..k {
+        if n[a] == 0 && ok(a) {
+            n_untried += 1;
+        }
+    }
+    let pick = if n_untried > 0 {
+        let mut target = rng.below(n_untried);
+        let mut chosen = 0;
+        for a in 0..k {
+            if n[a] == 0 && ok(a) {
+                if target == 0 {
+                    chosen = a;
+                    break;
+                }
+                target -= 1;
+            }
+        }
+        chosen
     } else {
         let total: u32 = n.iter().sum();
         let ln_total = (total as f64).ln();

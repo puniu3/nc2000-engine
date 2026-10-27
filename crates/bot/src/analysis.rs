@@ -356,9 +356,17 @@ impl MatrixSummary {
         }
         let (mix_mine, mix_kept) = solve_rm_plus(&flat, [rows, ncols], SOLVE_SWEEPS);
         let equity: Vec<f64> = (0..rows)
-            .map(|r| (0..ncols).map(|c| flat[r * ncols + c] * mix_kept[c]).sum())
+            .map(|r| {
+                (0..ncols)
+                    .map(|c| flat[r * ncols + c] * mix_kept[c])
+                    .sum::<f64>()
+                    .clamp(0.0, 1.0)
+            })
             .collect();
-        let value: f64 = (0..rows).map(|r| equity[r] * mix_mine[r]).sum();
+        let value: f64 = (0..rows)
+            .map(|r| equity[r] * mix_mine[r])
+            .sum::<f64>()
+            .clamp(0.0, 1.0);
         // The floor is the minimum of the SAME row the equity averages over,
         // so it can never sit above it — and it is reported only for a row
         // that has some evidence to floor.

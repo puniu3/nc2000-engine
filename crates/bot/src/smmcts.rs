@@ -432,9 +432,25 @@ pub(crate) fn select_ucb(
 
 pub(crate) fn select_ucb_counts(c: f64, rng: &mut SplitMix64, counts: &mut [u32], rewards: &[f64]) -> usize {
     let k = counts.len();
-    let untried: Vec<usize> = (0..k).filter(|&a| counts[a] == 0).collect();
-    let pick = if !untried.is_empty() {
-        untried[rng.below(untried.len())]
+    let mut n_untried = 0usize;
+    for &cnt in counts.iter() {
+        if cnt == 0 {
+            n_untried += 1;
+        }
+    }
+    let pick = if n_untried > 0 {
+        let mut target = rng.below(n_untried);
+        let mut chosen = 0;
+        for (a, &cnt) in counts.iter().enumerate() {
+            if cnt == 0 {
+                if target == 0 {
+                    chosen = a;
+                    break;
+                }
+                target -= 1;
+            }
+        }
+        chosen
     } else {
         let total: u32 = counts.iter().sum();
         let ln_total = (total as f64).ln();
@@ -523,7 +539,9 @@ pub(crate) fn run_iteration_with_root_child_value(
     mut continuation: Option<&mut crate::first_continuation::FirstContinuation>,
     mut history_policy: Option<&mut crate::history_continuation::HistoryContinuation>,
 ) -> f64 {
-    let mut path: Vec<(usize, usize, usize)> = Vec::new();
+    let mut path_buf = [(0usize, 0usize, 0usize); 32];
+    let mut path_len = 0usize;
+    let mut path_overflow: Vec<(usize, usize, usize)> = Vec::new();
     let mut exp3_path = Vec::new();
     let mut mean_path = Vec::new();
     let mut node_idx = start;
@@ -594,7 +612,12 @@ pub(crate) fn run_iteration_with_root_child_value(
                     }
                     _ => select_ucb(cfg, rng, &mut nodes[node_idx], s),
                 };
-                path.push((node_idx, s, ai));
+                if path_len < path_buf.len() {
+                    path_buf[path_len] = (node_idx, s, ai);
+                    path_len += 1;
+                } else {
+                    path_overflow.push((node_idx, s, ai));
+                }
                 ai
             };
             joint[s] = Some(nodes[node_idx].acts[s][ai]);
@@ -690,7 +713,10 @@ pub(crate) fn run_iteration_with_root_child_value(
         trace(SearchTrace::Result { battle: sim, reward0 });
     }
 
-    for (ni, s, ai) in path {
+    for &(ni, s, ai) in &path_buf[..path_len] {
+        nodes[ni].w[s][ai] += if s == 0 { reward0 } else { 1.0 - reward0 };
+    }
+    for (ni, s, ai) in path_overflow {
         nodes[ni].w[s][ai] += if s == 0 { reward0 } else { 1.0 - reward0 };
     }
     let mean_updates = if cfg.continuation_exp3_mean { record_raw_path(nodes,&mean_path,reward0) } else { Vec::new() };

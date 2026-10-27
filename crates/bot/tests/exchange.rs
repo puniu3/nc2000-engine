@@ -36,7 +36,7 @@ fn snorlax() -> PokemonSet {
     set(r#"{"name":"Snorlax","species":"Snorlax","item":"Leftovers","ability":"No Ability","moves":["Body Slam","Curse","Earthquake","Double-Edge"],"level":50,"evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"ivs":{"hp":31,"atk":31,"def":31,"spa":31,"spd":31,"spe":31},"gender":"M"}"#)
 }
 fn zapdos() -> PokemonSet {
-    set(r#"{"name":"Zapdos","species":"Zapdos","item":"Leftovers","ability":"No Ability","moves":["Thunderbolt","Drill Peck","Hidden Power Ice","Thunder Wave"],"level":50,"evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"ivs":{"hp":31,"atk":31,"def":31,"spa":31,"spd":31,"spe":31},"gender":"N"}"#)
+    set(r#"{"name":"Zapdos","species":"Zapdos","item":"Leftovers","ability":"No Ability","moves":["Thunderbolt","Drill Peck","Hidden Power Ice","Thunder Wave"],"level":50,"evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"ivs":{"hp":30,"atk":30,"def":26,"spa":30,"spd":30,"spe":30},"gender":"N"}"#)
 }
 fn marowak() -> PokemonSet {
     set(r#"{"name":"Marowak","species":"Marowak","item":"Thick Club","ability":"No Ability","moves":["Earthquake","Rock Slide","Hidden Power Bug","Swords Dance"],"level":50,"evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},"ivs":{"hp":30,"atk":26,"def":26,"spa":30,"spd":30,"spe":30},"gender":"M"}"#)
