@@ -157,7 +157,11 @@ fn main() {
     black_box(c_step_acc);
     let compact_step_ns = t0.elapsed().as_nanos() as f64 / step_iters as f64;
 
-    println!("=== CompactBattle (256B, align(64)) vs Battle ({}B) ===", std::mem::size_of::<Battle>());
+    println!(
+        "=== CompactBattle ({}B, align(64)) vs Battle ({}B) ===",
+        std::mem::size_of::<CompactBattle>(),
+        std::mem::size_of::<Battle>()
+    );
     println!(
         "1. State Clone : Battle = {:7.1} ns | CompactBattle = {:5.2} ns ({:6.1}x faster)",
         battle_clone_ns,

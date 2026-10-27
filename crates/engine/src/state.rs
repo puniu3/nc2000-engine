@@ -218,17 +218,17 @@ enum ScalarTag {
 
 #[derive(Clone, Copy, Debug, Default)]
 struct PackedScalar {
-    bits: [u8; 8],
+    bits: [u8; 4],
     tag: ScalarTag,
 }
 
 impl std::hash::Hash for PackedScalar {
     #[inline(always)]
     fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
-        let bits = u64::from_le_bytes(self.bits);
+        let bits = u32::from_le_bytes(self.bits);
         match self.tag {
-            ScalarTag::Int => (0u8, bits as i64).hash(h),
-            ScalarTag::Float => (1u8, bits).hash(h),
+            ScalarTag::Int => (0u8, bits as i32 as i64).hash(h),
+            ScalarTag::Float => (1u8, (f32::from_bits(bits) as f64).to_bits()).hash(h),
             ScalarTag::Bool => (2u8, bits != 0).hash(h),
             ScalarTag::Move => (3u8, bits as u16).hash(h),
             ScalarTag::Cond => (4u8, bits as u16).hash(h),
@@ -240,21 +240,21 @@ impl std::hash::Hash for PackedScalar {
 impl PackedScalar {
     fn new(value: Scalar) -> Self {
         let (tag, bits) = match value {
-            Scalar::Int(v) => (ScalarTag::Int, v as u64),
-            Scalar::Float(v) => (ScalarTag::Float, v.to_bits()),
-            Scalar::Bool(v) => (ScalarTag::Bool, v as u64),
-            Scalar::MoveK(v) => (ScalarTag::Move, v.0 as u64),
-            Scalar::CondK(v) => (ScalarTag::Cond, v.0 as u64),
-            Scalar::Slot(a, b) => (ScalarTag::Slot, (a as u64) | ((b as u64) << 8)),
+            Scalar::Int(v) => (ScalarTag::Int, v as i32 as u32),
+            Scalar::Float(v) => (ScalarTag::Float, (v as f32).to_bits()),
+            Scalar::Bool(v) => (ScalarTag::Bool, v as u32),
+            Scalar::MoveK(v) => (ScalarTag::Move, v.0 as u32),
+            Scalar::CondK(v) => (ScalarTag::Cond, v.0 as u32),
+            Scalar::Slot(a, b) => (ScalarTag::Slot, (a as u32) | ((b as u32) << 8)),
         };
         Self { bits: bits.to_le_bytes(), tag }
     }
 
     fn value(self) -> Scalar {
-        let bits = u64::from_le_bytes(self.bits);
+        let bits = u32::from_le_bytes(self.bits);
         match self.tag {
-            ScalarTag::Int => Scalar::Int(bits as i64),
-            ScalarTag::Float => Scalar::Float(f64::from_bits(bits)),
+            ScalarTag::Int => Scalar::Int(bits as i32 as i64),
+            ScalarTag::Float => Scalar::Float(f32::from_bits(bits) as f64),
             ScalarTag::Bool => Scalar::Bool(bits != 0),
             ScalarTag::Move => Scalar::MoveK(crate::dex::MoveId(bits as u16)),
             ScalarTag::Cond => Scalar::CondK(crate::dex::CondId(bits as u16)),
@@ -446,10 +446,10 @@ pub struct EffectState {
     pub linked_status: Option<CondId>,
     /// bide `lastDamageSource` (object in PS — essence-invisible).
     pub last_damage_source: Option<PokeId>,
-    /// leppaberry `moveSlot` (object reference in PS): move slot index.
-    pub slot_ref: Option<usize>,
+    /// leppaberry `moveSlot` (object reference in PS): move slot index (`0..=3`).
+    pub slot_ref: Option<u8>,
     /// futuremove `moveData.damage` (nested object — essence-invisible).
-    pub future_damage: Option<f64>,
+    pub future_damage: Option<i16>,
     /// Everything else scalar: time, startTime, counter, boundDivisor, move...
     /// Insertion-ordered like a JS object (affects nothing in essence compare,
     /// which is key-based, but keep order for faithful iteration anyway).
@@ -458,7 +458,7 @@ pub struct EffectState {
     pub effect_order: u32,
 }
 
-// Manual Hash (future_damage is f64); used by `Battle::state_key`.
+// Manual Hash (future_damage is hashed as f64 bits for state_key parity); used by `Battle::state_key`.
 impl std::hash::Hash for EffectState {
     #[inline(always)]
     fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
@@ -500,8 +500,8 @@ impl EffectState {
         self.linked_pokemon.hash(h);
         self.linked_status.hash(h);
         self.last_damage_source.hash(h);
-        self.slot_ref.hash(h);
-        self.future_damage.map(f64::to_bits).hash(h);
+        self.slot_ref.map(usize::from).hash(h);
+        self.future_damage.map(|d| (d as f64).to_bits()).hash(h);
         self.data.hash(h);
         self.effect_order.hash(h);
     }
@@ -743,14 +743,25 @@ pub enum MoveResult {
 }
 
 /// Entry in `pokemon.attackedBy` (Counter/Mirror Coat bookkeeping).
-#[derive(Clone, Copy, Debug, Hash)]
+#[derive(Clone, Copy, Debug)]
 pub struct Attacker {
     pub source: PokeId,
-    pub damage: i64,
+    pub damage: i16,
     pub move_id: MoveId,
     pub this_turn: bool,
     /// PS damageValue: number | false | undefined.
-    pub damage_value: Option<i64>,
+    pub damage_value: Option<i16>,
+}
+
+impl std::hash::Hash for Attacker {
+    #[inline(always)]
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        self.source.hash(h);
+        (self.damage as i64).hash(h);
+        self.move_id.hash(h);
+        self.this_turn.hash(h);
+        self.damage_value.map(i64::from).hash(h);
+    }
 }
 
 #[derive(Debug)]
@@ -955,8 +966,8 @@ impl Pokemon {
                 (last_damage / 16).hash(h);
                 for a in attacked_by.iter() {
                     (a.source, a.move_id, a.this_turn).hash(h);
-                    (a.damage / 16).hash(h);
-                    a.damage_value.map(|v| v / 16).hash(h);
+                    (a.damage as i64 / 16).hash(h);
+                    a.damage_value.map(|v| v as i64 / 16).hash(h);
                 }
             }
             (None, true) => hp.hash(h),
@@ -1102,8 +1113,8 @@ impl Pokemon {
                 (last_damage / 16).hash(h);
                 for a in attacked_by.iter() {
                     (a.source, a.move_id, a.this_turn).hash(h);
-                    (a.damage / 16).hash(h);
-                    a.damage_value.map(|v| v / 16).hash(h);
+                    (a.damage as i64 / 16).hash(h);
+                    a.damage_value.map(|v| v as i64 / 16).hash(h);
                 }
             }
             (None, true) => hp.hash(h),

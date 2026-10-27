@@ -271,7 +271,7 @@ pub fn dispatch_item(
                     b.add_volatile(dex, t, "leppaberry", None, EffectHandle::None);
                     let lb = crate::cond_id!(dex, "leppaberry").unwrap();
                     if let Some(vs) = b.poke_mut(t).volatile_mut(lb) {
-                        vs.slot_ref = Some(i);
+                        vs.slot_ref = Some(i as u8);
                     }
                     b.eat_item(dex, t, false, None, EffectHandle::None);
                 }
@@ -282,7 +282,7 @@ pub fn dispatch_item(
             let t = tpoke.unwrap();
             let lb = crate::cond_id!(dex, "leppaberry").unwrap();
             let slot_idx = if b.poke(t).has_volatile(lb) {
-                let idx = b.poke(t).volatile(lb).and_then(|v| v.slot_ref);
+                let idx = b.poke(t).volatile(lb).and_then(|v| v.slot_ref.map(usize::from));
                 b.remove_volatile(dex, t, "leppaberry");
                 idx
             } else {

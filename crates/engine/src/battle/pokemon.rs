@@ -710,13 +710,13 @@ impl Battle {
 
     /// pokemon.gotAttacked.
     pub fn got_attacked(&mut self, id: PokeId, move_id: Option<MoveId>, damage: Option<f64>, source: PokeId) {
-        let damage_number = damage.unwrap_or(0.0) as i64;
+        let damage_number = damage.unwrap_or(0.0) as i16;
         self.poke_mut(id).attacked_by.push(Attacker {
             source,
             damage: damage_number,
             move_id: move_id.unwrap_or(MoveId(u16::MAX)),
             this_turn: true,
-            damage_value: damage.map(|d| d as i64),
+            damage_value: damage.map(|d| d as i16),
         });
         self.poke_mut(id).times_attacked += 1;
     }

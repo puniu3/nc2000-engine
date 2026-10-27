@@ -548,7 +548,7 @@ pub fn dispatch_move_callback(
                     crate::state::Scalar::MoveK(dex.moves.id("futuresight").unwrap()),
                 );
                 st.source = Some(user);
-                st.future_damage = damage;
+                st.future_damage = damage.map(|d| d as i16);
             }
             let ps = b.poke_str(user);
             b.add(&["-start", &ps, "Future Sight"]);
@@ -1144,7 +1144,7 @@ pub fn resolve_future_move(b: &mut Battle, dex: &Dex, state: StateLoc, target: P
     let mut mv = get_active_move(dex, fs_id);
     mv.accuracy = Accuracy::Pct(90);
     mv.base_power = 0;
-    mv.damage = Some(crate::dex::FixedDamage::Amount(damage.unwrap_or(0.0) as i32));
+    mv.damage = Some(crate::dex::FixedDamage::Amount(damage.unwrap_or(0) as i32));
     mv.category = Category::Special;
     mv.move_type = dex.known_types.unknown;
     mv.will_crit = None;

@@ -1400,7 +1400,12 @@ impl SolvedBellmanSvd {
 const CACHE_SETS: usize = 256;
 const CACHE_WAYS: usize = 4;
 
+#[derive(Clone, Copy, Debug)]
+#[repr(C, align(64))]
+struct CacheKeySet([u128; CACHE_WAYS]);
+
 struct BellmanCache {
+    keys: Vec<CacheKeySet>,
     sets: Vec<[SolvedBellmanSvd; CACHE_WAYS]>,
     hand: [u8; CACHE_SETS],
 }
@@ -1408,6 +1413,7 @@ struct BellmanCache {
 impl BellmanCache {
     fn new() -> Self {
         Self {
+            keys: vec![CacheKeySet([0u128; CACHE_WAYS]); CACHE_SETS],
             sets: vec![[SolvedBellmanSvd::empty(); CACHE_WAYS]; CACHE_SETS],
             hand: [0u8; CACHE_SETS],
         }
@@ -1439,80 +1445,88 @@ fn pair_bellman_key(
         h ^= v as u128;
         h = h.wrapping_mul(0x0000000001000000000000000000013b);
     };
-    mix(sp0.species.0 as u64);
-    mix(sp1.species.0 as u64);
-    mix(sp0.level as u64);
-    mix(sp1.level as u64);
-    mix(sp0.maxhp as u64);
-    mix(sp1.maxhp as u64);
-    mix(m0.item as u64);
-    mix(m1.item as u64);
-    for st_i in 0..5 {
-        mix(cb.mon_stat(table, s0, slot0, st_i, false, false) as u64);
-        mix(cb.mon_stat(table, s0, slot0, st_i, true, true) as u64);
-        mix(cb.mon_stat(table, s1, slot1, st_i, false, false) as u64);
-        mix(cb.mon_stat(table, s1, slot1, st_i, true, true) as u64);
-    }
-    mix(cb.mon_action_speed(table, s0, slot0) as u64);
-    mix(cb.mon_action_speed(table, s1, slot1) as u64);
-    for i in 0..7 {
-        mix((m0.boosts[i] as u8) as u64);
-        mix((m1.boosts[i] as u8) as u64);
-    }
-    let st0_has_slp = (m0.status_raw() == Status::Slp as u8) as u64;
-    let st1_has_slp = (m1.status_raw() == Status::Slp as u8) as u64;
-    let st0_non_slp = if m0.status_raw() == Status::Slp as u8 {
-        0
+
+    // Word 0 & 1: precomputed static Pokemon fingerprints (species, level, maxhp, stored_stats, item, moves)
+    mix(sp0.static_fp);
+    mix(sp1.static_fp);
+
+    // Word 2 & 3: 7 stat stages + current held item packed into a single u64 per Pokemon
+    let w_b0 = u64::from_le_bytes([
+        m0.boosts[0] as u8,
+        m0.boosts[1] as u8,
+        m0.boosts[2] as u8,
+        m0.boosts[3] as u8,
+        m0.boosts[4] as u8,
+        m0.boosts[5] as u8,
+        m0.boosts[6] as u8,
+        m0.item,
+    ]);
+    let w_b1 = u64::from_le_bytes([
+        m1.boosts[0] as u8,
+        m1.boosts[1] as u8,
+        m1.boosts[2] as u8,
+        m1.boosts[3] as u8,
+        m1.boosts[4] as u8,
+        m1.boosts[5] as u8,
+        m1.boosts[6] as u8,
+        m1.item,
+    ]);
+    mix(w_b0);
+    mix(w_b1);
+
+    // Word 4: status, status_counter, active volatiles, PP availability mask, and disable/recharge bits
+    const VOL_MASK: u16 = vol_bit::LEECH_SEED
+        | vol_bit::CONFUSION
+        | vol_bit::DISABLE
+        | vol_bit::FORESIGHT
+        | vol_bit::PERISH_SONG
+        | vol_bit::PAR_SPEED_DROP
+        | vol_bit::BRN_ATK_DROP;
+    let st0_raw = m0.status_raw();
+    let st1_raw = m1.status_raw();
+    let st0_packed = if st0_raw == Status::Slp as u8 {
+        0x80u8
     } else {
-        m0.status_raw()
+        st0_raw | ((m0.status_counter() & 0x0F) << 3)
     };
-    let st1_non_slp = if m1.status_raw() == Status::Slp as u8 {
-        0
+    let st1_packed = if st1_raw == Status::Slp as u8 {
+        0x80u8
     } else {
-        m1.status_raw()
+        st1_raw | ((m1.status_counter() & 0x0F) << 3)
     };
-    mix(st0_has_slp);
-    mix(st1_has_slp);
-    mix(st0_non_slp as u64);
-    mix(st1_non_slp as u64);
-    mix(if st0_non_slp != 0 {
-        (m0.status_counter() & 0x1F) as u64
-    } else {
-        0
-    });
-    mix(if st1_non_slp != 0 {
-        (m1.status_counter() & 0x1F) as u64
-    } else {
-        0
-    });
-    mix((m0.vol_flags
-        & (vol_bit::LEECH_SEED
-            | vol_bit::CONFUSION
-            | vol_bit::DISABLE
-            | vol_bit::FORESIGHT
-            | vol_bit::PERISH_SONG)) as u64);
-    mix((m1.vol_flags
-        & (vol_bit::LEECH_SEED
-            | vol_bit::CONFUSION
-            | vol_bit::DISABLE
-            | vol_bit::FORESIGHT
-            | vol_bit::PERISH_SONG)) as u64);
-    mix(((m0.slot_refs >> 4) & 0x03) as u64);
-    mix(((m1.slot_refs >> 4) & 0x03) as u64);
-    mix((cb.sides[s0].alive_mask.count_ones() <= 1) as u64);
-    mix((cb.sides[s1].alive_mask.count_ones() <= 1) as u64);
-    mix((cb.sides[s0].reflect_turns > 0) as u64);
-    mix((cb.sides[s0].lightscreen_turns > 0) as u64);
-    mix((cb.sides[s1].reflect_turns > 0) as u64);
-    mix((cb.sides[s1].lightscreen_turns > 0) as u64);
-    mix(cb.weather_kind as u64);
-    mix((cb.weather_turns > 0) as u64);
-    for m_i in 0..4 {
-        mix(table.move_specs[idx0][m_i].id.0 as u64);
-        mix((m0.pp[m_i] > 0) as u64);
-        mix(table.move_specs[idx1][m_i].id.0 as u64);
-        mix((m1.pp[m_i] > 0) as u64);
-    }
+    let pp0 = ((m0.pp[0] > 0) as u8)
+        | (((m0.pp[1] > 0) as u8) << 1)
+        | (((m0.pp[2] > 0) as u8) << 2)
+        | (((m0.pp[3] > 0) as u8) << 3)
+        | (m0.slot_refs & 0xB0);
+    let pp1 = ((m1.pp[0] > 0) as u8)
+        | (((m1.pp[1] > 0) as u8) << 1)
+        | (((m1.pp[2] > 0) as u8) << 2)
+        | (((m1.pp[3] > 0) as u8) << 3)
+        | (m1.slot_refs & 0xB0);
+    let w_dyn = (st0_packed as u64)
+        | ((st1_packed as u64) << 8)
+        | (((m0.vol_flags & VOL_MASK) as u64) << 16)
+        | (((m1.vol_flags & VOL_MASK) as u64) << 32)
+        | ((pp0 as u64) << 48)
+        | ((pp1 as u64) << 56);
+    mix(w_dyn);
+
+    // Word 5: Quick Claw roll activation, last-mon flags, active screens, and weather
+    let qc0 = ((cb.quick_claw_roll != 0) & (m0.item != 0) & sp0.is_quick_claw) as u64;
+    let qc1 = ((cb.quick_claw_roll != 0) & (m1.item != 0) & sp1.is_quick_claw) as u64;
+    let w_field = qc0
+        | (qc1 << 1)
+        | (((cb.sides[s0].alive_mask.count_ones() <= 1) as u64) << 2)
+        | (((cb.sides[s1].alive_mask.count_ones() <= 1) as u64) << 3)
+        | (((cb.sides[s0].reflect_turns > 0) as u64) << 4)
+        | (((cb.sides[s0].lightscreen_turns > 0) as u64) << 5)
+        | (((cb.sides[s1].reflect_turns > 0) as u64) << 6)
+        | (((cb.sides[s1].lightscreen_turns > 0) as u64) << 7)
+        | ((cb.weather_kind as u64) << 8)
+        | (((cb.weather_turns > 0) as u64) << 16);
+    mix(w_field);
+
     h | 1
 }
 
@@ -1777,22 +1791,20 @@ fn with_solved_bellman<R>(
 ) -> R {
     let key = pair_bellman_key(cb, table, s0, slot0, s1, slot1);
     let set_idx = ((key as usize) ^ ((key >> 32) as usize)) & (CACHE_SETS - 1);
-    let hit_opt = BELLMAN_CACHE.with(|c| {
+    let mut f_opt = Some(f);
+    if let Some(res) = BELLMAN_CACHE.with(|c| {
         let borrow = c.borrow();
-        let set = &borrow.sets[set_idx];
+        let keys = &borrow.keys[set_idx].0;
         for way in 0..CACHE_WAYS {
-            if set[way].key == key {
-                return Some(way);
+            if keys[way] == key {
+                return Some((f_opt.take().unwrap())(&borrow.sets[set_idx][way]));
             }
         }
         None
-    });
-    if let Some(way) = hit_opt {
-        return BELLMAN_CACHE.with(|c| {
-            let borrow = c.borrow();
-            f(&borrow.sets[set_idx][way])
-        });
+    }) {
+        return res;
     }
+    let f = f_opt.unwrap();
 
     let k01_att = DmgKernel1D::best_attack_grid(cb, table, s0, slot0, s1, slot1);
     let k10_att = DmgKernel1D::best_attack_grid(cb, table, s1, slot1, s0, slot0);
@@ -1946,6 +1958,7 @@ fn with_solved_bellman<R>(
     BELLMAN_CACHE.with(|c| {
         let mut borrow = c.borrow_mut();
         let w = (borrow.hand[set_idx] as usize) & (CACHE_WAYS - 1);
+        borrow.keys[set_idx].0[w] = key;
         borrow.sets[set_idx][w] = solved;
         borrow.hand[set_idx] = (w as u8 + 1) & (CACHE_WAYS as u8 - 1);
         f(&borrow.sets[set_idx][w])

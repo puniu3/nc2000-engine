@@ -1,5 +1,5 @@
 //! Fast branchless arithmetic primitives, precomputed lookup tables, and the
-//! 256-byte fixed-size `CompactBattle` search kernel for `[Gen 2] NC 2000`
+//! 192-byte fixed-size `CompactBattle` search kernel for `[Gen 2] NC 2000`
 //! (`gen2stadium2`).
 //!
 //! Key design principles:
@@ -21,12 +21,12 @@
 //!      damage roll (`* 0x808081 >> 31`) into branchless integer/SIMD operations.
 //!    - Substitute targeting uses a 2-element HP pool `[hp, sub_hp]` indexed by
 //!      `idx = (has_sub & !bypasses_sub) as usize`.
-//! 2. **256-byte cache-line-aligned `Copy` state (`CompactBattle`)**:
+//! 2. **192-byte cache-line-aligned `Copy` state (`CompactBattle`)**:
 //!    - Immutable match constants (base stats, stored stats, move metadata,
 //!      1/8 and 1/16 residual quanta) live in `MatchTable`.
 //!    - Mutable state for the 6 picked Pokemon (24B × 6 = 144B), 2 sides
-//!      (12B × 2 = 24B), and field/turn/special state (88B) fits in exactly
-//!      256 bytes (4 cache lines), with zero heap allocations on clone or step.
+//!      (12B × 2 = 24B), and field/turn/damage/RNG state (24B) fits in exactly
+//!      192 bytes (3 cache lines), with zero heap allocations on clone or step.
 
 use std::sync::OnceLock;
 
@@ -669,12 +669,12 @@ pub struct CompactSide {
 
 const _: () = assert!(std::mem::size_of::<CompactSide>() == 12);
 
-/// Complete mutable battle state in exactly 256 bytes (4 cache lines, 64-byte aligned).
-/// Zero heap allocations: `Clone` is a 4-cache-line register copy.
+/// Complete mutable battle state in exactly 192 bytes (3 cache lines, 64-byte aligned).
+/// Zero heap allocations: `Clone` is a 3-cache-line register copy.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(C, align(64))]
 pub struct CompactBattle {
-    /// 6 picked Pokemon (`0..3` = Side 0 party, `3..6` = Side 1 party): 144 bytes.
+    /// 6 picked Pokemon (`0..3` = Side 0 party, `3..6` = Side 1 party): 144 bytes (offset 0..144).
     pub mons: [CompactMon; 6],
     /// 2 sides: 24 bytes (offset 144..168).
     pub sides: [CompactSide; 2],
@@ -694,28 +694,25 @@ pub struct CompactBattle {
     pub clause_flags: u8,
     /// Last damage dealt to `[P1, P2]` this turn (for Counter / Mirror Coat): 4 bytes (offset 176..180).
     pub hurt_damage_this_turn: [u16; 2],
-    /// Category of last move that damaged `[P1, P2]` (`0` = None, `1` = Physical, `2` = Special): 2 bytes.
+    /// Category of last move that damaged `[P1, P2]` (`0` = None, `1` = Physical, `2` = Special): 2 bytes (offset 180..182).
     pub hurt_cat_this_turn: [u8; 2],
-    /// Rollout / Fury Cutter / Bide / Trap counters for `[P1, P2]`: 6 bytes (offset 182..188).
-    pub special_counters: [u8; 6],
-    /// Future Sight delayed damage and countdown for `[P1, P2]`: 4 bytes (offset 188..192).
-    pub future_sight_dmg: [u8; 2],
-    pub future_sight_turns: [u8; 2],
-    /// 64-bit PRNG state (Gen5 LCG seed): 8 bytes (offset 192..200).
+    /// Low 16 bits of the static match fingerprint (bits 16..32 stored in `sides[0..2].pad`): 2 bytes (offset 182..184).
+    pub match_fp_lo: u16,
+    /// 64-bit PRNG state (Gen5 LCG seed): 8 bytes (offset 184..192).
     pub prng_seed: u64,
-    /// Cached static match fingerprint + SIMD workspace padding to exact 256 bytes: 56 bytes (offset 200..256).
-    pub match_fingerprint: u64,
-    pub reserved: [u64; 6],
 }
 
-const _: () = assert!(std::mem::size_of::<CompactBattle>() == 256);
+const _: () = assert!(std::mem::size_of::<CompactBattle>() == 192);
 const _: () = assert!(std::mem::align_of::<CompactBattle>() == 64);
 
 /// Immutable per-Pokemon reference data stored in [`MatchTable`].
 #[derive(Clone, Copy, Debug, Default)]
 pub struct StaticMonSpec {
+    /// Precomputed 64-bit static fingerprint of this Pokemon's species, stats, item, and moves.
+    pub static_fp: u64,
+    /// Bitmask of the Pokemon's 1–2 types (`(1 << t0) | (1 << t1)`).
+    pub type_mask: u32,
     pub species: SpeciesId,
-    pub level: u8,
     pub maxhp: i16,
     /// 1/8 of maxhp (min 1) for standard poison/burn/leech seed slip damage.
     pub quantum_1_8: i16,
@@ -723,12 +720,13 @@ pub struct StaticMonSpec {
     pub quantum_1_16: i16,
     /// Stored stats `[atk, def, spa, spd, spe]`.
     pub stored_stats: [i16; 5],
-    /// Bitmask of the Pokemon's 1–2 types (`(1 << t0) | (1 << t1)`).
-    pub type_mask: u32,
+    pub moves: [MoveId; 4],
+    pub max_pp: [u8; 4],
     pub types: [u8; 2],
     pub num_types: u8,
+    pub level: u8,
+    pub num_moves: u8,
     pub item_stat_kind: ItemStatKind,
-    pub initial_item: Option<ItemId>,
     /// Boosted type (`0..18`, or `0xFF` if held item is not a 1.1x type booster).
     pub item_boost_type: u8,
     pub is_quick_claw: bool,
@@ -741,12 +739,6 @@ pub struct StaticMonSpec {
     pub is_berry: bool,
     pub is_mysteryberry: bool,
     pub is_scope_lens: bool,
-    pub moves: [MoveId; 4],
-    pub max_pp: [u8; 4],
-    pub num_moves: u8,
-    pub hp_type: u8,
-    pub hp_power: i16,
-    pub return_bp: i16,
 }
 
 /// Immutable per-move compiled metadata for branchless execution.
@@ -754,6 +746,12 @@ pub struct StaticMonSpec {
 pub struct CompactMoveSpec {
     pub id: MoveId,
     pub base_power: i16,
+    /// Fixed damage (`-1` = Level, `> 0` = Amount(n), `0` = None).
+    pub fixed_damage: i16,
+    /// Primary volatile inflicted on target (`vol_bit` mask).
+    pub primary_vol: u16,
+    /// Secondary volatile inflicted on target (`vol_bit` mask).
+    pub sec_vol: u16,
     pub move_type: u8,
     pub is_physical: bool,
     pub is_status: bool,
@@ -780,14 +778,10 @@ pub struct CompactMoveSpec {
     pub recoil_quarter: bool,
     /// Primary status inflicted on target (`0` = None, else `Status as u8`).
     pub primary_status: u8,
-    /// Primary volatile inflicted on target (`vol_bit` mask).
-    pub primary_vol: u16,
     /// Secondary chance out of 256 (`0` = None).
     pub sec_chance_256: u8,
     /// Secondary status inflicted on target (`0` = None, else `Status as u8`).
     pub sec_status: u8,
-    /// Secondary volatile inflicted on target (`vol_bit` mask).
-    pub sec_vol: u16,
     /// Secondary stat stage delta (`(stat_idx, delta)` or `(0xFF, 0)`).
     pub sec_boost: (u8, i8),
     /// Self-targeted or target-applied stat boosts (`[(stat_idx_or_ff, delta); 3]`).
@@ -804,8 +798,6 @@ pub struct CompactMoveSpec {
     /// Variable base power kind (`0` = static, `1` = Return, `2` = Frustration,
     /// `3` = HiddenPower, `4` = Flail/Reversal, `5` = Magnitude, `6` = Present).
     pub var_bp_kind: u8,
-    /// Fixed damage (`-1` = Level, `> 0` = Amount(n), `0` = None).
-    pub fixed_damage: i16,
     /// Twice the expected hit count (`2` = single hit, `6` = 2..5 multihit, `2*n` = Fixed(n)).
     pub multihit_mean_x2: u8,
     /// Rollout status pseudo-score kind (`0` = None, `1` = Sleep, `2` = Par, `3` = Spikes,
@@ -1203,6 +1195,8 @@ fn build_compact_dex_tables(dex: &Dex) -> CompactDexTables {
     }
 }
 
+static DEFAULT_TYPE_CHART: [[i8; 20]; 20] = [[0i8; 20]; 20];
+
 /// Static match context shared across all `CompactBattle` nodes in a search tree.
 #[derive(Clone, Debug)]
 pub struct MatchTable {
@@ -1210,8 +1204,8 @@ pub struct MatchTable {
     pub mons: [StaticMonSpec; 6],
     /// Precompiled move specs for each of the 6 Pokemon's 4 move slots.
     pub move_specs: [[CompactMoveSpec; 4]; 6],
-    /// 20 × 20 type effectiveness matrix (`-1` = resist, `0` = neutral, `+1` = super, `-9` = immune).
-    pub type_chart: [[i8; 20]; 20],
+    /// Reference to the process-wide 20 × 20 type effectiveness matrix (`-1` = resist, `0` = neutral, `+1` = super, `-9` = immune).
+    pub type_chart: &'static [[i8; 20]; 20],
     pub normal_type: u8,
     pub fighting_type: u8,
     pub flying_type: u8,
@@ -1224,6 +1218,28 @@ pub struct MatchTable {
     pub sandstorm_immune_mask: u32,
     pub poison_immune_mask: u32,
     pub match_fingerprint: u64,
+}
+
+impl Default for MatchTable {
+    fn default() -> Self {
+        Self {
+            mons: [StaticMonSpec::default(); 6],
+            move_specs: [[CompactMoveSpec::default(); 4]; 6],
+            type_chart: &DEFAULT_TYPE_CHART,
+            normal_type: 0,
+            fighting_type: 0,
+            flying_type: 0,
+            ground_type: 0,
+            ghost_type: 0,
+            grass_type: 0,
+            fire_type: 0,
+            electric_type: 0,
+            ice_type: 0,
+            sandstorm_immune_mask: 0,
+            poison_immune_mask: 0,
+            match_fingerprint: 0,
+        }
+    }
 }
 
 impl MatchTable {
@@ -1390,24 +1406,54 @@ impl CompactBattle {
                     move_specs[c_idx][m_i] = cm;
                 }
 
+                let stored_stats = [
+                    p.stored_stats[0] as i16,
+                    p.stored_stats[1] as i16,
+                    p.stored_stats[2] as i16,
+                    p.stored_stats[3] as i16,
+                    p.stored_stats[4] as i16,
+                ];
+                let item_stat_kind = ItemStatKind::classify(dex, p.species, p.item);
+                let mut static_fp = 0xcbf29ce484222325u64;
+                let w0 = (p.species.0 as u64)
+                    | ((p.level as u64) << 16)
+                    | ((maxhp as u16 as u64) << 24)
+                    | ((type_mask as u64) << 40)
+                    | ((item_stat_kind as u64) << 60)
+                    | ((item_spec.boost_type as u64) << 52);
+                let w1 = (stored_stats[0] as u16 as u64)
+                    | ((stored_stats[1] as u16 as u64) << 12)
+                    | ((stored_stats[2] as u16 as u64) << 24)
+                    | ((stored_stats[3] as u16 as u64) << 36)
+                    | ((stored_stats[4] as u16 as u64) << 48)
+                    | ((p.hp_type.0 as u64) << 60);
+                let w2 = (moves[0].0 as u64)
+                    | ((moves[1].0 as u64) << 16)
+                    | ((moves[2].0 as u64) << 32)
+                    | ((moves[3].0 as u64) << 48);
+                let w3 = (move_specs[c_idx][0].base_power as u16 as u64)
+                    | ((move_specs[c_idx][1].base_power as u16 as u64) << 16)
+                    | ((move_specs[c_idx][2].base_power as u16 as u64) << 32)
+                    | ((move_specs[c_idx][3].base_power as u16 as u64) << 48);
+                for w in [w0, w1, w2, w3] {
+                    static_fp = static_fp.wrapping_add(w).wrapping_mul(0xf1357aea2e62a9c5);
+                }
+
                 static_mons[c_idx] = StaticMonSpec {
+                    static_fp,
+                    type_mask,
                     species: p.species,
-                    level: p.level,
                     maxhp,
                     quantum_1_8: (maxhp / 8).max(1),
                     quantum_1_16: (maxhp / 16).max(1),
-                    stored_stats: [
-                        p.stored_stats[0] as i16,
-                        p.stored_stats[1] as i16,
-                        p.stored_stats[2] as i16,
-                        p.stored_stats[3] as i16,
-                        p.stored_stats[4] as i16,
-                    ],
-                    type_mask,
+                    stored_stats,
+                    moves,
+                    max_pp,
                     types: [p.types.t[0].0, p.types.t[1].0],
                     num_types: p.types.n,
-                    item_stat_kind: ItemStatKind::classify(dex, p.species, p.item),
-                    initial_item: p.item,
+                    level: p.level,
+                    num_moves,
+                    item_stat_kind,
                     item_boost_type: item_spec.boost_type,
                     is_quick_claw: item_spec.is_quick_claw,
                     is_leftovers: item_spec.is_leftovers,
@@ -1419,12 +1465,6 @@ impl CompactBattle {
                     is_berry: item_spec.is_berry,
                     is_mysteryberry: item_spec.is_mysteryberry,
                     is_scope_lens: item_spec.is_scope_lens,
-                    moves,
-                    max_pp,
-                    num_moves,
-                    hp_type: p.hp_type.0,
-                    hp_power: p.hp_power as i16,
-                    return_bp,
                 };
 
                 let mut sub_hp = 0i16;
@@ -1591,17 +1631,15 @@ impl CompactBattle {
         // Compute static fingerprint for this match configuration.
         let mut fp = 0xcbf29ce484222325u64;
         for m in &static_mons {
-            let word = (m.species.0 as u64)
-                | ((m.level as u64) << 16)
-                | ((m.maxhp as u16 as u64) << 24)
-                | ((m.type_mask as u64) << 40);
-            fp = fp.wrapping_add(word).wrapping_mul(0xf1357aea2e62a9c5);
+            fp = fp.wrapping_add(m.static_fp).wrapping_mul(0xf1357aea2e62a9c5);
         }
+        compact_sides[0].pad = (fp >> 16) as u8;
+        compact_sides[1].pad = (fp >> 24) as u8;
 
         let table = MatchTable {
             mons: static_mons,
             move_specs,
-            type_chart: dt.type_chart,
+            type_chart: &dt.type_chart,
             normal_type: dt.normal_type,
             fighting_type: dt.fighting_type,
             flying_type: dt.flying_type,
@@ -1631,27 +1669,23 @@ impl CompactBattle {
             clause_flags,
             hurt_damage_this_turn: [0, 0],
             hurt_cat_this_turn: [0, 0],
-            special_counters: [0; 6],
-            future_sight_dmg: [0; 2],
-            future_sight_turns: [0; 2],
+            match_fp_lo: fp as u16,
             prng_seed: battle.prng.lcg.seed(),
-            match_fingerprint: fp,
-            reserved: [0; 6],
         };
         (table, cb)
     }
 
-    /// Ultra-fast polynomial hash of the 256-byte `CompactBattle` state
-    /// (hashes the first 25 `u64` words = 200 bytes, masking out `prng_seed`).
+    /// Ultra-fast polynomial hash of the 192-byte `CompactBattle` state
+    /// (hashes the first 23 `u64` words = 184 bytes, skipping `prng_seed`).
     #[inline(always)]
     pub fn search_hash(&self) -> u64 {
-        // SAFETY: `CompactBattle` is `#[repr(C, align(64))]` of size 256 bytes (32 u64 words)
+        // SAFETY: `CompactBattle` is `#[repr(C, align(64))]` of size 192 bytes (24 u64 words)
         // with all initialized bytes (`CompactMon`, `CompactSide`, scalar fields).
-        let words: &[u64; 32] = unsafe { &*(self as *const Self as *const [u64; 32]) };
-        let mut h = self.match_fingerprint;
-        // Words 0..24 cover `mons` (18 words), `sides` (3 words), and turn/field/counters (3 words).
-        // Word 24 is `prng_seed` (skipped so states differing only in RNG seed merge).
-        for &w in &words[..24] {
+        let words: &[u64; 24] = unsafe { &*(self as *const Self as *const [u64; 24]) };
+        let mut h = (self.match_fp_lo as u64).wrapping_mul(0x9e3779b97f4a7c15);
+        // Words 0..23 cover `mons` (18 words), `sides` (3 words), and turn/field/damage (2 words).
+        // Word 23 is `prng_seed` (skipped so states differing only in RNG seed merge).
+        for &w in &words[..23] {
             h = h.wrapping_add(w).wrapping_mul(0xf1357aea2e62a9c5);
         }
         h.rotate_left(26)
@@ -3057,10 +3091,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn compact_battle_layout_is_exact_256_bytes_and_64b_aligned() {
+    fn compact_battle_layout_is_exact_192_bytes_and_64b_aligned() {
         assert_eq!(std::mem::size_of::<CompactMon>(), 24);
         assert_eq!(std::mem::size_of::<CompactSide>(), 12);
-        assert_eq!(std::mem::size_of::<CompactBattle>(), 256);
+        assert_eq!(std::mem::size_of::<CompactBattle>(), 192);
         assert_eq!(std::mem::align_of::<CompactBattle>(), 64);
     }
 
