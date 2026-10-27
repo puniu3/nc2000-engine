@@ -145,7 +145,7 @@ const STATUS_DOMINANCE: [(&str, &str); 27] = [
     ("lovelykiss", "sleeppowder"),
 ];
 
-const STATUS_DOMINANCE_EXTRA: [(&str, &str); 7] = [
+const STATUS_DOMINANCE_EXTRA: [(&str, &str); 18] = [
     ("supersonic", "sweetkiss"),
     ("supersonic", "confuseray"),
     ("sweetkiss", "confuseray"),
@@ -153,17 +153,27 @@ const STATUS_DOMINANCE_EXTRA: [(&str, &str); 7] = [
     ("roar", "whirlwind"),
     ("detect", "protect"),
     ("snore", "sleeptalk"),
+    ("flash", "doubleteam"),
+    ("kinesis", "doubleteam"),
+    ("smokescreen", "doubleteam"),
+    ("sandattack", "doubleteam"),
+    ("tailwhip", "screech"),
+    ("leer", "screech"),
+    ("tailwhip", "curse"),
+    ("leer", "curse"),
+    ("sweetscent", "curse"),
+    ("stringshot", "icywind"),
+    ("stringshot", "thunderwave"),
 ];
 
 /// Damaging moves with unique mechanics that prevent generic BP/Acc/PP
 /// dominance pruning.
-const UNIQUE_DAMAGE_MOVES: [&str; 35] = [
+const UNIQUE_DAMAGE_MOVES: [&str; 33] = [
     "rapidspin",
     "pursuit",
     "beatup",
     "thief",
     "dynamicpunch",
-    "rage",
     "bide",
     "counter",
     "mirrorcoat",
@@ -173,7 +183,6 @@ const UNIQUE_DAMAGE_MOVES: [&str; 35] = [
     "magnitude",
     "psywave",
     "rollout",
-    "furycutter",
     "whirlpool",
     "firespin",
     "bind",
@@ -465,8 +474,9 @@ impl TeamGen {
     ///   dominator is not already on the team;
     /// - sets optimal DVs/EVs (`255` across the board, or `Atk EV = 0` &
     ///   `Atk DV = 1` on physical-less sets without Hidden Power / callers);
-    /// - repairs any orphaned pre-adaptation moves or invalidated items.
-    fn optimize_team_dominance(&self, dex: &Dex, raw: &mut [Value], rng: &mut SplitMix64) {
+    /// - repairs any orphaned pre-adaptation moves, dominated moves, or
+    ///   invalidated/dominated items.
+    pub fn optimize_team_dominance(&self, dex: &Dex, raw: &mut [Value], rng: &mut SplitMix64) {
         for slot in 0..raw.len() {
             // 1. Set-level species dominance promotion
             let sid = species_id(&raw[slot]);
@@ -806,7 +816,9 @@ impl TeamGen {
                 continue;
             }
 
-            // 6. Damaging move strict dominance within the species's legal learnset
+            // 6. Damaging move dominance within the species's legal learnset
+            //    (ignoring PP differences as long as the dominator has >= 5 PP,
+            //    and allowing a +20 BP jump to override minor <= 30% secondaries).
             let Some(ma_id) = dex.moves.id(a_str) else { continue };
             let ma = dex.moves.get(ma_id);
             let bp_a = if a_str == "return" { 102 } else { ma.base_power };
@@ -815,6 +827,12 @@ impl TeamGen {
                 && !UNIQUE_DAMAGE_MOVES.contains(&a_str)
                 && !FIXED_OR_PRIORITY_MOVES.contains(&a_str)
             {
+                // Ultra-low-BP starter moves (BP <= 35, e.g. Poison Sting 15, Lick 20,
+                // Leech Life 20, Smog 20, Absorb 20, Peck 35, Vine Whip 35, Constrict 10)
+                // deal less than neutral Return (102) even with STAB + 2x SE (3x <= 105).
+                if bp_a <= 35 && ma.multihit.is_none() && legal_set.contains("return") {
+                    continue;
+                }
                 let dominated = legal.iter().any(|b| {
                     let b_str = b.as_str();
                     if a_str == b_str {
@@ -829,7 +847,13 @@ impl TeamGen {
                     if mb.priority < ma.priority || mb.crit_ratio < ma.crit_ratio {
                         return false;
                     }
-                    let acc_a = ma.accuracy.as_i64().unwrap_or(101);
+                    // Treat never-miss 60 BP moves (Swift, Feint Attack) as 100% accuracy
+                    // when a same-type move is at least +20 BP stronger.
+                    let acc_a = if bp_b >= bp_a + 20 {
+                        ma.accuracy.as_i64().unwrap_or(100)
+                    } else {
+                        ma.accuracy.as_i64().unwrap_or(101)
+                    };
                     let acc_b = mb.accuracy.as_i64().unwrap_or(101);
                     if acc_b < acc_a {
                         return false;
@@ -860,25 +884,29 @@ impl TeamGen {
                     {
                         return false;
                     }
-                    if ma.drain.is_some() && mb.drain != ma.drain {
+                    if ma.drain.is_some() && mb.drain != ma.drain && bp_b < bp_a + 25 {
                         return false;
                     }
                     if ma.multihit.is_some() && bp_a >= 25 {
                         return false;
                     }
-                    // Secondary effect check: if A has a secondary effect, B must have the same with >= chance
+                    // Secondary effect check: if B is >= +20 BP stronger and A's secondary
+                    // is at most a minor (<= 30%) proc, B dominates A; otherwise B must
+                    // match A's secondary with >= chance.
                     if let Some(sec_a) = &ma.secondary {
-                        let Some(sec_b) = &mb.secondary else { return false };
-                        if sec_a["status"] != sec_b["status"]
-                            || sec_a["volatileStatus"] != sec_b["volatileStatus"]
-                            || sec_a["boosts"] != sec_b["boosts"]
-                            || sec_b["chance"].as_i64().unwrap_or(100)
-                                < sec_a["chance"].as_i64().unwrap_or(100)
-                        {
-                            return false;
+                        let chance_a = sec_a["chance"].as_i64().unwrap_or(100);
+                        if !(bp_b >= bp_a + 20 && chance_a <= 30) {
+                            let Some(sec_b) = &mb.secondary else { return false };
+                            if sec_a["status"] != sec_b["status"]
+                                || sec_a["volatileStatus"] != sec_b["volatileStatus"]
+                                || sec_a["boosts"] != sec_b["boosts"]
+                                || sec_b["chance"].as_i64().unwrap_or(100) < chance_a
+                            {
+                                return false;
+                            }
                         }
                     }
-                    mb.pp >= ma.pp.min(10)
+                    mb.pp >= 5
                 });
                 if dominated {
                     continue;
@@ -891,7 +919,7 @@ impl TeamGen {
 
     /// Non-dominated Hidden Power types for `sid` at `level`: excludes types
     /// where the species already learns a no-drawback 100%-accurate move of
-    /// that type with BP > 70 and PP >= 10.
+    /// that type with BP > 70 and PP >= 5.
     fn non_dominated_hp_types(&self, dex: &Dex, sid: &str, level: i64) -> Vec<String> {
         let Some(l) = self.ls.species(sid) else {
             return Vec::new();
@@ -919,7 +947,7 @@ impl TeamGen {
                     && &md.move_type == hp_type_name
                     && bp > 70
                     && md.accuracy.as_i64().unwrap_or(101) >= 100
-                    && md.pp >= 10
+                    && md.pp >= 5
                     && md.recoil.is_none()
                     && !md.extra.contains_key("selfdestruct")
                     && !matches!(
@@ -978,6 +1006,7 @@ impl TeamGen {
         }
 
         let gold_free = !held.contains(&"goldberry".to_string());
+        let juice_free = !held.contains(&"berryjuice".to_string());
         let miracle_free = !held.contains(&"miracleberry".to_string());
         let pinkbow_free = !held.contains(&"pinkbow".to_string());
         let thickclub_free = !held.contains(&"thickclub".to_string());
@@ -991,7 +1020,7 @@ impl TeamGen {
             if held.contains(&id) {
                 continue;
             }
-            if ZERO_EFFECT_ITEMS.contains(&id.as_str()) {
+            if ZERO_EFFECT_ITEMS.contains(&id.as_str()) || id == "mail" {
                 continue;
             }
             // Species-specific items
@@ -1015,8 +1044,11 @@ impl TeamGen {
                     continue;
                 }
             }
-            // Dominated HP berries
+            // Dominated HP berries: Berry (10 HP) < Berry Juice (20 HP) < Gold Berry (30 HP)
             if matches!(id.as_str(), "berry" | "berryjuice") && gold_free {
+                continue;
+            }
+            if id == "berry" && juice_free {
                 continue;
             }
             // Dominated status berries
@@ -1036,8 +1068,8 @@ impl TeamGen {
     }
 
     /// Replace any orphaned dependent moves (`sleeptalk`/`snore` without
-    /// `rest`, `dreameater`/`nightmare` without a sleep move) after a move
-    /// mutation removed their prerequisite.
+    /// `rest`, `dreameater`/`nightmare` without a sleep move, `defensecurl`
+    /// without `rollout`) or dominated moves on `raw[slot]`.
     fn repair_orphaned_moves(
         &self,
         dex: &Dex,
@@ -1055,13 +1087,16 @@ impl TeamGen {
                 "spore" | "sleeppowder" | "lovelykiss" | "hypnosis" | "sing"
             )
         });
+        let non_dom_init = self.non_dominated_moves(dex, &sid, level, &cur);
 
         let mut changed = false;
         let mut new_moves = cur.clone();
         for i in 0..new_moves.len() {
             let m = new_moves[i].as_str();
+            let b = base_id(m);
             let orphaned = (matches!(m, "sleeptalk" | "snore") && !has_rest)
-                || (matches!(m, "dreameater" | "nightmare") && !has_sleep);
+                || (matches!(m, "dreameater" | "nightmare") && !has_sleep)
+                || !non_dom_init.contains(&b);
             if orphaned {
                 let cands = self.non_dominated_moves(dex, &sid, level, &new_moves);
                 let cur_bases: BTreeSet<String> = new_moves.iter().map(|x| base_id(x)).collect();

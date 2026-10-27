@@ -167,8 +167,28 @@ fn provable_dominance_and_preadaptation_rules_hold() {
     assert!(!snorlax_no_rest.contains(&"snore".to_string()));
     assert!(!snorlax_no_rest.contains(&"strength".to_string()));
     assert!(!snorlax_no_rest.contains(&"tackle".to_string()));
+    assert!(!snorlax_no_rest.contains(&"headbutt".to_string()));
+    assert!(!snorlax_no_rest.contains(&"swift".to_string()));
+    assert!(!snorlax_no_rest.contains(&"lick".to_string()));
     assert!(!snorlax_no_rest.contains(&"splash".to_string()));
     assert!(!snorlax_no_rest.contains(&"frustration".to_string()));
+    // Body Slam (85 BP, 30% par) is within 20 BP of Return (102 BP) and kept
+    assert!(snorlax_no_rest.contains(&"bodyslam".to_string()));
+    assert!(snorlax_no_rest.contains(&"return".to_string()));
+
+    let nidoking_moves = gen.non_dominated_moves(&dex, "nidoking", 50, &[]);
+    assert!(!nidoking_moves.contains(&"poisonsting".to_string()));
+    assert!(!nidoking_moves.contains(&"tailwhip".to_string()));
+    assert!(!nidoking_moves.contains(&"leer".to_string()));
+
+    let starmie_moves = gen.non_dominated_moves(&dex, "starmie", 50, &[]);
+    assert!(!starmie_moves.contains(&"bubblebeam".to_string()));
+    assert!(!starmie_moves.contains(&"watergun".to_string()));
+    assert!(!starmie_moves.contains(&"psybeam".to_string()));
+    assert!(!starmie_moves.contains(&"confusion".to_string()));
+    assert!(starmie_moves.contains(&"surf".to_string()));
+    assert!(starmie_moves.contains(&"hydropump".to_string()));
+    assert!(starmie_moves.contains(&"psychic".to_string()));
 
     let snorlax_with_rest = gen.non_dominated_moves(&dex, "snorlax", 55, &["rest".into()]);
     assert!(snorlax_with_rest.contains(&"sleeptalk".to_string()));

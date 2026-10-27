@@ -83,6 +83,7 @@ STAGE_PATHS = [
     "data/meta-nash-v3/solution.json",
     "data/team-selection-v2/panel.json",
     "data/team-inventory-v1/eval/teams.json",
+    "data/psro-r1/checkpoints",
 ]
 
 
@@ -492,6 +493,116 @@ fi
     print(f"Submitted Phase 0 job: {job_id} ({len(cells)} cells across {num_shards} shards, parallelism={parallelism})")
 
 
+def cmd_submit_eco(args: argparse.Namespace) -> None:
+    """Submit Continuous-Abundance Replicator-Mutator Archipelago (`meta_eco evolve-island`)."""
+    src_hash = cmd_stage(args)
+    bucket = BUCKETS[args.region]
+    staples = "snorlax,zapdos,cloyster,gengar,exeggutor"
+
+    # Build `args.islands` island configs, each hosting 4 diverse strategic niches:
+    islands = []
+    for k in range(args.islands):
+        global_idx = args.island_offset + k
+        a1 = QD_ANCHORS[(global_idx * 2) % len(QD_ANCHORS)]
+        a2 = QD_ANCHORS[(global_idx * 2 + 1) % len(QD_ANCHORS)]
+        cap = 1 if (global_idx % 2 == 0) else 2
+        niches = f"qd-{a1}|{a1}|;qd-{a2}|{a2}|;novel-cap{cap}||{staples}:{cap};free-br||"
+        islands.append(
+            {
+                "name": f"island-r{args.round}-{global_idx:02d}",
+                "niches": niches,
+                "seed": args.seed_base + args.round * 10000 + global_idx * 137,
+                "gauntlet": args.gauntlet_file,
+            }
+        )
+
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+        json.dump(islands, f, indent=2)
+        manifest_local = f.name
+    try:
+        run_cmd(
+            [
+                "gcloud",
+                "storage",
+                "cp",
+                manifest_local,
+                f"gs://{bucket}/{GCS_PREFIX}/eco-r{args.round}/islands-manifest.json",
+            ]
+        )
+    finally:
+        os.unlink(manifest_local)
+
+    task_count = len(islands)
+    parallelism = min(task_count, args.parallelism)
+    job_id = f"nc2000-eco-r{args.round}-{int(time.time()) % 100000}"
+
+    script = f"""set -euo pipefail
+mkdir -p /tmp/work /mnt/disks/gcs/{GCS_PREFIX}/eco-r{args.round}/islands
+tar -xzf /mnt/disks/gcs/{GCS_PREFIX}/src-{src_hash}.tar.gz -C /tmp/work
+cd /tmp/work
+
+BIN=/mnt/disks/gcs/{GCS_PREFIX}/bin-{src_hash}/meta_eco
+mkdir -p /mnt/disks/gcs/{GCS_PREFIX}/bin-{src_hash}
+if [ -s "$BIN" ] && cp "$BIN" /tmp/meta_eco 2>/dev/null; then
+  chmod +x /tmp/meta_eco
+  BIN=/tmp/meta_eco
+else
+  echo "Building meta_eco locally on worker..."
+  CARGO_TARGET_DIR=/tmp/target cargo build --release -p nc2000-bot --example meta_eco
+  if [ "${{BATCH_TASK_INDEX:-0}}" = "0" ]; then
+    cp /tmp/target/release/examples/meta_eco "${{BIN}}.tmp" && mv "${{BIN}}.tmp" "$BIN" || true
+  fi
+  BIN=/tmp/target/release/examples/meta_eco
+fi
+
+export BIN_PATH="$BIN"
+
+python3 - << 'PY'
+import json, os, subprocess, sys
+
+idx = int(os.environ.get("BATCH_TASK_INDEX", "0"))
+manifest_path = "/mnt/disks/gcs/{GCS_PREFIX}/eco-r{args.round}/islands-manifest.json"
+islands = json.load(open(manifest_path))
+if idx >= len(islands):
+    sys.exit(0)
+cfg = islands[idx]
+cmd = [
+    os.environ["BIN_PATH"],
+    "evolve-island",
+    "--island", cfg["name"],
+    "--niches", cfg["niches"],
+    "--gauntlet-file", cfg["gauntlet"],
+    "--seed-dir", "data/psro-r1/checkpoints",
+    "--agent", "{args.agent}",
+    "--waves", "{args.waves}",
+    "--carry", "{args.carry}",
+    "--buds", "{args.buds}",
+    "--eval-games", "{args.eval_games}",
+    "--eta", "{args.eta}",
+    "--env-self-weight", "{args.env_self_weight}",
+    "--seed", str(cfg["seed"]),
+    "--threads", "{args.threads_per_task}",
+    "--out", "/mnt/disks/gcs/{GCS_PREFIX}/eco-r{args.round}/islands",
+    "--resume",
+]
+print("Running:", " ".join(cmd), flush=True)
+subprocess.run(cmd, check=True)
+PY
+"""
+    submit_batch_job(
+        job_id=job_id,
+        region=args.region,
+        machine_type=args.machine_type,
+        task_count=task_count,
+        parallelism=parallelism,
+        cpu_milli=args.threads_per_task * 1000,
+        memory_mib=args.threads_per_task * 1800,
+        max_run_duration="14400s",
+        script=script,
+    )
+    print(f"Submitted Ecosystem job: {job_id} ({task_count} islands, parallelism={parallelism})")
+
+
 def cmd_collect(args: argparse.Namespace) -> None:
     bucket = BUCKETS[args.region]
     dest = pathlib.Path(args.out)
@@ -550,6 +661,24 @@ def main() -> None:
     sp_p0.add_argument("--threads-per-task", type=int, default=16)
     sp_p0.add_argument("--parallelism", type=int, default=6)
     sp_p0.set_defaults(func=cmd_submit_phase0)
+
+    sp_eco = sub.add_parser("submit-eco", help="Submit Continuous-Abundance Replicator-Mutator islands")
+    sp_eco.add_argument("--round", type=int, default=2)
+    sp_eco.add_argument("--islands", type=int, default=6)
+    sp_eco.add_argument("--island-offset", type=int, default=0)
+    sp_eco.add_argument("--seed-base", type=int, default=20261028)
+    sp_eco.add_argument("--gauntlet-file", default="data/meta-nash-v3/pool-artifact.json")
+    sp_eco.add_argument("--agent", default="blind:1000:0.4")
+    sp_eco.add_argument("--waves", type=int, default=24)
+    sp_eco.add_argument("--carry", type=int, default=6)
+    sp_eco.add_argument("--buds", type=int, default=6)
+    sp_eco.add_argument("--eval-games", type=int, default=8)
+    sp_eco.add_argument("--eta", type=float, default=4.0)
+    sp_eco.add_argument("--env-self-weight", type=float, default=0.35)
+    sp_eco.add_argument("--machine-type", default="c2d-highcpu-16")
+    sp_eco.add_argument("--threads-per-task", type=int, default=16)
+    sp_eco.add_argument("--parallelism", type=int, default=6)
+    sp_eco.set_defaults(func=cmd_submit_eco)
 
     sp_col = sub.add_parser("collect", help="Sync results from GCS to local directory")
     sp_col.add_argument("--remote-subpath", required=True)
