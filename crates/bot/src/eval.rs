@@ -584,12 +584,15 @@ pub fn compact_eval_leaf(cb: &CompactBattle, table: &MatchTable, w: &EvalWeights
 #[inline]
 pub fn compact_eval01(cb: &CompactBattle, table: &MatchTable, w: &EvalWeights) -> f64 {
     let mut diff = compact_side_score(cb, table, w, 0) - compact_side_score(cb, table, w, 1);
+    let mut old_rm = 0.0;
     if w.race != 0.0 {
-        diff += w.race * compact_race_margin(cb, table, w);
+        old_rm = compact_race_margin(cb, table, w);
+        diff += w.race * old_rm;
     }
     if w.exchange != 0.0 {
         diff += w.exchange * compact_exchange_margin(cb, table, w);
     }
+    diff += crate::linear::compact_linear_diff(cb, table, diff, old_rm, w.race, w.scale);
     1.0 / (1.0 + (-w.scale * diff).exp())
 }
 

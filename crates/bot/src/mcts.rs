@@ -600,6 +600,9 @@ fn compact_greedy_pick(
         && (cb.sides[side].alive_mask & (1 << att_slot)) != 0
         && (cb.sides[def_side].alive_mask & (1 << def_slot)) != 0
     {
+        if let Some(la_pick) = crate::linear::compact_rollout_linear_pick(cb, table, side, cs) {
+            return la_pick;
+        }
         let mut best: Option<(u8, f64, f64)> = None;
         for &c in cs {
             if c < 4 {
