@@ -457,12 +457,12 @@ fn br_mode(root: &Path, dex: &Dex, args: &[String]) {
             let fit = weighted_fitness(
                 dex, &sets, &gauntlet, &gweights, games, agent_iters, threads, eval_seed,
             );
-            if best_child.as_ref().is_none_or(|(bf, _, _)| fit > *bf) {
+            if best_child.as_ref().is_none_or(|(bf, _, _)| fit >= *bf) {
                 best_child = Some((fit, prop.team, format!("{:?}", prop.op)));
             }
         }
         let (accepted, child_fit, op) = match best_child {
-            Some((fit, team, op)) if fit > parent_fit => {
+            Some((fit, team, op)) if fit >= parent_fit => {
                 parent = team;
                 (true, fit, op)
             }

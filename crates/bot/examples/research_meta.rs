@@ -37,13 +37,19 @@
 //! half) is the bake tooling: bake_preview --candidate <file> (this
 //! checkpoint format is accepted directly) — see that example's header.
 
+use std::collections::BTreeSet;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use conformance::fixture::repo_root;
 use conformance::load_dex;
-use nc2000_bot::teamgen::{gauntlet_eval, team_key, to_sets, EvalCfg, TeamGen};
+use nc2000_bot::preview::MetaPool;
+use nc2000_bot::teamgen::{
+    gauntlet_eval_weighted, team_key, to_sets, NicheConstraint, TeamGen, WeightedEvalCfg,
+};
 use nc2000_bot::SplitMix64;
 use nc2000_engine::battle::PokemonSet;
+use nc2000_engine::dex::toid;
 use serde_json::{json, Value};
 
 fn flag(args: &[String], name: &str) -> Option<String> {
@@ -97,13 +103,87 @@ fn main() {
         std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap();
     let gen = TeamGen::new(&dex, &ls_text, &pool_text).unwrap();
 
-    // ---- gauntlet: pool teams LO..=HI (default 0-7 = the tournament tier)
-    let (glo, ghi) = gauntlet_spec.split_once('-').expect("--gauntlet wants LO-HI");
-    let (glo, ghi): (usize, usize) =
-        (glo.parse().unwrap(), ghi.parse::<usize>().unwrap().min(gen.teams().len() - 1));
-    let gauntlet: Vec<Vec<PokemonSet>> = (glo..=ghi)
-        .map(|i| to_sets(&gen.canonize(&dex, &gen.team_json(i)).unwrap()).unwrap())
+    // ---- gauntlet: either --gauntlet-file JSON ({teams:[{sets, weight/drawWeight}]})
+    //      or pool teams LO..=HI (default 0-7 = the tournament tier)
+    let (gauntlet, gweights): (Vec<Vec<PokemonSet>>, Vec<f64>) =
+        if let Some(gfile) = flag(&args, "--gauntlet-file") {
+            let gtext = std::fs::read_to_string(&gfile).unwrap_or_else(|e| panic!("{gfile}: {e}"));
+            let gv: Value = serde_json::from_str(&gtext).unwrap();
+            let mut teams = Vec::new();
+            let mut weights = Vec::new();
+            for t in gv["teams"].as_array().expect("gauntlet-file: missing teams") {
+                let raw = t["sets"].as_array().expect("gauntlet-file team missing sets");
+                let canon = gen.canonize(&dex, raw).expect("gauntlet-file team invalid");
+                teams.push(to_sets(&canon).unwrap());
+                let w = t["weight"]
+                    .as_f64()
+                    .or_else(|| t["drawWeight"].as_f64())
+                    .unwrap_or(1.0);
+                weights.push(w);
+            }
+            (teams, weights)
+        } else {
+            let (glo, ghi) = gauntlet_spec.split_once('-').expect("--gauntlet wants LO-HI");
+            let (glo, ghi): (usize, usize) = (
+                glo.parse().unwrap(),
+                ghi.parse::<usize>().unwrap().min(gen.teams().len() - 1),
+            );
+            let teams: Vec<Vec<PokemonSet>> = (glo..=ghi)
+                .map(|i| to_sets(&gen.canonize(&dex, &gen.team_json(i)).unwrap()).unwrap())
+                .collect();
+            let weights = vec![1.0; teams.len()];
+            (teams, weights)
+        };
+    let (glo, ghi) = (0usize, gauntlet.len().saturating_sub(1));
+
+    // ---- optional agent spec (--agent blind:3000:0.4 or skuct:300:1.0)
+    let (agent_iters, agent_c, blind_pool): (u32, f64, Option<Arc<MetaPool>>) =
+        if let Some(spec) = flag(&args, "--agent") {
+            let mut parts = spec.split(':');
+            let kind = parts.next().unwrap();
+            let it: u32 = parts.next().unwrap_or("300").parse().unwrap();
+            let c: f64 = parts.next().unwrap_or("0.4").parse().unwrap();
+            let bpool = if kind == "blind" {
+                let bpath = flag(&args, "--belief-pool")
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|| root.join("data/belief-pool-v3/belief-pool.json"));
+                let btext = std::fs::read_to_string(&bpath).unwrap();
+                Some(Arc::new(serde_json::from_str::<MetaPool>(&btext).unwrap()))
+            } else {
+                None
+            };
+            (it, c, bpool)
+        } else {
+            (agent_iters, 1.0, None)
+        };
+
+    // ---- optional niche constraints (--anchors s1,s2 --max-staples K --forbid s3,s4)
+    let anchors: Vec<String> = flag(&args, "--anchors")
+        .map(|s| s.split(',').map(toid).filter(|x| !x.is_empty()).collect())
+        .unwrap_or_default();
+    let forbidden_species: BTreeSet<String> = flag(&args, "--forbid")
+        .map(|s| s.split(',').map(toid).filter(|x| !x.is_empty()).collect())
+        .unwrap_or_default();
+    let staple_cap = flag(&args, "--max-staples").map(|k| {
+        let max_k: usize = k.parse().expect("--max-staples wants usize");
+        let staples: BTreeSet<String> = [
+            "snorlax",
+            "zapdos",
+            "cloyster",
+            "gengar",
+            "starmie",
+            "exeggutor",
+        ]
+        .into_iter()
+        .map(String::from)
         .collect();
+        (staples, max_k)
+    });
+    let constraint = NicheConstraint {
+        anchor_slots: anchors.len(),
+        forbidden_species,
+        staple_cap,
+    };
 
     // ---- seed team + lineage name
     let mut seed_rng = SplitMix64::new(base_seed ^ 0x5EED_7EA3);
@@ -123,13 +203,18 @@ fn main() {
                 .map(|s| s.to_string_lossy().into_owned())
                 .unwrap_or_else(|| "file".into());
             (format!("file-{stem}"), team)
-        } else if args.iter().any(|a| a == "--random-team") {
+        } else if args.iter().any(|a| a == "--random-team") || !anchors.is_empty() {
             let team = gen
-                .random_team_valid(&dex, &mut seed_rng, 200)
-                .expect("failed to draw a random legal team");
-            (format!("rand-{base_seed}"), team)
+                .random_team_constrained(&dex, &mut seed_rng, &anchors, &constraint, 400)
+                .expect("failed to draw a random legal constrained team");
+            let tag = if anchors.is_empty() {
+                format!("rand-{base_seed}")
+            } else {
+                format!("niche-{}-{base_seed}", anchors.join("-"))
+            };
+            (tag, team)
         } else {
-            eprintln!("need --seed-team IDX | --seed-file FILE | --random-team");
+            eprintln!("need --seed-team IDX | --seed-file FILE | --random-team | --anchors S1[,S2]");
             std::process::exit(2);
         };
     let seed_team = if weaken > 0 {
@@ -183,16 +268,18 @@ fn main() {
         })
     };
 
-    let eval_cfg = |seed: u64, games: u32| EvalCfg {
+    let eval_cfg = |seed: u64, games: u32| WeightedEvalCfg {
         games_per_opponent: games,
         agent_iters,
+        c: agent_c,
+        blind_pool: blind_pool.clone(),
         max_turns,
         threads,
         seed,
     };
     let evaluate = |team: &[Value], seed: u64, games: u32| -> f64 {
         let sets = to_sets(team).unwrap();
-        gauntlet_eval(&dex, &sets, &gauntlet, &eval_cfg(seed, games)).score
+        gauntlet_eval_weighted(&dex, &sets, &gauntlet, &gweights, &eval_cfg(seed, games)).score
     };
 
     // ---- iter 0: seed-team fitness
@@ -226,7 +313,7 @@ fn main() {
         let eval_seed = base_seed ^ (it as u64).wrapping_mul(0xA24B_AED4_963E_E407);
         let mut children = Vec::new();
         for k in 0..lambda as usize {
-            match gen.propose_valid(&dex, &parent, &mut rng, 100) {
+            match gen.propose_constrained(&dex, &parent, &mut rng, &constraint, 150) {
                 Some(p) => children.push((k, p)),
                 None => eprintln!("lineage {lineage} iter {it}: child {k}: no valid proposal"),
             }
@@ -255,12 +342,15 @@ fn main() {
                 "iter": it, "child": k, "op": p.op.name(), "slot": p.slot,
                 "fitness": f, "accepted": false,
             }));
-            if best.as_ref().is_none_or(|(bf, _)| f > *bf) {
+            if best.as_ref().is_none_or(|(bf, _)| f >= *bf) {
                 best = Some((f, *k));
             }
         }
         if let Some((f, k)) = best {
-            if f > parent_fit {
+            // Accept strict improvements AND neutral drift (f >= parent_fit) so
+            // neutral 4th-slot / bench mutations can traverse neutral networks
+            // and unlock pre-adapted combos on subsequent steps.
+            if f >= parent_fit {
                 let team = &children.iter().find(|(ck_, _)| *ck_ == k).unwrap().1.team;
                 ck["parent"] = json!(team);
                 ck["parent_fitness"] = json!(f);
@@ -272,12 +362,12 @@ fn main() {
                     }
                 }
                 eprintln!(
-                    "lineage {lineage} iter {it}: ACCEPT child {k} ({f:.3} > parent {parent_fit:.3}, same seed)"
+                    "lineage {lineage} iter {it}: ACCEPT child {k} ({f:.3} >= parent {parent_fit:.3}, same seed)"
                 );
             } else {
                 ck["parent_fitness"] = json!(parent_fit);
                 eprintln!(
-                    "lineage {lineage} iter {it}: reject (best child {f:.3} <= parent {parent_fit:.3}, same seed)"
+                    "lineage {lineage} iter {it}: reject (best child {f:.3} < parent {parent_fit:.3}, same seed)"
                 );
             }
         }

@@ -147,3 +147,59 @@ fn gauntlet_eval_is_thread_count_invariant() {
     assert_eq!(a.score.to_bits(), b.score.to_bits(), "{} vs {}", a.score, b.score);
     assert_eq!(a.per_opponent.len(), 1);
 }
+
+#[test]
+fn provable_dominance_and_preadaptation_rules_hold() {
+    let (dex, gen, ls) = load();
+    // 1. 90 unconditionally dominated species pruned -> 156 kept
+    assert_eq!(gen.non_dominated_species().len(), 156);
+    assert!(!gen.non_dominated_species().contains(&"bulbasaur".to_string()));
+    assert!(!gen.non_dominated_species().contains(&"ivysaur".to_string()));
+    assert!(gen.non_dominated_species().contains(&"venusaur".to_string()));
+    // Special-item holders are kept even if pre-evolutions
+    assert!(gen.non_dominated_species().contains(&"pikachu".to_string()));
+    assert!(gen.non_dominated_species().contains(&"cubone".to_string()));
+    assert!(gen.non_dominated_species().contains(&"chansey".to_string()));
+
+    // 2. Pre-adaptation gating: Sleep Talk requires Rest; Dream Eater requires sleep move
+    let snorlax_no_rest = gen.non_dominated_moves(&dex, "snorlax", 55, &["return".into()]);
+    assert!(!snorlax_no_rest.contains(&"sleeptalk".to_string()));
+    assert!(!snorlax_no_rest.contains(&"snore".to_string()));
+    assert!(!snorlax_no_rest.contains(&"strength".to_string()));
+    assert!(!snorlax_no_rest.contains(&"tackle".to_string()));
+    assert!(!snorlax_no_rest.contains(&"splash".to_string()));
+    assert!(!snorlax_no_rest.contains(&"frustration".to_string()));
+
+    let snorlax_with_rest = gen.non_dominated_moves(&dex, "snorlax", 55, &["rest".into()]);
+    assert!(snorlax_with_rest.contains(&"sleeptalk".to_string()));
+    // Snore is still dominated by Sleep Talk on Snorlax
+    assert!(!snorlax_with_rest.contains(&"snore".to_string()));
+
+    let gengar_no_sleep = gen.non_dominated_moves(&dex, "gengar", 55, &["thunderbolt".into()]);
+    assert!(!gengar_no_sleep.contains(&"dreameater".to_string()));
+    assert!(!gengar_no_sleep.contains(&"nightmare".to_string()));
+
+    let gengar_with_sleep = gen.non_dominated_moves(&dex, "gengar", 55, &["hypnosis".into()]);
+    assert!(gengar_with_sleep.contains(&"dreameater".to_string()));
+    assert!(gengar_with_sleep.contains(&"nightmare".to_string()));
+
+    // 3. Random teams and proposals never carry zero-effect items or dominated EVs
+    let mut rng = SplitMix64::new(20261028);
+    for _ in 0..20 {
+        let team = gen.random_team_valid(&dex, &mut rng, 50).unwrap();
+        assert_clean(&dex, &ls, &team, "dominance-checked random team");
+        for set in &team {
+            let item = set["item"].as_str().unwrap().to_lowercase();
+            assert!(!item.contains("ball") || item == "light ball", "unexpected ball item: {item}");
+            assert!(!item.contains("stone") || item == "hard stone", "unexpected stone item: {item}");
+            assert_ne!(item, "dragon scale");
+            assert_ne!(item, "up-grade");
+            let evs = &set["evs"];
+            assert_eq!(evs["hp"].as_i64(), Some(255));
+            assert_eq!(evs["def"].as_i64(), Some(255));
+            assert_eq!(evs["spa"].as_i64(), Some(255));
+            assert_eq!(evs["spd"].as_i64(), Some(255));
+            assert_eq!(evs["spe"].as_i64(), Some(255));
+        }
+    }
+}

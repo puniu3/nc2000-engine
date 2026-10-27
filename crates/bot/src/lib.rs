@@ -86,4 +86,7 @@ pub use prior::{BeliefPrior, SpeciesPrior};
 pub use rng::SplitMix64;
 pub use runner::{play_game, GameResult};
 pub use smmcts::{RmAgent, RmConfig, SkuctSearch};
-pub use teamgen::{gauntlet_eval, to_sets, EvalCfg, EvalResult, MutOp, Proposal, TeamGen};
+pub use teamgen::{
+    gauntlet_eval, gauntlet_eval_weighted, to_sets, EvalCfg, EvalResult, MutOp, NicheConstraint,
+    Proposal, TeamGen, WeightedEvalCfg,
+};
