@@ -19,9 +19,9 @@
 //! Leaf probabilities are products of per-draw exact rationals
 //! (class-count / 2^32) accumulated in f64 — deterministic, no seed noise.
 
+use std::cell::Cell;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BinaryHeap, HashMap};
-use std::rc::Rc;
 
 use crate::dex::Dex;
 use crate::prng::{BattleRng, DamageRollMode, Draw, Oracle};
@@ -229,9 +229,22 @@ pub struct DamageEnumStats {
 
 struct LeafRec {
     battle: Battle,
-    key: u128,
+    key: Cell<Option<u128>>,
     prob: f64,
-    trace: Rc<Vec<Draw>>,
+    trace: Vec<Draw>,
+}
+
+impl LeafRec {
+    #[inline]
+    fn key(&self) -> u128 {
+        if let Some(k) = self.key.get() {
+            k
+        } else {
+            let k = self.battle.state_key128();
+            self.key.set(Some(k));
+            k
+        }
+    }
 }
 
 /// One scripted engine execution of a decision step: applies `choices` to a
@@ -268,18 +281,18 @@ pub fn run_scripted_with_damage_mode(
 
 type ScriptRunner<'a> = dyn FnMut(&[usize]) -> (Battle, Vec<Draw>, bool) + 'a;
 
-struct Ctx<'a> {
+struct Ctx<'a, 'r> {
     dex: &'a Dex,
     base: &'a Battle,
     choices: [Option<SearchChoice>; 2],
     damage_mode: DamageRollMode,
-    runner: Option<&'a mut ScriptRunner<'a>>,
+    runner: Option<&'a mut ScriptRunner<'r>>,
     cap: usize,
     runs: usize,
     damage: DamageEnumStats,
 }
 
-impl Ctx<'_> {
+impl Ctx<'_, '_> {
     fn run(&mut self, script: &[usize]) -> Option<(Battle, Vec<Draw>)> {
         if self.runs >= self.cap {
             return None;
@@ -325,9 +338,13 @@ impl Ctx<'_> {
 }
 
 fn leaf(b: Battle, trace: Vec<Draw>) -> LeafRec {
-    let key = b.state_key128();
     let prob = trace.iter().map(Draw::prob).product();
-    LeafRec { battle: b, key, prob, trace: Rc::new(trace) }
+    LeafRec {
+        battle: b,
+        key: Cell::new(None),
+        prob,
+        trace,
+    }
 }
 
 /// All leaves of the subtree whose draw choices are fixed by `script`.
@@ -351,12 +368,34 @@ fn subtree_from_run(
     if d.label.starts_with("dmgvar") {
         let chosen = d.chosen;
         let last = d.counts.len() - 1;
-        let mut cache: HashMap<usize, Rc<Vec<LeafRec>>> = HashMap::new();
+        let mut cache: [Option<Vec<LeafRec>>; 40] = std::array::from_fn(|_| None);
         script.push(chosen);
         let known = subtree_from_run(ctx, script, b, trace)?;
         script.pop();
-        cache.insert(chosen, Rc::new(known));
+        cache[chosen] = Some(known);
         droll_ranges(ctx, script, p, 0, last, &mut cache, &mut out)?;
+    } else if d.counts.len() <= 64 {
+        let chosen = d.chosen;
+        let mut mask = 0u64;
+        for (c, &cnt) in d.counts.iter().enumerate() {
+            if cnt != 0 {
+                mask |= 1u64 << c;
+            }
+        }
+        let mut known = Some((b, trace));
+        while mask != 0 {
+            let c = mask.trailing_zeros() as usize;
+            mask &= mask - 1;
+            script.push(c);
+            let mut leaves = if c == chosen {
+                let (b, trace) = known.take().unwrap();
+                subtree_from_run(ctx, script, b, trace)?
+            } else {
+                subtree(ctx, script)?
+            };
+            out.append(&mut leaves);
+            script.pop();
+        }
     } else {
         let counts = d.counts.clone();
         let chosen = d.chosen;
@@ -384,11 +423,11 @@ fn subtree_from_run(
 fn coincide(a: &[LeafRec], b: &[LeafRec], p: usize) -> bool {
     a.len() == b.len()
         && a.iter().zip(b).all(|(x, y)| {
-            x.key == y.key
-                && x.trace.len() == y.trace.len()
+            x.trace.len() == y.trace.len()
                 && x.trace[p + 1..].iter().zip(&y.trace[p + 1..]).all(|(dx, dy)| {
                     dx.label == dy.label && dx.chosen == dy.chosen && dx.counts == dy.counts
                 })
+                && x.key() == y.key()
         })
 }
 
@@ -399,49 +438,41 @@ fn droll_ranges(
     p: usize,
     a: usize,
     b: usize,
-    cache: &mut HashMap<usize, Rc<Vec<LeafRec>>>,
+    cache: &mut [Option<Vec<LeafRec>>; 40],
     out: &mut Vec<LeafRec>,
 ) -> Option<()> {
-    fn endpoint(
-        ctx: &mut Ctx,
-        script: &mut Vec<usize>,
-        cache: &mut HashMap<usize, Rc<Vec<LeafRec>>>,
-        c: usize,
-    ) -> Option<Rc<Vec<LeafRec>>> {
-        if let Some(s) = cache.get(&c) {
-            return Some(s.clone());
-        }
-        script.push(c);
-        let s = Rc::new(subtree(ctx, script)?);
+    if cache[a].is_none() {
+        script.push(a);
+        cache[a] = Some(subtree(ctx, script)?);
         script.pop();
-        cache.insert(c, s.clone());
-        Some(s)
     }
-
-    let sa = endpoint(ctx, script, cache, a)?;
     if a == b {
-        out.extend(sa.iter().map(|l| LeafRec {
-            battle: l.battle.clone(),
-            key: l.key,
-            prob: l.prob,
-            trace: l.trace.clone(),
-        }));
+        let mut sa = cache[a].take().unwrap();
+        out.append(&mut sa);
         return Some(());
     }
-    let sb = endpoint(ctx, script, cache, b)?;
-    if coincide(&sa, &sb, p) {
+    if cache[b].is_none() {
+        script.push(b);
+        cache[b] = Some(subtree(ctx, script)?);
+        script.pop();
+    }
+    if coincide(cache[a].as_ref().unwrap(), cache[b].as_ref().unwrap(), p) {
         // Merge [a, b]: reweight position p from class a's mass to the
         // range's total mass (per-class counts differ by ±1, so divide the
         // old factor out exactly).
-        let counts = &sa.first().map(|l| l.trace[p].counts.clone()).unwrap_or_default();
-        let range_mass: u64 = counts[a..=b].iter().sum();
-        let scale = range_mass as f64 / counts[a] as f64;
-        out.extend(sa.iter().map(|l| LeafRec {
-            battle: l.battle.clone(),
-            key: l.key,
-            prob: l.prob * scale,
-            trace: l.trace.clone(),
-        }));
+        let mut sa = cache[a].take().unwrap();
+        cache[b] = None;
+        let scale = if let Some(first) = sa.first() {
+            let counts = &first.trace[p].counts;
+            let range_mass: u64 = counts[a..=b].iter().sum();
+            range_mass as f64 / counts[a] as f64
+        } else {
+            1.0
+        };
+        for l in &mut sa {
+            l.prob *= scale;
+        }
+        out.append(&mut sa);
         return Some(());
     }
     let m = (a + b) / 2;
@@ -498,9 +529,17 @@ fn enumerate_with_runner<'a>(
     damage_mode: DamageRollMode,
     runner: Option<&'a mut ScriptRunner<'a>>,
 ) -> Option<StepEnum> {
+    let clean_base = if runner.is_none() && (base.log_enabled || !base.log.is_empty()) {
+        let mut b = base.clone();
+        b.set_log_enabled(false);
+        Some(b)
+    } else {
+        None
+    };
+    let base_ref = clean_base.as_ref().unwrap_or(base);
     let mut ctx = Ctx {
         dex,
-        base,
+        base: base_ref,
         choices,
         damage_mode,
         runner,
@@ -513,7 +552,11 @@ fn enumerate_with_runner<'a>(
     Some(StepEnum {
         leaves: recs
             .into_iter()
-            .map(|l| ChanceLeaf { battle: l.battle, prob: l.prob, draws: l.trace.len() })
+            .map(|l| ChanceLeaf {
+                battle: l.battle,
+                prob: l.prob,
+                draws: l.trace.len(),
+            })
             .collect(),
         runs: ctx.runs,
         damage: ctx.damage,

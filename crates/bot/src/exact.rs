@@ -14,11 +14,10 @@
 //! guarantee) whose worst width is reported in `ExactStats` — everything
 //! here is deterministic, so re-runs are bit-identical.
 
-use std::collections::HashMap;
-
 use nc2000_engine::battle::enumerate::enumerate_step;
 use nc2000_engine::battle::{Outcome, SearchChoice};
 use nc2000_engine::dex::Dex;
+use nc2000_engine::fxhash::FxHashMap;
 use nc2000_engine::state::Battle;
 
 #[derive(Clone, Debug)]
@@ -96,9 +95,9 @@ pub struct ExactSolver<'d> {
     /// contributes) — true values regardless of horizon, kept forever and
     /// shared across positions. Keyed by the 128-bit dual-hash fingerprint
     /// (certificate-grade identity).
-    exact_memo: HashMap<u128, f64>,
+    exact_memo: FxHashMap<u128, f64>,
     /// Interval memo for the current (root, horizon) pass only.
-    ival_memo: HashMap<u128, (f64, f64)>,
+    ival_memo: FxHashMap<u128, (f64, f64)>,
     t_max: u16,
     limit: usize,
     work_limit: usize,
@@ -110,8 +109,8 @@ impl<'d> ExactSolver<'d> {
         ExactSolver {
             dex,
             cfg,
-            exact_memo: HashMap::new(),
-            ival_memo: HashMap::new(),
+            exact_memo: FxHashMap::default(),
+            ival_memo: FxHashMap::default(),
             t_max: 0,
             limit: 0,
             work_limit: 0,
@@ -198,7 +197,7 @@ impl<'d> ExactSolver<'d> {
         for (i, &c0) in a0.iter().enumerate() {
             for (j, &c1) in a1.iter().enumerate() {
                 let step = enumerate_step(self.dex, b, [c0, c1], self.cfg.leaf_cap)?;
-                let mut agg: HashMap<u128, (f64, usize)> = HashMap::new();
+                let mut agg: FxHashMap<u128, (f64, usize)> = FxHashMap::default();
                 for (idx, l) in step.leaves.iter().enumerate() {
                     let e = agg.entry(l.battle.state_key128()).or_insert((0.0, idx));
                     e.0 += l.prob;
@@ -283,7 +282,7 @@ impl<'d> ExactSolver<'d> {
                 self.stats.chance_runs += step.runs;
                 self.stats.leaves += step.leaves.len();
                 // Merge identical successors before recursing.
-                let mut agg: HashMap<u128, (f64, usize)> = HashMap::new();
+                let mut agg: FxHashMap<u128, (f64, usize)> = FxHashMap::default();
                 for (idx, l) in step.leaves.iter().enumerate() {
                     let e = agg.entry(l.battle.state_key128()).or_insert((0.0, idx));
                     e.0 += l.prob;
@@ -367,11 +366,30 @@ pub struct MatrixSolution {
 /// with a certified bracket: returns ((lower+upper)/2, upper−lower) where
 /// lower = row strategy's guarantee, upper = column strategy's guarantee.
 pub fn solve_matrix(a: &[f64], n0: usize, n1: usize) -> (f64, f64) {
-    let s = solve_matrix_full(a, n0, n1);
-    (s.value, s.gap)
+    let mut x_stack = [0.0f64; 16];
+    let mut y_stack = [0.0f64; 16];
+    if n0 <= 16 && n1 <= 16 {
+        solve_matrix_into(a, n0, n1, &mut x_stack[..n0], &mut y_stack[..n1])
+    } else {
+        let s = solve_matrix_full(a, n0, n1);
+        (s.value, s.gap)
+    }
 }
 
 pub fn solve_matrix_full(a: &[f64], n0: usize, n1: usize) -> MatrixSolution {
+    let mut x = vec![0.0f64; n0];
+    let mut y = vec![0.0f64; n1];
+    let (value, gap) = solve_matrix_into(a, n0, n1, &mut x, &mut y);
+    MatrixSolution { value, gap, x, y }
+}
+
+pub(crate) fn solve_matrix_into(
+    a: &[f64],
+    n0: usize,
+    n1: usize,
+    x: &mut [f64],
+    y: &mut [f64],
+) -> (f64, f64) {
     // Positive shift so the game value is > 0.
     let min = a.iter().cloned().fold(f64::INFINITY, f64::min);
     let shift = min - 1.0;
@@ -380,7 +398,15 @@ pub fn solve_matrix_full(a: &[f64], n0: usize, n1: usize) -> MatrixSolution {
     // Tableau: n1 vars + n0 slacks + rhs; objective row last (stores
     // reduced costs; slack entries at optimum = dual values = row strategy).
     let cols = n1 + n0 + 1;
-    let mut tab = vec![0.0f64; (n0 + 1) * cols];
+    let tab_len = (n0 + 1) * cols;
+    let mut tab_stack = [0.0f64; 352];
+    let mut tab_heap;
+    let tab: &mut [f64] = if tab_len <= 352 {
+        &mut tab_stack[..tab_len]
+    } else {
+        tab_heap = vec![0.0f64; tab_len];
+        &mut tab_heap
+    };
     for i in 0..n0 {
         for j in 0..n1 {
             tab[i * cols + j] = a[i * n1 + j] - shift;
@@ -391,7 +417,17 @@ pub fn solve_matrix_full(a: &[f64], n0: usize, n1: usize) -> MatrixSolution {
     for j in 0..n1 {
         tab[n0 * cols + j] = -1.0;
     }
-    let mut basis: Vec<usize> = (n1..n1 + n0).collect();
+    let mut basis_stack = [0usize; 16];
+    let mut basis_heap;
+    let basis: &mut [usize] = if n0 <= 16 {
+        for i in 0..n0 {
+            basis_stack[i] = n1 + i;
+        }
+        &mut basis_stack[..n0]
+    } else {
+        basis_heap = (n1..n1 + n0).collect::<Vec<_>>();
+        &mut basis_heap
+    };
 
     const EPS: f64 = 1e-12;
     // Pivot cap + graceful exit on fp-degenerate "unbounded" directions:
@@ -446,17 +482,16 @@ pub fn solve_matrix_full(a: &[f64], n0: usize, n1: usize) -> MatrixSolution {
 
     // Recover strategies: column player w from the basis; row player from
     // the slack reduced costs (dual values).
-    let mut y = vec![0.0f64; n1];
+    y[..n1].fill(0.0);
     for (i, &bv) in basis.iter().enumerate() {
         if bv < n1 {
             y[bv] = tab[i * cols + cols - 1] * vp;
         }
     }
-    let mut x = vec![0.0f64; n0];
     for i in 0..n0 {
         x[i] = tab[n0 * cols + n1 + i] * vp;
     }
-    for weights in [&mut x, &mut y] {
+    for weights in [&mut x[..n0], &mut y[..n1]] {
         for weight in weights.iter_mut() {
             *weight = if weight.is_finite() { weight.max(0.0) } else { 0.0 };
         }
@@ -476,7 +511,7 @@ pub fn solve_matrix_full(a: &[f64], n0: usize, n1: usize) -> MatrixSolution {
     let upper = (0..n0)
         .map(|i| (0..n1).map(|j| y[j] * a[i * n1 + j]).sum::<f64>())
         .fold(f64::NEG_INFINITY, f64::max);
-    MatrixSolution { value: (lower + upper) * 0.5, gap: (upper - lower).max(0.0), x, y }
+    ((lower + upper) * 0.5, (upper - lower).max(0.0))
 }
 
 #[cfg(test)]

@@ -1508,6 +1508,15 @@ impl CompactBattle {
             if side.pokemon_left == 1 && alive_mask.count_ones() > 1 && active_idx < 3 {
                 alive_mask = 1 << active_idx;
             }
+            if active_idx >= 3 {
+                let fainted_roster = side.fainted_this_turn.or(side.fainted_last_turn);
+                active_idx = (0..party_len)
+                    .find(|&i| {
+                        Some(party_roster[i]) == fainted_roster && (alive_mask & (1 << i)) == 0
+                    })
+                    .or_else(|| (0..3usize).find(|&i| (alive_mask & (1 << i)) == 0))
+                    .unwrap_or(0) as u8;
+            }
 
             let mut reflect_turns = 0u8;
             let mut lightscreen_turns = 0u8;
@@ -1614,12 +1623,11 @@ impl CompactBattle {
             weather_turns,
             quick_claw_roll: battle.quick_claw_roll as u8,
             outcome,
-            speed_order: battle
-                .speed_order
-                .first()
-                .copied()
-                .unwrap_or(0)
-                .clamp(0, 1) as u8,
+            speed_order: if battle.mid_turn {
+                battle.speed_order.first().copied().unwrap_or(0).clamp(0, 1) as u8
+            } else {
+                0
+            },
             clause_flags,
             hurt_damage_this_turn: [0, 0],
             hurt_cat_this_turn: [0, 0],
@@ -1991,6 +1999,9 @@ impl CompactBattle {
                 }
             }
         }
+        self.hurt_damage_this_turn = [0, 0];
+        self.hurt_cat_this_turn = [0, 0];
+        self.speed_order = 0;
         self.prng_seed = rng.seed();
     }
 
@@ -2002,7 +2013,7 @@ impl CompactBattle {
         target_party_idx: u8,
         baton_pass: bool,
     ) {
-        let old_idx = side * 3 + self.sides[side].active_idx as usize;
+        let old_idx = side * 3 + (self.sides[side].active_idx.min(2) as usize);
         let saved_boosts = self.mons[old_idx].boosts;
         let saved_sub = self.mons[old_idx].hp_pool[1];
         let pass_mask = vol_bit::SUBSTITUTE
@@ -2033,7 +2044,7 @@ impl CompactBattle {
         // Switching out releases Mean Look / Spider Web trap on the opposing active Pokemon.
         if !baton_pass {
             let foe_side = side ^ 1;
-            let foe_idx = foe_side * 3 + self.sides[foe_side].active_idx as usize;
+            let foe_idx = foe_side * 3 + (self.sides[foe_side].active_idx.min(2) as usize);
             self.mons[foe_idx].vol_flags &= !vol_bit::TRAPPED_OR_LOCKED;
         }
 
@@ -3219,5 +3230,77 @@ mod tests {
         // Switch Snorlax to party slot 1 (action 4 + 1 = 5), Marowak Swords Dance (move 2).
         cb_clone.step_turn(&table, [5, 2]);
         assert_eq!(cb_clone.sides[0].active_idx, 1);
+    }
+
+    #[test]
+    fn compact_battle_forced_switch_after_ko_steps_safely() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../data/gen2stadium2.json");
+        let json = std::fs::read_to_string(&path).unwrap();
+        let dex = Dex::from_json(&json).unwrap();
+        let mk = |species: &str, level: u8, item: &str, moves: &[&str]| -> crate::battle::PokemonSet {
+            serde_json::from_value(serde_json::json!({
+                "name": species, "species": species, "item": item, "ability": "No Ability",
+                "moves": moves, "level": level,
+                "evs": {"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},
+                "ivs": {"hp":30,"atk":30,"def":30,"spa":30,"spd":30,"spe":30},
+                "happiness": 255
+            }))
+            .unwrap()
+        };
+        let p1 = vec![
+            mk("Cloyster", 50, "Leftovers", &["Explosion", "Surf", "Ice Beam", "Spikes"]),
+            mk("Snorlax", 55, "Leftovers", &["Double-Edge", "Earthquake", "Rest", "Sleep Talk"]),
+            mk("Zapdos", 50, "Mint Berry", &["Thunderbolt", "Hidden Power", "Rest", "Whirlwind"]),
+        ];
+        let p2 = vec![
+            mk("Marowak", 50, "Thick Club", &["Earthquake", "Rock Slide", "Swords Dance", "Rest"]),
+            mk("Skarmory", 50, "Leftovers", &["Drill Peck", "Whirlwind", "Curse", "Rest"]),
+            mk("Raikou", 50, "Miracle Berry", &["Thunderbolt", "Crunch", "Reflect", "Rest"]),
+        ];
+        let mut b = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
+        b.choose(&dex, 0, "team 1,2,3").unwrap();
+        b.choose(&dex, 1, "team 1,2,3").unwrap();
+
+        // Cloyster uses Explosion to KO both itself (side 0) and Marowak (side 1).
+        let id1 = b.active_id(1).unwrap();
+        b.poke_mut(id1).hp = 10;
+        b.choose(&dex, 0, "move 1").unwrap();
+        b.choose(&dex, 1, "move 3").unwrap();
+
+        assert_eq!(b.sides[0].request_state(), Some(RequestKind::Switch));
+        assert_eq!(b.sides[1].request_state(), Some(RequestKind::Switch));
+
+        // Also test the PositionSpec / protocol-import representation where `side.active` is `None`.
+        for clear_active in [false, true] {
+            let mut b_case = b.clone();
+            if clear_active {
+                b_case.sides[0].active = None;
+                b_case.sides[1].active = None;
+            }
+            let (table, mut cb) = CompactBattle::from_battle(&b_case, &dex);
+            for s in 0..2 {
+                assert!(
+                    cb.sides[s].active_idx < 3,
+                    "side {s} active_idx={} must be < 3 (clear_active={clear_active})",
+                    cb.sides[s].active_idx
+                );
+                assert_eq!(cb.sides[s].request, 2);
+                assert_eq!(cb.sides[s].alive_mask & (1 << cb.sides[s].active_idx), 0);
+                let mut acts = [0u8; 7];
+                let n = cb.legal_actions(&table, s, &mut acts);
+                assert_eq!(&acts[..n], &[5, 6]);
+            }
+
+            // Step forced switch on both sides (including side 1 where active_idx=3 previously panicked).
+            cb.apply_actions(&table, [5, 6]);
+            assert_eq!(cb.sides[0].active_idx, 1);
+            assert_eq!(cb.sides[1].active_idx, 2);
+            assert_eq!(cb.sides[0].request, 1);
+            assert_eq!(cb.sides[1].request, 1);
+            assert_eq!(cb.hurt_damage_this_turn, [0, 0]);
+            assert_eq!(cb.hurt_cat_this_turn, [0, 0]);
+            assert_eq!(cb.speed_order, 0);
+        }
     }
 }
