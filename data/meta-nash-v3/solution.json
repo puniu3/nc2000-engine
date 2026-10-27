@@ -1,17 +1,17 @@
 {
  "source": "data/meta-nash-v3/solution-blind27000.json",
- "conditions": "blind vs blind at blind:27000:0.4 on the frozen prior v3 (fnv1a64:ffa73c4245fe3774), no pondering, 500-turn cap = 0.5; the finite game over the 22 support-relevant selected parties (19 from the blind:3000:0.4 game + 3 joined by best-response rounds), 16 seed blocks per pair (seed base 20261161); RM+ (tools/nash-solve.py), support >= 0.01 renormalized",
+ "conditions": "blind vs blind at blind:27000:0.4 on the frozen prior v3 (fnv1a64:ffa73c4245fe3774), no pondering, 500-turn cap = 0.5; the finite game over the 22 support-relevant selected parties (19 from the blind:3000:0.4 game + 3 joined by best-response rounds), pooled across stage B/C (seed bases 20261121, 20261131), initial 16 seed blocks per pair (seed base 20261161), and +16 refinement seed blocks per pair on the top 10 support candidates (seed base 20262161); RM+ (tools/nash-solve.py), support >= 0.01 renormalized",
  "prior": {
   "path": "data/belief-pool-v3/belief-pool.json",
   "fingerprint": "fnv1a64:ffa73c4245fe3774"
  },
  "bot": "fnv1a64:c31d5635eb296d9a:m17e-solver-build-v3",
- "margin": 2.6360003302361434e-07,
+ "margin": 2.2069609366681675e-06,
  "weights": {
-  "sample-08": 0.411763,
-  "sample-07": 0.313725,
-  "mjj-2020-rraikou": 0.127459,
-  "sample-13": 0.127447,
-  "sample-10": 0.019606
+  "sample-07": 0.261004,
+  "nb-sample-13-0": 0.233512,
+  "sample-08": 0.186817,
+  "rental-cban-3": 0.159343,
+  "sample-10": 0.159324
  }
 }

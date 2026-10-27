@@ -23,19 +23,21 @@ bootstrap), procedure `data/team-selection-v2/PROTOCOL.md` §Nash.
 | `support-relevant-blind3000.txt` | its 19 support-relevant parties (weight ≥ 0.01 or support in ≥ 10% of bootstraps) |
 | `solution-blind27000-r0.json` | those 19, every pair 16 blocks at blind:27000:0.4 (seed base 20261161) |
 | `rounds.json` | best-response rounds: S members outside the game against the 27k mixture (16 mixture-sampled blocks); sample-16-orig and sample-02, then rental-cban-14 joined |
-| `solution-blind27000.json` | the final 22-party game at 27k |
+| `solution-blind27000.json` | the final 22-party game at 27k (pooled with stage B/C and +16 refinement blocks per pair on the top 10 support candidates at seed base 20262161) |
 | `solution.json` | the shipped weights (support ≥ 0.01, renormalized) and conditions |
 | `challenge-blind3000.json`, `challenge-blind27000.json`, `challenge-blind27000-refine.json` | non-selected candidates, held-out page teams and off-prior chimeras against the mixture |
 
 ## Result
 
-sample-08 0.412, sample-07 0.314, 魔人島 ソード＆シールド (mjj-2020-rraikou)
-0.127, sample-13 0.127, sample-10 0.020. The three parties that joined in the
-best-response rounds take no weight in the re-solved game, and the mixture did
-not change across rounds. The top of this game is flat: across seed
-bootstraps support spreads over a dozen parties (sample-08 in 94% of
-resamples, sample-07 78%, sample-10 69%, ソード＆シールド 69%,
-rental-cban-3 62%), so exact weights are not stable.
+sample-07 0.261, nb-sample-13-0 0.234, sample-08 0.187, rental-cban-3 0.159,
+sample-10 0.159 (initial 16-block solve: sample-08 0.412, sample-07 0.314,
+魔人島 ソード＆シールド 0.127, sample-13 0.127, sample-10 0.020; held-out 64-block
+CRN duel of the refined mixture against the initial mixture at blind:27000:0.4
+on seed base 20263161: 0.523 ± 0.074 overall, 0.531 ± 0.097 on the 49 non-mirror
+blocks). The three parties that joined in the best-response rounds take no
+weight in the re-solved game. Across seed bootstraps the five support parties
+lead consistently (rental-cban-3 in 88% of resamples, sample-08 84%, sample-10
+76%, nb-sample-13-0 75%, sample-07 74%).
 
 Challenges at 27k: no challenger's 95% interval clears 0.5. The two whose
 point estimate did (off-prior chimeras offprior-03 0.547 and offprior-16

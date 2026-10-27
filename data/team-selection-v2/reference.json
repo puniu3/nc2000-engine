@@ -270,7 +270,7 @@
    "catalog": true,
    "drawWeight": 0.020833,
    "priorWeight": 0.333333,
-   "nashWeight": 0.411763,
+   "nashWeight": 0.186817,
    "variantCluster": "vc06",
    "species": [
     "Exeggutor",
@@ -546,7 +546,7 @@
    "catalog": true,
    "drawWeight": 0.03125,
    "priorWeight": 0.5,
-   "nashWeight": 0.127447,
+   "nashWeight": 0,
    "variantCluster": "vc08",
    "species": [
     "Gengar",
@@ -730,7 +730,7 @@
    "catalog": true,
    "drawWeight": 0.03125,
    "priorWeight": 0.5,
-   "nashWeight": 0.019606,
+   "nashWeight": 0.159324,
    "variantCluster": "vc26",
    "species": [
     "Golem",
@@ -822,7 +822,7 @@
    "catalog": true,
    "drawWeight": 0.020833,
    "priorWeight": 0.333333,
-   "nashWeight": 0.313725,
+   "nashWeight": 0.261004,
    "variantCluster": "vc02",
    "species": [
     "Electrode",
@@ -2824,7 +2824,7 @@
    "catalog": true,
    "drawWeight": 0.03125,
    "priorWeight": 0.125,
-   "nashWeight": 0,
+   "nashWeight": 0.233512,
    "variantCluster": "vc08",
    "species": [
     "Gengar",
@@ -3319,7 +3319,7 @@
    "catalog": true,
    "drawWeight": 0.020833,
    "priorWeight": 0.333333,
-   "nashWeight": 0,
+   "nashWeight": 0.159343,
    "variantCluster": "vc02",
    "species": [
     "Tauros",
@@ -5132,7 +5132,7 @@
    "catalog": true,
    "drawWeight": 0.0625,
    "priorWeight": 1,
-   "nashWeight": 0.127459,
+   "nashWeight": 0,
    "variantCluster": "vc56",
    "species": [
     "Raikou",
