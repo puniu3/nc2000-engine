@@ -1,20 +1,18 @@
 import { expect, test } from "@playwright/test";
+import { readFileSync } from "node:fs";
 
-test("strength persists across reloads and play doors", async ({ page }) => {
+const live = JSON.parse(
+  readFileSync(new URL("../../data/live-search.json", import.meta.url), "utf8"),
+) as { defaultStrength: string; battle: { strong: number } };
+
+test("play doors always use the fixed strong search budget without a strength selector", async ({ page }) => {
+  expect(live.defaultStrength).toBe("strong");
+  expect(live.battle.strong).toBe(81000);
   await page.addInitScript(() => localStorage.setItem("nc2000-locale", "en"));
-  await page.goto("/");
-  const strength = page.getByRole("combobox", { name: "Bot strength", exact: true });
-  await expect(strength).toHaveValue("strong");
-  await strength.selectOption("standard");
-  await page.reload();
-  await expect(strength).toHaveValue("standard");
-  await page.goto("/?nash");
-  await expect(strength).toHaveValue("standard");
-  await strength.selectOption("strong");
-  await page.goto("/?blind");
-  await expect(strength).toHaveValue("strong");
-  await expect(page.locator(".strength-note")).toContainText("does not make it weaker");
-  await page.evaluate(() => localStorage.setItem("nc2000-strength", "unknown-tier"));
-  await page.reload();
-  await expect(strength).toHaveValue("strong");
+  for (const url of ["/", "/?nash", "/?blind"]) {
+    await page.goto(url);
+    await expect(page.locator(".start-title")).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Bot strength", exact: true })).toHaveCount(0);
+    await expect(page.locator(".strength-choice")).toHaveCount(0);
+  }
 });

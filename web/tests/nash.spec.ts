@@ -399,6 +399,8 @@ test("the start screen links to the party evaluator", async ({ page }) => {
   const link = page.locator(".start-link");
   await expect(link).toHaveAttribute("href", /\?evaluate$/);
   await link.click();
-  await expect(page.getByLabel("Search iterations", { exact: true })).toHaveValue("81000");
+  await expect(page.getByRole("heading", { name: "Evaluate your team's strength" })).toBeVisible();
+  await expect(page.getByLabel("Number of games", { exact: true })).toHaveValue("32");
+  await expect(page.getByLabel("Search iterations", { exact: true })).toHaveCount(0);
 });
 

@@ -64,7 +64,7 @@ import { announce, announceAssertive } from "./announcer";
 import { moveNote } from "./behavior-notes";
 import { noteRef } from "./tooltip";
 import type { SelectedTeam } from "./app";
-import { liveBudget, type Strength } from "./search-profile";
+import { DEFAULT_STRENGTH, liveBudget } from "./search-profile";
 import { Modal } from "./modal";
 import { sheetMon } from "./set-info";
 import { MonSheet, TeamSheets } from "./team-sheet";
@@ -135,7 +135,6 @@ const UNKNOWN_ITEM = "?";
 export function Game(props: {
   /** The opponent prior the bot's belief narrows down (belief-pool-v3). */
   poolJson: string;
-  strength: Strength;
   humanTeam: SelectedTeam;
   botTeam: SelectedTeam;
   /** Raw belief-prior table text, only when the player loaded one by hand
@@ -343,7 +342,7 @@ export function Game(props: {
 
   async function searchBot(req: Request, legal: Choice[]) {
     const bot = botRef.current!;
-    const budget = liveBudget(props.strength, legal[0].kind === "team");
+    const budget = liveBudget(DEFAULT_STRENGTH, legal[0].kind === "team");
     // Start before the human commits to hide latency. The worker finishes
     // exactly this budget regardless of when the human chooses.
     const ponder = req.needs[HUMAN] && req.picks[HUMAN] === null;

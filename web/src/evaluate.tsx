@@ -166,7 +166,6 @@ export function Evaluate() {
   const [editorDex, setEditorDex] = useState<EditorDex | null>(null);
   const [entries, setEntries] = useState<OpponentDraft[]>([]);
   const [party, setParty] = useState("");
-  const [iterations, setIterations] = useState(PRODUCT_ITERATIONS);
   const [games, setGames] = useState("32");
   const [belief, setBelief] = useState({ json: "", hash: "" });
   const [error, setError] = useToolMessage("");
@@ -190,7 +189,6 @@ export function Evaluate() {
         text: JSON.stringify(e.sets, null, 2),
       })),
     );
-    setIterations(saved.config.iterations);
     setError("");
     setProgress("");
     setNotice("");
@@ -254,7 +252,7 @@ export function Evaluate() {
   const budget =
     Number.isSafeInteger(testBudget) && testBudget > 0
       ? testBudget
-      : iterations;
+      : PRODUCT_ITERATIONS;
   const config: EvaluationConfig | null =
     validation.player && validation.opponents
       ? {
@@ -540,23 +538,6 @@ export function Evaluate() {
                 step={2}
                 onInput={(e) => setGames(e.currentTarget.value)}
               />
-            </label>
-            <label>
-              {toolText("iterations")}{" "}
-              <select
-                aria-label={toolText("iterations")}
-                value={iterations}
-                onChange={(e) => setIterations(Number(e.currentTarget.value))}
-              >
-                {[3000, 10000, PRODUCT_ITERATIONS].map((n) => (
-                  <option key={n} value={n}>
-                    {budgetLabel(n)}
-                  </option>
-                ))}
-                {![3000, 10000, PRODUCT_ITERATIONS].includes(iterations) && (
-                  <option value={iterations}>{budgetLabel(iterations)}</option>
-                )}
-              </select>
             </label>
           </div>
           {!validCount && (

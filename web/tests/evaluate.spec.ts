@@ -496,9 +496,7 @@ test("editing an imported party preserves custom stats and exposes no technical 
   await page.getByText("テキストから読み込む", { exact: true }).first().click();
   const visibleText = await page.locator("main").innerText();
   expect(visibleText).not.toMatch(/WASM|belief|反復|BLIND|正規化/);
-  await expect(page.getByLabel("考える回数", { exact: true })).toHaveValue(
-    "81000",
-  );
+  await expect(page.getByLabel("考える回数", { exact: true })).toHaveCount(0);
 });
 
 test("opponent panel shows the mixture's parties and probabilities, with JSON as its only edit control", async ({
@@ -521,13 +519,7 @@ test("opponent panel shows the mixture's parties and probabilities, with JSON as
   await expect(
     page.getByText("自動で補った項目", { exact: false }),
   ).toHaveCount(0);
-  await expect(
-    page.getByLabel("考える回数", { exact: true }).locator("option"),
-  ).toHaveText([
-    "3,000回(簡易計測)",
-    "10,000回(簡易計測)",
-    "81,000回(「強い」の対戦中と同じ回数)",
-  ]);
+  await expect(page.getByLabel("考える回数", { exact: true })).toHaveCount(0);
   await panel.getByText("技・持ち物を見る", { exact: true }).first().click();
   await expect(
     panel.locator(".eval-opponent-sets").first().locator("strong"),

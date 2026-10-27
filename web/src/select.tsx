@@ -1,4 +1,3 @@
-import type { Strength } from "./search-profile";
 // Start screen: a minimal centered column — Start battle, a one-line
 // banner naming the rules in force, Your party, and the setup button. Your
 // party defaults to Random, so one tap on Start begins a game; the party
@@ -827,8 +826,6 @@ export function StartScreen(props: {
   botDrawCount: number;
   prior: StoredPrior | null;
   onPrior: (p: StoredPrior | null) => void;
-  strength: Strength;
-  onStrength: (value: Strength) => void;
   onStart: (human: SelectedTeam, bot: SelectedTeam) => void;
 }) {
   const pool = props.loadedPool.pool;
@@ -917,15 +914,6 @@ export function StartScreen(props: {
       <main class="start-col">
         <h1 class="start-title">NC2000</h1>
         <div class="start-subtitle">{ui().subtitle}</div>
-        <label class="strength-choice">
-          <span>{ui().strengthLabel}</span>
-          <select aria-label={ui().strengthLabel} value={props.strength}
-            onChange={e => props.onStrength(e.currentTarget.value as Strength)}>
-            <option value="standard">{ui().strengthStandard}</option>
-            <option value="strong">{ui().strengthStrong}</option>
-          </select>
-        </label>
-        <p class="strength-note">{ui().strengthNote}</p>
         <button
           class="primary start-main-btn"
           onClick={() => props.onStart(humanTeam(), props.drawOpponent())}
