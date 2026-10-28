@@ -596,6 +596,15 @@ fn cmd_evolve_island(args: &[String]) {
             ((eval_games as usize * 3) / slice_len.max(1)).clamp(2, 6) as u32;
         let bench_n_games = (bench_games_per_opp as usize * slice_len) as f64;
         let eco_n_games = (eval_games as usize * eco_opps.len()) as f64;
+        let total_w_games =
+            bench_n_games + if eco_opps.is_empty() { 0.0 } else { eco_n_games };
+
+        let pre_wave_bayes: BTreeMap<String, f64> = ledger
+            .active_strains
+            .iter()
+            .filter(|s| s.cum_games > 0.0)
+            .map(|s| (s.id.clone(), s.bayes_fit))
+            .collect();
 
         // Evaluate all active strains concurrently across a single wave barrier so a single
         // long-turn stall game on one strain never idles the other 15 CPU cores across 24 barriers.
@@ -654,18 +663,42 @@ fn cmd_evolve_island(args: &[String]) {
                         bench_fit
                     };
 
-                    let total_w_games =
-                        bench_n_games + if eco_opps_ref.is_empty() { 0.0 } else { eco_n_games };
-                    s.cum_games += total_w_games;
-                    s.cum_wins += wave_fit * total_w_games;
                     s.last_wave_fit = wave_fit;
-                    s.recompute_stats(prior_games);
                 }));
             }
             for h in handles {
                 h.join().unwrap();
             }
         });
+
+        // Common-Random-Numbers (CRN) Paired Slice-Deconfounding:
+        // When a young bud (age <= 3 waves) and its parent are evaluated in the same wave on
+        // the exact same 8-team benchmark slice, eco opponents, and `wave_seed`, use the parent's
+        // wave score as a control variate so rotating slice difficulty never masks true improvements.
+        let wave_fit_by_id: BTreeMap<String, f64> = ledger
+            .active_strains
+            .iter()
+            .map(|s| (s.id.clone(), s.last_wave_fit))
+            .collect();
+        for s in &mut ledger.active_strains {
+            let eff_wave_fit = if s.born_wave > 0 && w.saturating_sub(s.born_wave) <= 3 {
+                if let (Some(&p_bayes), Some(&p_wave)) = (
+                    pre_wave_bayes.get(&s.parent_id),
+                    wave_fit_by_id.get(&s.parent_id),
+                ) {
+                    s.parent_prior = p_bayes;
+                    (p_bayes + (s.last_wave_fit - p_wave)).clamp(0.0, 1.0)
+                } else {
+                    s.last_wave_fit
+                }
+            } else {
+                s.last_wave_fit
+            };
+            s.cum_games += total_w_games;
+            s.cum_wins += eff_wave_fit * total_w_games;
+            s.last_wave_fit = eff_wave_fit;
+            s.recompute_stats(prior_games);
+        }
 
         // Within-Niche Boltzmann-Replicator Update on continuous abundance w_i:
         // Each niche maintains its own abundance share (1 / num_niches of the island) so
@@ -778,18 +811,47 @@ fn bud_next_wave_by_niche(
     let mut seen_keys: BTreeSet<String> = BTreeSet::new();
 
     for niche_spec in &ledger.niches {
-        let mut group = by_niche.remove(&niche_spec.name).unwrap_or_default();
-        group.sort_by(|a, b| {
-            let qa = 0.75 * a.bayes_fit + 0.25 * a.lcb95.max(a.bayes_fit - 0.12);
-            let qb = 0.75 * b.bayes_fit + 0.25 * b.lcb95.max(b.bayes_fit - 0.12);
-            qb.partial_cmp(&qa).unwrap_or(std::cmp::Ordering::Equal)
+        let group = by_niche.remove(&niche_spec.name).unwrap_or_default();
+        // 2-Wave Grace Period: buds born at `born_wave - 1` (which have completed only 1 wave so far)
+        // are protected for a second wave so they accumulate 2 waves (~112 games across 2 slices)
+        // of CRN paired evaluation before competing with veterans.
+        let mut grace_buds: Vec<Strain> = Vec::new();
+        let mut veterans: Vec<Strain> = Vec::new();
+        for s in group {
+            if s.born_wave > 0 && s.born_wave + 1 >= born_wave {
+                grace_buds.push(s);
+            } else {
+                veterans.push(s);
+            }
+        }
+        // Sort veterans by Empirical-Bayes posterior mean `bayes_fit` directly (without the
+        // `lcb95` sample-size penalty that artificially favored 500-game incumbents over 2-wave buds).
+        veterans.sort_by(|a, b| {
+            b.bayes_fit
+                .partial_cmp(&a.bayes_fit)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        grace_buds.sort_by(|a, b| {
+            b.bayes_fit
+                .partial_cmp(&a.bayes_fit)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
 
         let mut survivors: Vec<Strain> = Vec::new();
-        for s in group {
+        for s in veterans {
             let k = team_key(&s.team);
             if survivors.len() < carry_per_niche && seen_keys.insert(k) {
                 survivors.push(s);
+            } else {
+                ledger.archived_strains.push(s);
+            }
+        }
+
+        let mut kept_grace: Vec<Strain> = Vec::new();
+        for s in grace_buds {
+            let k = team_key(&s.team);
+            if kept_grace.len() < buds_per_niche && seen_keys.insert(k) {
+                kept_grace.push(s);
             } else {
                 ledger.archived_strains.push(s);
             }
@@ -826,10 +888,11 @@ fn bud_next_wave_by_niche(
             }
         }
 
-        // Bud `buds_per_niche` mutant offspring for this niche without penalizing the parent's abundance
+        // Spawn fresh buds for any bud slots not occupied by a grace-period bud
         let num_parents = survivors.len();
-        let mut niche_buds: Vec<Strain> = Vec::new();
-        for b_idx in 0..buds_per_niche {
+        let new_buds_needed = buds_per_niche.saturating_sub(kept_grace.len());
+        let mut niche_buds: Vec<Strain> = kept_grace;
+        for b_idx in 0..new_buds_needed {
             let p_idx = b_idx % num_parents;
             let parent = &survivors[p_idx];
             let (_, constraint) = build_constraint(dex, &parent.anchors, &parent.max_staples);
@@ -1760,11 +1823,13 @@ fn cmd_update_pool(args: &[String]) {
             min_admit_score
         );
 
+        let mut dom_rng = SplitMix64::new(seed ^ 0xCAFE_BEEF);
         let mut admitted = 0usize;
         for (ci, ct) in cand_arr.iter().take(top_cands).enumerate() {
             let cid = ct["id"].as_str().unwrap_or("cand");
-            let raw_sets = ct["sets"].as_array().unwrap();
-            let Some(canon) = gen.canonize(&dex, raw_sets) else {
+            let mut raw_sets = ct["sets"].as_array().unwrap().clone();
+            gen.optimize_team_dominance(&dex, &mut raw_sets, &mut dom_rng);
+            let Some(canon) = gen.canonize(&dex, &raw_sets) else {
                 continue;
             };
             let cand_key = team_key(&canon);

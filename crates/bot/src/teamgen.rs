@@ -145,7 +145,7 @@ const STATUS_DOMINANCE: [(&str, &str); 27] = [
     ("lovelykiss", "sleeppowder"),
 ];
 
-const STATUS_DOMINANCE_EXTRA: [(&str, &str); 18] = [
+const STATUS_DOMINANCE_EXTRA: [(&str, &str); 29] = [
     ("supersonic", "sweetkiss"),
     ("supersonic", "confuseray"),
     ("sweetkiss", "confuseray"),
@@ -161,9 +161,20 @@ const STATUS_DOMINANCE_EXTRA: [(&str, &str); 18] = [
     ("leer", "screech"),
     ("tailwhip", "curse"),
     ("leer", "curse"),
+    ("growl", "curse"),
     ("sweetscent", "curse"),
+    ("harden", "curse"),
+    ("withdraw", "curse"),
+    ("harden", "reflect"),
+    ("withdraw", "reflect"),
+    ("tailwhip", "reflect"),
+    ("leer", "reflect"),
+    ("growl", "reflect"),
     ("stringshot", "icywind"),
     ("stringshot", "thunderwave"),
+    ("stringshot", "stunspore"),
+    ("stringshot", "glare"),
+    ("stringshot", "scaryface"),
 ];
 
 /// Damaging moves with unique mechanics that prevent generic BP/Acc/PP
@@ -332,8 +343,10 @@ pub struct TeamGen {
     species_dominators: BTreeMap<String, Vec<String>>,
     /// Every item display name in the format lens (sorted by id).
     all_items: Vec<String>,
-    /// Slack-free Pareto-optimal sorted 6-level profiles under sum <= 155.
-    pareto_levels: Vec<[i64; 6]>,
+    /// Slack-free Pareto-optimal sorted 6-level profiles under sum <= 155,
+    /// grouped by macrostate `k = count(level == 55)` in `0..=4` so two-stage
+    /// Macro -> Micro sampling gives each Ace-count macrostate equal 20% weight.
+    pareto_by_aces: Vec<Vec<[i64; 6]>>,
     teams: Vec<PoolTeamRaw>,
 }
 
@@ -442,6 +455,12 @@ impl TeamGen {
 
         let all_items: Vec<String> = dex.items.values.iter().map(|d| d.name.clone()).collect();
         let pareto_levels = compute_pareto_levels();
+        let mut pareto_by_aces: Vec<Vec<[i64; 6]>> = vec![Vec::new(); 5];
+        for lv in pareto_levels {
+            let k = lv.iter().filter(|&&x| x == 55).count().min(4);
+            pareto_by_aces[k].push(lv);
+        }
+        pareto_by_aces.retain(|bucket| !bucket.is_empty());
 
         let pv: Value = serde_json::from_str(pool_json).map_err(|e| e.to_string())?;
         let mut teams = Vec::new();
@@ -457,7 +476,7 @@ impl TeamGen {
             species_ids,
             species_dominators,
             all_items,
-            pareto_levels,
+            pareto_by_aces,
             teams,
         })
     }
@@ -620,7 +639,8 @@ impl TeamGen {
     }
 
     /// `propose` honoring a `NicheConstraint` (anchored species slots,
-    /// forbidden species, or staple overlap cap).
+    /// forbidden species, or staple overlap cap). Supports neutral 1-to-3 step
+    /// compound transitions using the exact same unbiased atomic operators.
     pub fn propose_constrained(
         &self,
         dex: &Dex,
@@ -630,33 +650,53 @@ impl TeamGen {
         tries: usize,
     ) -> Option<Proposal> {
         for _ in 0..tries {
-            let roll = rng.below(20);
-            let op = if roll < 8 {
-                MutOp::MoveSwap
-            } else if roll < 12 {
-                MutOp::ItemSwap
-            } else if roll < 17 {
-                MutOp::SpeciesSwap
+            let step_roll = rng.below(20);
+            let num_steps = if step_roll < 12 {
+                1
+            } else if step_roll < 18 {
+                2
             } else {
-                MutOp::LevelTweak
-            };
-            let slot = if op == MutOp::SpeciesSwap {
-                if constraint.anchor_slots >= 6 {
-                    continue;
-                }
-                constraint.anchor_slots + rng.below(6 - constraint.anchor_slots)
-            } else {
-                rng.below(6)
+                3
             };
             let mut raw = parent.to_vec();
-            let ok = match op {
-                MutOp::MoveSwap => self.mut_move_swap(dex, &mut raw, slot, rng),
-                MutOp::ItemSwap => self.mut_item_swap(dex, &mut raw, slot, rng),
-                MutOp::LevelTweak => self.mut_level_tweak(&mut raw, slot, rng),
-                MutOp::SpeciesSwap => self.mut_species_swap(dex, &mut raw, slot, rng),
-                MutOp::DvTweak | MutOp::EvTweak | MutOp::MonReplace => unreachable!(),
-            };
-            if ok.is_none() {
+            let mut first_op = MutOp::MoveSwap;
+            let mut first_slot = 0usize;
+            let mut applied = 0usize;
+            for _ in 0..num_steps {
+                let roll = rng.below(20);
+                let op = if roll < 8 {
+                    MutOp::MoveSwap
+                } else if roll < 12 {
+                    MutOp::ItemSwap
+                } else if roll < 17 {
+                    MutOp::SpeciesSwap
+                } else {
+                    MutOp::LevelTweak
+                };
+                let slot = if op == MutOp::SpeciesSwap {
+                    if constraint.anchor_slots >= 6 {
+                        continue;
+                    }
+                    constraint.anchor_slots + rng.below(6 - constraint.anchor_slots)
+                } else {
+                    rng.below(6)
+                };
+                let ok = match op {
+                    MutOp::MoveSwap => self.mut_move_swap(dex, &mut raw, slot, rng),
+                    MutOp::ItemSwap => self.mut_item_swap(dex, &mut raw, slot, rng),
+                    MutOp::LevelTweak => self.mut_level_tweak(&mut raw, slot, rng),
+                    MutOp::SpeciesSwap => self.mut_species_swap(dex, &mut raw, slot, rng),
+                    MutOp::DvTweak | MutOp::EvTweak | MutOp::MonReplace => unreachable!(),
+                };
+                if ok.is_some() {
+                    if applied == 0 {
+                        first_op = op;
+                        first_slot = slot;
+                    }
+                    applied += 1;
+                }
+            }
+            if applied == 0 {
                 continue;
             }
             // Preserve anchored species slots during dominance promotion
@@ -678,7 +718,11 @@ impl TeamGen {
             if team_key(&team) == team_key(parent) {
                 continue;
             }
-            return Some(Proposal { op, slot, team });
+            return Some(Proposal {
+                op: first_op,
+                slot: first_slot,
+                team,
+            });
         }
         None
     }
@@ -724,8 +768,8 @@ impl TeamGen {
             if sids.len() != 6 {
                 continue;
             }
-            let levels = [55i64, 55, 50, 50, 50, 50];
-            // Check floor compatibility; if a non-anchor species has floor > 50, swap it into slot 1 (or 0 if no anchor)
+            let levels = self.sample_pareto_level_profile(rng);
+            // Check floor compatibility; if a non-anchor species has floor > assigned level, swap with a higher slot
             let mut assigned_levels = levels;
             let mut floor_ok = true;
             for i in 0..6 {
@@ -817,6 +861,14 @@ impl TeamGen {
             )
         });
         let has_rollout = cur_bases.contains("rollout");
+        let has_inaccurate = cur_bases.iter().any(|m| {
+            matches!(m.as_str(), "fissure" | "guillotine" | "horndrill")
+                || dex
+                    .moves
+                    .id(m)
+                    .and_then(|id| dex.moves.get(id).accuracy.as_i64())
+                    .is_some_and(|acc| acc < 100)
+        });
 
         let mut out = Vec::new();
         for a in &legal {
@@ -836,9 +888,16 @@ impl TeamGen {
             if matches!(a_str, "dreameater" | "nightmare") && !has_sleep {
                 continue;
             }
+            if matches!(a_str, "lockon" | "mindreader") && !has_inaccurate {
+                continue;
+            }
             if a_str == "defensecurl"
                 && !has_rollout
-                && (legal_set.contains("barrier") || legal_set.contains("acidarmor"))
+                && (legal_set.contains("barrier")
+                    || legal_set.contains("acidarmor")
+                    || legal_set.contains("withdraw")
+                    || legal_set.contains("curse")
+                    || legal_set.contains("reflect"))
             {
                 continue;
             }
@@ -903,8 +962,8 @@ impl TeamGen {
                     if acc_b < acc_a {
                         return false;
                     }
-                    // Dominator B cannot introduce recoil, self-KO, two-turn charge, recharge, or lock-in
-                    if mb.recoil.is_some()
+                    // Dominator B cannot introduce recoil (unless A has the same recoil), self-KO, two-turn charge, recharge, or lock-in
+                    if (mb.recoil.is_some() && mb.recoil != ma.recoil)
                         || mb.extra.contains_key("selfdestruct")
                         || mb.extra.contains_key("self")
                         || mb.volatile_status.is_some()
@@ -1280,6 +1339,14 @@ impl TeamGen {
         Some(())
     }
 
+    /// Two-stage Macro -> Micro draw over slack-free Pareto-optimal 6-level profiles:
+    /// 1. Macro draw: choose the Ace-count bucket `k = count(level == 55) in 0..=4` uniformly.
+    /// 2. Micro draw: choose a Pareto-optimal profile within bucket `k` uniformly.
+    pub fn sample_pareto_level_profile(&self, rng: &mut SplitMix64) -> [i64; 6] {
+        let bucket = &self.pareto_by_aces[rng.below(self.pareto_by_aces.len())];
+        bucket[rng.below(bucket.len())]
+    }
+
     fn mut_level_tweak(
         &self,
         raw: &mut [Value],
@@ -1313,16 +1380,19 @@ impl TeamGen {
             }
         }
 
-        // Transition to a Pareto-optimal (slack-free) 6-level profile
-        let profile = &self.pareto_levels[rng.below(self.pareto_levels.len())];
-        // Order slots with `slot` first or by random permutation that respects `floors`
+        // Two-stage Macro -> Micro transition to a Pareto-optimal (slack-free) 6-level profile,
+        // preserving existing level rank ordering across teammates (breaking ties randomly).
+        let profile = self.sample_pareto_level_profile(rng);
         let mut order: Vec<usize> = (0..raw.len()).collect();
         for i in (1..order.len()).rev() {
             let j = rng.below(i + 1);
             order.swap(i, j);
         }
-        // Sort order by floor descending so high-floor species (e.g. Dragonite/Tyranitar Lv55) get the top levels
-        order.sort_by(|&a, &b| floors[b].cmp(&floors[a]));
+        order.sort_by(|&a, &b| {
+            floors[b]
+                .cmp(&floors[a])
+                .then(cur_levels[b].cmp(&cur_levels[a]))
+        });
         for (rank, &idx) in order.iter().enumerate() {
             if floors[idx] > profile[rank] {
                 return None;
@@ -1566,11 +1636,7 @@ impl TeamGen {
             let fb = self.ls.species(b).map_or(50, |l| l.min_level);
             fb.cmp(&fa).then(a.cmp(b))
         });
-        let levels = if rng.below(2) == 0 {
-            [55, 55, 50, 50, 50, 50]
-        } else {
-            self.pareto_levels[rng.below(self.pareto_levels.len())]
-        };
+        let levels = self.sample_pareto_level_profile(rng);
         let mut raw: Vec<Value> = Vec::new();
         let mut held: Vec<String> = Vec::new();
         for (i, sid) in sids.iter().enumerate() {

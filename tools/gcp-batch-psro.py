@@ -84,7 +84,7 @@ STAGE_PATHS = [
     "data/team-selection-v2/panel.json",
     "data/team-inventory-v1/eval/teams.json",
     "data/eco-pool/master-pool.json",
-    "data/eco-r8/islands",
+    "data/eco-r9/islands",
 ]
 
 
@@ -388,7 +388,7 @@ PY
         parallelism=parallelism,
         cpu_milli=args.threads_per_task * 1000,
         memory_mib=args.threads_per_task * 1800,
-        max_run_duration="14400s",
+        max_run_duration=f"{max(1800, args.max_seconds + 600)}s",
         script=script,
     )
     print(f"Submitted PSRO evolution job: {job_id} ({task_count} lineages, parallelism={parallelism})")
@@ -604,7 +604,7 @@ PY
         parallelism=parallelism,
         cpu_milli=args.threads_per_task * 1000,
         memory_mib=args.threads_per_task * 1800,
-        max_run_duration="14400s",
+        max_run_duration=f"{max(1800, args.max_seconds + 600)}s",
         script=script,
     )
     print(f"Submitted Ecosystem job: {job_id} ({task_count} islands, parallelism={parallelism})")
