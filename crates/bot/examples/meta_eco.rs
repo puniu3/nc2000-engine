@@ -1086,17 +1086,15 @@ fn collect_all_strains(in_dir: &Path, min_games: f64) -> Vec<Strain> {
         }
     }
     let mut out: Vec<Strain> = by_key.into_values().collect();
-    // Sort by lower confidence bound (prioritizing external Master Pool LCB95 at 80%
-    // and overall island+benchmark LCB95 at 20%).
+    // Sort by Empirical-Bayes Master Pool benchmark winrate (75%) + island Bayes fitness (25%)
+    // so newly emerged 2-to-4 wave island leaders are not buried behind 800-game legacy strains.
     let strain_quality = |s: &Strain| -> f64 {
-        let bench_lcb95 = if s.bench_games > 0.0 {
-            let p = (s.bench_wins + 16.0 * 0.40) / (s.bench_games + 16.0);
-            let se = (p * (1.0 - p) / (s.bench_games + 16.0)).sqrt();
-            (p - 1.96 * se).max(0.0)
+        let bench_eb = if s.bench_games > 0.0 {
+            (s.bench_wins + 24.0 * 0.40) / (s.bench_games + 24.0)
         } else {
-            s.lcb95
+            s.bayes_fit
         };
-        0.80 * bench_lcb95 + 0.20 * s.lcb95
+        0.75 * bench_eb + 0.25 * s.bayes_fit
     };
     out.sort_by(|a, b| {
         strain_quality(b)
@@ -1116,6 +1114,16 @@ fn jaccard(a: &BTreeSet<String>, b: &BTreeSet<String>) -> f64 {
     }
 }
 
+fn strain_island_key(id: &str) -> String {
+    // Extract island index (e.g. "09" from "island-r14-09-s0696")
+    let parts: Vec<&str> = id.split('-').collect();
+    if parts.len() >= 3 {
+        parts[2].to_string()
+    } else {
+        id.to_string()
+    }
+}
+
 fn cmd_extract_pool(args: &[String]) {
     let in_dir = PathBuf::from(flag(args, "--in").expect("--in DIR"));
     let out_file = PathBuf::from(flag(args, "--out").expect("--out FILE"));
@@ -1125,25 +1133,43 @@ fn cmd_extract_pool(args: &[String]) {
     let max_jaccard: f64 = num(args, "--max-jaccard", 0.50);
 
     let all = collect_all_strains(&in_dir, min_games);
+    let root = repo_root();
+    let master_path = flag(args, "--master")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| root.join("data/eco-pool/master-pool.json"));
+    let mut existing_master_keys: BTreeSet<String> = BTreeSet::new();
+    if let Ok(mtxt) = std::fs::read_to_string(&master_path) {
+        if let Ok(mv) = serde_json::from_str::<Value>(&mtxt) {
+            if let Some(marr) = mv["teams"].as_array() {
+                for mt in marr {
+                    if let Some(sets) = mt["sets"].as_array() {
+                        existing_master_keys.insert(team_key(sets));
+                    }
+                }
+            }
+        }
+    }
+
     let mut selected: Vec<Strain> = Vec::new();
     let mut selected_species: Vec<BTreeSet<String>> = Vec::new();
-    let mut seen_niches: BTreeSet<String> = BTreeSet::new();
+    let mut seen_islands: BTreeSet<String> = BTreeSet::new();
 
-    // Pass 1: take top validated representative of each distinct niche that meets `min_bayes`
+    // Pass 1: take top validated representative of each distinct island that meets `min_bayes`
     for s in &all {
         if selected.len() >= top_k {
             break;
         }
-        if s.bayes_fit < min_bayes {
+        if s.bayes_fit < min_bayes || existing_master_keys.contains(&team_key(&s.team)) {
             continue;
         }
         let sp = s.species_set();
-        if !seen_niches.contains(&s.niche)
+        let ikey = strain_island_key(&s.id);
+        if !seen_islands.contains(&ikey)
             && selected_species
                 .iter()
                 .all(|prev| jaccard(&sp, prev) <= max_jaccard)
         {
-            seen_niches.insert(s.niche.clone());
+            seen_islands.insert(ikey);
             selected_species.push(sp);
             selected.push(s.clone());
         }
@@ -1153,7 +1179,9 @@ fn cmd_extract_pool(args: &[String]) {
         if selected.len() >= top_k {
             break;
         }
-        if selected.iter().any(|x| x.id == s.id) {
+        if selected.iter().any(|x| x.id == s.id)
+            || existing_master_keys.contains(&team_key(&s.team))
+        {
             continue;
         }
         let sp = s.species_set();
@@ -1165,6 +1193,14 @@ fn cmd_extract_pool(args: &[String]) {
             selected.push(s.clone());
         }
     }
+
+    // Re-sort `selected` by quality descending so `--top-candidates` in `update-pool`
+    // always evaluates the highest-ranked strains across both Pass 1 and Pass 2.
+    selected.sort_by(|a, b| {
+        let qa = 0.75 * ((a.bench_wins + 24.0 * 0.40) / (a.bench_games + 24.0)) + 0.25 * a.bayes_fit;
+        let qb = 0.75 * ((b.bench_wins + 24.0 * 0.40) / (b.bench_games + 24.0)) + 0.25 * b.bayes_fit;
+        qb.partial_cmp(&qa).unwrap()
+    });
 
     let w_sum: f64 = selected.iter().map(|s| s.abundance.max(1e-4)).sum();
     let teams_json: Vec<Value> = selected
