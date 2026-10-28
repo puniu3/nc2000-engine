@@ -4244,6 +4244,547 @@ fn cmd_core_nash(args: &[String]) {
     }
 }
 
+fn cmd_verify_1gen(args: &[String]) {
+    let t_start = std::time::Instant::now();
+    let dex = load_dex();
+    let root = repo_root();
+    let ls_text = std::fs::read_to_string(root.join("data/learnsets-gen2.json")).unwrap();
+    let pool_text = std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap();
+    let gen = TeamGen::new(&dex, &ls_text, &pool_text).unwrap();
+
+    let n_parents: usize = num(args, "--parents", 6);
+    let buds_per_parent: usize = num(args, "--buds-per-parent", 2);
+    let screen_games: u32 = num(args, "--screen-games", 2);
+    let refine_games: u32 = num(args, "--refine-games", 2);
+    let support_k: usize = num(args, "--support", 3);
+    let oos_games: u32 = num(args, "--oos-games", 4);
+    let max_turns: u16 = num(args, "--max-turns", 300);
+    let base_seed: u64 = num(args, "--seed", 20261029);
+    let out_file = flag(args, "--out").map(PathBuf::from);
+    let threads: usize = flag(args, "--threads")
+        .map(|v| v.parse().unwrap())
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(8)
+        });
+    let (agent_iters, agent_c, blind_pool, open_sheet) = parse_agent_spec(args, &root);
+
+    let bench_file = flag(args, "--bench-file").unwrap_or_else(|| {
+        let m = root.join("data/eco-pool/master-pool.json");
+        if m.exists() {
+            m.to_string_lossy().into_owned()
+        } else {
+            root.join("data/meta-nash-v3/pool-artifact.json")
+                .to_string_lossy()
+                .into_owned()
+        }
+    });
+    let (all_bench_teams, all_bench_weights) = load_gauntlet_file(&dex, &gen, &bench_file);
+    let slice_len = all_bench_teams.len().min(10);
+    let bench_teams: Vec<Vec<PokemonSet>> = all_bench_teams.iter().take(slice_len).cloned().collect();
+    let mut bench_weights: Vec<f64> = all_bench_weights.iter().take(slice_len).copied().collect();
+    let bw_sum: f64 = bench_weights.iter().sum::<f64>().max(1e-12);
+    for w in &mut bench_weights {
+        *w /= bw_sum;
+    }
+
+    let oos_file = root
+        .join("data/meta-nash-v3/pool-artifact.json")
+        .to_string_lossy()
+        .into_owned();
+    let (oos_teams, oos_weights) = load_gauntlet_file(&dex, &gen, &oos_file);
+
+    // Load top `n_parents` distinct founder teams from `bench_file`
+    let bv: Value = serde_json::from_str(&std::fs::read_to_string(&bench_file).unwrap()).unwrap();
+    let mut parents: Vec<Strain> = Vec::new();
+    let mut seen_keys = BTreeSet::new();
+    if let Some(arr) = bv["teams"].as_array() {
+        for (idx, t) in arr.iter().enumerate() {
+            if parents.len() >= n_parents {
+                break;
+            }
+            let Some(sets) = t["sets"].as_array() else {
+                continue;
+            };
+            let Some(canon) = gen.canonize(&dex, sets) else {
+                continue;
+            };
+            if !seen_keys.insert(team_key(&canon)) {
+                continue;
+            }
+            let origin = t["id"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_else(|| format!("founder-{idx}"));
+            parents.push(Strain {
+                id: format!("P{idx:02}({origin})"),
+                parent_id: origin,
+                niche: "verify".into(),
+                anchors: String::new(),
+                max_staples: String::new(),
+                born_wave: 0,
+                last_op: "founder".into(),
+                abundance: 1.0 / (n_parents as f64),
+                cum_games: 0.0,
+                cum_wins: 0.0,
+                bench_games: 0.0,
+                bench_wins: 0.0,
+                eco_games: 0.0,
+                eco_wins: 0.0,
+                last_wave_fit: 0.5,
+                parent_prior: 0.5,
+                bayes_fit: 0.5,
+                lcb95: 0.0,
+                slot_picks: [0.0; 6],
+                slot_wins: [0.0; 6],
+                slot_marginals: [0.0; 6],
+                slot_wars: [0.0; 6],
+                move_dqs: [[0.0; 4]; 6],
+                last_wave_slot_picks: [0.0; 6],
+                last_wave_slot_marginals: [0.0; 6],
+                effective_cores: 1.0,
+                team: canon,
+            });
+        }
+    }
+
+    let w_games = (refine_games as usize * support_k * support_k * bench_teams.len()) as f64;
+    let inner_threads = (threads / 3).max(2);
+    let seed_w1 = base_seed ^ 0x1111_2222_3333_4444;
+    let seed_w2 = base_seed ^ 0x5555_6666_7777_8888;
+    let seed_oos = base_seed ^ 0x9999_AAAA_BBBB_CCCC;
+
+    eprintln!(
+        "=== Step 1: Wave 1 Parent Calibration ({} parents vs {} bench teams, k={}, iters={}) ===",
+        parents.len(),
+        bench_teams.len(),
+        support_k,
+        agent_iters
+    );
+    let dex_ref = &dex;
+    let bt_ref = &bench_teams;
+    let bw_ref = &bench_weights;
+    std::thread::scope(|scope| {
+        let mut handles = Vec::new();
+        for p in &mut parents {
+            handles.push(scope.spawn(move || {
+                let cand = to_sets(&p.team).unwrap();
+                let r = core_nash_eval_weighted(
+                    dex_ref,
+                    &cand,
+                    bt_ref,
+                    bw_ref,
+                    &CoreNashGauntletCfg {
+                        screen_games,
+                        refine_games,
+                        support_k,
+                        agent_iters,
+                        c: agent_c,
+                        smoothing: 0.15,
+                        max_turns,
+                        seed: seed_w1,
+                        threads: inner_threads,
+                    },
+                );
+                p.cum_games = w_games;
+                p.cum_wins = r.eval.score * w_games;
+                p.last_wave_fit = r.eval.score;
+                p.bayes_fit = r.eval.score;
+                for i in 0..6 {
+                    p.slot_picks[i] = r.eval.slot_picks[i] * w_games;
+                    p.slot_wins[i] = r.eval.slot_wins[i] * w_games;
+                    p.slot_marginals[i] = r.slot_marginals[i] * w_games;
+                }
+                p.move_dqs = r.move_dqs;
+            }));
+        }
+        for h in handles {
+            h.join().unwrap();
+        }
+    });
+
+    let (mu_50, mu_55, beta_l) = recompute_population_wars(&mut parents);
+    eprintln!(
+        "  Endogenous Replacement Level: mu(L50)={:+.2}pt, mu(L55)={:+.2}pt, beta_L={:+.2}pt/Lv",
+        mu_50 * 100.0,
+        mu_55 * 100.0,
+        beta_l * 100.0
+    );
+    for p in &parents {
+        let slots: Vec<String> = (0..6)
+            .map(|i| {
+                let sp = p.team[i]["species"].as_str().unwrap_or("?");
+                let lv = p.team[i]["level"].as_u64().unwrap_or(50);
+                let pk = p.slot_picks[i] / w_games * 100.0;
+                let war = p.slot_wars[i] * 100.0;
+                format!("{sp}(L{lv},p={pk:.0}%,WAR={war:+.1}pt)")
+            })
+            .collect();
+        eprintln!(
+            "  {:18} V*(W1)={:.3} | {}",
+            p.id,
+            p.last_wave_fit,
+            slots.join(" | ")
+        );
+    }
+
+    // Step 2: Spawn `buds_per_parent` Targeted children (WAR + move dQ Stochastic Resonance)
+    // and `buds_per_parent` Untargeted Control children (uniform random slot & move) per parent.
+    let free_constraint = NicheConstraint::default();
+    let mut rng_targ = SplitMix64(base_seed ^ 0xABCD_0001);
+    let mut rng_ctrl = SplitMix64(base_seed ^ 0xABCD_0002);
+
+    #[derive(Clone)]
+    struct ChildCand {
+        id: String,
+        parent_idx: usize,
+        arm: &'static str,
+        op: String,
+        mut_slot: Option<usize>,
+        team: Vec<Value>,
+        w2_score: f64,
+        w2_picks: [f64; 6],
+        w2_marginals: [f64; 6],
+        w2_wars: [f64; 6],
+        w2_move_dqs: [[f64; 4]; 6],
+    }
+
+    let mut children: Vec<ChildCand> = Vec::new();
+    for (p_idx, p) in parents.iter().enumerate() {
+        let mut seen_t = BTreeSet::new();
+        seen_t.insert(team_key(&p.team));
+        for b in 0..buds_per_parent {
+            for _ in 0..16 {
+                if let Some(prop) = gen.propose_marginal_targeted(
+                    &dex,
+                    &p.team,
+                    &p.slot_picks,
+                    &p.slot_wins,
+                    &p.slot_wars,
+                    Some(&p.move_dqs),
+                    &mut rng_targ,
+                    &free_constraint,
+                    150,
+                ) {
+                    if seen_t.insert(team_key(&prop.team)) {
+                        children.push(ChildCand {
+                            id: format!("T{p_idx:02}_{b}"),
+                            parent_idx: p_idx,
+                            arm: "targeted",
+                            op: format!("{}@{}", prop.op.name(), prop.slot),
+                            mut_slot: Some(prop.slot),
+                            team: prop.team,
+                            w2_score: 0.0,
+                            w2_picks: [0.0; 6],
+                            w2_marginals: [0.0; 6],
+                            w2_wars: [0.0; 6],
+                            w2_move_dqs: [[0.0; 4]; 6],
+                        });
+                        break;
+                    }
+                }
+            }
+        }
+        let mut seen_c = BTreeSet::new();
+        seen_c.insert(team_key(&p.team));
+        for b in 0..buds_per_parent {
+            for _ in 0..16 {
+                if let Some(prop) = gen.propose(&dex, &p.team, &mut rng_ctrl) {
+                    if seen_c.insert(team_key(&prop.team)) {
+                        children.push(ChildCand {
+                            id: format!("C{p_idx:02}_{b}"),
+                            parent_idx: p_idx,
+                            arm: "untargeted",
+                            op: format!("{}@{}", prop.op.name(), prop.slot),
+                            mut_slot: Some(prop.slot),
+                            team: prop.team,
+                            w2_score: 0.0,
+                            w2_picks: [0.0; 6],
+                            w2_marginals: [0.0; 6],
+                            w2_wars: [0.0; 6],
+                            w2_move_dqs: [[0.0; 4]; 6],
+                        });
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    eprintln!(
+        "\n=== Step 2: Wave 2 CRN-Paired Evaluation ({} parents + {} children on seed_w2) ===",
+        parents.len(),
+        children.len()
+    );
+    let mut parent_w2_scores = vec![0.0f64; parents.len()];
+    let mut parent_w2_marginals = vec![[0.0f64; 6]; parents.len()];
+    let mut parent_w2_wars = vec![[0.0f64; 6]; parents.len()];
+    std::thread::scope(|scope| {
+        let mut p_handles = Vec::new();
+        for (idx, p) in parents.iter().enumerate() {
+            let team_c = p.team.clone();
+            p_handles.push(scope.spawn(move || {
+                let cand = to_sets(&team_c).unwrap();
+                let r = core_nash_eval_weighted(
+                    dex_ref,
+                    &cand,
+                    bt_ref,
+                    bw_ref,
+                    &CoreNashGauntletCfg {
+                        screen_games,
+                        refine_games,
+                        support_k,
+                        agent_iters,
+                        c: agent_c,
+                        smoothing: 0.15,
+                        max_turns,
+                        seed: seed_w2,
+                        threads: inner_threads,
+                    },
+                );
+                (idx, r.eval.score, r.slot_marginals)
+            }));
+        }
+        let mut c_handles = Vec::new();
+        for c in &mut children {
+            c_handles.push(scope.spawn(move || {
+                let cand = to_sets(&c.team).unwrap();
+                let r = core_nash_eval_weighted(
+                    dex_ref,
+                    &cand,
+                    bt_ref,
+                    bw_ref,
+                    &CoreNashGauntletCfg {
+                        screen_games,
+                        refine_games,
+                        support_k,
+                        agent_iters,
+                        c: agent_c,
+                        smoothing: 0.15,
+                        max_turns,
+                        seed: seed_w2,
+                        threads: inner_threads,
+                    },
+                );
+                c.w2_score = r.eval.score;
+                c.w2_picks = r.eval.slot_picks;
+                c.w2_marginals = r.slot_marginals;
+                c.w2_move_dqs = r.move_dqs;
+            }));
+        }
+        for h in p_handles {
+            let (idx, sc, marg) = h.join().unwrap();
+            parent_w2_scores[idx] = sc;
+            parent_w2_marginals[idx] = marg;
+        }
+        for h in c_handles {
+            h.join().unwrap();
+        }
+    });
+
+    // Compute W2 WARs using the population's W1 endogenous replacement level `(mu_50, mu_55, beta_l)`
+    for (idx, p) in parents.iter().enumerate() {
+        for i in 0..6 {
+            let lv = p.team[i]["level"].as_u64().unwrap_or(50) as f64;
+            let rep = mu_50 + beta_l * (lv - 50.0);
+            parent_w2_wars[idx][i] = parent_w2_marginals[idx][i] - rep;
+        }
+    }
+    for c in &mut children {
+        for i in 0..6 {
+            let lv = c.team[i]["level"].as_u64().unwrap_or(50) as f64;
+            let rep = mu_50 + beta_l * (lv - 50.0);
+            c.w2_wars[i] = c.w2_marginals[i] - rep;
+        }
+    }
+
+    let mut targ_dv = Vec::new();
+    let mut ctrl_dv = Vec::new();
+    let mut targ_dwar = Vec::new();
+    let mut ctrl_dwar = Vec::new();
+
+    for c in &children {
+        let p_sc = parent_w2_scores[c.parent_idx];
+        let mut dv = c.w2_score - p_sc;
+        // Active-Pick Deconfounding: unpicked mutated slot cannot claim positive gain
+        if !c.op.starts_with("level-tweak") {
+            if let Some(ms) = c.mut_slot {
+                if ms < 6 && c.w2_picks[ms] <= 1e-6 && dv > 0.0 {
+                    dv = 0.0;
+                }
+            }
+        }
+        let dwar = c
+            .mut_slot
+            .filter(|&s| s < 6)
+            .map(|s| c.w2_wars[s] - parent_w2_wars[c.parent_idx][s])
+            .unwrap_or(0.0);
+        let p_id = &parents[c.parent_idx].id;
+        let slot_desc = if let Some(s) = c.mut_slot.filter(|&s| s < 6) {
+            let old_sp = parents[c.parent_idx].team[s]["species"].as_str().unwrap_or("?");
+            let new_sp = c.team[s]["species"].as_str().unwrap_or("?");
+            format!(
+                "{old_sp}->{new_sp} (pick={:.0}%, WAR: {:+.1}pt -> {:+.1}pt, dWAR={:+.1}pt)",
+                c.w2_picks[s] * 100.0,
+                parent_w2_wars[c.parent_idx][s] * 100.0,
+                c.w2_wars[s] * 100.0,
+                dwar * 100.0
+            )
+        } else {
+            "multi-slot".into()
+        };
+        eprintln!(
+            "  [{:10}] {:6} (from {:18}, op={:16}): V*(P)={:.3} -> V*(C)={:.3} | dV={:+.2}pt | {}",
+            c.arm,
+            c.id,
+            p_id,
+            c.op,
+            p_sc,
+            c.w2_score,
+            dv * 100.0,
+            slot_desc
+        );
+        if c.arm == "targeted" {
+            targ_dv.push(dv);
+            targ_dwar.push(dwar);
+        } else {
+            ctrl_dv.push(dv);
+            ctrl_dwar.push(dwar);
+        }
+    }
+
+    let mean = |xs: &[f64]| -> f64 { xs.iter().sum::<f64>() / (xs.len().max(1) as f64) };
+    let hit_rate = |xs: &[f64], thresh: f64| -> f64 {
+        (xs.iter().filter(|&&x| x >= thresh).count() as f64) / (xs.len().max(1) as f64)
+    };
+
+    eprintln!("\n=== Summary of Criterion 1 (Causality) & Criterion 2 (Proposal Efficiency) ===");
+    eprintln!(
+        "  Targeted   (n={:2}): mean dV(C-P)={:+.2}pt | hit(dV>+1.0pt)={:.1}% | hit(dV>0)={:.1}% | mean dWAR_slot={:+.2}pt",
+        targ_dv.len(),
+        mean(&targ_dv) * 100.0,
+        hit_rate(&targ_dv, 0.01) * 100.0,
+        hit_rate(&targ_dv, 0.0001) * 100.0,
+        mean(&targ_dwar) * 100.0
+    );
+    eprintln!(
+        "  Untargeted (n={:2}): mean dV(C-P)={:+.2}pt | hit(dV>+1.0pt)={:.1}% | hit(dV>0)={:.1}% | mean dWAR_slot={:+.2}pt",
+        ctrl_dv.len(),
+        mean(&ctrl_dv) * 100.0,
+        hit_rate(&ctrl_dv, 0.01) * 100.0,
+        hit_rate(&ctrl_dv, 0.0001) * 100.0,
+        mean(&ctrl_dwar) * 100.0
+    );
+
+    // Step 3: Criterion 3 (Out-of-Sample Full Turn-0 OpenAgent Verification on Top Surviving Children)
+    let mut ranked_targ: Vec<&ChildCand> = children
+        .iter()
+        .filter(|c| c.arm == "targeted")
+        .collect();
+    ranked_targ.sort_by(|a, b| {
+        let dva = a.w2_score - parent_w2_scores[a.parent_idx];
+        let dvb = b.w2_score - parent_w2_scores[b.parent_idx];
+        dvb.partial_cmp(&dva).unwrap()
+    });
+
+    let top_verify = ranked_targ.into_iter().take(3).collect::<Vec<_>>();
+    eprintln!(
+        "\n=== Step 3: Criterion 3 Out-of-Sample Full Turn-0 OpenAgent Verification ({} games/opp vs {} Meta-Nash-v3 teams) ===",
+        oos_games,
+        oos_teams.len()
+    );
+    let mut oos_records = Vec::new();
+    for c in top_verify {
+        let p = &parents[c.parent_idx];
+        let p_sets = to_sets(&p.team).unwrap();
+        let c_sets = to_sets(&c.team).unwrap();
+        let pair_seed = seed_oos ^ ((c.parent_idx as u64 + 1) * 0x9E37_79B9_7F4A_7C15);
+        let p_oos = gauntlet_eval_weighted(
+            &dex,
+            &p_sets,
+            &oos_teams,
+            &oos_weights,
+            &WeightedEvalCfg {
+                games_per_opponent: oos_games,
+                agent_iters,
+                c: agent_c,
+                max_turns,
+                seed: pair_seed,
+                threads,
+                blind_pool: blind_pool.clone(),
+                open_sheet,
+            },
+        )
+        .score;
+        let c_oos = gauntlet_eval_weighted(
+            &dex,
+            &c_sets,
+            &oos_teams,
+            &oos_weights,
+            &WeightedEvalCfg {
+                games_per_opponent: oos_games,
+                agent_iters,
+                c: agent_c,
+                max_turns,
+                seed: pair_seed,
+                threads,
+                blind_pool: blind_pool.clone(),
+                open_sheet,
+            },
+        )
+        .score;
+        let in_dv = c.w2_score - parent_w2_scores[c.parent_idx];
+        let oos_dv = c_oos - p_oos;
+        eprintln!(
+            "  {} (from {}, op={}): In-Sample dV={:+.2}pt | OOS Turn-0 OpenAgent: Parent={:.3} -> Child={:.3} (OOS dWR={:+.2}pt)",
+            c.id,
+            p.id,
+            c.op,
+            in_dv * 100.0,
+            p_oos,
+            c_oos,
+            oos_dv * 100.0
+        );
+        oos_records.push(json!({
+            "child_id": c.id,
+            "parent_id": p.id,
+            "op": c.op,
+            "in_sample_dv": in_dv,
+            "parent_oos_wr": p_oos,
+            "child_oos_wr": c_oos,
+            "oos_dwr": oos_dv,
+        }));
+    }
+
+    if let Some(path) = out_file {
+        let out = json!({
+            "elapsed_secs": t_start.elapsed().as_secs_f64(),
+            "replacement_level": {
+                "mu_50": mu_50,
+                "mu_55": mu_55,
+                "beta_l": beta_l,
+            },
+            "targeted": {
+                "count": targ_dv.len(),
+                "mean_dv": mean(&targ_dv),
+                "hit_rate_1pt": hit_rate(&targ_dv, 0.01),
+                "hit_rate_pos": hit_rate(&targ_dv, 0.0001),
+                "mean_dwar_slot": mean(&targ_dwar),
+            },
+            "untargeted": {
+                "count": ctrl_dv.len(),
+                "mean_dv": mean(&ctrl_dv),
+                "hit_rate_1pt": hit_rate(&ctrl_dv, 0.01),
+                "hit_rate_pos": hit_rate(&ctrl_dv, 0.0001),
+                "mean_dwar_slot": mean(&ctrl_dwar),
+            },
+            "oos_verification": oos_records,
+        });
+        write_json_atomic(&path, &out);
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let sub = args
@@ -4260,8 +4801,9 @@ fn main() {
         "tomography" => cmd_tomography(&args[1..]),
         "kodoku" => cmd_kodoku(&args[1..]),
         "core-nash" => cmd_core_nash(&args[1..]),
+        "verify-1gen" => cmd_verify_1gen(&args[1..]),
         other => panic!(
-            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring | update-pool | tomography | kodoku | core-nash)"
+            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring | update-pool | tomography | kodoku | core-nash | verify-1gen)"
         ),
     }
 }
