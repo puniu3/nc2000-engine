@@ -84,7 +84,7 @@ STAGE_PATHS = [
     "data/team-selection-v2/panel.json",
     "data/team-inventory-v1/eval/teams.json",
     "data/eco-pool/master-pool.json",
-    "data/eco-r14/islands",
+    "data/eco-r15/islands",
 ]
 
 
