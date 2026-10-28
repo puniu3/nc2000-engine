@@ -43,7 +43,7 @@ use nc2000_engine::dex::{toid, Dex};
 use nc2000_engine::state::Battle;
 use nc2000_engine::validate::{canonicalize_team, validate_team, Learnsets};
 
-use crate::blind::BlindAgent;
+use crate::blind::{BlindAgent, OpenAgent};
 use crate::preview::MetaPool;
 use crate::rng::SplitMix64;
 use crate::runner::{play_game, GameResult};
@@ -703,6 +703,152 @@ impl TeamGen {
                 continue;
             }
             // Preserve anchored species slots during dominance promotion
+            let saved_anchors: Vec<String> = (0..constraint.anchor_slots.min(6))
+                .map(|i| species_id(&parent[i]))
+                .collect();
+            self.optimize_team_dominance(dex, &mut raw, rng);
+            for (i, orig_sid) in saved_anchors.iter().enumerate() {
+                if species_id(&raw[i]) != *orig_sid {
+                    let orig_name = dex.species.get(dex.species.id(orig_sid).unwrap()).name.clone();
+                    raw[i]["species"] = json!(orig_name.clone());
+                    raw[i]["name"] = json!(orig_name);
+                }
+            }
+            if !constraint.allows_team(&raw, Some(parent)) {
+                continue;
+            }
+            let Some(team) = self.canonize(dex, &raw) else { continue };
+            if team_key(&team) == team_key(parent) {
+                continue;
+            }
+            return Some(Proposal {
+                op: first_op,
+                slot: first_slot,
+                team,
+            });
+        }
+        None
+    }
+
+    /// Vitality-inverse targeted mutation: biases slot selection toward
+    /// low-vitality / hitchhiker slots (`v_i = slot_wins[i]`, `p_i = slot_picks[i]`)
+    /// while preserving a positive exploration floor across all 6 slots.
+    /// Slots with `p_i < 0.12` (unpicked / vestigial) prioritize `SpeciesSwap`
+    /// so dead slots rapidly search for a species that enters active Cores.
+    pub fn propose_targeted(
+        &self,
+        dex: &Dex,
+        parent: &[Value],
+        slot_picks: &[f64; 6],
+        slot_wins: &[f64; 6],
+        rng: &mut SplitMix64,
+        constraint: &NicheConstraint,
+        tries: usize,
+    ) -> Option<Proposal> {
+        let pick_sum: f64 = slot_picks.iter().sum();
+        if pick_sum <= 1e-6 {
+            return self.propose_constrained(dex, parent, rng, constraint, tries);
+        }
+        let mut p_norm = [0.5f64; 6];
+        let mut v_norm = [0.25f64; 6];
+        for i in 0..6 {
+            p_norm[i] = (slot_picks[i] * 3.0 / pick_sum).clamp(0.0, 1.0);
+            let w_i = if slot_picks[i] > 1e-6 {
+                (slot_wins[i] / slot_picks[i]).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            v_norm[i] = p_norm[i] * w_i;
+        }
+        let v_max = v_norm.iter().copied().fold(0.0f64, f64::max);
+        let mut slot_w = [1.0f64; 6];
+        for i in 0..6 {
+            let gap = (v_max - v_norm[i] + 0.08).max(0.05);
+            slot_w[i] = gap * gap;
+        }
+
+        let sample_slot = |rng: &mut SplitMix64, min_slot: usize| -> usize {
+            let start = min_slot.min(5);
+            let total: f64 = slot_w[start..6].iter().sum();
+            if total <= 1e-12 {
+                return start + rng.below(6 - start);
+            }
+            let mut u = rng.next_f64() * total;
+            for i in start..6 {
+                u -= slot_w[i];
+                if u <= 0.0 {
+                    return i;
+                }
+            }
+            5
+        };
+
+        for _ in 0..tries {
+            let step_roll = rng.below(20);
+            let num_steps = if step_roll < 13 {
+                1
+            } else if step_roll < 18 {
+                2
+            } else {
+                3
+            };
+            let mut raw = parent.to_vec();
+            let mut first_op = MutOp::MoveSwap;
+            let mut first_slot = 0usize;
+            let mut applied = 0usize;
+            for _ in 0..num_steps {
+                let target_slot = sample_slot(rng, 0);
+                let is_hitchhiker = p_norm[target_slot] < 0.12;
+                let roll = rng.below(20);
+                let op = if is_hitchhiker {
+                    // Dead/unpicked slot: 55% SpeciesSwap, 25% MoveSwap, 10% ItemSwap, 10% LevelTweak
+                    if roll < 11 {
+                        MutOp::SpeciesSwap
+                    } else if roll < 16 {
+                        MutOp::MoveSwap
+                    } else if roll < 18 {
+                        MutOp::ItemSwap
+                    } else {
+                        MutOp::LevelTweak
+                    }
+                } else {
+                    // Active core member: 45% MoveSwap, 25% ItemSwap, 15% SpeciesSwap, 15% LevelTweak
+                    if roll < 9 {
+                        MutOp::MoveSwap
+                    } else if roll < 14 {
+                        MutOp::ItemSwap
+                    } else if roll < 17 {
+                        MutOp::SpeciesSwap
+                    } else {
+                        MutOp::LevelTweak
+                    }
+                };
+                let slot = if op == MutOp::SpeciesSwap && target_slot < constraint.anchor_slots {
+                    if constraint.anchor_slots >= 6 {
+                        continue;
+                    }
+                    sample_slot(rng, constraint.anchor_slots)
+                } else {
+                    target_slot
+                };
+                let ok = match op {
+                    MutOp::MoveSwap => self.mut_move_swap(dex, &mut raw, slot, rng),
+                    MutOp::ItemSwap => self.mut_item_swap(dex, &mut raw, slot, rng),
+                    MutOp::LevelTweak => self.mut_level_tweak(&mut raw, slot, rng),
+                    MutOp::SpeciesSwap => self.mut_species_swap(dex, &mut raw, slot, rng),
+                    MutOp::DvTweak | MutOp::EvTweak | MutOp::MonReplace => unreachable!(),
+                };
+                if ok.is_some() {
+                    if applied == 0 {
+                        first_op = op;
+                        first_slot = slot;
+                    }
+                    applied += 1;
+                }
+            }
+            if applied == 0 {
+                continue;
+            }
             let saved_anchors: Vec<String> = (0..constraint.anchor_slots.min(6))
                 .map(|i| species_id(&parent[i]))
                 .collect();
@@ -1895,6 +2041,31 @@ pub struct EvalResult {
     pub score: f64,
     pub per_opponent: Vec<f64>,
     pub games: usize,
+    /// Per-slot pick frequency in `0.0..=1.0` (sums to `3.0` across the 6 slots).
+    pub slot_picks: [f64; 6],
+    /// Per-slot win contribution in `0.0..=1.0` (sums to `3.0 * score`).
+    pub slot_wins: [f64; 6],
+    /// Pick distribution across the 20 possible 3-mon Cores (key = 6-bit mask with 3 bits set,
+    /// value = `(weighted pick share in 0..=1, weighted win share in 0..=1)`).
+    pub core_stats: BTreeMap<u8, (f64, f64)>,
+}
+
+impl EvalResult {
+    /// Effective number of active 3-mon Cores `exp(H(pi))` in `1.0..=20.0`.
+    pub fn effective_cores(&self) -> f64 {
+        let total: f64 = self.core_stats.values().map(|&(p, _)| p).sum();
+        if total <= 1e-12 {
+            return 1.0;
+        }
+        let mut h = 0.0;
+        for &(p, _) in self.core_stats.values() {
+            let q = p / total;
+            if q > 1e-12 {
+                h -= q * q.ln();
+            }
+        }
+        h.exp()
+    }
 }
 
 struct EvalJob {
@@ -1903,6 +2074,16 @@ struct EvalJob {
     cand_seed: u64,
     opp_seed: u64,
     cand_is_p1: bool,
+}
+
+fn party_core_mask(b: &Battle, side: usize) -> u8 {
+    let mut mask = 0u8;
+    for &slot in &b.sides[side].party {
+        if (slot as usize) < 6 {
+            mask |= 1 << slot;
+        }
+    }
+    mask
 }
 
 /// Candidate fitness vs a gauntlet: seed-paired skuct-vs-skuct duels (both
@@ -1935,13 +2116,13 @@ pub fn gauntlet_eval(
     }
 
     let cursor = AtomicUsize::new(0);
-    let mut results: Vec<(usize, f64)> = Vec::with_capacity(jobs.len());
+    let mut results: Vec<(usize, f64, u8)> = Vec::with_capacity(jobs.len());
     std::thread::scope(|scope| {
         let mut handles = Vec::new();
         for _ in 0..cfg.threads.max(1) {
             let (jobs, cursor) = (&jobs, &cursor);
             handles.push(scope.spawn(move || {
-                let mut out: Vec<(usize, (usize, f64))> = Vec::new();
+                let mut out: Vec<(usize, (usize, f64, u8))> = Vec::new();
                 loop {
                     let i = cursor.fetch_add(1, Ordering::Relaxed);
                     if i >= jobs.len() {
@@ -1979,50 +2160,72 @@ pub fn gauntlet_eval(
                         GameResult::Outcome(Outcome::Tie) | GameResult::TurnCapped => 0.5,
                     };
                     let score = if job.cand_is_p1 { p1_score } else { 1.0 - p1_score };
-                    out.push((i, (job.opp, score)));
+                    let cand_side = if job.cand_is_p1 { 0 } else { 1 };
+                    let cmask = party_core_mask(&b, cand_side);
+                    out.push((i, (job.opp, score, cmask)));
                 }
                 out
             }));
         }
-        let mut all: Vec<(usize, (usize, f64))> = Vec::new();
+        let mut all: Vec<(usize, (usize, f64, u8))> = Vec::new();
         for h in handles {
             all.extend(h.join().unwrap());
         }
         all.sort_by_key(|r| r.0);
-        results = all.into_iter().map(|(i, (_, s))| (jobs[i].opp, s)).collect();
+        results = all
+            .into_iter()
+            .map(|(i, (_, s, cm))| (jobs[i].opp, s, cm))
+            .collect();
     });
 
     // job-ordered summation -> bit-stable means at any thread count
     let mut per: Vec<(f64, usize)> = vec![(0.0, 0); gauntlet.len()];
     let mut total = 0.0;
-    for &(opp, s) in &results {
+    let mut slot_picks = [0.0f64; 6];
+    let mut slot_wins = [0.0f64; 6];
+    let mut core_stats: BTreeMap<u8, (f64, f64)> = BTreeMap::new();
+    let w_game = 1.0 / (results.len().max(1) as f64);
+    for &(opp, s, cm) in &results {
         per[opp].0 += s;
         per[opp].1 += 1;
         total += s;
+        let entry = core_stats.entry(cm).or_insert((0.0, 0.0));
+        entry.0 += w_game;
+        entry.1 += w_game * s;
+        for slot in 0..6 {
+            if (cm & (1 << slot)) != 0 {
+                slot_picks[slot] += w_game;
+                slot_wins[slot] += w_game * s;
+            }
+        }
     }
     EvalResult {
         score: total / results.len() as f64,
         per_opponent: per.iter().map(|&(s, n)| s / n.max(1) as f64).collect(),
         games: results.len(),
+        slot_picks,
+        slot_wins,
+        core_stats,
     }
 }
 
-/// Configuration for weighted blind or skuct gauntlet evaluation (used in
-/// PSRO / evolutionary Best-Response runs under `blind:ITERS:0.4`).
+/// Configuration for weighted open, blind, or skuct gauntlet evaluation.
 #[derive(Clone)]
 pub struct WeightedEvalCfg {
     pub games_per_opponent: u32,
     pub agent_iters: u32,
     pub c: f64,
     pub blind_pool: Option<Arc<MetaPool>>,
+    pub open_sheet: bool,
     pub max_turns: u16,
     pub threads: usize,
     pub seed: u64,
 }
 
 /// Evaluate `candidate` against `gauntlet` with optional `weights` (if empty,
-/// uniform weights are used) under either `BlindAgent` (when `cfg.blind_pool`
-/// is `Some`) or `RmAgent` (`skuct`), with seed-paired common random numbers.
+/// uniform weights are used) under `OpenAgent` (when `cfg.open_sheet` is `true`),
+/// `BlindAgent` (when `cfg.blind_pool` is `Some`), or `RmAgent` (`skuct`),
+/// with seed-paired common random numbers and full within-party Core telemetry.
 pub fn gauntlet_eval_weighted(
     dex: &Dex,
     candidate: &[PokemonSet],
@@ -2051,13 +2254,13 @@ pub fn gauntlet_eval_weighted(
     }
 
     let cursor = AtomicUsize::new(0);
-    let mut results: Vec<(usize, f64)> = Vec::with_capacity(jobs.len());
+    let mut results: Vec<(usize, f64, u8)> = Vec::with_capacity(jobs.len());
     std::thread::scope(|scope| {
         let mut handles = Vec::new();
         for _ in 0..cfg.threads.max(1) {
             let (jobs, cursor) = (&jobs, &cursor);
             handles.push(scope.spawn(move || {
-                let mut out: Vec<(usize, (usize, f64))> = Vec::new();
+                let mut out: Vec<(usize, (usize, f64, u8))> = Vec::new();
                 loop {
                     let i = cursor.fetch_add(1, Ordering::Relaxed);
                     if i >= jobs.len() {
@@ -2071,7 +2274,9 @@ pub fn gauntlet_eval_weighted(
                         ..Default::default()
                     };
                     let make_agent = |seed: u64| -> Box<dyn Agent> {
-                        if let Some(pool) = &cfg.blind_pool {
+                        if cfg.open_sheet {
+                            Box::new(OpenAgent::new(rm_cfg.clone(), None, seed))
+                        } else if let Some(pool) = &cfg.blind_pool {
                             Box::new(BlindAgent::new(rm_cfg.clone(), pool.clone(), None, seed))
                         } else {
                             Box::new(RmAgent::new(rm_cfg.clone(), seed))
@@ -2085,7 +2290,7 @@ pub fn gauntlet_eval_weighted(
                         (gauntlet[job.opp].as_slice(), candidate)
                     };
                     let mut b = Battle::from_fixture(dex, &job.battle_seed, t1, t2).unwrap();
-                    b.set_log_enabled(cfg.blind_pool.is_some());
+                    b.set_log_enabled(cfg.open_sheet || cfg.blind_pool.is_some());
                     let res = if job.cand_is_p1 {
                         play_game(
                             dex,
@@ -2108,33 +2313,60 @@ pub fn gauntlet_eval_weighted(
                         GameResult::Outcome(Outcome::Tie) | GameResult::TurnCapped => 0.5,
                     };
                     let score = if job.cand_is_p1 { p1_score } else { 1.0 - p1_score };
-                    out.push((i, (job.opp, score)));
+                    let cand_side = if job.cand_is_p1 { 0 } else { 1 };
+                    let cmask = party_core_mask(&b, cand_side);
+                    out.push((i, (job.opp, score, cmask)));
                 }
                 out
             }));
         }
-        let mut all: Vec<(usize, (usize, f64))> = Vec::new();
+        let mut all: Vec<(usize, (usize, f64, u8))> = Vec::new();
         for h in handles {
             all.extend(h.join().unwrap());
         }
         all.sort_by_key(|r| r.0);
-        results = all.into_iter().map(|(i, (_, s))| (jobs[i].opp, s)).collect();
+        results = all
+            .into_iter()
+            .map(|(i, (_, s, cm))| (jobs[i].opp, s, cm))
+            .collect();
     });
 
+    let wsum: f64 = if weights.len() == gauntlet.len() {
+        weights.iter().sum::<f64>().max(1e-12)
+    } else {
+        gauntlet.len().max(1) as f64
+    };
     let mut per: Vec<(f64, usize)> = vec![(0.0, 0); gauntlet.len()];
-    for &(opp, s) in &results {
+    let mut slot_picks = [0.0f64; 6];
+    let mut slot_wins = [0.0f64; 6];
+    let mut core_stats: BTreeMap<u8, (f64, f64)> = BTreeMap::new();
+    for &(opp, s, cm) in &results {
         per[opp].0 += s;
         per[opp].1 += 1;
+        let opp_w = if weights.len() == gauntlet.len() {
+            weights[opp] / wsum
+        } else {
+            1.0 / wsum
+        };
+        let w_game = opp_w / (games.max(1) as f64);
+        let entry = core_stats.entry(cm).or_insert((0.0, 0.0));
+        entry.0 += w_game;
+        entry.1 += w_game * s;
+        for slot in 0..6 {
+            if (cm & (1 << slot)) != 0 {
+                slot_picks[slot] += w_game;
+                slot_wins[slot] += w_game * s;
+            }
+        }
     }
     let per_opponent: Vec<f64> = per.iter().map(|&(s, n)| s / n.max(1) as f64).collect();
     let score = if weights.len() == gauntlet.len() {
-        let wsum: f64 = weights.iter().sum();
         per_opponent
             .iter()
             .zip(weights.iter())
             .map(|(s, w)| s * w)
             .sum::<f64>()
-            / wsum.max(1e-12)
+            / wsum
     } else {
         per_opponent.iter().sum::<f64>() / per_opponent.len().max(1) as f64
     };
@@ -2142,5 +2374,8 @@ pub fn gauntlet_eval_weighted(
         score,
         per_opponent,
         games: results.len(),
+        slot_picks,
+        slot_wins,
+        core_stats,
     }
 }

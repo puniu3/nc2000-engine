@@ -136,8 +136,8 @@ fn main() {
         };
     let (glo, ghi) = (0usize, gauntlet.len().saturating_sub(1));
 
-    // ---- optional agent spec (--agent blind:3000:0.4 or skuct:300:1.0)
-    let (agent_iters, agent_c, blind_pool): (u32, f64, Option<Arc<MetaPool>>) =
+    // ---- optional agent spec (--agent open:1000:0.4, blind:3000:0.4, or skuct:300:1.0)
+    let (agent_iters, agent_c, blind_pool, open_sheet): (u32, f64, Option<Arc<MetaPool>>, bool) =
         if let Some(spec) = flag(&args, "--agent") {
             let mut parts = spec.split(':');
             let kind = parts.next().unwrap();
@@ -152,9 +152,9 @@ fn main() {
             } else {
                 None
             };
-            (it, c, bpool)
+            (it, c, bpool, kind == "open")
         } else {
-            (agent_iters, 1.0, None)
+            (agent_iters, 1.0, None, false)
         };
 
     // ---- optional niche constraints (--anchors s1,s2 --max-staples K --forbid s3,s4)
@@ -273,6 +273,7 @@ fn main() {
         agent_iters,
         c: agent_c,
         blind_pool: blind_pool.clone(),
+        open_sheet,
         max_turns,
         threads,
         seed,

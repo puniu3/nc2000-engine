@@ -63,6 +63,14 @@ struct Strain {
     parent_prior: f64,
     bayes_fit: f64,
     lcb95: f64,
+    #[serde(default)]
+    slot_picks: [f64; 6],
+    #[serde(default)]
+    slot_wins: [f64; 6],
+    #[serde(default)]
+    last_wave_slot_picks: [f64; 6],
+    #[serde(default)]
+    effective_cores: f64,
     team: Vec<Value>,
 }
 
@@ -154,7 +162,7 @@ fn build_constraint(dex: &Dex, anchors_str: &str, max_staples_str: &str) -> (Vec
     (anchor_list, constraint)
 }
 
-fn parse_agent_spec(args: &[String], root: &Path) -> (u32, f64, Option<Arc<MetaPool>>) {
+fn parse_agent_spec(args: &[String], root: &Path) -> (u32, f64, Option<Arc<MetaPool>>, bool) {
     if let Some(spec) = flag(args, "--agent") {
         let parts: Vec<&str> = spec.split(':').collect();
         assert!(
@@ -165,6 +173,7 @@ fn parse_agent_spec(args: &[String], root: &Path) -> (u32, f64, Option<Arc<MetaP
         let it: u32 = parts[1].parse().expect("agent iters");
         let c: f64 = parts.get(2).map(|s| s.parse().expect("agent c")).unwrap_or(0.4);
         match kind {
+            "open" => (it, c, None, true),
             "blind" => {
                 let bpath = flag(args, "--belief-pool")
                     .map(PathBuf::from)
@@ -172,13 +181,13 @@ fn parse_agent_spec(args: &[String], root: &Path) -> (u32, f64, Option<Arc<MetaP
                 let btext = std::fs::read_to_string(&bpath)
                     .unwrap_or_else(|e| panic!("read belief-pool {}: {e}", bpath.display()));
                 let mp: MetaPool = serde_json::from_str(&btext).expect("parse belief-pool");
-                (it, c, Some(Arc::new(mp)))
+                (it, c, Some(Arc::new(mp)), false)
             }
-            "skuct" => (it, c, None),
-            other => panic!("unsupported --agent kind {other} (expected blind or skuct)"),
+            "skuct" => (it, c, None, false),
+            other => panic!("unsupported --agent kind {other} (expected open, blind, or skuct)"),
         }
     } else {
-        (1000, 0.4, None)
+        (1000, 0.4, None, true)
     }
 }
 
@@ -358,7 +367,8 @@ fn cmd_evolve_island(args: &[String]) {
     let gfile = flag(args, "--gauntlet-file")
         .unwrap_or_else(|| root.join("data/meta-nash-v3/pool-artifact.json").to_string_lossy().into_owned());
     let (bench_teams, bench_weights) = load_gauntlet_file(&dex, &gen, &gfile);
-    let (agent_iters, agent_c, blind_pool) = parse_agent_spec(args, &root);
+    let (agent_iters, agent_c, blind_pool, open_sheet) = parse_agent_spec(args, &root);
+    let max_per_archetype: usize = num(args, "--max-per-archetype", 2);
 
     let niches_spec = flag(args, "--niches").unwrap_or_else(|| "rand||".into());
     let niches = parse_niches(&niches_spec);
@@ -495,6 +505,10 @@ fn cmd_evolve_island(args: &[String]) {
                 parent_prior: 0.35,
                 bayes_fit: 0.35,
                 lcb95: 0.0,
+                slot_picks: [0.0; 6],
+                slot_wins: [0.0; 6],
+                last_wave_slot_picks: [0.0; 6],
+                effective_cores: 1.0,
                 team,
             });
         }
@@ -542,6 +556,7 @@ fn cmd_evolve_island(args: &[String]) {
                 w - 1,
                 carry,
                 buds,
+                max_per_archetype,
                 &mut ledger,
                 &mut rng,
             );
@@ -645,7 +660,7 @@ fn cmd_evolve_island(args: &[String]) {
                 let bp = blind_pool.clone();
                 handles.push(scope.spawn(move || {
                     let cand = to_sets(&s.team).expect("valid strain team");
-                    let bench_fit = gauntlet_eval_weighted(
+                    let bench_res = gauntlet_eval_weighted(
                         dex_ref,
                         &cand,
                         wb_teams_ref,
@@ -654,18 +669,27 @@ fn cmd_evolve_island(args: &[String]) {
                             games_per_opponent: bench_games_per_opp,
                             agent_iters,
                             c: agent_c,
+                            open_sheet,
                             max_turns,
                             seed: wave_seed,
                             threads: inner_threads,
                             blind_pool: bp.clone(),
                         },
-                    )
-                    .score;
+                    );
+                    let bench_fit = bench_res.score;
                     s.bench_games += bench_n_games;
                     s.bench_wins += bench_fit * bench_n_games;
 
+                    let mut wave_picks = [0.0f64; 6];
+                    let mut wave_wins = [0.0f64; 6];
+                    for k in 0..6 {
+                        wave_picks[k] += bench_res.slot_picks[k] * bench_n_games;
+                        wave_wins[k] += bench_res.slot_wins[k] * bench_n_games;
+                    }
+                    s.effective_cores = bench_res.effective_cores();
+
                     let wave_fit = if !eco_opps_ref.is_empty() && env_self_weight > 0.0 {
-                        let eco_fit = gauntlet_eval_weighted(
+                        let eco_res = gauntlet_eval_weighted(
                             dex_ref,
                             &cand,
                             eco_opps_ref,
@@ -674,20 +698,32 @@ fn cmd_evolve_island(args: &[String]) {
                                 games_per_opponent: eval_games,
                                 agent_iters,
                                 c: agent_c,
+                                open_sheet,
                                 max_turns,
                                 seed: wave_seed ^ 0x5555_AAAA_5555_AAAA,
                                 threads: inner_threads,
                                 blind_pool: bp,
                             },
-                        )
-                        .score;
+                        );
+                        let eco_fit = eco_res.score;
                         s.eco_games += eco_n_games;
                         s.eco_wins += eco_fit * eco_n_games;
+                        for k in 0..6 {
+                            wave_picks[k] += eco_res.slot_picks[k] * eco_n_games;
+                            wave_wins[k] += eco_res.slot_wins[k] * eco_n_games;
+                        }
+                        s.effective_cores = (1.0 - env_self_weight) * bench_res.effective_cores()
+                            + env_self_weight * eco_res.effective_cores();
                         (1.0 - env_self_weight) * bench_fit + env_self_weight * eco_fit
                     } else {
                         bench_fit
                     };
 
+                    for k in 0..6 {
+                        s.slot_picks[k] += wave_picks[k];
+                        s.slot_wins[k] += wave_wins[k];
+                        s.last_wave_slot_picks[k] = wave_picks[k] / total_w_games.max(1.0);
+                    }
                     s.last_wave_fit = wave_fit;
                 }));
             }
@@ -696,10 +732,14 @@ fn cmd_evolve_island(args: &[String]) {
             }
         });
 
-        // Common-Random-Numbers (CRN) Paired Slice-Deconfounding:
-        // When a young bud (age <= 3 waves) and its parent are evaluated in the same wave on
-        // the exact same 8-team benchmark slice, eco opponents, and `wave_seed`, use the parent's
-        // wave score as a control variate so rotating slice difficulty never masks true improvements.
+        // Common-Random-Numbers (CRN) Paired Slice-Deconfounding + Active-Pick Deconfounding:
+        // 1. When a young bud (age <= 3 waves) and its parent are evaluated in the same wave on
+        //    the exact same 8-team benchmark slice, eco opponents, and `wave_seed`, use the parent's
+        //    wave score as a control variate so rotating slice difficulty never masks true improvements.
+        // 2. Active-Pick Deconfounding: if a 1-wave-old bud mutated a single slot `k` (`op@k` other
+        //    than `level-tweak`) and slot `k` was picked in ZERO games this wave (`last_wave_slot_picks[k] == 0`),
+        //    the mutated Pokemon never stepped onto the field, so any positive `s.last_wave_fit > p_wave`
+        //    is pure MCTS noise on the unchanged 5 slots and is clamped to `0.0` gain.
         let wave_fit_by_id: BTreeMap<String, f64> = ledger
             .active_strains
             .iter()
@@ -712,7 +752,17 @@ fn cmd_evolve_island(args: &[String]) {
                     wave_fit_by_id.get(&s.parent_id),
                 ) {
                     s.parent_prior = p_bayes;
-                    (p_bayes + (s.last_wave_fit - p_wave)).clamp(0.0, 1.0)
+                    let mut delta = s.last_wave_fit - p_wave;
+                    if w.saturating_sub(s.born_wave) == 1 && !s.last_op.starts_with("level-tweak") {
+                        if let Some((_, slot_str)) = s.last_op.split_once('@') {
+                            if let Ok(slot_idx) = slot_str.parse::<usize>() {
+                                if slot_idx < 6 && s.last_wave_slot_picks[slot_idx] <= 1e-6 && delta > 0.0 {
+                                    delta = 0.0;
+                                }
+                            }
+                        }
+                    }
+                    (p_bayes + delta).clamp(0.0, 1.0)
                 } else {
                     s.last_wave_fit
                 }
@@ -815,10 +865,10 @@ fn bud_next_wave_by_niche(
     born_wave: u32,
     carry: usize,
     buds: usize,
+    max_per_archetype: usize,
     ledger: &mut IslandLedger,
     rng: &mut SplitMix64,
 ) {
-    let max_per_archetype = 2usize;
     let mut seen_keys: BTreeSet<String> = BTreeSet::new();
 
     // Island-wide selection: separate active strains into 1-wave-old grace-period buds
@@ -860,8 +910,11 @@ fn bud_next_wave_by_niche(
         } else {
             s.bayes_fit
         };
-        let viable =
-            s.bench_games < 20.0 || (b_wr >= 0.26 && s.bayes_fit + 0.14 >= top_vet_fit);
+        let viable = if max_per_archetype == usize::MAX {
+            b_wr >= 0.32 || survivors.len() < carry
+        } else {
+            s.bench_games < 20.0 || (b_wr >= 0.26 && s.bayes_fit + 0.14 >= top_vet_fit)
+        };
         let sp = s.species_set();
         if survivors.len() < carry
             && viable
@@ -892,8 +945,11 @@ fn bud_next_wave_by_niche(
             } else {
                 s.bayes_fit
             };
-            let viable =
-                s.bench_games >= 20.0 && b_wr >= 0.28 && s.bayes_fit + 0.12 >= top_vet_fit;
+            let viable = if max_per_archetype == usize::MAX {
+                b_wr >= 0.35
+            } else {
+                s.bench_games >= 20.0 && b_wr >= 0.28 && s.bayes_fit + 0.12 >= top_vet_fit
+            };
             let sp = s.species_set();
             if survivors.len() < carry
                 && viable
@@ -910,11 +966,11 @@ fn bud_next_wave_by_niche(
 
     // 3. Fill any still-open survivor slots up to `carry` by alternating between multi-step
     //    speciation branches from top survivors (mutated until they form a new archetype with
-    //    < 4 shared species) and fresh de-novo Pareto-level teams.
+    //    < 4 shared species) and fresh de-novo Pareto-level teams (skipped in pure Kodoku mode).
     let free_constraint = NicheConstraint::default();
     let base_survivors = survivors.len();
     let mut fill_attempt = 0usize;
-    while survivors.len() < carry && fill_attempt < carry * 6 {
+    while max_per_archetype != usize::MAX && survivors.len() < carry && fill_attempt < carry * 6 {
         fill_attempt += 1;
         let mut candidate_opt: Option<(Vec<Value>, String, String, f64)> = None;
         if base_survivors > 0 && fill_attempt % 2 == 1 {
@@ -922,9 +978,15 @@ fn bud_next_wave_by_niche(
             let parent = &survivors[p_idx];
             let mut cur_team = parent.team.clone();
             for _ in 0..3 {
-                if let Some(prop) =
-                    gen.propose_constrained(dex, &cur_team, rng, &free_constraint, 150)
-                {
+                if let Some(prop) = gen.propose_targeted(
+                    dex,
+                    &cur_team,
+                    &parent.slot_picks,
+                    &parent.slot_wins,
+                    rng,
+                    &free_constraint,
+                    150,
+                ) {
                     cur_team = prop.team;
                     let sp = team_species_set(&cur_team);
                     if count_same_archetype(&sp, &survivors) < max_per_archetype {
@@ -974,6 +1036,10 @@ fn bud_next_wave_by_niche(
                     parent_prior: prior,
                     bayes_fit: prior,
                     lcb95: 0.0,
+                    slot_picks: [0.0; 6],
+                    slot_wins: [0.0; 6],
+                    last_wave_slot_picks: [0.0; 6],
+                    effective_cores: 1.0,
                     team,
                 });
             }
@@ -992,8 +1058,17 @@ fn bud_next_wave_by_niche(
         } else {
             s.bayes_fit
         };
-        let promising = s.last_wave_fit + 0.05 >= s.parent_prior
-            && (s.bench_games < 16.0 || b_wr >= 0.24)
+        let mut active_graft = true;
+        if let Some((op_name, slot_str)) = s.last_op.split_once('@') {
+            if let Ok(slot_idx) = slot_str.parse::<usize>() {
+                if slot_idx < 6 && !op_name.starts_with("level-tweak") && s.last_wave_slot_picks[slot_idx] < 0.08 {
+                    active_graft = false;
+                }
+            }
+        }
+        let promising = active_graft
+            && s.last_wave_fit + 0.03 >= s.parent_prior
+            && (s.bench_games < 16.0 || b_wr >= 0.28)
             && s.bayes_fit + 0.14 >= top_vet_fit;
         if kept_grace.len() < max_grace && promising && seen_keys.insert(k) {
             kept_grace.push(s);
@@ -1002,14 +1077,23 @@ fn bud_next_wave_by_niche(
         }
     }
 
-    // 5. Spawn fresh buds from the surviving veterans for remaining bud slots.
+    // 5. Spawn fresh buds from the surviving veterans for remaining bud slots,
+    //    using within-party vitality telemetry (`propose_targeted`) to target hitchhikers.
     let num_parents = survivors.len().max(1);
     let new_buds_needed = buds.saturating_sub(kept_grace.len());
     let mut island_buds: Vec<Strain> = kept_grace;
     for b_idx in 0..new_buds_needed {
         let p_idx = (born_wave as usize + b_idx) % num_parents;
         let parent = &survivors[p_idx];
-        if let Some(prop) = gen.propose_constrained(dex, &parent.team, rng, &free_constraint, 150) {
+        if let Some(prop) = gen.propose_targeted(
+            dex,
+            &parent.team,
+            &parent.slot_picks,
+            &parent.slot_wins,
+            rng,
+            &free_constraint,
+            150,
+        ) {
             let k = team_key(&prop.team);
             if seen_keys.insert(k) {
                 let id = format!("{island}-s{:04}", ledger.next_strain_seq);
@@ -1033,6 +1117,10 @@ fn bud_next_wave_by_niche(
                     parent_prior: parent.bayes_fit,
                     bayes_fit: parent.bayes_fit,
                     lcb95: 0.0,
+                    slot_picks: [0.0; 6],
+                    slot_wins: [0.0; 6],
+                    last_wave_slot_picks: [0.0; 6],
+                    effective_cores: parent.effective_cores,
                     team: prop.team,
                 });
             }
@@ -1326,7 +1414,7 @@ fn cmd_extract_nash(args: &[String]) {
                 .map(|n| n.get())
                 .unwrap_or(4)
         });
-    let (agent_iters, agent_c, blind_pool) = parse_agent_spec(args, &root);
+    let (agent_iters, agent_c, blind_pool, open_sheet) = parse_agent_spec(args, &root);
 
     // 1. Load existing Old-Nash benchmark teams and weights
     let gfile = flag(args, "--gauntlet-file").unwrap_or_else(|| {
@@ -1397,6 +1485,7 @@ fn cmd_extract_nash(args: &[String]) {
                 seed: seed ^ 0x7777_1111_u64.wrapping_add(c_idx as u64 * 9973),
                 threads,
                 blind_pool: blind_pool.clone(),
+                open_sheet,
             },
         )
         .score;
@@ -1470,6 +1559,7 @@ fn cmd_extract_nash(args: &[String]) {
                     seed: seed ^ ((i * 131 + j) as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15),
                     threads,
                     blind_pool: blind_pool.clone(),
+                    open_sheet,
                 },
             )
             .score;
@@ -1554,7 +1644,7 @@ fn cmd_verify_nash(args: &[String]) {
                 .map(|n| n.get())
                 .unwrap_or(4)
         });
-    let (agent_iters, agent_c, blind_pool) = parse_agent_spec(args, &root);
+    let (agent_iters, agent_c, blind_pool, open_sheet) = parse_agent_spec(args, &root);
 
     let (new_teams, new_weights) = load_gauntlet_file(&dex, &gen, &new_file);
     let (old_teams, old_weights) = load_gauntlet_file(&dex, &gen, &old_file);
@@ -1638,6 +1728,7 @@ fn cmd_verify_nash(args: &[String]) {
                     seed: seed ^ ((i as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15)),
                     threads,
                     blind_pool: blind_pool.clone(),
+                    open_sheet,
                 },
             )
             .score
@@ -1862,7 +1953,7 @@ fn cmd_update_pool(args: &[String]) {
     let max_turns: u16 = num(args, "--max-turns", 300);
     let threads: usize = num(args, "--threads", 8);
     let seed: u64 = num(args, "--seed", 2026102850);
-    let (agent_iters, agent_c, blind_pool) = parse_agent_spec(args, &root);
+    let (agent_iters, agent_c, blind_pool, open_sheet) = parse_agent_spec(args, &root);
 
     let mut master_teams: Vec<Value> = if master_path.exists() {
         let mv: Value = serde_json::from_str(&std::fs::read_to_string(&master_path).unwrap()).unwrap();
@@ -1996,6 +2087,7 @@ fn cmd_update_pool(args: &[String]) {
                     seed: seed ^ ((ci as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15)),
                     threads,
                     blind_pool: blind_pool.clone(),
+                    open_sheet,
                 },
             );
             let cand_score = eval_res.score;
@@ -2138,6 +2230,696 @@ fn cmd_update_pool(args: &[String]) {
     );
 }
 
+fn count_legal_155_cores(sets: &[Value]) -> usize {
+    let n = sets.len().min(6);
+    let mut cnt = 0usize;
+    for i in 0..n {
+        for j in (i + 1)..n {
+            for k in (j + 1)..n {
+                let li = sets[i]["level"].as_u64().unwrap_or(50);
+                let lj = sets[j]["level"].as_u64().unwrap_or(50);
+                let lk = sets[k]["level"].as_u64().unwrap_or(50);
+                if li + lj + lk <= 155 {
+                    cnt += 1;
+                }
+            }
+        }
+    }
+    cnt
+}
+
+fn format_core_mask(mask: u8, sets: &[Value]) -> String {
+    let mut names = Vec::new();
+    for slot in 0..sets.len().min(6) {
+        if (mask & (1u8 << slot)) != 0 {
+            let sp = sets[slot]["species"].as_str().unwrap_or("?");
+            let lv = sets[slot]["level"].as_u64().unwrap_or(50);
+            names.push(format!("{sp}(L{lv})"));
+        }
+    }
+    names.join("+")
+}
+
+/// Open-Sheet Core Tomography (`meta_eco tomography`):
+/// Measures exact per-slot pick frequency `p_i`, conditional winrate `w_i`,
+/// vitality `v_i = p_i * w_i`, effective core count `K_eff = exp(H(pi))`,
+/// and identifies vestigial hitchhikers vs true 4-Ace / flex-core structures.
+fn cmd_tomography(args: &[String]) {
+    let dex = load_dex();
+    let root = repo_root();
+    let ls_text = std::fs::read_to_string(root.join("data/learnsets-gen2.json")).unwrap();
+    let pool_text = std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap();
+    let gen = TeamGen::new(&dex, &ls_text, &pool_text).unwrap();
+
+    let pool_file = flag(args, "--pool").expect("--pool TEAMS.json");
+    let gfile = flag(args, "--gauntlet-file").unwrap_or_else(|| {
+        root.join("data/team-pool-v2/team-pool.json")
+            .to_string_lossy()
+            .into_owned()
+    });
+    let eval_games: u32 = num(args, "--eval-games", 2);
+    let top_n: usize = num(args, "--top", 50);
+    let max_turns: u16 = num(args, "--max-turns", 300);
+    let seed: u64 = num(args, "--seed", 2026102901);
+    let threads: usize = flag(args, "--threads")
+        .map(|v| v.parse().unwrap())
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(4)
+        });
+    let (agent_iters, agent_c, blind_pool, open_sheet) = parse_agent_spec(args, &root);
+
+    let (bench_teams, bench_weights) = load_gauntlet_file(&dex, &gen, &gfile);
+    let pv: Value = serde_json::from_str(&std::fs::read_to_string(&pool_file).unwrap()).unwrap();
+    let teams_arr = pv["teams"]
+        .as_array()
+        .expect("--pool must contain a 'teams' array");
+
+    println!(
+        "=== Open-Sheet Core Tomography ({} teams vs {} benchmark teams, {} games/opp = {} games/team, open_sheet={}) ===",
+        teams_arr.len().min(top_n),
+        bench_teams.len(),
+        eval_games,
+        eval_games as usize * bench_teams.len(),
+        open_sheet
+    );
+
+    let mut report_teams: Vec<Value> = Vec::new();
+    for (idx, t) in teams_arr.iter().take(top_n).enumerate() {
+        let tid = t["id"]
+            .as_str()
+            .map(String::from)
+            .unwrap_or_else(|| format!("team-{idx}"));
+        let raw_sets = t["sets"].as_array().expect("team missing sets");
+        let canon = gen.canonize(&dex, raw_sets).expect("canonize team");
+        let cand_sets = to_sets(&canon).expect("to_sets");
+
+        let res = gauntlet_eval_weighted(
+            &dex,
+            &cand_sets,
+            &bench_teams,
+            &bench_weights,
+            &WeightedEvalCfg {
+                games_per_opponent: eval_games,
+                agent_iters,
+                c: agent_c,
+                max_turns,
+                seed,
+                threads,
+                blind_pool: blind_pool.clone(),
+                open_sheet,
+            },
+        );
+
+        let k_eff = res.effective_cores();
+        let legal_cores = count_legal_155_cores(&canon);
+
+        let mut sorted_cores: Vec<(u8, f64, f64)> = res
+            .core_stats
+            .iter()
+            .map(|(&mask, &(picks, wins))| (mask, picks, wins))
+            .collect();
+        sorted_cores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+        let mut hitchhikers = Vec::new();
+        let mut slot_rows = Vec::new();
+        for slot in 0..canon.len().min(6) {
+            let sp = canon[slot]["species"].as_str().unwrap_or("?");
+            let lv = canon[slot]["level"].as_u64().unwrap_or(50);
+            let item = canon[slot]["item"].as_str().unwrap_or("(none)");
+            let p_i = res.slot_picks[slot];
+            let w_i = if p_i > 1e-9 {
+                res.slot_wins[slot] / p_i
+            } else {
+                0.0
+            };
+            let v_i = res.slot_wins[slot];
+            let role = if p_i < 0.08 {
+                hitchhikers.push(format!("{sp}(L{lv})"));
+                "HITCHHIKER"
+            } else if p_i >= 0.65 {
+                "PRIMARY_ACE"
+            } else if p_i >= 0.30 {
+                "FLEX_CORE"
+            } else {
+                "COUNTER_PICK"
+            };
+            slot_rows.push(json!({
+                "slot": slot,
+                "species": sp,
+                "level": lv,
+                "item": item,
+                "pick_rate": p_i,
+                "cond_winrate": w_i,
+                "vitality": v_i,
+                "role": role,
+            }));
+        }
+
+        println!(
+            "\n[{:2}] {:22} | Open-WR: {:5.1}% ({:.4}) | K_eff: {:4.2} / {:2} legal cores | Hitchhikers: {}",
+            idx + 1,
+            tid,
+            res.score * 100.0,
+            res.score,
+            k_eff,
+            legal_cores,
+            if hitchhikers.is_empty() {
+                "None (all 6 active)".to_string()
+            } else {
+                hitchhikers.join(", ")
+            }
+        );
+        for srow in &slot_rows {
+            println!(
+                "     slot {}: {:12} L{:2} @ {:14} | pick={:5.1}% | cond_wr={:5.1}% | vitality={:.3} [{}]",
+                srow["slot"].as_u64().unwrap(),
+                srow["species"].as_str().unwrap(),
+                srow["level"].as_u64().unwrap(),
+                srow["item"].as_str().unwrap(),
+                srow["pick_rate"].as_f64().unwrap() * 100.0,
+                srow["cond_winrate"].as_f64().unwrap() * 100.0,
+                srow["vitality"].as_f64().unwrap(),
+                srow["role"].as_str().unwrap(),
+            );
+        }
+        let top_cores_str: Vec<String> = sorted_cores
+            .iter()
+            .take(3)
+            .map(|&(mask, picks, wins)| {
+                let share = picks * 100.0;
+                let cwr = wins / picks.max(1e-9) * 100.0;
+                format!("{} ({:.0}% pick, {:.0}% wr)", format_core_mask(mask, &canon), share, cwr)
+            })
+            .collect();
+        println!("     top cores: {}", top_cores_str.join("  ||  "));
+
+        let top_cores_json: Vec<Value> = sorted_cores
+            .iter()
+            .take(6)
+            .map(|&(mask, picks, wins)| {
+                json!({
+                    "mask": mask,
+                    "core": format_core_mask(mask, &canon),
+                    "pick_rate": picks,
+                    "cond_winrate": wins / picks.max(1e-9),
+                })
+            })
+            .collect();
+
+        report_teams.push(json!({
+            "id": tid,
+            "open_score": res.score,
+            "effective_cores": k_eff,
+            "legal_155_cores": legal_cores,
+            "hitchhiker_count": hitchhikers.len(),
+            "hitchhikers": hitchhikers,
+            "slots": slot_rows,
+            "top_cores": top_cores_json,
+            "sets": canon,
+        }));
+    }
+
+    report_teams.sort_by(|a, b| {
+        b["open_score"]
+            .as_f64()
+            .unwrap()
+            .partial_cmp(&a["open_score"].as_f64().unwrap())
+            .unwrap()
+    });
+
+    if let Some(out_path) = flag(args, "--out") {
+        let out_p = PathBuf::from(out_path);
+        if let Some(parent) = out_p.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        let out_json = json!({
+            "format": "nc2000-core-tomography-v1",
+            "gauntlet_file": gfile,
+            "eval_games_per_opp": eval_games,
+            "open_sheet": open_sheet,
+            "teams": report_teams,
+        });
+        write_json_atomic(&out_p, &out_json);
+        println!("\nSaved tomography report -> {}", out_p.display());
+    }
+}
+
+/// Pure-Strength Open-Sheet Kodoku (`meta_eco kodoku`):
+/// Evolves a population seeded from diverse human + evolved teams under Open Team Sheet
+/// (`OpenAgent`), with:
+/// 1. ZERO diversity quotas or archetype caps (`max_per_archetype = usize::MAX`),
+/// 2. Within-party vitality-targeted mutation (`TeamGen::propose_targeted`) that surgical-strikes
+///    low-vitality / hitchhiker slots while preserving high-vitality 3-mon cores,
+/// 3. Active-Pick Deconfounding (clamping positive wave deltas of unpicked `@slot` mutations to 0).
+fn cmd_kodoku(args: &[String]) {
+    let dex = load_dex();
+    let root = repo_root();
+    let ls_text = std::fs::read_to_string(root.join("data/learnsets-gen2.json")).unwrap();
+    let pool_text = std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap();
+    let gen = TeamGen::new(&dex, &ls_text, &pool_text).unwrap();
+
+    let out_dir = PathBuf::from(flag(args, "--out-dir").expect("--out-dir DIR"));
+    std::fs::create_dir_all(&out_dir).unwrap();
+    let ledger_path = out_dir.join("kodoku-ledger.json");
+    let elites_path = flag(args, "--out")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| out_dir.join("kodoku-elites.json"));
+
+    let waves: u32 = num(args, "--waves", 6);
+    let carry: usize = num(args, "--carry", 10);
+    let buds: usize = num(args, "--buds", 10);
+    let eval_games: u32 = num(args, "--eval-games", 2);
+    let prior_games: f64 = num(args, "--prior-games", 16.0);
+    let max_turns: u16 = num(args, "--max-turns", 300);
+    let max_seconds: u64 = num(args, "--max-seconds", 0);
+    let base_seed: u64 = num(args, "--seed", 2026102999);
+    let threads: usize = flag(args, "--threads")
+        .map(|v| v.parse().unwrap())
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(4)
+        });
+    let (agent_iters, agent_c, blind_pool, open_sheet) = parse_agent_spec(args, &root);
+
+    let gfile = flag(args, "--gauntlet-file").unwrap_or_else(|| {
+        root.join("data/team-pool-v2/team-pool.json")
+            .to_string_lossy()
+            .into_owned()
+    });
+    let (bench_teams, bench_weights) = load_gauntlet_file(&dex, &gen, &gfile);
+
+    let t_run_start = std::time::Instant::now();
+    let mut ledger: IslandLedger = if ledger_path.exists() {
+        let txt = std::fs::read_to_string(&ledger_path).unwrap();
+        serde_json::from_str(&txt).expect("valid kodoku-ledger.json")
+    } else {
+        let seed_files_str = flag(args, "--seeds").unwrap_or_else(|| {
+            root.join("data/team-pool-v2/team-pool.json")
+                .to_string_lossy()
+                .into_owned()
+        });
+        let mut rng = SplitMix64::new(base_seed);
+        let mut active: Vec<Strain> = Vec::new();
+        let mut seen_keys: BTreeSet<String> = BTreeSet::new();
+        let mut seq = 0u64;
+
+        for sf in seed_files_str.split(',') {
+            let sf = sf.trim();
+            if sf.is_empty() {
+                continue;
+            }
+            let Ok(txt) = std::fs::read_to_string(sf) else {
+                continue;
+            };
+            let Ok(v) = serde_json::from_str::<Value>(&txt) else {
+                continue;
+            };
+            let Some(arr) = v["teams"].as_array() else {
+                continue;
+            };
+            for t in arr {
+                if active.len() >= carry + buds {
+                    break;
+                }
+                let Some(sets) = t["sets"].as_array() else {
+                    continue;
+                };
+                let mut raw_sets = sets.clone();
+                gen.optimize_team_dominance(&dex, &mut raw_sets, &mut rng);
+                let Some(canon) = gen.canonize(&dex, &raw_sets) else {
+                    continue;
+                };
+                let k = team_key(&canon);
+                if !seen_keys.insert(k) {
+                    continue;
+                }
+                let origin_id = t["id"].as_str().unwrap_or("seed").to_string();
+                let id = format!("kodoku-s{seq:04}");
+                seq += 1;
+                active.push(Strain {
+                    id,
+                    parent_id: origin_id,
+                    niche: "kodoku".into(),
+                    anchors: String::new(),
+                    max_staples: String::new(),
+                    born_wave: 0,
+                    last_op: "founder".into(),
+                    abundance: 1.0 / ((carry + buds).max(1) as f64),
+                    cum_games: 0.0,
+                    cum_wins: 0.0,
+                    bench_games: 0.0,
+                    bench_wins: 0.0,
+                    eco_games: 0.0,
+                    eco_wins: 0.0,
+                    last_wave_fit: 0.50,
+                    parent_prior: 0.50,
+                    bayes_fit: 0.50,
+                    lcb95: 0.0,
+                    slot_picks: [0.0; 6],
+                    slot_wins: [0.0; 6],
+                    last_wave_slot_picks: [0.0; 6],
+                    effective_cores: 1.0,
+                    team: canon,
+                });
+            }
+        }
+        let l = IslandLedger {
+            island: "kodoku".into(),
+            wave: 0,
+            next_strain_seq: seq,
+            rng: rng.0,
+            niches: Vec::new(),
+            active_strains: active,
+            archived_strains: Vec::new(),
+            wave_history: Vec::new(),
+        };
+        write_json_atomic(&ledger_path, &l);
+        l
+    };
+
+    let mut rng = SplitMix64(ledger.rng);
+    let mut waves_this_run = 0u32;
+    let mut avg_wave_secs = 90.0f64;
+
+    while ledger.wave < waves {
+        if max_seconds > 0 && waves_this_run > 0 {
+            let elapsed = t_run_start.elapsed().as_secs_f64();
+            if elapsed + avg_wave_secs * 0.65 >= max_seconds as f64 {
+                eprintln!(
+                    "[kodoku] wall-clock budget reached ({elapsed:.0}s / {max_seconds}s after {waves_this_run} waves, total wave={}); stopping cleanly.",
+                    ledger.wave
+                );
+                break;
+            }
+        }
+
+        let w = ledger.wave + 1;
+        let t_wave = std::time::Instant::now();
+        let wave_seed = base_seed ^ (w as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+
+        // Pure-strength selection + vitality-targeted budding with ZERO archetype caps (`usize::MAX`)
+        if w > 1 && ledger.active_strains.iter().all(|s| s.cum_games > 0.0) {
+            bud_next_wave_by_niche(
+                &dex,
+                &gen,
+                "kodoku",
+                w - 1,
+                carry,
+                buds,
+                usize::MAX,
+                &mut ledger,
+                &mut rng,
+            );
+        }
+
+        // Top 4 Kodoku leaders form the co-evolutionary apex predator panel
+        let mut vet_indices: Vec<usize> = (0..ledger.active_strains.len())
+            .filter(|&i| ledger.active_strains[i].cum_games > 0.0)
+            .collect();
+        if vet_indices.is_empty() {
+            vet_indices = (0..ledger.active_strains.len()).collect();
+        }
+        vet_indices.sort_by(|&a, &b| {
+            ledger.active_strains[b]
+                .bayes_fit
+                .partial_cmp(&ledger.active_strains[a].bayes_fit)
+                .unwrap()
+        });
+        let mut eco_opps: Vec<Vec<PokemonSet>> = Vec::new();
+        let mut eco_weights: Vec<f64> = Vec::new();
+        for &vi in vet_indices.iter().take(4) {
+            if let Ok(sets) = to_sets(&ledger.active_strains[vi].team) {
+                eco_opps.push(sets);
+                eco_weights.push(1.0);
+            }
+        }
+        let eco_wsum: f64 = eco_weights.iter().sum();
+        if eco_wsum > 0.0 {
+            for ew in &mut eco_weights {
+                *ew /= eco_wsum;
+            }
+        }
+
+        // Rotate a 12-team slice of the 24-team benchmark each wave so every 2 waves covers all 24
+        let slice_len = bench_teams.len().min(12);
+        let start_idx = ((w as usize).saturating_sub(1) * slice_len) % bench_teams.len().max(1);
+        let mut wave_bench_teams = Vec::with_capacity(slice_len);
+        let mut wave_bench_weights = Vec::with_capacity(slice_len);
+        for k in 0..slice_len {
+            let idx = (start_idx + k) % bench_teams.len();
+            wave_bench_teams.push(bench_teams[idx].clone());
+            wave_bench_weights.push(bench_weights[idx]);
+        }
+        let wb_sum: f64 = wave_bench_weights.iter().sum();
+        if wb_sum > 0.0 {
+            for wv in &mut wave_bench_weights {
+                *wv /= wb_sum;
+            }
+        }
+
+        let bench_n_games = (eval_games as usize * slice_len) as f64;
+        let eco_n_games = (eval_games as usize * eco_opps.len()) as f64;
+        let total_w_games = bench_n_games + eco_n_games;
+
+        let inner_threads = (threads / 4).max(2);
+        let dex_ref = &dex;
+        let wb_teams_ref = &wave_bench_teams;
+        let wb_weights_ref = &wave_bench_weights;
+        let eco_opps_ref = &eco_opps;
+        let eco_weights_ref = &eco_weights;
+        std::thread::scope(|scope| {
+            let mut handles = Vec::new();
+            for s in &mut ledger.active_strains {
+                let bp = blind_pool.clone();
+                handles.push(scope.spawn(move || {
+                    let cand = to_sets(&s.team).expect("valid strain team");
+                    let bench_res = gauntlet_eval_weighted(
+                        dex_ref,
+                        &cand,
+                        wb_teams_ref,
+                        wb_weights_ref,
+                        &WeightedEvalCfg {
+                            games_per_opponent: eval_games,
+                            agent_iters,
+                            c: agent_c,
+                            max_turns,
+                            seed: wave_seed ^ 0xA5A5_5A5A_u64,
+                            threads: inner_threads,
+                            blind_pool: bp.clone(),
+                            open_sheet,
+                        },
+                    );
+                    let eco_res = if eco_opps_ref.is_empty() {
+                        nc2000_bot::teamgen::EvalResult {
+                            score: bench_res.score,
+                            per_opponent: Vec::new(),
+                            games: 0,
+                            slot_picks: [0.0; 6],
+                            slot_wins: [0.0; 6],
+                            core_stats: BTreeMap::new(),
+                        }
+                    } else {
+                        gauntlet_eval_weighted(
+                            dex_ref,
+                            &cand,
+                            eco_opps_ref,
+                            eco_weights_ref,
+                            &WeightedEvalCfg {
+                                games_per_opponent: eval_games,
+                                agent_iters,
+                                c: agent_c,
+                                max_turns,
+                                seed: wave_seed ^ 0x5A5A_A5A5_u64,
+                                threads: inner_threads,
+                                blind_pool: bp,
+                                open_sheet,
+                            },
+                        )
+                    };
+                    (s, bench_res, eco_res)
+                }));
+            }
+            for h in handles {
+                let (s, bench_res, eco_res) = h.join().expect("kodoku eval thread panicked");
+                let bench_score = bench_res.score;
+                let eco_score = eco_res.score;
+                let wave_score = 0.70 * bench_score + 0.30 * eco_score;
+                s.bench_games += bench_n_games;
+                s.bench_wins += bench_score * bench_n_games;
+                s.eco_games += eco_n_games;
+                s.eco_wins += eco_score * eco_n_games;
+                for slot in 0..6 {
+                    let wp = bench_res.slot_picks[slot] * bench_n_games
+                        + eco_res.slot_picks[slot] * eco_n_games;
+                    let ww = bench_res.slot_wins[slot] * bench_n_games
+                        + eco_res.slot_wins[slot] * eco_n_games;
+                    s.last_wave_slot_picks[slot] = wp / total_w_games.max(1.0);
+                    s.slot_picks[slot] += wp;
+                    s.slot_wins[slot] += ww;
+                }
+                s.effective_cores = 0.70 * bench_res.effective_cores()
+                    + 0.30 * eco_res.effective_cores();
+                s.last_wave_fit = wave_score;
+            }
+        });
+
+        let wave_scores_by_id: BTreeMap<String, f64> = ledger
+            .active_strains
+            .iter()
+            .map(|s| (s.id.clone(), s.last_wave_fit))
+            .collect();
+
+        for s in &mut ledger.active_strains {
+            if s.cum_games == 0.0 {
+                if let Some(&p_wave) = wave_scores_by_id.get(&s.parent_id) {
+                    s.parent_prior = p_wave;
+                }
+            }
+            // Active-Pick Deconfounding: unpicked single-slot mutation cannot claim positive wave delta
+            let mut effective_wave_score = s.last_wave_fit;
+            if s.cum_games == 0.0 && !s.last_op.starts_with("level-tweak") {
+                if let Some((_op, slot_str)) = s.last_op.split_once('@') {
+                    if let Ok(mut_slot) = slot_str.parse::<usize>() {
+                        if mut_slot < 6
+                            && s.last_wave_slot_picks[mut_slot] <= 1e-6
+                            && effective_wave_score > s.parent_prior
+                        {
+                            effective_wave_score = s.parent_prior;
+                        }
+                    }
+                }
+            }
+            s.last_wave_fit = effective_wave_score;
+            s.cum_games += total_w_games;
+            s.cum_wins += effective_wave_score * total_w_games;
+            s.recompute_stats(prior_games);
+        }
+
+        ledger.active_strains.sort_by(|a, b| {
+            b.bayes_fit
+                .partial_cmp(&a.bayes_fit)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        let wave_secs = t_wave.elapsed().as_secs_f64();
+        waves_this_run += 1;
+        avg_wave_secs = if waves_this_run == 1 {
+            wave_secs
+        } else {
+            0.7 * avg_wave_secs + 0.3 * wave_secs
+        };
+
+        let u_bar: f64 = ledger
+            .active_strains
+            .iter()
+            .map(|s| s.bayes_fit)
+            .sum::<f64>()
+            / (ledger.active_strains.len().max(1) as f64);
+        let top = &ledger.active_strains[0];
+        let hitchhikers = (0..6)
+            .filter(|&i| top.slot_picks[i] / top.cum_games.max(1.0) < 0.08)
+            .count();
+        eprintln!(
+            "[kodoku wave {w}] ({wave_secs:.0}s) mean_fit={u_bar:.3} | #1={} (parent={}, op={}, bayes={:.3}, raw={:.3}, K_eff={:.2}, hitchhikers={}, games={:.0})",
+            top.id,
+            top.parent_id,
+            top.last_op,
+            top.bayes_fit,
+            top.cum_wins / top.cum_games.max(1.0),
+            top.effective_cores,
+            hitchhikers,
+            top.cum_games,
+        );
+
+        ledger.wave_history.push(WaveSummary {
+            wave: w,
+            mean_payoff: u_bar,
+            top_strain_id: top.id.clone(),
+            top_abundance: top.abundance,
+            top_bayes_fit: top.bayes_fit,
+            top_lcb95: top.lcb95,
+            active_count: ledger.active_strains.len(),
+            archived_count: ledger.archived_strains.len(),
+        });
+        ledger.wave = w;
+        ledger.rng = rng.0;
+        write_json_atomic(&ledger_path, &ledger);
+    }
+
+    // Export top Kodoku elites with full per-slot vitality telemetry
+    let mut all_measured: Vec<Strain> = ledger
+        .active_strains
+        .iter()
+        .chain(ledger.archived_strains.iter())
+        .filter(|s| s.cum_games >= 24.0)
+        .cloned()
+        .collect();
+    all_measured.sort_by(|a, b| b.bayes_fit.partial_cmp(&a.bayes_fit).unwrap());
+
+    let mut elite_json = Vec::new();
+    let mut seen_k = BTreeSet::new();
+    for s in all_measured.into_iter().take(carry * 2) {
+        let k = team_key(&s.team);
+        if !seen_k.insert(k) {
+            continue;
+        }
+        let g = s.cum_games.max(1.0);
+        let slot_telemetry: Vec<Value> = (0..s.team.len().min(6))
+            .map(|i| {
+                let sp = s.team[i]["species"].as_str().unwrap_or("?");
+                let lv = s.team[i]["level"].as_u64().unwrap_or(50);
+                let p_i = s.slot_picks[i] / g;
+                let w_i = if s.slot_picks[i] > 0.0 {
+                    s.slot_wins[i] / s.slot_picks[i]
+                } else {
+                    0.0
+                };
+                json!({
+                    "slot": i,
+                    "species": sp,
+                    "level": lv,
+                    "pick_rate": p_i,
+                    "cond_winrate": w_i,
+                    "vitality": s.slot_wins[i] / g,
+                })
+            })
+            .collect();
+        elite_json.push(json!({
+            "id": s.id,
+            "parent_id": s.parent_id,
+            "born_wave": s.born_wave,
+            "last_op": s.last_op,
+            "cum_games": s.cum_games,
+            "raw_winrate": s.cum_wins / g,
+            "bayes_winrate": s.bayes_fit,
+            "lcb95": s.lcb95,
+            "bench_games": s.bench_games,
+            "bench_wins": s.bench_wins,
+            "bench_winrate": s.bench_wins / s.bench_games.max(1.0),
+            "effective_cores": s.effective_cores,
+            "slot_telemetry": slot_telemetry,
+            "weight": 1.0,
+            "drawWeight": 1.0,
+            "sets": s.team,
+        }));
+    }
+    let out_val = json!({
+        "format": "nc2000-kodoku-elites-v1",
+        "waves": ledger.wave,
+        "open_sheet": open_sheet,
+        "teams": elite_json,
+    });
+    write_json_atomic(&elites_path, &out_val);
+    println!(
+        "Saved {} Kodoku elites -> {}",
+        out_val["teams"].as_array().unwrap().len(),
+        elites_path.display()
+    );
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let sub = args
@@ -2151,8 +2933,10 @@ fn main() {
         "verify-nash" => cmd_verify_nash(&args[1..]),
         "update-ring" => cmd_update_ring(&args[1..]),
         "update-pool" => cmd_update_pool(&args[1..]),
+        "tomography" => cmd_tomography(&args[1..]),
+        "kodoku" => cmd_kodoku(&args[1..]),
         other => panic!(
-            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring | update-pool)"
+            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring | update-pool | tomography | kodoku)"
         ),
     }
 }
