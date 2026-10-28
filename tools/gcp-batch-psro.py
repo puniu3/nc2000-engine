@@ -507,12 +507,16 @@ def cmd_submit_eco(args: argparse.Namespace) -> None:
     for k in range(args.islands):
         global_idx = args.island_offset + k
         niches = ";".join(f"f{b}-i{global_idx:02d}||" for b in range(4))
+        # Environmental isolation gradient across the 12 islands:
+        # Island 00 (0.15 = 85% Master Pool / 15% local) -> Island 11 (0.81 = 19% Master Pool / 81% local)
+        env_w = round(0.15 + 0.06 * (global_idx % 12), 2)
         islands.append(
             {
                 "name": f"island-r{args.round}-{global_idx:02d}",
                 "niches": niches,
                 "seed": args.seed_base + args.round * 100003 + global_idx * 9973,
                 "gauntlet": args.gauntlet_file,
+                "env_self_weight": env_w,
             }
         )
 
@@ -580,7 +584,7 @@ cmd = [
     "--buds", "{args.buds}",
     "--eval-games", "{args.eval_games}",
     "--eta", "{args.eta}",
-    "--env-self-weight", "{args.env_self_weight}",
+    "--env-self-weight", str(cfg.get("env_self_weight", "{args.env_self_weight}")),
     "--seed", str(cfg["seed"]),
     "--threads", "{args.threads_per_task}",
     "--out", "/mnt/disks/gcs/{GCS_PREFIX}/eco-r{args.round}/islands",

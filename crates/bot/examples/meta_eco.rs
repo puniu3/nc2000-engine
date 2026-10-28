@@ -384,7 +384,13 @@ fn cmd_evolve_island(args: &[String]) {
                             if reset_bench {
                                 prev.archived_strains.clear();
                             }
+                            let mut upgrade_rng = SplitMix64::new(prev.rng ^ 0xD0AD_CAFE_u64);
                             for s in &mut prev.active_strains {
+                                let mut upgraded = s.team.clone();
+                                gen.optimize_team_dominance(&dex, &mut upgraded, &mut upgrade_rng);
+                                if let Some(canon) = gen.canonize(&dex, &upgraded) {
+                                    s.team = canon;
+                                }
                                 if reset_bench {
                                     s.bench_games = 0.0;
                                     s.bench_wins = 0.0;
@@ -874,7 +880,7 @@ fn collect_all_strains(in_dir: &Path, min_games: f64) -> Vec<Strain> {
             .into_iter()
             .chain(ledger.archived_strains.into_iter())
         {
-            if s.cum_games < min_games {
+            if s.cum_games < min_games || s.bench_games < 48.0 {
                 continue;
             }
             let k = team_key(&s.team);
@@ -893,9 +899,8 @@ fn collect_all_strains(in_dir: &Path, min_games: f64) -> Vec<Strain> {
         }
     }
     let mut out: Vec<Strain> = by_key.into_values().collect();
-    // Sort by lower confidence bound (blending external benchmark LCB95 and overall LCB95)
-    // so multi-wave proven veterans (e.g. n=500..1000) always outrank noisy small-sample
-    // offspring until the offspring also accumulate high game counts.
+    // Sort by lower confidence bound (prioritizing external Master Pool LCB95 at 80%
+    // and overall island+benchmark LCB95 at 20%).
     let strain_quality = |s: &Strain| -> f64 {
         let bench_lcb95 = if s.bench_games > 0.0 {
             let p = (s.bench_wins + 16.0 * 0.40) / (s.bench_games + 16.0);
@@ -904,7 +909,7 @@ fn collect_all_strains(in_dir: &Path, min_games: f64) -> Vec<Strain> {
         } else {
             s.lcb95
         };
-        0.55 * bench_lcb95 + 0.45 * s.lcb95
+        0.80 * bench_lcb95 + 0.20 * s.lcb95
     };
     out.sort_by(|a, b| {
         strain_quality(b)

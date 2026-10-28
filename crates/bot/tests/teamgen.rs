@@ -151,10 +151,15 @@ fn gauntlet_eval_is_thread_count_invariant() {
 #[test]
 fn provable_dominance_and_preadaptation_rules_hold() {
     let (dex, gen, ls) = load();
-    // 1. 90 unconditionally dominated species pruned -> 156 kept
-    assert_eq!(gen.non_dominated_species().len(), 156);
+    // 1. 109 unconditionally dominated species (including type-adding pre-evolutions) pruned -> 137 kept
+    assert_eq!(gen.non_dominated_species().len(), 137);
     assert!(!gen.non_dominated_species().contains(&"bulbasaur".to_string()));
     assert!(!gen.non_dominated_species().contains(&"ivysaur".to_string()));
+    assert!(!gen.non_dominated_species().contains(&"metapod".to_string()));
+    assert!(!gen.non_dominated_species().contains(&"charmeleon".to_string()));
+    assert!(!gen.non_dominated_species().contains(&"dragonair".to_string()));
+    assert!(!gen.non_dominated_species().contains(&"pineco".to_string()));
+    assert!(!gen.non_dominated_species().contains(&"seadra".to_string()));
     assert!(gen.non_dominated_species().contains(&"venusaur".to_string()));
     // Special-item holders are kept even if pre-evolutions
     assert!(gen.non_dominated_species().contains(&"pikachu".to_string()));

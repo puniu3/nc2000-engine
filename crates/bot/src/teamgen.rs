@@ -359,6 +359,16 @@ impl TeamGen {
         let mut species_dominators: BTreeMap<String, Vec<String>> = BTreeMap::new();
         let mut unconditionally_dominated: BTreeSet<String> = BTreeSet::new();
 
+        let larval_evolutions: BTreeMap<&str, &str> = [
+            ("metapod", "butterfree"),
+            ("kakuna", "beedrill"),
+            ("poliwhirl", "poliwrath"),
+            ("remoraid", "octillery"),
+            ("onix", "steelix"),
+        ]
+        .into_iter()
+        .collect();
+
         for a in &all_species {
             if special_item_holders.contains(a.as_str()) {
                 continue;
@@ -367,12 +377,28 @@ impl TeamGen {
             let ls_a = ls.species(a).unwrap();
             let moves_a: BTreeSet<&String> = ls_a.moves.iter().collect();
             let mut doms: Vec<(i32, String)> = Vec::new();
+            if let Some(&evo) = larval_evolutions.get(a.as_str()) {
+                if let Some(sp_id) = dex.species.id(evo) {
+                    let sp_b = dex.species.get(sp_id);
+                    let bst = (sp_b.base_stats.hp as i32)
+                        + (sp_b.base_stats.atk as i32)
+                        + (sp_b.base_stats.def as i32)
+                        + (sp_b.base_stats.spa as i32)
+                        + (sp_b.base_stats.spd as i32)
+                        + (sp_b.base_stats.spe as i32);
+                    doms.push((bst + 1000, evo.to_string()));
+                    unconditionally_dominated.insert(a.clone());
+                }
+            }
             for b in &all_species {
                 if a == b {
                     continue;
                 }
                 let sp_b = dex.species.get(dex.species.id(b).unwrap());
-                if sp_a.types != sp_b.types {
+                let ls_b = ls.species(b).unwrap();
+                let moves_b: BTreeSet<&String> = ls_b.moves.iter().collect();
+                let is_direct_evo = moves_a.len() >= 3 && moves_a.is_subset(&moves_b);
+                if sp_a.types != sp_b.types && !is_direct_evo {
                     continue;
                 }
                 let bs_a = [
@@ -394,11 +420,11 @@ impl TeamGen {
                 if bs_b.iter().zip(&bs_a).all(|(x, y)| x >= y)
                     && bs_b.iter().zip(&bs_a).any(|(x, y)| x > y)
                 {
-                    let ls_b = ls.species(b).unwrap();
                     let bst: i32 = bs_b.iter().map(|&x| x as i32).sum();
-                    doms.push((bst, b.clone()));
-                    let moves_b: BTreeSet<&String> = ls_b.moves.iter().collect();
-                    if ls_b.min_level <= ls_a.min_level.max(50) && moves_a.is_subset(&moves_b) {
+                    // Prefer direct evolution first (e.g. Charmeleon -> Charizard)
+                    let prio = if is_direct_evo { bst + 500 } else { bst };
+                    doms.push((prio, b.clone()));
+                    if ls_b.min_level <= 55 && moves_a.is_subset(&moves_b) {
                         unconditionally_dominated.insert(a.clone());
                     }
                 }
@@ -480,8 +506,9 @@ impl TeamGen {
         for slot in 0..raw.len() {
             // 1. Set-level species dominance promotion
             let sid = species_id(&raw[slot]);
-            let level = set_level(&raw[slot]);
+            let mut level = set_level(&raw[slot]);
             let cur_moves = move_ids(&raw[slot]);
+            let is_uncond_dom = !self.species_ids.contains(&sid);
             if let Some(doms) = self.species_dominators.get(&sid) {
                 let teammates: Vec<String> = (0..raw.len())
                     .filter(|&i| i != slot)
@@ -493,14 +520,32 @@ impl TeamGen {
                     }
                     let Some(ls_dom) = self.ls.species(dom) else { continue };
                     if ls_dom.min_level > level {
-                        continue;
+                        if is_uncond_dom {
+                            if let Some(donor) = (0..raw.len()).find(|&i| {
+                                i != slot
+                                    && set_level(&raw[i]) >= ls_dom.min_level
+                                    && self
+                                        .ls
+                                        .species(&species_id(&raw[i]))
+                                        .is_none_or(|l| l.min_level.max(50) <= level)
+                            }) {
+                                let donor_lv = set_level(&raw[donor]);
+                                raw[donor]["level"] = json!(level);
+                                raw[slot]["level"] = json!(donor_lv);
+                                level = donor_lv;
+                            } else {
+                                continue;
+                            }
+                        } else {
+                            continue;
+                        }
                     }
                     let all_legal = cur_moves.iter().all(|m| {
                         let b = base_id(m);
                         ls_dom.allows(&b)
                             && ls_dom.move_min_level.get(b.as_str()).is_none_or(|&mn| level >= mn)
                     });
-                    if all_legal {
+                    if all_legal || is_uncond_dom {
                         let dom_name = dex.species.get(dex.species.id(dom).unwrap()).name.clone();
                         raw[slot]["species"] = json!(dom_name.clone());
                         raw[slot]["name"] = json!(dom_name);
@@ -1112,6 +1157,24 @@ impl TeamGen {
                     new_moves[i] = chosen;
                     changed = true;
                 }
+            }
+        }
+        while new_moves.len() < 4 {
+            let cands = self.non_dominated_moves(dex, &sid, level, &new_moves);
+            let cur_bases: BTreeSet<String> = new_moves.iter().map(|x| base_id(x)).collect();
+            let avail: Vec<&String> =
+                cands.iter().filter(|c| !cur_bases.contains(*c)).collect();
+            if let Some(&pick) = avail.get(rng.below(avail.len().max(1))) {
+                let chosen = if pick == "hiddenpower" {
+                    let hp = self.non_dominated_hp_types(dex, &sid, level);
+                    hp[rng.below(hp.len())].clone()
+                } else {
+                    pick.clone()
+                };
+                new_moves.push(chosen);
+                changed = true;
+            } else {
+                break;
             }
         }
         if changed {
