@@ -68,7 +68,11 @@ struct Strain {
     #[serde(default)]
     slot_wins: [f64; 6],
     #[serde(default)]
+    slot_marginals: [f64; 6],
+    #[serde(default)]
     last_wave_slot_picks: [f64; 6],
+    #[serde(default)]
+    last_wave_slot_marginals: [f64; 6],
     #[serde(default)]
     effective_cores: f64,
     team: Vec<Value>,
@@ -507,7 +511,9 @@ fn cmd_evolve_island(args: &[String]) {
                 lcb95: 0.0,
                 slot_picks: [0.0; 6],
                 slot_wins: [0.0; 6],
+                slot_marginals: [0.0; 6],
                 last_wave_slot_picks: [0.0; 6],
+                last_wave_slot_marginals: [0.0; 6],
                 effective_cores: 1.0,
                 team,
             });
@@ -1038,7 +1044,9 @@ fn bud_next_wave_by_niche(
                     lcb95: 0.0,
                     slot_picks: [0.0; 6],
                     slot_wins: [0.0; 6],
+                    slot_marginals: [0.0; 6],
                     last_wave_slot_picks: [0.0; 6],
+                    last_wave_slot_marginals: [0.0; 6],
                     effective_cores: 1.0,
                     team,
                 });
@@ -1085,11 +1093,12 @@ fn bud_next_wave_by_niche(
     for b_idx in 0..new_buds_needed {
         let p_idx = (born_wave as usize + b_idx) % num_parents;
         let parent = &survivors[p_idx];
-        if let Some(prop) = gen.propose_targeted(
+        if let Some(prop) = gen.propose_marginal_targeted(
             dex,
             &parent.team,
             &parent.slot_picks,
             &parent.slot_wins,
+            &parent.slot_marginals,
             rng,
             &free_constraint,
             150,
@@ -1119,7 +1128,9 @@ fn bud_next_wave_by_niche(
                     lcb95: 0.0,
                     slot_picks: [0.0; 6],
                     slot_wins: [0.0; 6],
+                    slot_marginals: [0.0; 6],
                     last_wave_slot_picks: [0.0; 6],
+                    last_wave_slot_marginals: [0.0; 6],
                     effective_cores: parent.effective_cores,
                     team: prop.team,
                 });
@@ -2580,7 +2591,9 @@ fn cmd_kodoku(args: &[String]) {
                     lcb95: 0.0,
                     slot_picks: [0.0; 6],
                     slot_wins: [0.0; 6],
+                    slot_marginals: [0.0; 6],
                     last_wave_slot_picks: [0.0; 6],
+                    last_wave_slot_marginals: [0.0; 6],
                     effective_cores: 1.0,
                     team: canon,
                 });
@@ -2680,8 +2693,21 @@ fn cmd_kodoku(args: &[String]) {
             }
         }
 
-        let bench_n_games = (eval_games as usize * slice_len) as f64;
-        let eco_n_games = (eval_games as usize * eco_opps.len()) as f64;
+        let screen_games: u32 = num(args, "--screen-games", 2);
+        let refine_games: u32 = num(args, "--refine-games", eval_games.max(2));
+        let support_k: usize = num(args, "--support", 3);
+        let use_core_nash = !args.iter().any(|a| a == "--legacy-eval");
+
+        let bench_n_games = if use_core_nash {
+            (refine_games as usize * support_k * support_k * slice_len) as f64
+        } else {
+            (eval_games as usize * slice_len) as f64
+        };
+        let eco_n_games = if use_core_nash {
+            (refine_games as usize * support_k * support_k * eco_opps.len()) as f64
+        } else {
+            (eval_games as usize * eco_opps.len()) as f64
+        };
         let total_w_games = bench_n_games + eco_n_games;
 
         let inner_threads = (threads / 4).max(2);
@@ -2696,33 +2722,77 @@ fn cmd_kodoku(args: &[String]) {
                 let bp = blind_pool.clone();
                 handles.push(scope.spawn(move || {
                     let cand = to_sets(&s.team).expect("valid strain team");
-                    let bench_res = gauntlet_eval_weighted(
-                        dex_ref,
-                        &cand,
-                        wb_teams_ref,
-                        wb_weights_ref,
-                        &WeightedEvalCfg {
-                            games_per_opponent: eval_games,
-                            agent_iters,
-                            c: agent_c,
-                            max_turns,
-                            seed: wave_seed ^ 0xA5A5_5A5A_u64,
-                            threads: inner_threads,
-                            blind_pool: bp.clone(),
-                            open_sheet,
-                        },
-                    );
-                    let eco_res = if eco_opps_ref.is_empty() {
-                        nc2000_bot::teamgen::EvalResult {
-                            score: bench_res.score,
-                            per_opponent: Vec::new(),
-                            games: 0,
-                            slot_picks: [0.0; 6],
-                            slot_wins: [0.0; 6],
-                            core_stats: BTreeMap::new(),
-                        }
+                    let (bench_res, bench_marg) = if use_core_nash {
+                        let r = core_nash_eval_weighted(
+                            dex_ref,
+                            &cand,
+                            wb_teams_ref,
+                            wb_weights_ref,
+                            &CoreNashGauntletCfg {
+                                screen_games,
+                                refine_games,
+                                support_k,
+                                agent_iters,
+                                c: agent_c,
+                                smoothing: 0.15,
+                                max_turns,
+                                seed: wave_seed ^ 0xA5A5_5A5A_u64,
+                                threads: inner_threads,
+                            },
+                        );
+                        (r.eval, r.slot_marginals)
                     } else {
-                        gauntlet_eval_weighted(
+                        let r = gauntlet_eval_weighted(
+                            dex_ref,
+                            &cand,
+                            wb_teams_ref,
+                            wb_weights_ref,
+                            &WeightedEvalCfg {
+                                games_per_opponent: eval_games,
+                                agent_iters,
+                                c: agent_c,
+                                max_turns,
+                                seed: wave_seed ^ 0xA5A5_5A5A_u64,
+                                threads: inner_threads,
+                                blind_pool: bp.clone(),
+                                open_sheet,
+                            },
+                        );
+                        (r, [0.0; 6])
+                    };
+                    let (eco_res, eco_marg) = if eco_opps_ref.is_empty() {
+                        (
+                            nc2000_bot::teamgen::EvalResult {
+                                score: bench_res.score,
+                                per_opponent: Vec::new(),
+                                games: 0,
+                                slot_picks: [0.0; 6],
+                                slot_wins: [0.0; 6],
+                                core_stats: BTreeMap::new(),
+                            },
+                            [0.0; 6],
+                        )
+                    } else if use_core_nash {
+                        let r = core_nash_eval_weighted(
+                            dex_ref,
+                            &cand,
+                            eco_opps_ref,
+                            eco_weights_ref,
+                            &CoreNashGauntletCfg {
+                                screen_games,
+                                refine_games,
+                                support_k,
+                                agent_iters,
+                                c: agent_c,
+                                smoothing: 0.15,
+                                max_turns,
+                                seed: wave_seed ^ 0x5A5A_A5A5_u64,
+                                threads: inner_threads,
+                            },
+                        );
+                        (r.eval, r.slot_marginals)
+                    } else {
+                        let r = gauntlet_eval_weighted(
                             dex_ref,
                             &cand,
                             eco_opps_ref,
@@ -2737,13 +2807,15 @@ fn cmd_kodoku(args: &[String]) {
                                 blind_pool: bp,
                                 open_sheet,
                             },
-                        )
+                        );
+                        (r, [0.0; 6])
                     };
-                    (s, bench_res, eco_res)
+                    (s, bench_res, bench_marg, eco_res, eco_marg)
                 }));
             }
             for h in handles {
-                let (s, bench_res, eco_res) = h.join().expect("kodoku eval thread panicked");
+                let (s, bench_res, bench_marg, eco_res, eco_marg) =
+                    h.join().expect("kodoku eval thread panicked");
                 let bench_score = bench_res.score;
                 let eco_score = eco_res.score;
                 let wave_score = 0.70 * bench_score + 0.30 * eco_score;
@@ -2756,9 +2828,13 @@ fn cmd_kodoku(args: &[String]) {
                         + eco_res.slot_picks[slot] * eco_n_games;
                     let ww = bench_res.slot_wins[slot] * bench_n_games
                         + eco_res.slot_wins[slot] * eco_n_games;
+                    let wm = bench_marg[slot] * bench_n_games
+                        + eco_marg[slot] * eco_n_games;
                     s.last_wave_slot_picks[slot] = wp / total_w_games.max(1.0);
+                    s.last_wave_slot_marginals[slot] = wm / total_w_games.max(1.0);
                     s.slot_picks[slot] += wp;
                     s.slot_wins[slot] += ww;
+                    s.slot_marginals[slot] += wm;
                 }
                 s.effective_cores = 0.70 * bench_res.effective_cores()
                     + 0.30 * eco_res.effective_cores();
@@ -2819,19 +2895,29 @@ fn cmd_kodoku(args: &[String]) {
             .sum::<f64>()
             / (ledger.active_strains.len().max(1) as f64);
         let top = &ledger.active_strains[0];
+        let top_g = top.cum_games.max(1.0);
         let hitchhikers = (0..6)
-            .filter(|&i| top.slot_picks[i] / top.cum_games.max(1.0) < 0.08)
+            .filter(|&i| top.slot_picks[i] / top_g < 0.08 && top.slot_marginals[i] / top_g < 0.008)
             .count();
+        let slot_summary: Vec<String> = (0..top.team.len().min(6))
+            .map(|i| {
+                let sp = top.team[i]["species"].as_str().unwrap_or("?");
+                let p_i = top.slot_picks[i] / top_g * 100.0;
+                let dv_i = top.slot_marginals[i] / top_g * 100.0;
+                format!("{sp}(p={p_i:.0}%,dV={dv_i:+.1}pt)")
+            })
+            .collect();
         eprintln!(
-            "[kodoku wave {w}] ({wave_secs:.0}s) mean_fit={u_bar:.3} | #1={} (parent={}, op={}, bayes={:.3}, raw={:.3}, K_eff={:.2}, hitchhikers={}, games={:.0})",
+            "[kodoku wave {w}] ({wave_secs:.0}s) mean_fit={u_bar:.3} | #1={} (parent={}, op={}, bayes={:.3}, raw={:.3}, K_eff={:.2}, hitchhikers={}, games={:.0})\n  #1 slots: {}",
             top.id,
             top.parent_id,
             top.last_op,
             top.bayes_fit,
-            top.cum_wins / top.cum_games.max(1.0),
+            top.cum_wins / top_g,
             top.effective_cores,
             hitchhikers,
             top.cum_games,
+            slot_summary.join(" | "),
         );
 
         ledger.wave_history.push(WaveSummary {
@@ -2849,7 +2935,7 @@ fn cmd_kodoku(args: &[String]) {
         write_json_atomic(&ledger_path, &ledger);
     }
 
-    // Export top Kodoku elites with full per-slot vitality telemetry
+    // Export top Kodoku elites with full per-slot vitality + marginal value telemetry
     let mut all_measured: Vec<Strain> = ledger
         .active_strains
         .iter()
@@ -2877,6 +2963,7 @@ fn cmd_kodoku(args: &[String]) {
                 } else {
                     0.0
                 };
+                let dv_i = s.slot_marginals[i] / g;
                 json!({
                     "slot": i,
                     "species": sp,
@@ -2884,6 +2971,7 @@ fn cmd_kodoku(args: &[String]) {
                     "pick_rate": p_i,
                     "cond_winrate": w_i,
                     "vitality": s.slot_wins[i] / g,
+                    "marginal_value": dv_i,
                 })
             })
             .collect();
@@ -3029,6 +3117,314 @@ fn subset_3_sets(sets: &[PokemonSet], triple: [u8; 3]) -> Vec<PokemonSet> {
         sets[(triple[1] - 1) as usize].clone(),
         sets[(triple[2] - 1) as usize].clone(),
     ]
+}
+
+struct CoreNashGauntletCfg {
+    screen_games: u32,
+    refine_games: u32,
+    support_k: usize,
+    agent_iters: u32,
+    c: f64,
+    smoothing: f64,
+    max_turns: u16,
+    seed: u64,
+    threads: usize,
+}
+
+struct CoreNashEvalResult {
+    eval: nc2000_bot::teamgen::EvalResult,
+    slot_marginals: [f64; 6],
+}
+
+/// Evaluate a candidate 6-mon party against a weighted opponent gauntlet via Two-Stage
+/// Forced-Preview 6v6 Core-Nash (`RolloutAgent` screen -> top-k + leave-one-out coverage
+/// support -> `OpenAgent` with `Bayesian-Nash-6v6` hidden bench).
+/// Returns exact per-opponent Nash values, per-slot Nash pick share `p_i^*`, conditional
+/// winrate `w_i^*`, and leave-one-out marginal contribution `\Delta V_{-i}` with zero extra
+/// battle simulations.
+fn core_nash_eval_weighted(
+    dex: &Dex,
+    cand: &[PokemonSet],
+    opps: &[Vec<PokemonSet>],
+    weights: &[f64],
+    cfg: &CoreNashGauntletCfg,
+) -> CoreNashEvalResult {
+    use nc2000_bot::preview::{legal_action_indices, preview_actions, MatrixEst, RolloutAgent};
+    use nc2000_bot::smmcts::{solve_rm_plus, SelRule};
+    use nc2000_bot::{OpenAgent, RmConfig};
+
+    if opps.is_empty() {
+        return CoreNashEvalResult {
+            eval: nc2000_bot::teamgen::EvalResult {
+                score: 0.5,
+                per_opponent: Vec::new(),
+                games: 0,
+                slot_picks: [0.0; 6],
+                slot_wins: [0.0; 6],
+                core_stats: BTreeMap::new(),
+            },
+            slot_marginals: [0.0; 6],
+        };
+    }
+
+    let actions = preview_actions();
+    let levels_a: Vec<u8> = cand.iter().map(|s| s.level).collect();
+    let legal_a = legal_action_indices(&actions, &levels_a);
+
+    let w_sum: f64 = weights.iter().sum::<f64>().max(1e-12);
+    let mut total_score = 0.0f64;
+    let mut per_opponent = Vec::with_capacity(opps.len());
+    let mut slot_picks = [0.0f64; 6];
+    let mut slot_wins = [0.0f64; 6];
+    let mut slot_marginals = [0.0f64; 6];
+    let mut core_stats: BTreeMap<u8, (f64, f64)> = BTreeMap::new();
+    let mut total_games = 0u32;
+
+    for (m, opp) in opps.iter().enumerate() {
+        let w_m = weights.get(m).copied().unwrap_or(1.0) / w_sum;
+        let opp_seed = cfg.seed ^ ((m as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15));
+        let levels_b: Vec<u8> = opp.iter().map(|s| s.level).collect();
+        let legal_b = legal_action_indices(&actions, &levels_b);
+
+        // Stage 1: Full-width Rollout screening on legal_a x legal_b
+        let mut screen_jobs = Vec::with_capacity(legal_a.len() * legal_b.len() * cfg.screen_games as usize);
+        for &a in &legal_a {
+            for &b in &legal_b {
+                push_core_jobs(
+                    &mut screen_jobs,
+                    a * 60 + b,
+                    actions[a],
+                    actions[b],
+                    cfg.screen_games.max(1),
+                    opp_seed ^ 0x5C4E,
+                );
+            }
+        }
+        let screen_res = run_forced_preview_games(
+            dex,
+            cand,
+            opp,
+            &screen_jobs,
+            cfg.threads,
+            cfg.max_turns,
+            &|_, _, _, sa, sb| {
+                (
+                    Box::new(RolloutAgent::new(0.2, sa)),
+                    Box::new(RolloutAgent::new(0.2, sb)),
+                )
+            },
+            false,
+        );
+        let mut screen = MatrixEst::new(60, 60);
+        for (cell, sc) in screen_res {
+            screen.record(cell, sc);
+        }
+        let screen_ref = &screen;
+        let sub: Vec<f64> = legal_a
+            .iter()
+            .flat_map(|&a| legal_b.iter().map(move |&b| screen_ref.at(a, b)))
+            .collect();
+        let (e0, e1) = solve_rm_plus(&sub, [legal_a.len(), legal_b.len()], 8_000);
+
+        let u_a: Vec<f64> = legal_a
+            .iter()
+            .map(|&a| {
+                legal_b
+                    .iter()
+                    .zip(&e1)
+                    .map(|(&b, &wb)| screen.at(a, b) * wb)
+                    .sum()
+            })
+            .collect();
+        let u_b: Vec<f64> = legal_b
+            .iter()
+            .map(|&b| {
+                legal_a
+                    .iter()
+                    .zip(&e0)
+                    .map(|(&a, &wa)| (1.0 - screen.at(a, b)) * wa)
+                    .sum()
+            })
+            .collect();
+
+        let select_top_k = |legal: &[usize], eq: &[f64], br: &[f64], k: usize| -> Vec<usize> {
+            let mut order: Vec<usize> = (0..legal.len()).collect();
+            order.sort_by(|&i, &j| {
+                let si = (eq[i] >= 0.01, eq[i] + 0.05 * br[i]);
+                let sj = (eq[j] >= 0.01, eq[j] + 0.05 * br[j]);
+                sj.0.cmp(&si.0).then_with(|| sj.1.partial_cmp(&si.1).unwrap())
+            });
+            order.into_iter().take(k.min(legal.len())).map(|i| legal[i]).collect()
+        };
+
+        let sup_a = select_top_k(&legal_a, &e0, &u_a, cfg.support_k);
+        let sup_b = select_top_k(&legal_b, &e1, &u_b, cfg.support_k);
+
+        let mut p_a_s1 = vec![0.0f64; 60];
+        let mut p_b_s1 = vec![0.0f64; 60];
+        for (ia, &a) in legal_a.iter().enumerate() {
+            p_a_s1[a] = e0[ia];
+        }
+        for (ib, &b) in legal_b.iter().enumerate() {
+            p_b_s1[b] = e1[ib];
+        }
+
+        // Stage 2: Strictly symmetric k x k Forced-Preview 6v6 OpenAgent with Bayesian-Nash-6v6 bench
+        let ka = sup_a.len();
+        let kb = sup_b.len();
+        let mut refine_jobs = Vec::with_capacity(ka * kb * cfg.refine_games as usize);
+        for ia in 0..ka {
+            for ib in 0..kb {
+                push_core_jobs(
+                    &mut refine_jobs,
+                    ia * kb + ib,
+                    actions[sup_a[ia]],
+                    actions[sup_b[ib]],
+                    cfg.refine_games.max(2),
+                    opp_seed ^ 0x2222,
+                );
+            }
+        }
+        let rm_cfg = RmConfig {
+            iterations: cfg.agent_iters,
+            c: cfg.c,
+            rule: SelRule::Ucb,
+            ..RmConfig::default()
+        };
+        let pa_ref = &p_a_s1;
+        let pb_ref = &p_b_s1;
+        let smoothing = cfg.smoothing;
+        let refine_res = run_forced_preview_games(
+            dex,
+            cand,
+            opp,
+            &refine_jobs,
+            cfg.threads,
+            cfg.max_turns,
+            &|b, side_a, side_b, sa, sb| {
+                let mut oa = OpenAgent::new(rm_cfg.clone(), None, sa)
+                    .with_opponent_pick_policy(pb_ref.clone(), smoothing);
+                let mut ob = OpenAgent::new(rm_cfg.clone(), None, sb)
+                    .with_opponent_pick_policy(pa_ref.clone(), smoothing);
+                oa.init_at_preview(b, side_a);
+                ob.init_at_preview(b, side_b);
+                (Box::new(oa), Box::new(ob))
+            },
+            true,
+        );
+        total_games += refine_jobs.len() as u32;
+
+        let mut mat = MatrixEst::new(ka, kb);
+        for (cell, sc) in refine_res {
+            mat.record(cell, sc);
+        }
+        let (x_star, y_star) = solve_rm_plus(&mat.v, [ka, kb], 10_000);
+        let v_star: f64 = (0..ka)
+            .map(|ia| {
+                (0..kb)
+                    .map(|ib| mat.at(ia, ib) * x_star[ia] * y_star[ib])
+                    .sum::<f64>()
+            })
+            .sum();
+
+        // Calibrate Stage-2 minus Stage-1 offset on the evaluated k x k support
+        let mut s2_s1_diff = 0.0f64;
+        for ia in 0..ka {
+            for ib in 0..kb {
+                s2_s1_diff += mat.at(ia, ib) - screen.at(sup_a[ia], sup_b[ib]);
+            }
+        }
+        let s2_s1_offset = s2_s1_diff / ((ka * kb).max(1) as f64);
+
+        total_score += w_m * v_star;
+        per_opponent.push(v_star);
+
+        for ia in 0..ka {
+            let p_row = x_star[ia];
+            if p_row <= 1e-9 {
+                continue;
+            }
+            let ev_row: f64 = (0..kb).map(|ib| mat.at(ia, ib) * y_star[ib]).sum();
+            let triple = actions[sup_a[ia]];
+            let mut mask = 0u8;
+            for &s1 in &triple {
+                let s = (s1 - 1) as usize;
+                slot_picks[s] += w_m * p_row;
+                slot_wins[s] += w_m * p_row * ev_row;
+                mask |= 1u8 << s;
+            }
+            let entry = core_stats.entry(mask).or_insert((0.0, 0.0));
+            entry.0 += w_m * p_row;
+            entry.1 += w_m * p_row * ev_row;
+        }
+
+        // Exact Leave-One-Out Marginal Contribution \Delta V_{-s}^{(m)}
+        for s in 0..6usize {
+            let s1 = (s + 1) as u8;
+            let rem_rows: Vec<usize> = (0..ka)
+                .filter(|&ia| !actions[sup_a[ia]].contains(&s1))
+                .collect();
+            let v_minus_s = if !rem_rows.is_empty() {
+                let mat_ref = &mat;
+                let sub_m: Vec<f64> = rem_rows
+                    .iter()
+                    .flat_map(|&ia| (0..kb).map(move |ib| mat_ref.at(ia, ib)))
+                    .collect();
+                let (xr, yr) = solve_rm_plus(&sub_m, [rem_rows.len(), kb], 8_000);
+                (0..rem_rows.len())
+                    .map(|ir| {
+                        (0..kb)
+                            .map(|ib| sub_m[ir * kb + ib] * xr[ir] * yr[ib])
+                            .sum::<f64>()
+                    })
+                    .sum()
+            } else {
+                // Slot `s` appears in 100% of top-k rows; use Stage-1 screen rows without `s`
+                // against `sup_b`, calibrated by `s2_s1_offset`.
+                let rem_s1: Vec<usize> = legal_a
+                    .iter()
+                    .copied()
+                    .filter(|&a| !actions[a].contains(&s1))
+                    .collect();
+                if rem_s1.is_empty() {
+                    0.0
+                } else {
+                    let screen_ref = &screen;
+                    let sup_b_ref = &sup_b;
+                    let sub_s1: Vec<f64> = rem_s1
+                        .iter()
+                        .flat_map(|&a| {
+                            sup_b_ref
+                                .iter()
+                                .map(move |&b| (screen_ref.at(a, b) + s2_s1_offset).clamp(0.0, 1.0))
+                        })
+                        .collect();
+                    let (xr, yr) = solve_rm_plus(&sub_s1, [rem_s1.len(), kb], 8_000);
+                    (0..rem_s1.len())
+                        .map(|ir| {
+                            (0..kb)
+                                .map(|ib| sub_s1[ir * kb + ib] * xr[ir] * yr[ib])
+                                .sum::<f64>()
+                        })
+                        .sum()
+                }
+            };
+            let dv = (v_star - v_minus_s).max(0.0);
+            slot_marginals[s] += w_m * dv;
+        }
+    }
+
+    CoreNashEvalResult {
+        eval: nc2000_bot::teamgen::EvalResult {
+            score: total_score,
+            per_opponent,
+            games: total_games as usize,
+            slot_picks,
+            slot_wins,
+            core_stats,
+        },
+        slot_marginals,
+    }
 }
 
 /// Core-Nash Decomposition & Shadow-Context Verification (`meta_eco core-nash`):

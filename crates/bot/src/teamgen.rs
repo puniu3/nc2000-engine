@@ -730,6 +730,164 @@ impl TeamGen {
         None
     }
 
+    /// Propose a mutation driven directly by per-slot Nash equilibrium marginal
+    /// value `W_i = \Delta V_{-i}` and Nash pick rate `p_i^*`:
+    /// - Hitchhikers (`W_i < 0.008` and `p_i^* < 0.10`) receive exponential Boltzmann
+    ///   targeting priority and a 75% `SpeciesSwap` replacement rate.
+    /// - Low-marginal flex/counter slots (`W_i < 0.045`) receive balanced species/kit tuning.
+    /// - High-marginal core pillars (`W_i >= 0.045`) are protected from `SpeciesSwap` and
+    ///   only receive rare `MoveSwap` / `ItemSwap` / `LevelTweak` refinements.
+    pub fn propose_marginal_targeted(
+        &self,
+        dex: &Dex,
+        parent: &[Value],
+        slot_picks: &[f64; 6],
+        slot_wins: &[f64; 6],
+        slot_marginals: &[f64; 6],
+        rng: &mut SplitMix64,
+        constraint: &NicheConstraint,
+        tries: usize,
+    ) -> Option<Proposal> {
+        let pick_sum: f64 = slot_picks.iter().sum();
+        let marg_sum: f64 = slot_marginals.iter().sum();
+        if pick_sum <= 1e-6 || marg_sum <= 1e-6 {
+            return self.propose_targeted(dex, parent, slot_picks, slot_wins, rng, constraint, tries);
+        }
+        let n_games = (pick_sum / 3.0).max(1e-6);
+        let mut p_norm = [0.0f64; 6];
+        let mut w_marg = [0.0f64; 6];
+        let mut slot_w = [1.0f64; 6];
+        for i in 0..6 {
+            p_norm[i] = (slot_picks[i] / n_games).clamp(0.0, 1.0);
+            w_marg[i] = (slot_marginals[i] / n_games).clamp(0.0, 1.0);
+            let survival_val = w_marg[i] + 0.15 * p_norm[i];
+            let hitchhiker_boost = if w_marg[i] < 0.008 && p_norm[i] < 0.10 {
+                3.5
+            } else {
+                1.0
+            };
+            slot_w[i] = (-16.0 * survival_val).exp() * hitchhiker_boost;
+        }
+
+        let sample_slot = |rng: &mut SplitMix64, min_slot: usize| -> usize {
+            let start = min_slot.min(5);
+            let total: f64 = slot_w[start..6].iter().sum();
+            if total <= 1e-12 {
+                return start + rng.below(6 - start);
+            }
+            let mut u = rng.next_f64() * total;
+            for i in start..6 {
+                u -= slot_w[i];
+                if u <= 0.0 {
+                    return i;
+                }
+            }
+            5
+        };
+
+        for _ in 0..tries {
+            let step_roll = rng.below(20);
+            let num_steps = if step_roll < 14 {
+                1
+            } else if step_roll < 19 {
+                2
+            } else {
+                3
+            };
+            let mut raw = parent.to_vec();
+            let mut first_op = MutOp::MoveSwap;
+            let mut first_slot = 0usize;
+            let mut applied = 0usize;
+            for _ in 0..num_steps {
+                let target_slot = sample_slot(rng, 0);
+                let is_hitchhiker = w_marg[target_slot] < 0.008 && p_norm[target_slot] < 0.10;
+                let is_pillar = w_marg[target_slot] >= 0.045;
+                let roll = rng.below(20);
+                let op = if is_hitchhiker {
+                    // Verified hitchhiker (W_i ~ 0): 75% SpeciesSwap, 15% MoveSwap, 5% ItemSwap, 5% LevelTweak
+                    if roll < 15 {
+                        MutOp::SpeciesSwap
+                    } else if roll < 18 {
+                        MutOp::MoveSwap
+                    } else if roll < 19 {
+                        MutOp::ItemSwap
+                    } else {
+                        MutOp::LevelTweak
+                    }
+                } else if is_pillar {
+                    // Proven core pillar (W_i >= 4.5pt): 0% SpeciesSwap! 60% MoveSwap, 25% ItemSwap, 15% LevelTweak
+                    if roll < 12 {
+                        MutOp::MoveSwap
+                    } else if roll < 17 {
+                        MutOp::ItemSwap
+                    } else {
+                        MutOp::LevelTweak
+                    }
+                } else {
+                    // Low-marginal flex/counter slot: 40% SpeciesSwap, 35% MoveSwap, 15% ItemSwap, 10% LevelTweak
+                    if roll < 8 {
+                        MutOp::SpeciesSwap
+                    } else if roll < 15 {
+                        MutOp::MoveSwap
+                    } else if roll < 18 {
+                        MutOp::ItemSwap
+                    } else {
+                        MutOp::LevelTweak
+                    }
+                };
+                let slot = if op == MutOp::SpeciesSwap && target_slot < constraint.anchor_slots {
+                    if constraint.anchor_slots >= 6 {
+                        continue;
+                    }
+                    sample_slot(rng, constraint.anchor_slots)
+                } else {
+                    target_slot
+                };
+                let ok = match op {
+                    MutOp::MoveSwap => self.mut_move_swap(dex, &mut raw, slot, rng),
+                    MutOp::ItemSwap => self.mut_item_swap(dex, &mut raw, slot, rng),
+                    MutOp::LevelTweak => self.mut_level_tweak(&mut raw, slot, rng),
+                    MutOp::SpeciesSwap => self.mut_species_swap(dex, &mut raw, slot, rng),
+                    MutOp::DvTweak | MutOp::EvTweak | MutOp::MonReplace => unreachable!(),
+                };
+                if ok.is_some() {
+                    if applied == 0 {
+                        first_op = op;
+                        first_slot = slot;
+                    }
+                    applied += 1;
+                }
+            }
+            if applied == 0 {
+                continue;
+            }
+            let saved_anchors: Vec<String> = (0..constraint.anchor_slots.min(6))
+                .map(|i| species_id(&parent[i]))
+                .collect();
+            self.optimize_team_dominance(dex, &mut raw, rng);
+            for (i, orig_sid) in saved_anchors.iter().enumerate() {
+                if species_id(&raw[i]) != *orig_sid {
+                    let orig_name = dex.species.get(dex.species.id(orig_sid).unwrap()).name.clone();
+                    raw[i]["species"] = json!(orig_name.clone());
+                    raw[i]["name"] = json!(orig_name);
+                }
+            }
+            if !constraint.allows_team(&raw, Some(parent)) {
+                continue;
+            }
+            let Some(team) = self.canonize(dex, &raw) else { continue };
+            if team_key(&team) == team_key(parent) {
+                continue;
+            }
+            return Some(Proposal {
+                op: first_op,
+                slot: first_slot,
+                team,
+            });
+        }
+        None
+    }
+
     /// Vitality-inverse targeted mutation: biases slot selection toward
     /// low-vitality / hitchhiker slots (`v_i = slot_wins[i]`, `p_i = slot_picks[i]`)
     /// while preserving a positive exploration floor across all 6 slots.
