@@ -70,6 +70,10 @@ struct Strain {
     #[serde(default)]
     slot_marginals: [f64; 6],
     #[serde(default)]
+    slot_wars: [f64; 6],
+    #[serde(default)]
+    move_dqs: [[f64; 4]; 6],
+    #[serde(default)]
     last_wave_slot_picks: [f64; 6],
     #[serde(default)]
     last_wave_slot_marginals: [f64; 6],
@@ -99,6 +103,59 @@ impl Strain {
             .filter_map(|s| s["species"].as_str().map(toid))
             .collect()
     }
+}
+
+/// Endogenously calibrate the Replacement Level `\hat{\mu}_{pop}(L)` as a function of
+/// slot level `L \in [50, 55]` via OLS regression over all evaluated slots in `strains`
+/// (zero hand-coded level prior). Updates `s.slot_wars[i] = \Delta V_{-i} - \hat{\mu}_{pop}(L_i)`
+/// and returns `(mu_50, mu_55, beta_l)`.
+fn recompute_population_wars(strains: &mut [Strain]) -> (f64, f64, f64) {
+    let mut sum_l = 0.0f64;
+    let mut sum_m = 0.0f64;
+    let mut n = 0usize;
+    for s in strains.iter().filter(|s| s.cum_games > 0.0) {
+        let g = s.cum_games.max(1.0);
+        for i in 0..s.team.len().min(6) {
+            let lv = s.team[i]["level"].as_u64().unwrap_or(50) as f64;
+            let m = s.slot_marginals[i] / g;
+            sum_l += lv;
+            sum_m += m;
+            n += 1;
+        }
+    }
+    if n == 0 {
+        return (0.0, 0.0, 0.0);
+    }
+    let mean_l = sum_l / (n as f64);
+    let mean_m = sum_m / (n as f64);
+    let mut cov_lm = 0.0f64;
+    let mut var_l = 0.0f64;
+    for s in strains.iter().filter(|s| s.cum_games > 0.0) {
+        let g = s.cum_games.max(1.0);
+        for i in 0..s.team.len().min(6) {
+            let dl = (s.team[i]["level"].as_u64().unwrap_or(50) as f64) - mean_l;
+            let dm = (s.slot_marginals[i] / g) - mean_m;
+            cov_lm += dl * dm;
+            var_l += dl * dl;
+        }
+    }
+    let beta_l = if var_l > 1e-6 {
+        cov_lm / var_l
+    } else {
+        0.0
+    };
+    for s in strains.iter_mut().filter(|s| s.cum_games > 0.0) {
+        let g = s.cum_games.max(1.0);
+        for i in 0..s.team.len().min(6) {
+            let lv = s.team[i]["level"].as_u64().unwrap_or(50) as f64;
+            let m = s.slot_marginals[i] / g;
+            let rep_lv = mean_m + beta_l * (lv - mean_l);
+            s.slot_wars[i] = m - rep_lv;
+        }
+    }
+    let mu_50 = mean_m + beta_l * (50.0 - mean_l);
+    let mu_55 = mean_m + beta_l * (55.0 - mean_l);
+    (mu_50, mu_55, beta_l)
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -512,6 +569,8 @@ fn cmd_evolve_island(args: &[String]) {
                 slot_picks: [0.0; 6],
                 slot_wins: [0.0; 6],
                 slot_marginals: [0.0; 6],
+                slot_wars: [0.0; 6],
+                move_dqs: [[0.0; 4]; 6],
                 last_wave_slot_picks: [0.0; 6],
                 last_wave_slot_marginals: [0.0; 6],
                 effective_cores: 1.0,
@@ -875,6 +934,7 @@ fn bud_next_wave_by_niche(
     ledger: &mut IslandLedger,
     rng: &mut SplitMix64,
 ) {
+    recompute_population_wars(&mut ledger.active_strains);
     let mut seen_keys: BTreeSet<String> = BTreeSet::new();
 
     // Island-wide selection: separate active strains into 1-wave-old grace-period buds
@@ -1045,6 +1105,8 @@ fn bud_next_wave_by_niche(
                     slot_picks: [0.0; 6],
                     slot_wins: [0.0; 6],
                     slot_marginals: [0.0; 6],
+                    slot_wars: [0.0; 6],
+                    move_dqs: [[0.0; 4]; 6],
                     last_wave_slot_picks: [0.0; 6],
                     last_wave_slot_marginals: [0.0; 6],
                     effective_cores: 1.0,
@@ -1098,7 +1160,8 @@ fn bud_next_wave_by_niche(
             &parent.team,
             &parent.slot_picks,
             &parent.slot_wins,
-            &parent.slot_marginals,
+            &parent.slot_wars,
+            Some(&parent.move_dqs),
             rng,
             &free_constraint,
             150,
@@ -1129,6 +1192,8 @@ fn bud_next_wave_by_niche(
                     slot_picks: [0.0; 6],
                     slot_wins: [0.0; 6],
                     slot_marginals: [0.0; 6],
+                    slot_wars: [0.0; 6],
+                    move_dqs: [[0.0; 4]; 6],
                     last_wave_slot_picks: [0.0; 6],
                     last_wave_slot_marginals: [0.0; 6],
                     effective_cores: parent.effective_cores,
@@ -2592,6 +2657,8 @@ fn cmd_kodoku(args: &[String]) {
                     slot_picks: [0.0; 6],
                     slot_wins: [0.0; 6],
                     slot_marginals: [0.0; 6],
+                    slot_wars: [0.0; 6],
+                    move_dqs: [[0.0; 4]; 6],
                     last_wave_slot_picks: [0.0; 6],
                     last_wave_slot_marginals: [0.0; 6],
                     effective_cores: 1.0,
@@ -2722,7 +2789,7 @@ fn cmd_kodoku(args: &[String]) {
                 let bp = blind_pool.clone();
                 handles.push(scope.spawn(move || {
                     let cand = to_sets(&s.team).expect("valid strain team");
-                    let (bench_res, bench_marg) = if use_core_nash {
+                    let (bench_res, bench_marg, bench_mdq) = if use_core_nash {
                         let r = core_nash_eval_weighted(
                             dex_ref,
                             &cand,
@@ -2740,7 +2807,7 @@ fn cmd_kodoku(args: &[String]) {
                                 threads: inner_threads,
                             },
                         );
-                        (r.eval, r.slot_marginals)
+                        (r.eval, r.slot_marginals, r.move_dqs)
                     } else {
                         let r = gauntlet_eval_weighted(
                             dex_ref,
@@ -2758,9 +2825,9 @@ fn cmd_kodoku(args: &[String]) {
                                 open_sheet,
                             },
                         );
-                        (r, [0.0; 6])
+                        (r, [0.0; 6], [[0.0; 4]; 6])
                     };
-                    let (eco_res, eco_marg) = if eco_opps_ref.is_empty() {
+                    let (eco_res, eco_marg, eco_mdq) = if eco_opps_ref.is_empty() {
                         (
                             nc2000_bot::teamgen::EvalResult {
                                 score: bench_res.score,
@@ -2771,6 +2838,7 @@ fn cmd_kodoku(args: &[String]) {
                                 core_stats: BTreeMap::new(),
                             },
                             [0.0; 6],
+                            [[0.0; 4]; 6],
                         )
                     } else if use_core_nash {
                         let r = core_nash_eval_weighted(
@@ -2790,7 +2858,7 @@ fn cmd_kodoku(args: &[String]) {
                                 threads: inner_threads,
                             },
                         );
-                        (r.eval, r.slot_marginals)
+                        (r.eval, r.slot_marginals, r.move_dqs)
                     } else {
                         let r = gauntlet_eval_weighted(
                             dex_ref,
@@ -2808,17 +2876,19 @@ fn cmd_kodoku(args: &[String]) {
                                 open_sheet,
                             },
                         );
-                        (r, [0.0; 6])
+                        (r, [0.0; 6], [[0.0; 4]; 6])
                     };
-                    (s, bench_res, bench_marg, eco_res, eco_marg)
+                    (s, bench_res, bench_marg, bench_mdq, eco_res, eco_marg, eco_mdq)
                 }));
             }
             for h in handles {
-                let (s, bench_res, bench_marg, eco_res, eco_marg) =
+                let (s, bench_res, bench_marg, bench_mdq, eco_res, eco_marg, eco_mdq) =
                     h.join().expect("kodoku eval thread panicked");
                 let bench_score = bench_res.score;
                 let eco_score = eco_res.score;
                 let wave_score = 0.70 * bench_score + 0.30 * eco_score;
+                let prev_g = s.cum_games;
+                let new_g = prev_g + total_w_games;
                 s.bench_games += bench_n_games;
                 s.bench_wins += bench_score * bench_n_games;
                 s.eco_games += eco_n_games;
@@ -2835,6 +2905,11 @@ fn cmd_kodoku(args: &[String]) {
                     s.slot_picks[slot] += wp;
                     s.slot_wins[slot] += ww;
                     s.slot_marginals[slot] += wm;
+                    for mk in 0..4 {
+                        let w_mdq = 0.70 * bench_mdq[slot][mk] + 0.30 * eco_mdq[slot][mk];
+                        s.move_dqs[slot][mk] =
+                            (s.move_dqs[slot][mk] * prev_g + w_mdq * total_w_games) / new_g.max(1.0);
+                    }
                 }
                 s.effective_cores = 0.70 * bench_res.effective_cores()
                     + 0.30 * eco_res.effective_cores();
@@ -2874,6 +2949,8 @@ fn cmd_kodoku(args: &[String]) {
             s.recompute_stats(prior_games);
         }
 
+        let (mu_50, mu_55, beta_l) = recompute_population_wars(&mut ledger.active_strains);
+
         ledger.active_strains.sort_by(|a, b| {
             b.bayes_fit
                 .partial_cmp(&a.bayes_fit)
@@ -2897,18 +2974,23 @@ fn cmd_kodoku(args: &[String]) {
         let top = &ledger.active_strains[0];
         let top_g = top.cum_games.max(1.0);
         let hitchhikers = (0..6)
-            .filter(|&i| top.slot_picks[i] / top_g < 0.08 && top.slot_marginals[i] / top_g < 0.008)
+            .filter(|&i| top.slot_picks[i] / top_g < 0.08 && top.slot_wars[i] < -0.015)
             .count();
         let slot_summary: Vec<String> = (0..top.team.len().min(6))
             .map(|i| {
                 let sp = top.team[i]["species"].as_str().unwrap_or("?");
+                let lv = top.team[i]["level"].as_u64().unwrap_or(50);
                 let p_i = top.slot_picks[i] / top_g * 100.0;
                 let dv_i = top.slot_marginals[i] / top_g * 100.0;
-                format!("{sp}(p={p_i:.0}%,dV={dv_i:+.1}pt)")
+                let war_i = top.slot_wars[i] * 100.0;
+                format!("{sp}(L{lv},p={p_i:.0}%,dV={dv_i:+.1}pt,WAR={war_i:+.1}pt)")
             })
             .collect();
         eprintln!(
-            "[kodoku wave {w}] ({wave_secs:.0}s) mean_fit={u_bar:.3} | #1={} (parent={}, op={}, bayes={:.3}, raw={:.3}, K_eff={:.2}, hitchhikers={}, games={:.0})\n  #1 slots: {}",
+            "[kodoku wave {w}] ({wave_secs:.0}s) mean_fit={u_bar:.3} | repl_level: mu50={:+.1}pt, mu55={:+.1}pt (beta_L={:+.2}pt/Lv) | #1={} (parent={}, op={}, bayes={:.3}, raw={:.3}, K_eff={:.2}, hitchhikers={}, games={:.0})\n  #1 slots: {}",
+            mu_50 * 100.0,
+            mu_55 * 100.0,
+            beta_l * 100.0,
             top.id,
             top.parent_id,
             top.last_op,
@@ -2964,6 +3046,17 @@ fn cmd_kodoku(args: &[String]) {
                     0.0
                 };
                 let dv_i = s.slot_marginals[i] / g;
+                let war_i = s.slot_wars[i];
+                let moves_arr = s.team[i]["moves"].as_array();
+                let move_telemetry: Vec<Value> = (0..4)
+                    .filter_map(|mk| {
+                        let mname = moves_arr.and_then(|a| a.get(mk)).and_then(Value::as_str)?;
+                        Some(json!({
+                            "move": mname,
+                            "marginal_dq": s.move_dqs[i][mk],
+                        }))
+                    })
+                    .collect();
                 json!({
                     "slot": i,
                     "species": sp,
@@ -2972,6 +3065,8 @@ fn cmd_kodoku(args: &[String]) {
                     "cond_winrate": w_i,
                     "vitality": s.slot_wins[i] / g,
                     "marginal_value": dv_i,
+                    "war": war_i,
+                    "move_telemetry": move_telemetry,
                 })
             })
             .collect();
@@ -3134,6 +3229,41 @@ struct CoreNashGauntletCfg {
 struct CoreNashEvalResult {
     eval: nc2000_bot::teamgen::EvalResult,
     slot_marginals: [f64; 6],
+    move_dqs: [[f64; 4]; 6],
+}
+
+struct TelemetryOpenAgent {
+    inner: nc2000_bot::OpenAgent,
+    sink: Arc<std::sync::Mutex<([[f64; 4]; 6], [u32; 6])>>,
+}
+
+impl nc2000_bot::Agent for TelemetryOpenAgent {
+    fn name(&self) -> String {
+        self.inner.name()
+    }
+
+    fn choose(
+        &mut self,
+        battle: &nc2000_engine::state::Battle,
+        dex: &Dex,
+        side: usize,
+        choices: &[nc2000_engine::battle::SearchChoice],
+    ) -> nc2000_engine::battle::SearchChoice {
+        self.inner.choose(battle, dex, side, choices)
+    }
+}
+
+impl Drop for TelemetryOpenAgent {
+    fn drop(&mut self) {
+        let (m, t) = self.inner.move_telemetry();
+        let mut g = self.sink.lock().unwrap();
+        for s in 0..6 {
+            g.1[s] += t[s];
+            for k in 0..4 {
+                g.0[s][k] += m[s][k];
+            }
+        }
+    }
 }
 
 /// Evaluate a candidate 6-mon party against a weighted opponent gauntlet via Two-Stage
@@ -3164,6 +3294,7 @@ fn core_nash_eval_weighted(
                 core_stats: BTreeMap::new(),
             },
             slot_marginals: [0.0; 6],
+            move_dqs: [[0.0; 4]; 6],
         };
     }
 
@@ -3177,6 +3308,8 @@ fn core_nash_eval_weighted(
     let mut slot_picks = [0.0f64; 6];
     let mut slot_wins = [0.0f64; 6];
     let mut slot_marginals = [0.0f64; 6];
+    let mut move_dqs = [[0.0f64; 4]; 6];
+    let move_acc = Arc::new(std::sync::Mutex::new(([[0.0f64; 4]; 6], [0u32; 6])));
     let mut core_stats: BTreeMap<u8, (f64, f64)> = BTreeMap::new();
     let mut total_games = 0u32;
 
@@ -3294,6 +3427,7 @@ fn core_nash_eval_weighted(
         let pa_ref = &p_a_s1;
         let pb_ref = &p_b_s1;
         let smoothing = cfg.smoothing;
+        let move_acc_ref = &move_acc;
         let refine_res = run_forced_preview_games(
             dex,
             cand,
@@ -3308,7 +3442,13 @@ fn core_nash_eval_weighted(
                     .with_opponent_pick_policy(pa_ref.clone(), smoothing);
                 oa.init_at_preview(b, side_a);
                 ob.init_at_preview(b, side_b);
-                (Box::new(oa), Box::new(ob))
+                (
+                    Box::new(TelemetryOpenAgent {
+                        inner: oa,
+                        sink: move_acc_ref.clone(),
+                    }),
+                    Box::new(ob),
+                )
             },
             true,
         );
@@ -3414,6 +3554,16 @@ fn core_nash_eval_weighted(
         }
     }
 
+    {
+        let g = move_acc.lock().unwrap();
+        for s in 0..6 {
+            let turns = (g.1[s] as f64).max(1.0);
+            for k in 0..4 {
+                move_dqs[s][k] = g.0[s][k] / turns;
+            }
+        }
+    }
+
     CoreNashEvalResult {
         eval: nc2000_bot::teamgen::EvalResult {
             score: total_score,
@@ -3424,6 +3574,7 @@ fn core_nash_eval_weighted(
             core_stats,
         },
         slot_marginals,
+        move_dqs,
     }
 }
 

@@ -1590,6 +1590,8 @@ pub struct OpenAgent {
     rng: SplitMix64,
     tables: Option<Arc<TableSet>>,
     opp_pick_policy: Option<(Vec<f64>, f64)>,
+    move_marginals: [[f64; 4]; 6],
+    move_turns: [u32; 6],
     game: Option<GameState>,
 }
 
@@ -1602,6 +1604,8 @@ impl OpenAgent {
             rng: SplitMix64::new(seed),
             tables,
             opp_pick_policy: None,
+            move_marginals: [[0.0; 4]; 6],
+            move_turns: [0; 6],
             game: None,
         }
     }
@@ -1612,6 +1616,13 @@ impl OpenAgent {
     pub fn with_opponent_pick_policy(mut self, policy: Vec<f64>, smoothing: f64) -> Self {
         self.opp_pick_policy = Some((policy, smoothing));
         self
+    }
+
+    /// Per-slot, per-move counterfactual root marginal values `\Delta Q_{-m_k}`
+    /// accumulated over mid-battle move decisions, along with active move-decision
+    /// turn counts per roster slot.
+    pub fn move_telemetry(&self) -> ([[f64; 4]; 6], [u32; 6]) {
+        (self.move_marginals, self.move_turns)
     }
 
     /// Explicitly initialize the per-game observer & pinned belief at Team Preview
@@ -1688,7 +1699,48 @@ impl Agent for OpenAgent {
             }
         }
         let g = self.game.as_ref().expect("choose after lifecycle setup");
-        search_choose(&self.cfg, &mut self.rng, g, battle, dex, side, choices, false)
+        let mut bs = BlindSearch::with_rng(battle, dex, self.cfg.clone(), side, self.rng.clone());
+        bs.prune_preview_aliases(dex);
+        debug_assert_eq!(bs.actions(), choices, "root action set drifted from caller's choices");
+        for _ in 0..self.cfg.iterations {
+            bs.step_one(dex, &g.belief, &g.observer);
+        }
+        self.rng = bs.rng.clone();
+        let picked = bs.best().expect("search called with a non-empty choice list");
+
+        // Record mid-battle move-level counterfactual regret \Delta Q_{-m_k}
+        if !is_preview {
+            if let Some(active_u8) = battle.sides[side].active {
+                let slot = (active_u8 as usize).min(5);
+                if slot < battle.sides[side].roster.len()
+                    && choices.iter().any(|c| matches!(c, SearchChoice::Move(_)))
+                {
+                    self.move_turns[slot] += 1;
+                    if let SearchChoice::Move(chosen_mid) = picked {
+                        let means = bs.means();
+                        let visits = bs.visits();
+                        if let Some(chosen_idx) = choices.iter().position(|&c| c == picked) {
+                            let q_best = means[chosen_idx];
+                            let q_alt = (0..choices.len())
+                                .filter(|&i| i != chosen_idx && visits[i] > 0)
+                                .map(|i| means[i])
+                                .fold(f64::NEG_INFINITY, f64::max);
+                            if q_alt.is_finite() {
+                                let dq = (q_best - q_alt).max(0.0);
+                                let mon = &battle.sides[side].roster[slot];
+                                for (m_idx, ms) in mon.base_move_slots.iter().enumerate().take(4) {
+                                    if ms.id == chosen_mid {
+                                        self.move_marginals[slot][m_idx] += dq;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        picked
     }
 }
 

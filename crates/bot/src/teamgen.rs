@@ -730,43 +730,45 @@ impl TeamGen {
         None
     }
 
-    /// Propose a mutation driven directly by per-slot Nash equilibrium marginal
-    /// value `W_i = \Delta V_{-i}` and Nash pick rate `p_i^*`:
-    /// - Hitchhikers (`W_i < 0.008` and `p_i^* < 0.10`) receive exponential Boltzmann
-    ///   targeting priority and a 75% `SpeciesSwap` replacement rate.
-    /// - Low-marginal flex/counter slots (`W_i < 0.045`) receive balanced species/kit tuning.
-    /// - High-marginal core pillars (`W_i >= 0.045`) are protected from `SpeciesSwap` and
-    ///   only receive rare `MoveSwap` / `ItemSwap` / `LevelTweak` refinements.
+    /// Propose a mutation driven by:
+    /// 1. Endogenous population-calibrated Wins Above Replacement `slot_wars[i] = \Delta V_{-i} - \hat{\mu}_{pop}(L_i)`
+    ///    (zero hand-coded level prior),
+    /// 2. Per-move counterfactual MCTS root regret `move_dqs[i][k] = \Delta Q_{-m_k}`,
+    /// 3. Stochastic Resonance (finite-temperature Boltzmann selection + uniform noise floor `\varepsilon`)
+    ///    at both the Party->Pokemon layer and the Pokemon->Move layer so neutral combo stepping stones
+    ///    can drift long enough to find their partner move before locking in.
     pub fn propose_marginal_targeted(
         &self,
         dex: &Dex,
         parent: &[Value],
         slot_picks: &[f64; 6],
         slot_wins: &[f64; 6],
-        slot_marginals: &[f64; 6],
+        slot_wars: &[f64; 6],
+        move_dqs: Option<&[[f64; 4]; 6]>,
         rng: &mut SplitMix64,
         constraint: &NicheConstraint,
         tries: usize,
     ) -> Option<Proposal> {
         let pick_sum: f64 = slot_picks.iter().sum();
-        let marg_sum: f64 = slot_marginals.iter().sum();
-        if pick_sum <= 1e-6 || marg_sum <= 1e-6 {
+        let has_war = slot_wars.iter().any(|&x| x.abs() > 1e-6);
+        if pick_sum <= 1e-6 || !has_war {
             return self.propose_targeted(dex, parent, slot_picks, slot_wins, rng, constraint, tries);
         }
         let n_games = (pick_sum / 3.0).max(1e-6);
-        let mut p_norm = [0.0f64; 6];
-        let mut w_marg = [0.0f64; 6];
-        let mut slot_w = [1.0f64; 6];
+        let mut p_norm = [0.5f64; 6];
+        let mut raw_w = [1.0f64; 6];
+        let t_slot = 0.045;
+        let eps_slot = 0.18;
         for i in 0..6 {
             p_norm[i] = (slot_picks[i] / n_games).clamp(0.0, 1.0);
-            w_marg[i] = (slot_marginals[i] / n_games).clamp(0.0, 1.0);
-            let survival_val = w_marg[i] + 0.15 * p_norm[i];
-            let hitchhiker_boost = if w_marg[i] < 0.008 && p_norm[i] < 0.10 {
-                3.5
-            } else {
-                1.0
-            };
-            slot_w[i] = (-16.0 * survival_val).exp() * hitchhiker_boost;
+            let war_i = slot_wars[i].clamp(-0.35, 0.35);
+            let signal = war_i + 0.10 * (p_norm[i] - 0.50);
+            raw_w[i] = (-signal / t_slot).exp();
+        }
+        let raw_sum: f64 = raw_w.iter().sum::<f64>().max(1e-12);
+        let mut slot_w = [1.0f64 / 6.0; 6];
+        for i in 0..6 {
+            slot_w[i] = (1.0 - eps_slot) * (raw_w[i] / raw_sum) + eps_slot / 6.0;
         }
 
         let sample_slot = |rng: &mut SplitMix64, min_slot: usize| -> usize {
@@ -787,9 +789,9 @@ impl TeamGen {
 
         for _ in 0..tries {
             let step_roll = rng.below(20);
-            let num_steps = if step_roll < 14 {
+            let num_steps = if step_roll < 13 {
                 1
-            } else if step_roll < 19 {
+            } else if step_roll < 18 {
                 2
             } else {
                 3
@@ -800,32 +802,35 @@ impl TeamGen {
             let mut applied = 0usize;
             for _ in 0..num_steps {
                 let target_slot = sample_slot(rng, 0);
-                let is_hitchhiker = w_marg[target_slot] < 0.008 && p_norm[target_slot] < 0.10;
-                let is_pillar = w_marg[target_slot] >= 0.045;
+                let war_i = slot_wars[target_slot];
+                let below_rep = war_i < -0.020 || (p_norm[target_slot] < 0.12 && war_i <= 0.0);
+                let above_rep = war_i >= 0.030;
                 let roll = rng.below(20);
-                let op = if is_hitchhiker {
-                    // Verified hitchhiker (W_i ~ 0): 75% SpeciesSwap, 15% MoveSwap, 5% ItemSwap, 5% LevelTweak
-                    if roll < 15 {
+                let op = if below_rep {
+                    // Below replacement level: 65% SpeciesSwap, 20% MoveSwap, 10% ItemSwap, 5% LevelTweak
+                    if roll < 13 {
                         MutOp::SpeciesSwap
-                    } else if roll < 18 {
+                    } else if roll < 17 {
                         MutOp::MoveSwap
                     } else if roll < 19 {
                         MutOp::ItemSwap
                     } else {
                         MutOp::LevelTweak
                     }
-                } else if is_pillar {
-                    // Proven core pillar (W_i >= 4.5pt): 0% SpeciesSwap! 60% MoveSwap, 25% ItemSwap, 15% LevelTweak
-                    if roll < 12 {
+                } else if above_rep {
+                    // Above-replacement pillar: 55% MoveSwap, 25% ItemSwap, 10% LevelTweak, 10% SpeciesSwap (noise floor)
+                    if roll < 11 {
                         MutOp::MoveSwap
-                    } else if roll < 17 {
+                    } else if roll < 16 {
                         MutOp::ItemSwap
-                    } else {
+                    } else if roll < 18 {
                         MutOp::LevelTweak
+                    } else {
+                        MutOp::SpeciesSwap
                     }
                 } else {
-                    // Low-marginal flex/counter slot: 40% SpeciesSwap, 35% MoveSwap, 15% ItemSwap, 10% LevelTweak
-                    if roll < 8 {
+                    // Near-replacement flex slot: 35% SpeciesSwap, 40% MoveSwap, 15% ItemSwap, 10% LevelTweak
+                    if roll < 7 {
                         MutOp::SpeciesSwap
                     } else if roll < 15 {
                         MutOp::MoveSwap
@@ -843,8 +848,9 @@ impl TeamGen {
                 } else {
                     target_slot
                 };
+                let slot_move_dq = move_dqs.map(|m| &m[slot]);
                 let ok = match op {
-                    MutOp::MoveSwap => self.mut_move_swap(dex, &mut raw, slot, rng),
+                    MutOp::MoveSwap => self.mut_move_swap_weighted(dex, &mut raw, slot, slot_move_dq, rng),
                     MutOp::ItemSwap => self.mut_item_swap(dex, &mut raw, slot, rng),
                     MutOp::LevelTweak => self.mut_level_tweak(&mut raw, slot, rng),
                     MutOp::SpeciesSwap => self.mut_species_swap(dex, &mut raw, slot, rng),
@@ -1558,6 +1564,17 @@ impl TeamGen {
         slot: usize,
         rng: &mut SplitMix64,
     ) -> Option<()> {
+        self.mut_move_swap_weighted(dex, raw, slot, None, rng)
+    }
+
+    fn mut_move_swap_weighted(
+        &self,
+        dex: &Dex,
+        raw: &mut [Value],
+        slot: usize,
+        move_dq: Option<&[f64; 4]>,
+        rng: &mut SplitMix64,
+    ) -> Option<()> {
         let sid = species_id(&raw[slot]);
         let level = set_level(&raw[slot]);
         let cur = move_ids(&raw[slot]);
@@ -1584,10 +1601,41 @@ impl TeamGen {
         if moves.len() < 4 && rng.below(2) == 0 {
             moves.push(json!(display));
         } else {
-            // If `pick == "hiddenpower"`, replace any existing hiddenpower slot first
             let hp_slot = cur.iter().position(|m| m.starts_with("hiddenpower"));
-            let p = if pick == "hiddenpower" {
-                hp_slot.unwrap_or_else(|| rng.below(moves.len()))
+            let p = if pick == "hiddenpower" && hp_slot.is_some() {
+                hp_slot.unwrap()
+            } else if let Some(dq) = move_dq {
+                let m_len = moves.len().min(4);
+                let has_signal = dq[..m_len].iter().any(|&v| v > 1e-6);
+                if !has_signal {
+                    rng.below(m_len)
+                } else {
+                    // Stochastic Resonance Boltzmann move selection:
+                    // Finite temperature T_move = 0.035 + uniform drift floor eps = 0.24
+                    // protects high-\Delta Q signature/combo moves while letting single
+                    // \Delta Q = 0 prerequisite moves survive ~55-65% of move swaps
+                    // so their combo partner can arrive.
+                    let t_move = 0.035;
+                    let eps_move = 0.24;
+                    let mut raw_w = [1.0f64; 4];
+                    let mut raw_sum = 0.0f64;
+                    for k in 0..m_len {
+                        raw_w[k] = (-dq[k].clamp(0.0, 0.50) / t_move).exp();
+                        raw_sum += raw_w[k];
+                    }
+                    let mut u = rng.next_f64();
+                    let mut chosen = m_len - 1;
+                    for k in 0..m_len {
+                        let prob = (1.0 - eps_move) * (raw_w[k] / raw_sum.max(1e-12))
+                            + eps_move / (m_len as f64);
+                        u -= prob;
+                        if u <= 0.0 {
+                            chosen = k;
+                            break;
+                        }
+                    }
+                    chosen
+                }
             } else {
                 rng.below(moves.len())
             };
