@@ -83,8 +83,7 @@ STAGE_PATHS = [
     "data/meta-nash-v3/solution.json",
     "data/team-selection-v2/panel.json",
     "data/team-inventory-v1/eval/teams.json",
-    "data/eco-r2/extracted-nash.json",
-    "data/eco-ring/ring-gauntlet.json",
+    "data/eco-pool/master-pool.json",
     "data/eco-r4/islands",
 ]
 
@@ -587,6 +586,8 @@ cmd = [
     "--out", "/mnt/disks/gcs/{GCS_PREFIX}/eco-r{args.round}/islands",
     "--resume",
 ]
+if "{args.reset_bench}" == "True":
+    cmd.append("--reset-bench")
 print("Running:", " ".join(cmd), flush=True)
 subprocess.run(cmd, check=True)
 PY
@@ -669,8 +670,9 @@ def main() -> None:
     sp_eco.add_argument("--islands", type=int, default=6)
     sp_eco.add_argument("--island-offset", type=int, default=0)
     sp_eco.add_argument("--seed-base", type=int, default=20261028)
-    sp_eco.add_argument("--gauntlet-file", default="data/eco-ring/ring-gauntlet.json")
+    sp_eco.add_argument("--gauntlet-file", default="data/eco-pool/master-pool.json")
     sp_eco.add_argument("--seed-dir", default="none")
+    sp_eco.add_argument("--reset-bench", action="store_true")
     sp_eco.add_argument("--agent", default="blind:1000:0.4")
     sp_eco.add_argument("--waves", type=int, default=9999)
     sp_eco.add_argument("--max-seconds", type=int, default=2400)

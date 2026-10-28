@@ -366,9 +366,10 @@ fn cmd_evolve_island(args: &[String]) {
     let seed_dir = flag(args, "--seed-dir")
         .filter(|s| !s.is_empty() && s != "none")
         .map(PathBuf::from);
+    let reset_bench = args.iter().any(|a| a == "--reset-bench");
 
-    // Check if a matching same-island ledger exists in `--seed-dir` (e.g. `island-r3-07.json`
-    // for `island-r4-07`) to continue the isolated island ecosystem across epochs.
+    // Check if a matching same-island ledger exists in `--seed-dir` (e.g. `island-r4-07.json`
+    // for `island-r5-07`) to continue the isolated island ecosystem across epochs.
     let prev_island_ledger: Option<IslandLedger> = if !(resume && ledger_path.exists()) {
         seed_dir.as_ref().and_then(|sdir| {
             let suffix = island.rsplit('-').next().unwrap_or("");
@@ -380,20 +381,33 @@ fn cmd_evolve_island(args: &[String]) {
                     if let Ok(txt) = std::fs::read_to_string(&p) {
                         if let Ok(mut prev) = serde_json::from_str::<IslandLedger>(&txt) {
                             prev.island = island.clone();
+                            if reset_bench {
+                                prev.archived_strains.clear();
+                            }
                             for s in &mut prev.active_strains {
-                                s.cum_games *= 0.5;
-                                s.cum_wins *= 0.5;
-                                s.bench_games *= 0.5;
-                                s.bench_wins *= 0.5;
-                                s.eco_games *= 0.5;
-                                s.eco_wins *= 0.5;
+                                if reset_bench {
+                                    s.bench_games = 0.0;
+                                    s.bench_wins = 0.0;
+                                    s.eco_games *= 0.5;
+                                    s.eco_wins *= 0.5;
+                                    s.cum_games = s.eco_games;
+                                    s.cum_wins = s.eco_wins;
+                                } else {
+                                    s.cum_games *= 0.5;
+                                    s.cum_wins *= 0.5;
+                                    s.bench_games *= 0.5;
+                                    s.bench_wins *= 0.5;
+                                    s.eco_games *= 0.5;
+                                    s.eco_wins *= 0.5;
+                                }
                                 s.recompute_stats(prior_games);
                             }
                             eprintln!(
-                                "[{island}] continuing isolated ecosystem from {} (wave={}, active={})",
+                                "[{island}] continuing isolated ecosystem from {} (wave={}, active={}, reset_bench={})",
                                 p.display(),
                                 prev.wave,
-                                prev.active_strains.len()
+                                prev.active_strains.len(),
+                                reset_bench
                             );
                             return Some(prev);
                         }
@@ -554,19 +568,37 @@ fn cmd_evolve_island(args: &[String]) {
             }
         }
 
+        // Rotate an 8-team slice of the Master Pool each wave so every 3 waves a surviving
+        // strain faces all 24 teams of the Master Pool without bloating per-wave wall-clock.
+        let slice_len = bench_teams.len().min(8);
+        let start_idx = ((w as usize).saturating_sub(1) * slice_len) % bench_teams.len().max(1);
+        let mut wave_bench_teams = Vec::with_capacity(slice_len);
+        let mut wave_bench_weights = Vec::with_capacity(slice_len);
+        for k in 0..slice_len {
+            let idx = (start_idx + k) % bench_teams.len();
+            wave_bench_teams.push(bench_teams[idx].clone());
+            wave_bench_weights.push(bench_weights[idx]);
+        }
+        let wb_sum: f64 = wave_bench_weights.iter().sum();
+        if wb_sum > 0.0 {
+            for wv in &mut wave_bench_weights {
+                *wv /= wb_sum;
+            }
+        }
+
         let bench_games_per_opp =
-            ((eval_games as usize * 3) / bench_teams.len().max(1)).clamp(2, 6) as u32;
-        let bench_n_games = (bench_games_per_opp as usize * bench_teams.len()) as f64;
+            ((eval_games as usize * 3) / slice_len.max(1)).clamp(2, 6) as u32;
+        let bench_n_games = (bench_games_per_opp as usize * slice_len) as f64;
         let eco_n_games = (eval_games as usize * eco_opps.len()) as f64;
 
-        // Evaluate every active strain against Living Island Ecosystem (primary) and Benchmark (secondary)
+        // Evaluate every active strain against Living Island Ecosystem (primary) and Master Pool (secondary)
         for s in &mut ledger.active_strains {
             let cand = to_sets(&s.team).expect("valid strain team");
             let bench_fit = gauntlet_eval_weighted(
                 &dex,
                 &cand,
-                &bench_teams,
-                &bench_weights,
+                &wave_bench_teams,
+                &wave_bench_weights,
                 &WeightedEvalCfg {
                     games_per_opponent: bench_games_per_opp,
                     agent_iters,
@@ -1569,6 +1601,313 @@ fn cmd_update_ring(args: &[String]) {
     }
 }
 
+fn team_species_set(sets: &[Value]) -> BTreeSet<String> {
+    sets.iter()
+        .filter_map(|s| s["species"].as_str().map(toid))
+        .collect()
+}
+
+/// Maintain the single Master Strong Pool (`data/eco-pool/master-pool.json`):
+/// 1. Starts from the 24 strong teams of `data/team-pool-v2/team-pool.json` (with their
+///    measured Stage A 3000-iter scores against the 24-team Master Pool).
+/// 2. Evaluates candidate veterans against ALL teams in the Master Pool (`--games-per-opp`).
+/// 3. Enforces Monotonic Diverse Pool Invariants:
+///    - Same Archetype (>= 4 shared species with closest team `u` in pool): replaces `u`
+///      iff `cand_score >= u.score + 0.015 && cand_score >= min_admit_score`.
+///    - New Archetype (<= 3 shared species with all teams in pool): added to pool iff
+///      `cand_score >= min_admit_score`; if pool exceeds `--max-pool` (default 30),
+///      evicts the lowest-scoring team in the pool.
+fn cmd_update_pool(args: &[String]) {
+    let dex = load_dex();
+    let root = repo_root();
+    let ls_text = std::fs::read_to_string(root.join("data/learnsets-gen2.json")).unwrap();
+    let pool_text = std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap();
+    let gen = TeamGen::new(&dex, &ls_text, &pool_text).unwrap();
+
+    let master_path = flag(args, "--master")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| root.join("data/eco-pool/master-pool.json"));
+    let max_pool: usize = num(args, "--max-pool", 30);
+    let top_cands: usize = num(args, "--top-candidates", 6);
+    let games_per_opp: u32 = num(args, "--games-per-opp", 6);
+    let min_admit_score: f64 = num(args, "--min-admit-score", 0.520);
+    let max_turns: u16 = num(args, "--max-turns", 300);
+    let threads: usize = num(args, "--threads", 8);
+    let seed: u64 = num(args, "--seed", 2026102850);
+    let (agent_iters, agent_c, blind_pool) = parse_agent_spec(args, &root);
+
+    let mut master_teams: Vec<Value> = if master_path.exists() {
+        let mv: Value = serde_json::from_str(&std::fs::read_to_string(&master_path).unwrap()).unwrap();
+        mv["teams"].as_array().unwrap().clone()
+    } else {
+        // Initialize from the 24 teams of `data/team-pool-v2/team-pool.json`
+        let tp_path = root.join("data/team-pool-v2/team-pool.json");
+        let tp: Value = serde_json::from_str(&std::fs::read_to_string(&tp_path).unwrap()).unwrap();
+        let raw_teams = tp["teams"].as_array().unwrap();
+        let ids24: Vec<String> = raw_teams
+            .iter()
+            .map(|t| t["id"].as_str().unwrap().to_string())
+            .collect();
+
+        // Load exact 24x24 head-to-head scores from `data/team-selection-v2/stage-a-3000/cells/` if available
+        let cells_dir = root.join("data/team-selection-v2/stage-a-3000/cells");
+        let mut pair_scores: BTreeMap<(String, String), f64> = BTreeMap::new();
+        for (i, a) in ids24.iter().enumerate() {
+            for b in ids24.iter().skip(i + 1) {
+                for (fname, flip) in [
+                    (format!("cell-{a}__{b}.jsonl"), false),
+                    (format!("cell-{b}__{a}.jsonl"), true),
+                ] {
+                    let p = cells_dir.join(fname);
+                    if let Ok(txt) = std::fs::read_to_string(&p) {
+                        let mut sum = 0.0;
+                        let mut cnt = 0usize;
+                        for line in txt.lines() {
+                            if let Ok(v) = serde_json::from_str::<Value>(line) {
+                                if let Some(sc) = v["score"].as_f64() {
+                                    sum += sc;
+                                    cnt += 1;
+                                }
+                            }
+                        }
+                        if cnt > 0 {
+                            let sc = sum / (cnt as f64);
+                            let ab = if flip { 1.0 - sc } else { sc };
+                            pair_scores.insert((a.clone(), b.clone()), ab);
+                            pair_scores.insert((b.clone(), a.clone()), 1.0 - ab);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut init_teams = Vec::new();
+        for t in raw_teams {
+            let tid = t["id"].as_str().unwrap();
+            let sets = t["sets"].as_array().unwrap();
+            let canon = gen.canonize(&dex, sets).expect("canonize team-pool-v2 team");
+            let mut sum = 0.0;
+            let mut cnt = 0usize;
+            for oid in &ids24 {
+                if oid != tid {
+                    sum += pair_scores
+                        .get(&(tid.to_string(), oid.clone()))
+                        .copied()
+                        .unwrap_or(0.5);
+                    cnt += 1;
+                }
+            }
+            let pool24_wr = if cnt > 0 { sum / (cnt as f64) } else { 0.5 };
+            let panel_wr = t["score"].as_f64().unwrap_or(0.58);
+            // Blended baseline score against the 24-team Master Pool + panel
+            let score = 0.65 * pool24_wr + 0.35 * panel_wr;
+            init_teams.push(json!({
+                "id": tid,
+                "origin": "team-pool-v2",
+                "score": score,
+                "pool24_wr": pool24_wr,
+                "panel_wr": panel_wr,
+                "weight": 1.0 / (raw_teams.len() as f64),
+                "drawWeight": 1.0 / (raw_teams.len() as f64),
+                "species": t["species"],
+                "sets": canon,
+            }));
+        }
+        init_teams
+    };
+
+    if let Some(cand_file) = flag(args, "--candidates") {
+        let origin_tag = flag(args, "--origin").unwrap_or_else(|| "evolved".into());
+        let cv: Value = serde_json::from_str(&std::fs::read_to_string(&cand_file).unwrap()).unwrap();
+        let cand_arr = cv["teams"].as_array().expect("--candidates missing teams array");
+
+        // Snapshot current Master Pool teams as benchmark opponents
+        let opp_teams: Vec<Vec<PokemonSet>> = master_teams
+            .iter()
+            .map(|t| to_sets(t["sets"].as_array().unwrap()).unwrap())
+            .collect();
+        let opp_weights = vec![1.0 / (opp_teams.len() as f64); opp_teams.len()];
+
+        println!(
+            "=== Master Pool Admission Test ({} candidates vs {} Master Pool teams, {} games/opp = {} games/cand, min_admit={:.3}) ===",
+            cand_arr.len().min(top_cands),
+            opp_teams.len(),
+            games_per_opp,
+            games_per_opp as usize * opp_teams.len(),
+            min_admit_score
+        );
+
+        let mut admitted = 0usize;
+        for (ci, ct) in cand_arr.iter().take(top_cands).enumerate() {
+            let cid = ct["id"].as_str().unwrap_or("cand");
+            let raw_sets = ct["sets"].as_array().unwrap();
+            let Some(canon) = gen.canonize(&dex, raw_sets) else {
+                continue;
+            };
+            let cand_key = team_key(&canon);
+            if master_teams
+                .iter()
+                .any(|m| team_key(m["sets"].as_array().unwrap()) == cand_key)
+            {
+                continue;
+            }
+            let cand_sets = to_sets(&canon).unwrap();
+            let eval_res = gauntlet_eval_weighted(
+                &dex,
+                &cand_sets,
+                &opp_teams,
+                &opp_weights,
+                &WeightedEvalCfg {
+                    games_per_opponent: games_per_opp,
+                    agent_iters,
+                    c: agent_c,
+                    max_turns,
+                    seed: seed ^ ((ci as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15)),
+                    threads,
+                    blind_pool: blind_pool.clone(),
+                },
+            );
+            let cand_score = eval_res.score;
+            let cand_sp = team_species_set(&canon);
+
+            // Find closest archetype in Master Pool by shared species count
+            let mut best_overlap = 0usize;
+            let mut best_idx = 0usize;
+            for (mi, mt) in master_teams.iter().enumerate() {
+                let m_sp = team_species_set(mt["sets"].as_array().unwrap());
+                let ov = cand_sp.intersection(&m_sp).count();
+                if ov > best_overlap {
+                    best_overlap = ov;
+                    best_idx = mi;
+                }
+            }
+
+            let species_names: Vec<String> = canon
+                .iter()
+                .filter_map(|s| s["species"].as_str().map(String::from))
+                .collect();
+
+            if best_overlap >= 4 {
+                let inc_id = master_teams[best_idx]["id"].as_str().unwrap_or("?").to_string();
+                let inc_score = master_teams[best_idx]["score"].as_f64().unwrap_or(0.5);
+                if cand_score >= inc_score + 0.015 && cand_score >= min_admit_score {
+                    println!(
+                        "  {:22} vs MasterPool = {:.4} ({:.1}%) [overlap={} w/ {} ({:.4})] -> REPLACED INCUMBENT",
+                        cid,
+                        cand_score,
+                        cand_score * 100.0,
+                        best_overlap,
+                        inc_id,
+                        inc_score
+                    );
+                    master_teams[best_idx] = json!({
+                        "id": cid,
+                        "origin": origin_tag,
+                        "score": cand_score,
+                        "pool24_wr": cand_score,
+                        "weight": 1.0,
+                        "drawWeight": 1.0,
+                        "species": species_names,
+                        "sets": canon,
+                    });
+                    admitted += 1;
+                } else {
+                    println!(
+                        "  {:22} vs MasterPool = {:.4} ({:.1}%) [overlap={} w/ {} ({:.4})] -> REJECTED",
+                        cid,
+                        cand_score,
+                        cand_score * 100.0,
+                        best_overlap,
+                        inc_id,
+                        inc_score
+                    );
+                }
+            } else if cand_score >= min_admit_score {
+                println!(
+                    "  {:22} vs MasterPool = {:.4} ({:.1}%) [new archetype, max_overlap={}] -> ADMITTED TO POOL",
+                    cid,
+                    cand_score,
+                    cand_score * 100.0,
+                    best_overlap
+                );
+                master_teams.push(json!({
+                    "id": cid,
+                    "origin": origin_tag,
+                    "score": cand_score,
+                    "pool24_wr": cand_score,
+                    "weight": 1.0,
+                    "drawWeight": 1.0,
+                    "species": species_names,
+                    "sets": canon,
+                }));
+                admitted += 1;
+                if master_teams.len() > max_pool {
+                    // Evict weakest team in Master Pool
+                    let mut min_i = 0usize;
+                    let mut min_sc = f64::INFINITY;
+                    for (mi, mt) in master_teams.iter().enumerate() {
+                        let sc = mt["score"].as_f64().unwrap_or(0.5);
+                        if sc < min_sc {
+                            min_sc = sc;
+                            min_i = mi;
+                        }
+                    }
+                    let evicted_id = master_teams[min_i]["id"].as_str().unwrap_or("?").to_string();
+                    println!(
+                        "    [Pool > {}] Evicted weakest team {} (score={:.4})",
+                        max_pool, evicted_id, min_sc
+                    );
+                    master_teams.remove(min_i);
+                }
+            } else {
+                println!(
+                    "  {:22} vs MasterPool = {:.4} ({:.1}%) [new archetype, max_overlap={}] -> REJECTED (below {:.3})",
+                    cid,
+                    cand_score,
+                    cand_score * 100.0,
+                    best_overlap,
+                    min_admit_score
+                );
+            }
+        }
+        println!("Master Pool admission summary: {} admitted.", admitted);
+    }
+
+    // Sort Master Pool by descending score and assign uniform draw weights
+    master_teams.sort_by(|a, b| {
+        b["score"]
+            .as_f64()
+            .unwrap_or(0.0)
+            .partial_cmp(&a["score"].as_f64().unwrap_or(0.0))
+            .unwrap()
+    });
+    let n_teams = master_teams.len().max(1) as f64;
+    let mut mean_score = 0.0;
+    for t in &mut master_teams {
+        t["weight"] = json!(1.0 / n_teams);
+        t["drawWeight"] = json!(1.0 / n_teams);
+        mean_score += t["score"].as_f64().unwrap_or(0.5) / n_teams;
+    }
+
+    if let Some(p) = master_path.parent() {
+        std::fs::create_dir_all(p).unwrap();
+    }
+    let out_json = json!({
+        "format": "nc2000-eco-master-pool-v1",
+        "max_pool": max_pool,
+        "mean_score": mean_score,
+        "teams": master_teams,
+    });
+    write_json_atomic(&master_path, &out_json);
+    println!(
+        "Saved Master Pool ({} teams, mean_score={:.4}) -> {}",
+        master_teams.len(),
+        mean_score,
+        master_path.display()
+    );
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let sub = args
@@ -1581,8 +1920,9 @@ fn main() {
         "extract-nash" => cmd_extract_nash(&args[1..]),
         "verify-nash" => cmd_verify_nash(&args[1..]),
         "update-ring" => cmd_update_ring(&args[1..]),
+        "update-pool" => cmd_update_pool(&args[1..]),
         other => panic!(
-            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring)"
+            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring | update-pool)"
         ),
     }
 }
