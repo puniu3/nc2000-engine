@@ -86,6 +86,7 @@ STAGE_PATHS = [
     "data/psro-r1/checkpoints",
     "data/eco-r2/extracted-nash.json",
     "data/eco-ring/ring-gauntlet.json",
+    "data/eco-r3/islands",
 ]
 
 

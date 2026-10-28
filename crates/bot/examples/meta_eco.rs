@@ -363,13 +363,56 @@ fn cmd_evolve_island(args: &[String]) {
     let niches_spec = flag(args, "--niches").unwrap_or_else(|| "rand||".into());
     let niches = parse_niches(&niches_spec);
 
+    let seed_dir = flag(args, "--seed-dir")
+        .filter(|s| !s.is_empty() && s != "none")
+        .map(PathBuf::from);
+
+    // Check if a matching same-island ledger exists in `--seed-dir` (e.g. `island-r3-07.json`
+    // for `island-r4-07`) to continue the isolated island ecosystem across epochs.
+    let prev_island_ledger: Option<IslandLedger> = if !(resume && ledger_path.exists()) {
+        seed_dir.as_ref().and_then(|sdir| {
+            let suffix = island.rsplit('-').next().unwrap_or("");
+            let entries = std::fs::read_dir(sdir).ok()?;
+            for e in entries.flatten() {
+                let p = e.path();
+                let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                if !suffix.is_empty() && stem.ends_with(&format!("-{suffix}")) {
+                    if let Ok(txt) = std::fs::read_to_string(&p) {
+                        if let Ok(mut prev) = serde_json::from_str::<IslandLedger>(&txt) {
+                            prev.island = island.clone();
+                            for s in &mut prev.active_strains {
+                                s.cum_games *= 0.5;
+                                s.cum_wins *= 0.5;
+                                s.bench_games *= 0.5;
+                                s.bench_wins *= 0.5;
+                                s.eco_games *= 0.5;
+                                s.eco_wins *= 0.5;
+                                s.recompute_stats(prior_games);
+                            }
+                            eprintln!(
+                                "[{island}] continuing isolated ecosystem from {} (wave={}, active={})",
+                                p.display(),
+                                prev.wave,
+                                prev.active_strains.len()
+                            );
+                            return Some(prev);
+                        }
+                    }
+                }
+            }
+            None
+        })
+    } else {
+        None
+    };
+
     let mut ledger: IslandLedger = if resume && ledger_path.exists() {
         serde_json::from_str(&std::fs::read_to_string(&ledger_path).unwrap()).unwrap()
+    } else if let Some(prev) = prev_island_ledger {
+        write_json_atomic(&ledger_path, &prev);
+        prev
     } else {
         let mut rng = SplitMix64::new(base_seed ^ 0xEC05_757E_u64);
-        let seed_dir = flag(args, "--seed-dir")
-            .filter(|s| !s.is_empty() && s != "none")
-            .map(PathBuf::from);
         let mut active: Vec<Strain> = Vec::new();
         let mut seq = 1u64;
 
@@ -511,7 +554,8 @@ fn cmd_evolve_island(args: &[String]) {
             }
         }
 
-        let bench_games_per_opp = (eval_games / 2).max(4);
+        let bench_games_per_opp =
+            ((eval_games as usize * 3) / bench_teams.len().max(1)).clamp(2, 6) as u32;
         let bench_n_games = (bench_games_per_opp as usize * bench_teams.len()) as f64;
         let eco_n_games = (eval_games as usize * eco_opps.len()) as f64;
 
@@ -1372,8 +1416,8 @@ fn cmd_update_ring(args: &[String]) {
                 };
                 let w = t["weight"]
                     .as_f64()
-                    .or_else(|| t["drawWeight"].as_f64())
                     .or_else(|| t["lcb95"].as_f64())
+                    .or_else(|| t["drawWeight"].as_f64())
                     .unwrap_or(1.0)
                     .max(1e-3);
                 w_sum += w;
