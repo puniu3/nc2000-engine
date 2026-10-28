@@ -84,7 +84,7 @@ STAGE_PATHS = [
     "data/team-selection-v2/panel.json",
     "data/team-inventory-v1/eval/teams.json",
     "data/eco-pool/master-pool.json",
-    "data/eco-r11/islands",
+    "data/eco-r12/islands",
 ]
 
 
@@ -496,6 +496,25 @@ fi
 
 def cmd_submit_eco(args: argparse.Namespace) -> None:
     """Submit Continuous-Abundance Replicator-Mutator Archipelago (`meta_eco evolve-island`)."""
+    existing = run_cmd(
+        [
+            "gcloud",
+            "batch",
+            "jobs",
+            "list",
+            "--location",
+            args.region,
+            "--format=value(name.basename(),status.state)",
+        ],
+        capture=True,
+    )
+    prefix = f"nc2000-eco-r{args.round}-"
+    for line in existing.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[0].startswith(prefix) and parts[1] in ("QUEUED", "SCHEDULED", "RUNNING"):
+            print(f"Idempotency guard: {parts[0]} is already {parts[1]} in {args.region}; skipping duplicate submit.")
+            return
+
     src_hash = cmd_stage(args)
     bucket = BUCKETS[args.region]
 

@@ -385,7 +385,13 @@ fn cmd_evolve_island(args: &[String]) {
                                 prev.archived_strains.clear();
                             }
                             let mut upgrade_rng = SplitMix64::new(prev.rng ^ 0xD0AD_CAFE_u64);
-                            for s in &mut prev.active_strains {
+                            for s in prev
+                                .active_strains
+                                .iter_mut()
+                                .chain(prev.archived_strains.iter_mut())
+                            {
+                                s.anchors.clear();
+                                s.max_staples.clear();
                                 let mut upgraded = s.team.clone();
                                 gen.optimize_team_dominance(&dex, &mut upgraded, &mut upgrade_rng);
                                 if let Some(canon) = gen.canonize(&dex, &upgraded) {
@@ -399,12 +405,20 @@ fn cmd_evolve_island(args: &[String]) {
                                     s.cum_games = s.eco_games;
                                     s.cum_wins = s.eco_wins;
                                 } else {
-                                    s.cum_games *= 0.5;
-                                    s.cum_wins *= 0.5;
+                                    // Anchor cross-epoch continuation to decayed Master Pool benchmark
+                                    // performance (`bench_games`, `bench_wins`), purging historical
+                                    // `eco_wins` inflation from extinct local punching bags while
+                                    // allowing `env_self_weight` co-evolution within the new epoch.
                                     s.bench_games *= 0.5;
                                     s.bench_wins *= 0.5;
-                                    s.eco_games *= 0.5;
-                                    s.eco_wins *= 0.5;
+                                    s.eco_games = 0.0;
+                                    s.eco_wins = 0.0;
+                                    s.cum_games = s.bench_games;
+                                    s.cum_wins = s.bench_wins;
+                                    if s.bench_games > 0.0 {
+                                        s.parent_prior =
+                                            (s.bench_wins / s.bench_games).clamp(0.15, 0.85);
+                                    }
                                 }
                                 s.recompute_stats(prior_games);
                             }
@@ -533,9 +547,8 @@ fn cmd_evolve_island(args: &[String]) {
             );
         }
 
-        // Build co-evolutionary opponent pool from top strains of each founder lineage (up to 4).
-        // In Wave 1 (before any strain has cum_games > 0), use the initial founder teams so
-        // local island co-evolution starts from Wave 1.
+        // Build co-evolutionary opponent pool from the top 4 structurally distinct archetypes
+        // (< 4 shared species) on the island.
         let mut vet_indices: Vec<usize> = (0..ledger.active_strains.len())
             .filter(|&i| ledger.active_strains[i].cum_games > 0.0)
             .collect();
@@ -549,12 +562,24 @@ fn cmd_evolve_island(args: &[String]) {
                 .unwrap()
         });
         let mut chosen_vets: Vec<usize> = Vec::new();
-        let mut vet_niches: BTreeSet<String> = BTreeSet::new();
+        for &vi in &vet_indices {
+            if chosen_vets.len() >= 4 {
+                break;
+            }
+            let sp_i = ledger.active_strains[vi].species_set();
+            let distinct = chosen_vets.iter().all(|&vj| {
+                let sp_j = ledger.active_strains[vj].species_set();
+                sp_i.intersection(&sp_j).count() < 4
+            });
+            if distinct {
+                chosen_vets.push(vi);
+            }
+        }
         for vi in vet_indices {
             if chosen_vets.len() >= 4 {
                 break;
             }
-            if vet_niches.insert(ledger.active_strains[vi].niche.clone()) {
+            if !chosen_vets.contains(&vi) {
                 chosen_vets.push(vi);
             }
         }
@@ -700,39 +725,28 @@ fn cmd_evolve_island(args: &[String]) {
             s.recompute_stats(prior_games);
         }
 
-        // Within-Niche Boltzmann-Replicator Update on continuous abundance w_i:
-        // Each niche maintains its own abundance share (1 / num_niches of the island) so
-        // warm-started niches never starve de-novo anchor niches of mutations, and within
-        // each niche damped replicator dynamics w_i <- w_i^0.5 * exp(eta * (u_i - u_bar_niche))
-        // lets stronger offspring overtake parents without the 3.55x founder handicap.
-        let mut niche_groups: BTreeMap<String, Vec<usize>> = BTreeMap::new();
-        for (idx, s) in ledger.active_strains.iter().enumerate() {
-            niche_groups.entry(s.niche.clone()).or_default().push(idx);
+        // Island-Wide Damped Boltzmann-Replicator Update on continuous abundance w_i:
+        // Damped replicator dynamics w_i <- w_i^0.5 * exp(eta * (u_i - u_bar))
+        // lets stronger archetypes and offspring grow smoothly across the whole island
+        // while structural diversity is guaranteed by the <= 2 per-archetype survivor cap.
+        let mut w_sum = 0.0;
+        let mut u_bar = 0.0;
+        for s in &ledger.active_strains {
+            let u = 0.35 * s.last_wave_fit + 0.65 * s.bayes_fit;
+            u_bar += s.abundance * u;
+            w_sum += s.abundance;
         }
-        let num_niches = niche_groups.len().max(1) as f64;
-        for indices in niche_groups.values() {
-            let mut w_sum = 0.0;
-            let mut u_bar = 0.0;
-            for &i in indices {
-                let s = &ledger.active_strains[i];
-                let u = 0.35 * s.last_wave_fit + 0.65 * s.bayes_fit;
-                u_bar += s.abundance * u;
-                w_sum += s.abundance;
-            }
-            if w_sum > 0.0 {
-                u_bar /= w_sum;
-            }
-            let mut new_niche_w = 0.0;
-            for &i in indices {
-                let s = &mut ledger.active_strains[i];
-                let u = 0.35 * s.last_wave_fit + 0.65 * s.bayes_fit;
-                s.abundance = (s.abundance.max(1e-4).sqrt() * (eta * (u - u_bar)).exp()).max(1e-6);
-                new_niche_w += s.abundance;
-            }
-            for &i in indices {
-                ledger.active_strains[i].abundance =
-                    (ledger.active_strains[i].abundance / new_niche_w.max(1e-9)) / num_niches;
-            }
+        if w_sum > 0.0 {
+            u_bar /= w_sum;
+        }
+        let mut new_w_sum = 0.0;
+        for s in &mut ledger.active_strains {
+            let u = 0.35 * s.last_wave_fit + 0.65 * s.bayes_fit;
+            s.abundance = (s.abundance.max(1e-4).sqrt() * (eta * (u - u_bar)).exp()).max(1e-6);
+            new_w_sum += s.abundance;
+        }
+        for s in &mut ledger.active_strains {
+            s.abundance /= new_w_sum.max(1e-9);
         }
 
         let u_bar: f64 = ledger
@@ -787,6 +801,13 @@ fn cmd_evolve_island(args: &[String]) {
     }
 }
 
+fn count_same_archetype(sp: &BTreeSet<String>, group: &[Strain]) -> usize {
+    group
+        .iter()
+        .filter(|other| sp.intersection(&other.species_set()).count() >= 4)
+        .count()
+}
+
 fn bud_next_wave_by_niche(
     dex: &Dex,
     gen: &TeamGen,
@@ -797,147 +818,233 @@ fn bud_next_wave_by_niche(
     ledger: &mut IslandLedger,
     rng: &mut SplitMix64,
 ) {
-    let num_niches = ledger.niches.len().max(1);
-    let carry_per_niche = (carry / num_niches).max(2);
-    let buds_per_niche = (buds / num_niches).max(1);
-
-    // Group active strains by niche, sorted by composite score (70% bayes_fit + 30% abundance)
-    let mut by_niche: BTreeMap<String, Vec<Strain>> = BTreeMap::new();
-    for s in ledger.active_strains.drain(..) {
-        by_niche.entry(s.niche.clone()).or_default().push(s);
-    }
-
-    let mut next_active: Vec<Strain> = Vec::new();
+    let max_per_archetype = 2usize;
     let mut seen_keys: BTreeSet<String> = BTreeSet::new();
 
-    for niche_spec in &ledger.niches {
-        let group = by_niche.remove(&niche_spec.name).unwrap_or_default();
-        // 2-Wave Grace Period: buds born at `born_wave - 1` (which have completed only 1 wave so far)
-        // are protected for a second wave so they accumulate 2 waves (~112 games across 2 slices)
-        // of CRN paired evaluation before competing with veterans.
-        let mut grace_buds: Vec<Strain> = Vec::new();
-        let mut veterans: Vec<Strain> = Vec::new();
-        for s in group {
-            if s.born_wave > 0 && s.born_wave + 1 >= born_wave {
-                grace_buds.push(s);
-            } else {
-                veterans.push(s);
-            }
+    // Island-wide selection: separate active strains into 1-wave-old grace-period buds
+    // and veterans, clearing any legacy founder niche restrictions (`anchors`, `max_staples`).
+    let mut grace_buds: Vec<Strain> = Vec::new();
+    let mut veterans: Vec<Strain> = Vec::new();
+    for mut s in ledger.active_strains.drain(..) {
+        s.anchors.clear();
+        s.max_staples.clear();
+        if s.born_wave > 0 && s.born_wave + 1 >= born_wave {
+            grace_buds.push(s);
+        } else {
+            veterans.push(s);
         }
-        // Sort veterans by Empirical-Bayes posterior mean `bayes_fit` directly (without the
-        // `lcb95` sample-size penalty that artificially favored 500-game incumbents over 2-wave buds).
-        veterans.sort_by(|a, b| {
-            b.bayes_fit
-                .partial_cmp(&a.bayes_fit)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-        grace_buds.sort_by(|a, b| {
-            b.bayes_fit
-                .partial_cmp(&a.bayes_fit)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+    }
 
-        let mut survivors: Vec<Strain> = Vec::new();
-        for s in veterans {
+    veterans.sort_by(|a, b| {
+        b.bayes_fit
+            .partial_cmp(&a.bayes_fit)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    grace_buds.sort_by(|a, b| {
+        b.bayes_fit
+            .partial_cmp(&a.bayes_fit)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    let top_vet_fit = veterans.first().map(|s| s.bayes_fit).unwrap_or(0.35);
+
+    // 1. Select up to `carry` survivors island-wide subject to:
+    //    - Viability floor: veterans with >= 20 bench games that have < 26% Master Pool
+    //      winrate or trail `top_vet_fit` by > 0.14 (dead founder lineages) are evicted.
+    //    - Structural Archetype Cap: at most `max_per_archetype` (2) survivors may share >= 4 species.
+    let mut survivors: Vec<Strain> = Vec::new();
+    for s in veterans {
+        let k = team_key(&s.team);
+        let b_wr = if s.bench_games > 0.0 {
+            s.bench_wins / s.bench_games
+        } else {
+            s.bayes_fit
+        };
+        let viable =
+            s.bench_games < 20.0 || (b_wr >= 0.26 && s.bayes_fit + 0.14 >= top_vet_fit);
+        let sp = s.species_set();
+        if survivors.len() < carry
+            && viable
+            && count_same_archetype(&sp, &survivors) < max_per_archetype
+            && seen_keys.insert(k)
+        {
+            survivors.push(s);
+        } else {
+            ledger.archived_strains.push(s);
+        }
+    }
+
+    // 2. If dead founder niches were evicted and `survivors.len() < carry`, first check if any
+    //    viable distinct-archetype strain in `archived_strains` can fill a slot.
+    if survivors.len() < carry && !ledger.archived_strains.is_empty() {
+        ledger.archived_strains.sort_by(|a, b| {
+            b.bayes_fit
+                .partial_cmp(&a.bayes_fit)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        let mut remaining_archive = Vec::with_capacity(ledger.archived_strains.len());
+        for mut s in ledger.archived_strains.drain(..) {
+            s.anchors.clear();
+            s.max_staples.clear();
             let k = team_key(&s.team);
-            if survivors.len() < carry_per_niche && seen_keys.insert(k) {
+            let b_wr = if s.bench_games > 0.0 {
+                s.bench_wins / s.bench_games
+            } else {
+                s.bayes_fit
+            };
+            let viable =
+                s.bench_games >= 20.0 && b_wr >= 0.28 && s.bayes_fit + 0.12 >= top_vet_fit;
+            let sp = s.species_set();
+            if survivors.len() < carry
+                && viable
+                && count_same_archetype(&sp, &survivors) < max_per_archetype
+                && seen_keys.insert(k)
+            {
                 survivors.push(s);
             } else {
-                ledger.archived_strains.push(s);
+                remaining_archive.push(s);
             }
         }
+        ledger.archived_strains = remaining_archive;
+    }
 
-        let mut kept_grace: Vec<Strain> = Vec::new();
-        for s in grace_buds {
-            let k = team_key(&s.team);
-            if kept_grace.len() < buds_per_niche && seen_keys.insert(k) {
-                kept_grace.push(s);
-            } else {
-                ledger.archived_strains.push(s);
+    // 3. Fill any still-open survivor slots up to `carry` by alternating between multi-step
+    //    speciation branches from top survivors (mutated until they form a new archetype with
+    //    < 4 shared species) and fresh de-novo Pareto-level teams.
+    let free_constraint = NicheConstraint::default();
+    let base_survivors = survivors.len();
+    let mut fill_attempt = 0usize;
+    while survivors.len() < carry && fill_attempt < carry * 6 {
+        fill_attempt += 1;
+        let mut candidate_opt: Option<(Vec<Value>, String, String, f64)> = None;
+        if base_survivors > 0 && fill_attempt % 2 == 1 {
+            let p_idx = (fill_attempt / 2) % base_survivors;
+            let parent = &survivors[p_idx];
+            let mut cur_team = parent.team.clone();
+            for _ in 0..3 {
+                if let Some(prop) =
+                    gen.propose_constrained(dex, &cur_team, rng, &free_constraint, 150)
+                {
+                    cur_team = prop.team;
+                    let sp = team_species_set(&cur_team);
+                    if count_same_archetype(&sp, &survivors) < max_per_archetype {
+                        break;
+                    }
+                }
+            }
+            let sp = team_species_set(&cur_team);
+            if count_same_archetype(&sp, &survivors) < max_per_archetype {
+                candidate_opt = Some((
+                    cur_team,
+                    parent.id.clone(),
+                    "speciate".into(),
+                    (parent.bayes_fit - 0.03).max(0.35),
+                ));
             }
         }
-
-        // If a niche somehow had no survivors, seed a fresh one
-        if survivors.is_empty() {
-            let (anchors, constraint) =
-                build_constraint(dex, &niche_spec.anchors, &niche_spec.max_staples);
-            if let Some(team) = gen.random_team_constrained(dex, rng, &anchors, &constraint, 300) {
+        if candidate_opt.is_none() {
+            if let Some(team) = gen.random_team_constrained(dex, rng, &[], &free_constraint, 300) {
+                let sp = team_species_set(&team);
+                if count_same_archetype(&sp, &survivors) < max_per_archetype {
+                    candidate_opt = Some((team, "reseed".into(), "reseed".into(), 0.35));
+                }
+            }
+        }
+        if let Some((team, parent_id, last_op, prior)) = candidate_opt {
+            let k = team_key(&team);
+            if seen_keys.insert(k) {
                 let id = format!("{island}-s{:04}", ledger.next_strain_seq);
                 ledger.next_strain_seq += 1;
                 survivors.push(Strain {
                     id,
-                    parent_id: "reseed".into(),
-                    niche: niche_spec.name.clone(),
-                    anchors: niche_spec.anchors.clone(),
-                    max_staples: niche_spec.max_staples.clone(),
+                    parent_id,
+                    niche: "eco".into(),
+                    anchors: String::new(),
+                    max_staples: String::new(),
                     born_wave,
-                    last_op: "reseed".into(),
-                    abundance: 1.0 / (num_niches as f64),
+                    last_op,
+                    abundance: 1.0 / ((carry + buds).max(1) as f64),
                     cum_games: 0.0,
                     cum_wins: 0.0,
                     bench_games: 0.0,
                     bench_wins: 0.0,
                     eco_games: 0.0,
                     eco_wins: 0.0,
-                    last_wave_fit: 0.35,
-                    parent_prior: 0.35,
-                    bayes_fit: 0.35,
+                    last_wave_fit: prior,
+                    parent_prior: prior,
+                    bayes_fit: prior,
                     lcb95: 0.0,
                     team,
                 });
             }
         }
+    }
 
-        // Spawn fresh buds for any bud slots not occupied by a grace-period bud
-        let num_parents = survivors.len();
-        let new_buds_needed = buds_per_niche.saturating_sub(kept_grace.len());
-        let mut niche_buds: Vec<Strain> = kept_grace;
-        for b_idx in 0..new_buds_needed {
-            let p_idx = b_idx % num_parents;
-            let parent = &survivors[p_idx];
-            let (_, constraint) = build_constraint(dex, &parent.anchors, &parent.max_staples);
-            if let Some(prop) = gen.propose_constrained(dex, &parent.team, rng, &constraint, 150) {
-                let k = team_key(&prop.team);
-                if seen_keys.insert(k) {
-                    let id = format!("{island}-s{:04}", ledger.next_strain_seq);
-                    ledger.next_strain_seq += 1;
-                    niche_buds.push(Strain {
-                        id,
-                        parent_id: parent.id.clone(),
-                        niche: parent.niche.clone(),
-                        anchors: parent.anchors.clone(),
-                        max_staples: parent.max_staples.clone(),
-                        born_wave,
-                        last_op: format!("{}@{}", prop.op.name(), prop.slot),
-                        abundance: parent.abundance,
-                        cum_games: 0.0,
-                        cum_wins: 0.0,
-                        bench_games: 0.0,
-                        bench_wins: 0.0,
-                        eco_games: 0.0,
-                        eco_wins: 0.0,
-                        last_wave_fit: parent.bayes_fit,
-                        parent_prior: parent.bayes_fit,
-                        bayes_fit: parent.bayes_fit,
-                        lcb95: 0.0,
-                        team: prop.team,
-                    });
-                }
+    // 4. Keep up to `buds / 2` promising 1-wave-old grace buds (early-stopping buds that
+    //    lost sharply to their parent on the CRN-paired wave slice) so neutral/beneficial
+    //    buds get a 2nd wave of evaluation while every wave also spawns fresh mutations.
+    let max_grace = (buds / 2).max(1);
+    let mut kept_grace: Vec<Strain> = Vec::new();
+    for s in grace_buds {
+        let k = team_key(&s.team);
+        let b_wr = if s.bench_games > 0.0 {
+            s.bench_wins / s.bench_games
+        } else {
+            s.bayes_fit
+        };
+        let promising = s.last_wave_fit + 0.05 >= s.parent_prior
+            && (s.bench_games < 16.0 || b_wr >= 0.24)
+            && s.bayes_fit + 0.14 >= top_vet_fit;
+        if kept_grace.len() < max_grace && promising && seen_keys.insert(k) {
+            kept_grace.push(s);
+        } else {
+            ledger.archived_strains.push(s);
+        }
+    }
+
+    // 5. Spawn fresh buds from the surviving veterans for remaining bud slots.
+    let num_parents = survivors.len().max(1);
+    let new_buds_needed = buds.saturating_sub(kept_grace.len());
+    let mut island_buds: Vec<Strain> = kept_grace;
+    for b_idx in 0..new_buds_needed {
+        let p_idx = (born_wave as usize + b_idx) % num_parents;
+        let parent = &survivors[p_idx];
+        if let Some(prop) = gen.propose_constrained(dex, &parent.team, rng, &free_constraint, 150) {
+            let k = team_key(&prop.team);
+            if seen_keys.insert(k) {
+                let id = format!("{island}-s{:04}", ledger.next_strain_seq);
+                ledger.next_strain_seq += 1;
+                island_buds.push(Strain {
+                    id,
+                    parent_id: parent.id.clone(),
+                    niche: parent.niche.clone(),
+                    anchors: String::new(),
+                    max_staples: String::new(),
+                    born_wave,
+                    last_op: format!("{}@{}", prop.op.name(), prop.slot),
+                    abundance: parent.abundance,
+                    cum_games: 0.0,
+                    cum_wins: 0.0,
+                    bench_games: 0.0,
+                    bench_wins: 0.0,
+                    eco_games: 0.0,
+                    eco_wins: 0.0,
+                    last_wave_fit: parent.bayes_fit,
+                    parent_prior: parent.bayes_fit,
+                    bayes_fit: parent.bayes_fit,
+                    lcb95: 0.0,
+                    team: prop.team,
+                });
             }
         }
-        survivors.extend(niche_buds);
-        let nw: f64 = survivors.iter().map(|s| s.abundance.max(1e-4)).sum();
-        for s in &mut survivors {
-            s.abundance = (s.abundance.max(1e-4) / nw.max(1e-9)) / (num_niches as f64);
-        }
-        next_active.extend(survivors);
     }
 
-    // Archive any remaining ungrouped strains
-    for (_k, rem) in by_niche {
-        ledger.archived_strains.extend(rem);
+    survivors.extend(island_buds);
+    let total_w: f64 = survivors.iter().map(|s| s.abundance.max(1e-4)).sum();
+    for s in &mut survivors {
+        s.abundance = s.abundance.max(1e-4) / total_w.max(1e-9);
     }
-    ledger.active_strains = next_active;
+    ledger.active_strains = survivors;
 }
 
 fn collect_all_strains(in_dir: &Path, min_games: f64) -> Vec<Strain> {

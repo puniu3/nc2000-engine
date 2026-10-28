@@ -151,8 +151,11 @@ fn gauntlet_eval_is_thread_count_invariant() {
 #[test]
 fn provable_dominance_and_preadaptation_rules_hold() {
     let (dex, gen, ls) = load();
-    // 1. 109 unconditionally dominated species (including type-adding pre-evolutions) pruned -> 137 kept
-    assert_eq!(gen.non_dominated_species().len(), 137);
+    // 1. 110 unconditionally dominated species (including type-adding pre-evolutions) pruned -> 136 kept
+    assert_eq!(gen.non_dominated_species().len(), 136);
+    assert!(!gen.non_dominated_species().contains(&"caterpie".to_string()));
+    assert!(!gen.non_dominated_species().contains(&"weedle".to_string()));
+    assert!(!gen.non_dominated_species().contains(&"magikarp".to_string()));
     assert!(!gen.non_dominated_species().contains(&"bulbasaur".to_string()));
     assert!(!gen.non_dominated_species().contains(&"ivysaur".to_string()));
     assert!(!gen.non_dominated_species().contains(&"metapod".to_string()));

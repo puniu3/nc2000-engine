@@ -373,8 +373,11 @@ impl TeamGen {
         let mut unconditionally_dominated: BTreeSet<String> = BTreeSet::new();
 
         let larval_evolutions: BTreeMap<&str, &str> = [
+            ("caterpie", "butterfree"),
             ("metapod", "butterfree"),
+            ("weedle", "beedrill"),
             ("kakuna", "beedrill"),
+            ("magikarp", "gyarados"),
             ("poliwhirl", "poliwrath"),
             ("remoraid", "octillery"),
             ("onix", "steelix"),
