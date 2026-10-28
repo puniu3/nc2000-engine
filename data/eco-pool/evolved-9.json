@@ -1,0 +1,1912 @@
+{
+  "teams": [
+    {
+      "id": "island-r16-11-s0607",
+      "origin": "eco-r17",
+      "score": 0.6465517241379313,
+      "pool24_wr": 0.6465517241379313,
+      "weight": 0.03333333333333333,
+      "drawWeight": 0.03333333333333333,
+      "species": [
+        "Golduck",
+        "Primeape",
+        "Magmar",
+        "Delibird",
+        "Typhlosion",
+        "Butterfree"
+      ],
+      "sets": [
+        {
+          "name": "Golduck",
+          "species": "Golduck",
+          "item": "Mystic Water",
+          "ability": "No Ability",
+          "moves": [
+            "Substitute",
+            "Psych Up",
+            "Ice Beam",
+            "Hydro Pump"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "F",
+          "ivs": {
+            "hp": 31,
+            "atk": 3,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Primeape",
+          "species": "Primeape",
+          "item": "Scope Lens",
+          "ability": "No Ability",
+          "moves": [
+            "Cross Chop",
+            "Thunder",
+            "Low Kick",
+            "Double-Edge"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Magmar",
+          "species": "Magmar",
+          "item": "Charcoal",
+          "ability": "No Ability",
+          "moves": [
+            "Psychic",
+            "Double Team",
+            "Dynamic Punch",
+            "Flamethrower"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Delibird",
+          "species": "Delibird",
+          "item": "Focus Band",
+          "ability": "No Ability",
+          "moves": [
+            "Mud-Slap",
+            "Rest",
+            "Spikes",
+            "Endure"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Typhlosion",
+          "species": "Typhlosion",
+          "item": "Berserk Gene",
+          "ability": "No Ability",
+          "moves": [
+            "Quick Attack",
+            "Roar",
+            "Rollout",
+            "Protect"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Butterfree",
+          "species": "Butterfree",
+          "item": "King's Rock",
+          "ability": "No Ability",
+          "moves": [
+            "Gust",
+            "Double Team",
+            "Endure",
+            "Toxic"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        }
+      ],
+      "bench_games": 200.0,
+      "bench_wins": 129.31034482758625
+    },
+    {
+      "id": "island-r16-06-s0757",
+      "origin": "eco-r16",
+      "score": 0.6203703703703707,
+      "pool24_wr": 0.6203703703703707,
+      "weight": 0.03333333333333333,
+      "drawWeight": 0.03333333333333333,
+      "species": [
+        "Mantine",
+        "Gyarados",
+        "Corsola",
+        "Kingdra",
+        "Snorlax",
+        "Espeon"
+      ],
+      "sets": [
+        {
+          "name": "Mantine",
+          "species": "Mantine",
+          "item": "Bright Powder",
+          "ability": "No Ability",
+          "moves": [
+            "Surf",
+            "Attract",
+            "Curse",
+            "Twister"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "F",
+          "ivs": {
+            "hp": 31,
+            "atk": 3,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 53,
+          "happiness": 255
+        },
+        {
+          "name": "Gyarados",
+          "species": "Gyarados",
+          "item": "Scope Lens",
+          "ability": "No Ability",
+          "moves": [
+            "Whirlpool",
+            "Thunderbolt",
+            "Dragon Breath",
+            "Mimic"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 52,
+          "happiness": 255
+        },
+        {
+          "name": "Corsola",
+          "species": "Corsola",
+          "item": "Hard Stone",
+          "ability": "No Ability",
+          "moves": [
+            "Ancient Power",
+            "Surf",
+            "Curse",
+            "Ice Beam"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Kingdra",
+          "species": "Kingdra",
+          "item": "King's Rock",
+          "ability": "No Ability",
+          "moves": [
+            "Octazooka",
+            "Whirlpool",
+            "Agility",
+            "Hydro Pump"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "F",
+          "ivs": {
+            "hp": 31,
+            "atk": 3,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Snorlax",
+          "species": "Snorlax",
+          "item": "Leftovers",
+          "ability": "No Ability",
+          "moves": [
+            "Earthquake",
+            "Lovely Kiss",
+            "Body Slam",
+            "Belly Drum"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Espeon",
+          "species": "Espeon",
+          "item": "Twisted Spoon",
+          "ability": "No Ability",
+          "moves": [
+            "Hyper Beam",
+            "Return",
+            "Toxic",
+            "Psychic"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        }
+      ],
+      "bench_games": 200.0,
+      "bench_wins": 124.07407407407413
+    },
+    {
+      "id": "island-r13-09-s0619",
+      "origin": "eco-r13",
+      "score": 0.6057692307692311,
+      "pool24_wr": 0.6057692307692311,
+      "weight": 0.03333333333333333,
+      "drawWeight": 0.03333333333333333,
+      "species": [
+        "Gyarados",
+        "Ursaring",
+        "Zapdos",
+        "Murkrow",
+        "Octillery",
+        "Golduck"
+      ],
+      "sets": [
+        {
+          "name": "Gyarados",
+          "species": "Gyarados",
+          "item": "Miracle Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Thunder",
+            "Endure",
+            "Body Slam",
+            "Swagger"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 53,
+          "happiness": 255
+        },
+        {
+          "name": "Ursaring",
+          "species": "Ursaring",
+          "item": "Quick Claw",
+          "ability": "No Ability",
+          "moves": [
+            "Earthquake",
+            "Hidden Power Poison",
+            "Return",
+            "Toxic"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 6,
+            "atk": 24,
+            "def": 28,
+            "spa": 30,
+            "spd": 30,
+            "spe": 30
+          },
+          "level": 54,
+          "happiness": 255
+        },
+        {
+          "name": "Zapdos",
+          "species": "Zapdos",
+          "item": "Berry Juice",
+          "ability": "No Ability",
+          "moves": [
+            "Thunderbolt",
+            "Swagger",
+            "Substitute",
+            "Thunder Wave"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 31,
+            "atk": 3,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Murkrow",
+          "species": "Murkrow",
+          "item": "Gold Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Icy Wind",
+            "Quick Attack",
+            "Toxic",
+            "Feint Attack"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 52,
+          "happiness": 255
+        },
+        {
+          "name": "Octillery",
+          "species": "Octillery",
+          "item": "Focus Band",
+          "ability": "No Ability",
+          "moves": [
+            "Psybeam",
+            "Attract",
+            "Flamethrower",
+            "Swagger"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "F",
+          "ivs": {
+            "hp": 31,
+            "atk": 3,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 51,
+          "happiness": 255
+        },
+        {
+          "name": "Golduck",
+          "species": "Golduck",
+          "item": "King's Rock",
+          "ability": "No Ability",
+          "moves": [
+            "Hypnosis",
+            "Iron Tail",
+            "Swagger",
+            "Hydro Pump"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 51,
+          "happiness": 255
+        }
+      ],
+      "bench_games": 200.0,
+      "bench_wins": 121.15384615384622
+    },
+    {
+      "id": "island-r9-04-s0121",
+      "origin": "eco-r10",
+      "score": 0.5865384615384617,
+      "pool24_wr": 0.5865384615384617,
+      "weight": 0.03333333333333333,
+      "drawWeight": 0.03333333333333333,
+      "species": [
+        "Kabutops",
+        "Scyther",
+        "Seaking",
+        "Venomoth",
+        "Steelix",
+        "Espeon"
+      ],
+      "sets": [
+        {
+          "name": "Kabutops",
+          "species": "Kabutops",
+          "item": "Mystic Water",
+          "ability": "No Ability",
+          "moves": [
+            "Ancient Power",
+            "Rollout",
+            "Body Slam",
+            "Whirlpool"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Scyther",
+          "species": "Scyther",
+          "item": "Quick Claw",
+          "ability": "No Ability",
+          "moves": [
+            "Hidden Power Water",
+            "Sonic Boom",
+            "Quick Attack",
+            "Pursuit"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 14,
+            "atk": 28,
+            "def": 26,
+            "spa": 30,
+            "spd": 30,
+            "spe": 30
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Seaking",
+          "species": "Seaking",
+          "item": "Never-Melt Ice",
+          "ability": "No Ability",
+          "moves": [
+            "Blizzard",
+            "Curse",
+            "Double-Edge",
+            "Surf"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Venomoth",
+          "species": "Venomoth",
+          "item": "Mystery Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Whirlwind",
+            "Foresight",
+            "Reflect",
+            "Sludge Bomb"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Steelix",
+          "species": "Steelix",
+          "item": "Leftovers",
+          "ability": "No Ability",
+          "moves": [
+            "Iron Tail",
+            "Swagger",
+            "Earthquake",
+            "Body Slam"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Espeon",
+          "species": "Espeon",
+          "item": "Gold Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Body Slam",
+            "Growth",
+            "Psychic",
+            "Rain Dance"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        }
+      ],
+      "bench_games": 200.0,
+      "bench_wins": 117.30769230769234
+    },
+    {
+      "id": "island-r17-06-s0852",
+      "origin": "eco-r17",
+      "score": 0.5862068965517242,
+      "pool24_wr": 0.5862068965517242,
+      "weight": 0.03333333333333333,
+      "drawWeight": 0.03333333333333333,
+      "species": [
+        "Stantler",
+        "Raticate",
+        "Golem",
+        "Hitmontop",
+        "Snorlax",
+        "Espeon"
+      ],
+      "sets": [
+        {
+          "name": "Stantler",
+          "species": "Stantler",
+          "item": "King's Rock",
+          "ability": "No Ability",
+          "moves": [
+            "Return",
+            "Mud-Slap",
+            "Reflect",
+            "Swagger"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Raticate",
+          "species": "Raticate",
+          "item": "Scope Lens",
+          "ability": "No Ability",
+          "moves": [
+            "Return",
+            "Sunny Day",
+            "Hyper Beam",
+            "Super Fang"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Golem",
+          "species": "Golem",
+          "item": "Hard Stone",
+          "ability": "No Ability",
+          "moves": [
+            "Flamethrower",
+            "Double-Edge",
+            "Dynamic Punch",
+            "Rollout"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Hitmontop",
+          "species": "Hitmontop",
+          "item": "Berserk Gene",
+          "ability": "No Ability",
+          "moves": [
+            "Pursuit",
+            "Hidden Power Steel",
+            "Mach Punch",
+            "Focus Energy"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 30,
+            "atk": 26,
+            "def": 30,
+            "spa": 30,
+            "spd": 30,
+            "spe": 30
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Snorlax",
+          "species": "Snorlax",
+          "item": "Leftovers",
+          "ability": "No Ability",
+          "moves": [
+            "Earthquake",
+            "Lovely Kiss",
+            "Body Slam",
+            "Psychic"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Espeon",
+          "species": "Espeon",
+          "item": "Bright Powder",
+          "ability": "No Ability",
+          "moves": [
+            "Rest",
+            "Reflect",
+            "Toxic",
+            "Psychic"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "F",
+          "ivs": {
+            "hp": 31,
+            "atk": 3,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        }
+      ],
+      "bench_games": 200.0,
+      "bench_wins": 117.24137931034484
+    },
+    {
+      "id": "island-r16-03-s0574",
+      "origin": "eco-r16",
+      "score": 0.5833333333333337,
+      "pool24_wr": 0.5833333333333337,
+      "weight": 0.03333333333333333,
+      "drawWeight": 0.03333333333333333,
+      "species": [
+        "Espeon",
+        "Pinsir",
+        "Ursaring",
+        "Marowak",
+        "Electrode",
+        "Muk"
+      ],
+      "sets": [
+        {
+          "name": "Espeon",
+          "species": "Espeon",
+          "item": "Leftovers",
+          "ability": "No Ability",
+          "moves": [
+            "Body Slam",
+            "Substitute",
+            "Psychic",
+            "Endure"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Pinsir",
+          "species": "Pinsir",
+          "item": "Gold Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Swords Dance",
+            "Hyper Beam",
+            "Double-Edge",
+            "Sunny Day"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Ursaring",
+          "species": "Ursaring",
+          "item": "Black Belt",
+          "ability": "No Ability",
+          "moves": [
+            "Mud-Slap",
+            "Roar",
+            "Dynamic Punch",
+            "Return"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Marowak",
+          "species": "Marowak",
+          "item": "Thick Club",
+          "ability": "No Ability",
+          "moves": [
+            "Ice Beam",
+            "Dynamic Punch",
+            "Substitute",
+            "Double Team"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Electrode",
+          "species": "Electrode",
+          "item": "Bright Powder",
+          "ability": "No Ability",
+          "moves": [
+            "Hidden Power Dragon",
+            "Explosion",
+            "Screech",
+            "Thunder"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 22,
+            "atk": 30,
+            "def": 28,
+            "spa": 30,
+            "spd": 30,
+            "spe": 30
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Muk",
+          "species": "Muk",
+          "item": "Focus Band",
+          "ability": "No Ability",
+          "moves": [
+            "Fire Blast",
+            "Ice Punch",
+            "Mud-Slap",
+            "Attract"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        }
+      ],
+      "bench_games": 200.0,
+      "bench_wins": 116.66666666666674
+    },
+    {
+      "id": "island-r17-01-s0793",
+      "origin": "eco-r17",
+      "score": 0.5689655172413794,
+      "pool24_wr": 0.5689655172413794,
+      "weight": 0.03333333333333333,
+      "drawWeight": 0.03333333333333333,
+      "species": [
+        "Electabuzz",
+        "Delibird",
+        "Rhydon",
+        "Farfetch\u2019d",
+        "Rapidash",
+        "Blastoise"
+      ],
+      "sets": [
+        {
+          "name": "Electabuzz",
+          "species": "Electabuzz",
+          "item": "Scope Lens",
+          "ability": "No Ability",
+          "moves": [
+            "Pursuit",
+            "Curse",
+            "Rest",
+            "Thunderbolt"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "F",
+          "ivs": {
+            "hp": 31,
+            "atk": 3,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Delibird",
+          "species": "Delibird",
+          "item": "Miracle Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Rapid Spin",
+            "Swagger",
+            "Rest",
+            "Icy Wind"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Rhydon",
+          "species": "Rhydon",
+          "item": "Leftovers",
+          "ability": "No Ability",
+          "moves": [
+            "Mega Kick",
+            "Sandstorm",
+            "Toxic",
+            "Scary Face"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Farfetch\u2019d",
+          "species": "Farfetch\u2019d",
+          "item": "PRZ Cure Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Steel Wing",
+            "Flail",
+            "Fly",
+            "Foresight"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Rapidash",
+          "species": "Rapidash",
+          "item": "Gold Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Substitute",
+            "Fire Blast",
+            "Hyper Beam",
+            "Swagger"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Blastoise",
+          "species": "Blastoise",
+          "item": "Focus Band",
+          "ability": "No Ability",
+          "moves": [
+            "Endure",
+            "Surf",
+            "Swagger",
+            "Bite"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "F",
+          "ivs": {
+            "hp": 31,
+            "atk": 3,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        }
+      ],
+      "bench_games": 200.0,
+      "bench_wins": 113.79310344827589
+    },
+    {
+      "id": "island-r17-11-s0667",
+      "origin": "eco-r17",
+      "score": 0.5344827586206898,
+      "pool24_wr": 0.5344827586206898,
+      "weight": 0.03333333333333333,
+      "drawWeight": 0.03333333333333333,
+      "species": [
+        "Typhlosion",
+        "Starmie",
+        "Blastoise",
+        "Persian",
+        "Kabutops",
+        "Scizor"
+      ],
+      "sets": [
+        {
+          "name": "Typhlosion",
+          "species": "Typhlosion",
+          "item": "Focus Band",
+          "ability": "No Ability",
+          "moves": [
+            "Dynamic Punch",
+            "Toxic",
+            "Swagger",
+            "Fire Blast"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Starmie",
+          "species": "Starmie",
+          "item": "Quick Claw",
+          "ability": "No Ability",
+          "moves": [
+            "Thunder",
+            "Mimic",
+            "Psychic",
+            "Attract"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Blastoise",
+          "species": "Blastoise",
+          "item": "Bright Powder",
+          "ability": "No Ability",
+          "moves": [
+            "Icy Wind",
+            "Dynamic Punch",
+            "Surf",
+            "Bide"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Persian",
+          "species": "Persian",
+          "item": "Scope Lens",
+          "ability": "No Ability",
+          "moves": [
+            "Icy Wind",
+            "Screech",
+            "Feint Attack",
+            "Hyper Beam"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Kabutops",
+          "species": "Kabutops",
+          "item": "Mystery Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Hyper Beam",
+            "Dig",
+            "Reflect",
+            "Swords Dance"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Scizor",
+          "species": "Scizor",
+          "item": "Berserk Gene",
+          "ability": "No Ability",
+          "moves": [
+            "Substitute",
+            "Reversal",
+            "Metal Claw",
+            "Return"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        }
+      ],
+      "bench_games": 200.0,
+      "bench_wins": 106.89655172413796
+    },
+    {
+      "id": "island-r17-03-s0593",
+      "origin": "eco-r17",
+      "score": 0.5258620689655175,
+      "pool24_wr": 0.5258620689655175,
+      "weight": 0.03333333333333333,
+      "drawWeight": 0.03333333333333333,
+      "species": [
+        "Espeon",
+        "Pinsir",
+        "Pikachu",
+        "Pidgeot",
+        "Electrode",
+        "Blastoise"
+      ],
+      "sets": [
+        {
+          "name": "Espeon",
+          "species": "Espeon",
+          "item": "Bright Powder",
+          "ability": "No Ability",
+          "moves": [
+            "Body Slam",
+            "Return",
+            "Psychic",
+            "Rain Dance"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Pinsir",
+          "species": "Pinsir",
+          "item": "Gold Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Swords Dance",
+            "Hyper Beam",
+            "Double-Edge",
+            "Sunny Day"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Pikachu",
+          "species": "Pikachu",
+          "item": "Mystery Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Return",
+            "Light Screen",
+            "Double Team",
+            "Body Slam"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Pidgeot",
+          "species": "Pidgeot",
+          "item": "Sharp Beak",
+          "ability": "No Ability",
+          "moves": [
+            "Hidden Power Flying",
+            "Hyper Beam",
+            "Return",
+            "Agility"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 14,
+            "atk": 24,
+            "def": 26,
+            "spa": 30,
+            "spd": 30,
+            "spe": 30
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Electrode",
+          "species": "Electrode",
+          "item": "Leftovers",
+          "ability": "No Ability",
+          "moves": [
+            "Hidden Power Dragon",
+            "Explosion",
+            "Screech",
+            "Thunder"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 22,
+            "atk": 30,
+            "def": 28,
+            "spa": 30,
+            "spd": 30,
+            "spe": 30
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Blastoise",
+          "species": "Blastoise",
+          "item": "Berry Juice",
+          "ability": "No Ability",
+          "moves": [
+            "Blizzard",
+            "Surf",
+            "Mega Kick",
+            "Whirlpool"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        }
+      ],
+      "bench_games": 200.0,
+      "bench_wins": 105.17241379310349
+    }
+  ]
+}

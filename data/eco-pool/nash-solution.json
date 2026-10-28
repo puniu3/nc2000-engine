@@ -1,0 +1,1479 @@
+{
+  "format": "nc2000-eco-extracted-nash-v1",
+  "candidates": [
+    "island-r16-11-s0607",
+    "island-r16-06-s0757",
+    "island-r13-09-s0619",
+    "island-r9-04-s0121",
+    "island-r17-06-s0852",
+    "island-r16-03-s0574",
+    "island-r17-01-s0793",
+    "island-r17-11-s0667",
+    "island-r17-03-s0593",
+    "sample-07",
+    "nb-sample-13-0",
+    "sample-08",
+    "rental-cban-3",
+    "sample-10"
+  ],
+  "weights": [
+    5.010971965603536e-7,
+    3.17563377182393e-6,
+    3.5714285714285515e-7,
+    0.03546559826860165,
+    0.4325106058989245,
+    1.3831209137387047e-6,
+    8.828437917222938e-7,
+    3.5714285714285515e-7,
+    3.5714285714285515e-7,
+    0.2178960468636493,
+    0.004710608514061068,
+    0.18267227606297382,
+    3.968395269196447e-7,
+    0.12673745342801745
+  ],
+  "payoff": [
+    [
+      0.5,
+      0.25,
+      0.5,
+      0.25,
+      0.0,
+      0.625,
+      0.625,
+      0.875,
+      0.625,
+      0.25,
+      0.625,
+      0.5,
+      0.125,
+      1.0
+    ],
+    [
+      0.75,
+      0.5,
+      0.625,
+      1.0,
+      0.25,
+      0.625,
+      0.375,
+      0.875,
+      0.375,
+      0.5,
+      0.5,
+      0.5,
+      0.375,
+      0.375
+    ],
+    [
+      0.5,
+      0.375,
+      0.5,
+      0.25,
+      0.125,
+      0.0,
+      0.0,
+      0.75,
+      0.375,
+      0.625,
+      0.5,
+      0.5,
+      0.375,
+      0.625
+    ],
+    [
+      0.75,
+      0.0,
+      0.75,
+      0.5,
+      0.375,
+      1.0,
+      0.625,
+      0.75,
+      0.375,
+      0.5,
+      0.75,
+      0.875,
+      0.375,
+      0.375
+    ],
+    [
+      1.0,
+      0.75,
+      0.875,
+      0.625,
+      0.5,
+      0.75,
+      0.75,
+      0.625,
+      1.0,
+      0.375,
+      0.5,
+      0.625,
+      0.875,
+      0.5
+    ],
+    [
+      0.375,
+      0.375,
+      1.0,
+      0.0,
+      0.25,
+      0.5,
+      0.875,
+      0.625,
+      0.0,
+      0.625,
+      0.5,
+      0.625,
+      0.875,
+      0.625
+    ],
+    [
+      0.375,
+      0.625,
+      1.0,
+      0.375,
+      0.25,
+      0.125,
+      0.5,
+      0.875,
+      0.75,
+      0.4375,
+      0.25,
+      0.25,
+      1.0,
+      0.75
+    ],
+    [
+      0.125,
+      0.125,
+      0.25,
+      0.25,
+      0.375,
+      0.375,
+      0.125,
+      0.5,
+      0.5,
+      0.25,
+      0.875,
+      0.375,
+      0.5,
+      0.5
+    ],
+    [
+      0.375,
+      0.625,
+      0.625,
+      0.625,
+      0.0,
+      1.0,
+      0.25,
+      0.5,
+      0.5,
+      0.75,
+      0.375,
+      0.375,
+      0.25,
+      0.625
+    ],
+    [
+      0.75,
+      0.5,
+      0.375,
+      0.5,
+      0.625,
+      0.375,
+      0.5625,
+      0.75,
+      0.25,
+      0.5,
+      0.5571428571428572,
+      0.42857142857142855,
+      0.6428571428571429,
+      0.35714285714285715
+    ],
+    [
+      0.375,
+      0.5,
+      0.5,
+      0.25,
+      0.5,
+      0.5,
+      0.75,
+      0.125,
+      0.625,
+      0.44285714285714284,
+      0.5,
+      0.6285714285714286,
+      0.5,
+      0.44285714285714284
+    ],
+    [
+      0.5,
+      0.5,
+      0.5,
+      0.125,
+      0.375,
+      0.375,
+      0.75,
+      0.625,
+      0.625,
+      0.5714285714285714,
+      0.37142857142857144,
+      0.5,
+      0.38571428571428573,
+      0.6857142857142857
+    ],
+    [
+      0.875,
+      0.625,
+      0.625,
+      0.625,
+      0.125,
+      0.125,
+      0.0,
+      0.5,
+      0.75,
+      0.3571428571428571,
+      0.5,
+      0.6142857142857143,
+      0.5,
+      0.6
+    ],
+    [
+      0.0,
+      0.625,
+      0.375,
+      0.625,
+      0.5,
+      0.375,
+      0.25,
+      0.5,
+      0.375,
+      0.6428571428571428,
+      0.5571428571428572,
+      0.3142857142857143,
+      0.4,
+      0.5
+    ]
+  ],
+  "shrunk_payoff": [
+    [
+      0.5,
+      0.35714285714285715,
+      0.5,
+      0.35714285714285715,
+      0.21428571428571427,
+      0.5714285714285714,
+      0.5714285714285714,
+      0.7142857142857143,
+      0.5714285714285714,
+      0.35714285714285715,
+      0.5714285714285714,
+      0.5,
+      0.2857142857142857,
+      0.7857142857142857
+    ],
+    [
+      0.6428571428571428,
+      0.5,
+      0.5714285714285714,
+      0.7857142857142857,
+      0.35714285714285715,
+      0.5714285714285714,
+      0.42857142857142855,
+      0.7142857142857143,
+      0.42857142857142855,
+      0.5,
+      0.5,
+      0.5,
+      0.42857142857142855,
+      0.42857142857142855
+    ],
+    [
+      0.5,
+      0.4285714285714286,
+      0.5,
+      0.35714285714285715,
+      0.2857142857142857,
+      0.21428571428571427,
+      0.21428571428571427,
+      0.6428571428571429,
+      0.42857142857142855,
+      0.5714285714285714,
+      0.5,
+      0.5,
+      0.42857142857142855,
+      0.5714285714285714
+    ],
+    [
+      0.6428571428571428,
+      0.2142857142857143,
+      0.6428571428571428,
+      0.5,
+      0.42857142857142855,
+      0.7857142857142857,
+      0.5714285714285714,
+      0.6428571428571429,
+      0.42857142857142855,
+      0.5,
+      0.6428571428571429,
+      0.7142857142857143,
+      0.42857142857142855,
+      0.42857142857142855
+    ],
+    [
+      0.7857142857142857,
+      0.6428571428571428,
+      0.7142857142857143,
+      0.5714285714285714,
+      0.5,
+      0.6428571428571429,
+      0.6428571428571429,
+      0.5714285714285714,
+      0.7857142857142857,
+      0.42857142857142855,
+      0.5,
+      0.5714285714285714,
+      0.7142857142857143,
+      0.5
+    ],
+    [
+      0.4285714285714286,
+      0.4285714285714286,
+      0.7857142857142857,
+      0.2142857142857143,
+      0.3571428571428571,
+      0.5,
+      0.7142857142857143,
+      0.5714285714285714,
+      0.21428571428571427,
+      0.5714285714285714,
+      0.5,
+      0.5714285714285714,
+      0.7142857142857143,
+      0.5714285714285714
+    ],
+    [
+      0.4285714285714286,
+      0.5714285714285714,
+      0.7857142857142857,
+      0.4285714285714286,
+      0.3571428571428571,
+      0.2857142857142857,
+      0.5,
+      0.7142857142857143,
+      0.6428571428571429,
+      0.4642857142857143,
+      0.35714285714285715,
+      0.35714285714285715,
+      0.7857142857142857,
+      0.6428571428571429
+    ],
+    [
+      0.2857142857142857,
+      0.2857142857142857,
+      0.3571428571428571,
+      0.3571428571428571,
+      0.4285714285714286,
+      0.4285714285714286,
+      0.2857142857142857,
+      0.5,
+      0.5,
+      0.35714285714285715,
+      0.7142857142857143,
+      0.42857142857142855,
+      0.5,
+      0.5
+    ],
+    [
+      0.4285714285714286,
+      0.5714285714285714,
+      0.5714285714285714,
+      0.5714285714285714,
+      0.2142857142857143,
+      0.7857142857142857,
+      0.3571428571428571,
+      0.5,
+      0.5,
+      0.6428571428571429,
+      0.42857142857142855,
+      0.42857142857142855,
+      0.35714285714285715,
+      0.5714285714285714
+    ],
+    [
+      0.6428571428571428,
+      0.5,
+      0.4285714285714286,
+      0.5,
+      0.5714285714285714,
+      0.4285714285714286,
+      0.5357142857142857,
+      0.6428571428571428,
+      0.3571428571428571,
+      0.5,
+      0.5571428571428572,
+      0.42857142857142855,
+      0.6428571428571429,
+      0.35714285714285715
+    ],
+    [
+      0.4285714285714286,
+      0.5,
+      0.5,
+      0.3571428571428571,
+      0.5,
+      0.5,
+      0.6428571428571428,
+      0.2857142857142857,
+      0.5714285714285714,
+      0.44285714285714284,
+      0.5,
+      0.6285714285714286,
+      0.5,
+      0.44285714285714284
+    ],
+    [
+      0.5,
+      0.5,
+      0.5,
+      0.2857142857142857,
+      0.4285714285714286,
+      0.4285714285714286,
+      0.6428571428571428,
+      0.5714285714285714,
+      0.5714285714285714,
+      0.5714285714285714,
+      0.37142857142857144,
+      0.5,
+      0.38571428571428573,
+      0.6857142857142857
+    ],
+    [
+      0.7142857142857143,
+      0.5714285714285714,
+      0.5714285714285714,
+      0.5714285714285714,
+      0.2857142857142857,
+      0.2857142857142857,
+      0.2142857142857143,
+      0.5,
+      0.6428571428571428,
+      0.3571428571428571,
+      0.5,
+      0.6142857142857143,
+      0.5,
+      0.6
+    ],
+    [
+      0.2142857142857143,
+      0.5714285714285714,
+      0.4285714285714286,
+      0.5714285714285714,
+      0.5,
+      0.4285714285714286,
+      0.3571428571428571,
+      0.5,
+      0.4285714285714286,
+      0.6428571428571428,
+      0.5571428571428572,
+      0.3142857142857143,
+      0.4,
+      0.5
+    ]
+  ],
+  "teams": [
+    {
+      "id": "island-r17-06-s0852",
+      "weight": 0.4325106058989245,
+      "sets": [
+        {
+          "name": "Stantler",
+          "species": "Stantler",
+          "item": "King's Rock",
+          "ability": "No Ability",
+          "moves": [
+            "Return",
+            "Mud-Slap",
+            "Reflect",
+            "Swagger"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Raticate",
+          "species": "Raticate",
+          "item": "Scope Lens",
+          "ability": "No Ability",
+          "moves": [
+            "Return",
+            "Sunny Day",
+            "Hyper Beam",
+            "Super Fang"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Golem",
+          "species": "Golem",
+          "item": "Hard Stone",
+          "ability": "No Ability",
+          "moves": [
+            "Flamethrower",
+            "Double-Edge",
+            "Dynamic Punch",
+            "Rollout"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Hitmontop",
+          "species": "Hitmontop",
+          "item": "Berserk Gene",
+          "ability": "No Ability",
+          "moves": [
+            "Pursuit",
+            "Hidden Power Steel",
+            "Mach Punch",
+            "Focus Energy"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 30,
+            "atk": 26,
+            "def": 30,
+            "spa": 30,
+            "spd": 30,
+            "spe": 30
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Snorlax",
+          "species": "Snorlax",
+          "item": "Leftovers",
+          "ability": "No Ability",
+          "moves": [
+            "Earthquake",
+            "Lovely Kiss",
+            "Body Slam",
+            "Psychic"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Espeon",
+          "species": "Espeon",
+          "item": "Bright Powder",
+          "ability": "No Ability",
+          "moves": [
+            "Rest",
+            "Reflect",
+            "Toxic",
+            "Psychic"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "F",
+          "ivs": {
+            "hp": 31,
+            "atk": 3,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        }
+      ]
+    },
+    {
+      "id": "sample-07",
+      "weight": 0.2178960468636493,
+      "sets": [
+        {
+          "name": "Electrode",
+          "species": "Electrode",
+          "item": "Miracle Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Thunderbolt",
+            "Explosion",
+            "Reflect",
+            "Thunder Wave"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Tauros",
+          "species": "Tauros",
+          "item": "Berserk Gene",
+          "ability": "No Ability",
+          "moves": [
+            "Double-Edge",
+            "Fire Blast",
+            "Earthquake",
+            "Hyper Beam"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Cloyster",
+          "species": "Cloyster",
+          "item": "Gold Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Ice Beam",
+            "Explosion",
+            "Curse",
+            "Spikes"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Marowak",
+          "species": "Marowak",
+          "item": "Thick Club",
+          "ability": "No Ability",
+          "moves": [
+            "Earthquake",
+            "Rock Slide",
+            "Hidden Power Bug",
+            "Swords Dance"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 26,
+            "def": 26,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Snorlax",
+          "species": "Snorlax",
+          "item": "Leftovers",
+          "ability": "No Ability",
+          "moves": [
+            "Body Slam",
+            "Earthquake",
+            "Self-Destruct",
+            "Curse"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Zapdos",
+          "species": "Zapdos",
+          "item": "Mint Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Thunderbolt",
+            "Hidden Power Ice",
+            "Whirlwind",
+            "Rest"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 26,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        }
+      ]
+    },
+    {
+      "id": "sample-08",
+      "weight": 0.18267227606297382,
+      "sets": [
+        {
+          "name": "Exeggutor",
+          "species": "Exeggutor",
+          "item": "Quick Claw",
+          "ability": "No Ability",
+          "moves": [
+            "Psychic",
+            "Hidden Power Bug",
+            "Explosion",
+            "Leech Seed"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 26,
+            "def": 26,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Machamp",
+          "species": "Machamp",
+          "item": "Gold Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Cross Chop",
+            "Earthquake",
+            "Rock Slide",
+            "Hidden Power Bug"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 26,
+            "def": 26,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Miltank",
+          "species": "Miltank",
+          "item": "Polkadot Bow",
+          "ability": "No Ability",
+          "moves": [
+            "Return",
+            "Zap Cannon",
+            "Curse",
+            "Milk Drink"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "F",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Cloyster",
+          "species": "Cloyster",
+          "item": "Miracle Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Surf",
+            "Ice Beam",
+            "Explosion",
+            "Spikes"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Snorlax",
+          "species": "Snorlax",
+          "item": "Mint Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Body Slam",
+            "Earthquake",
+            "Self-Destruct",
+            "Rest"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Zapdos",
+          "species": "Zapdos",
+          "item": "Leftovers",
+          "ability": "No Ability",
+          "moves": [
+            "Thunder",
+            "Hidden Power Ice",
+            "Swagger",
+            "Whirlwind"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 26,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        }
+      ]
+    },
+    {
+      "id": "sample-10",
+      "weight": 0.12673745342801745,
+      "sets": [
+        {
+          "name": "Golem",
+          "species": "Golem",
+          "item": "Gold Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Rock Slide",
+            "Earthquake",
+            "Explosion",
+            "Curse"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Exeggutor",
+          "species": "Exeggutor",
+          "item": "Mint Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Psychic",
+            "Explosion",
+            "Leech Seed",
+            "Sleep Powder"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Miltank",
+          "species": "Miltank",
+          "item": "Polkadot Bow",
+          "ability": "No Ability",
+          "moves": [
+            "Return",
+            "Dynamic Punch",
+            "Curse",
+            "Milk Drink"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "F",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Snorlax",
+          "species": "Snorlax",
+          "item": "Leftovers",
+          "ability": "No Ability",
+          "moves": [
+            "Double-Edge",
+            "Fire Blast",
+            "Self-Destruct",
+            "Curse"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Venusaur",
+          "species": "Venusaur",
+          "item": "PRZ Cure Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Razor Leaf",
+            "Leech Seed",
+            "Sleep Powder",
+            "Synthesis"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Tyranitar",
+          "species": "Tyranitar",
+          "item": "Miracle Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Rock Slide",
+            "Crunch",
+            "Fire Blast",
+            "Dynamic Punch"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        }
+      ]
+    },
+    {
+      "id": "island-r9-04-s0121",
+      "weight": 0.03546559826860165,
+      "sets": [
+        {
+          "name": "Kabutops",
+          "species": "Kabutops",
+          "item": "Mystic Water",
+          "ability": "No Ability",
+          "moves": [
+            "Ancient Power",
+            "Rollout",
+            "Body Slam",
+            "Whirlpool"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Scyther",
+          "species": "Scyther",
+          "item": "Quick Claw",
+          "ability": "No Ability",
+          "moves": [
+            "Hidden Power Water",
+            "Sonic Boom",
+            "Quick Attack",
+            "Pursuit"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 14,
+            "atk": 28,
+            "def": 26,
+            "spa": 30,
+            "spd": 30,
+            "spe": 30
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Seaking",
+          "species": "Seaking",
+          "item": "Never-Melt Ice",
+          "ability": "No Ability",
+          "moves": [
+            "Blizzard",
+            "Curse",
+            "Double-Edge",
+            "Surf"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Venomoth",
+          "species": "Venomoth",
+          "item": "Mystery Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Whirlwind",
+            "Foresight",
+            "Reflect",
+            "Sludge Bomb"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Steelix",
+          "species": "Steelix",
+          "item": "Leftovers",
+          "ability": "No Ability",
+          "moves": [
+            "Iron Tail",
+            "Swagger",
+            "Earthquake",
+            "Body Slam"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Espeon",
+          "species": "Espeon",
+          "item": "Gold Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Body Slam",
+            "Growth",
+            "Psychic",
+            "Rain Dance"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        }
+      ]
+    }
+  ]
+}
