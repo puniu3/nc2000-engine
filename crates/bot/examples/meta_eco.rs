@@ -1006,7 +1006,9 @@ fn cmd_extract_nash(args: &[String]) {
     let pool_file = PathBuf::from(flag(args, "--pool").expect("--pool EXTRACTED_POOL.json"));
     let out_file = PathBuf::from(flag(args, "--out").expect("--out NASH.json"));
     let top_evolved: usize = num(args, "--top-evolved", 10);
-    let eval_games: u32 = num(args, "--eval-games", 12);
+    let eval_games: u32 = num(args, "--eval-games", 16);
+    let gate_games: u32 = num(args, "--gate-games", 16);
+    let min_gate_wr: f64 = num(args, "--min-gate-wr", 0.505);
     let max_turns: u16 = num(args, "--max-turns", 300);
     let seed: u64 = num(args, "--seed", 20261201);
     let threads: usize = flag(args, "--threads")
@@ -1018,33 +1020,96 @@ fn cmd_extract_nash(args: &[String]) {
         });
     let (agent_iters, agent_c, blind_pool) = parse_agent_spec(args, &root);
 
-    let pv: Value = serde_json::from_str(&std::fs::read_to_string(&pool_file).unwrap()).unwrap();
-    let mut ids: Vec<String> = Vec::new();
-    let mut raw_teams: Vec<Vec<Value>> = Vec::new();
-    let mut sets_list: Vec<Vec<PokemonSet>> = Vec::new();
-
-    for t in pv["teams"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .take(top_evolved)
-    {
-        let id = t["id"].as_str().unwrap().to_string();
-        let raw = t["sets"].as_array().unwrap().clone();
-        let canon = gen.canonize(&dex, &raw).unwrap();
-        ids.push(id);
-        sets_list.push(to_sets(&canon).unwrap());
-        raw_teams.push(canon);
-    }
-
-    // Include human benchmark teams from --gauntlet-file so Nash solves over
-    // the union of human champions + evolved ecosystem challengers
+    // 1. Load existing Old-Nash benchmark teams and weights
     let gfile = flag(args, "--gauntlet-file").unwrap_or_else(|| {
         root.join("data/meta-nash-v3/pool-artifact.json")
             .to_string_lossy()
             .into_owned()
     });
+    let (old_teams, old_weights) = load_gauntlet_file(&dex, &gen, &gfile);
     let gv: Value = serde_json::from_str(&std::fs::read_to_string(&gfile).unwrap()).unwrap();
+
+    // Load known reference pairwise matrix (e.g. data/meta-nash-v3/solution-blind27000.json)
+    // so small-sample noise NEVER scrambles the known equilibrium among existing benchmark teams!
+    let ref_matrix_file = flag(args, "--ref-matrix").unwrap_or_else(|| {
+        root.join("data/meta-nash-v3/solution-blind27000.json")
+            .to_string_lossy()
+            .into_owned()
+    });
+    let mut ref_payoff_map: BTreeMap<(String, String), f64> = BTreeMap::new();
+    if let Ok(rtxt) = std::fs::read_to_string(&ref_matrix_file) {
+        if let Ok(rv) = serde_json::from_str::<Value>(&rtxt) {
+            if let (Some(rids), Some(rmat)) = (rv["ids"].as_array(), rv["matrix"].as_array()) {
+                for (i, ri) in rids.iter().enumerate() {
+                    for (j, rj) in rids.iter().enumerate() {
+                        if let (Some(si), Some(sj), Some(p)) = (
+                            ri.as_str(),
+                            rj.as_str(),
+                            rmat.get(i).and_then(|row| row.get(j)).and_then(Value::as_f64),
+                        ) {
+                            ref_payoff_map.insert((si.to_string(), sj.to_string()), p);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let mut ids: Vec<String> = Vec::new();
+    let mut raw_teams: Vec<Vec<Value>> = Vec::new();
+    let mut sets_list: Vec<Vec<PokemonSet>> = Vec::new();
+
+    // 2. Out-of-Sample Entry Gate: only admit evolved challengers that strictly beat Old-Nash
+    // (`score_vs_old >= min_gate_wr`) on independent verification seeds!
+    let pv: Value = serde_json::from_str(&std::fs::read_to_string(&pool_file).unwrap()).unwrap();
+    eprintln!(
+        "=== Step 1: Out-of-Sample Challenger Entry Gate vs Old-Nash (min_gate_wr={min_gate_wr:.3}, {gate_games} games/opp) ==="
+    );
+    for (c_idx, t) in pv["teams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .take(top_evolved)
+        .enumerate()
+    {
+        let id = t["id"].as_str().unwrap().to_string();
+        let raw = t["sets"].as_array().unwrap().clone();
+        let canon = gen.canonize(&dex, &raw).unwrap();
+        let cand_sets = to_sets(&canon).unwrap();
+        let vs_old = gauntlet_eval_weighted(
+            &dex,
+            &cand_sets,
+            &old_teams,
+            &old_weights,
+            &WeightedEvalCfg {
+                games_per_opponent: gate_games,
+                agent_iters,
+                c: agent_c,
+                max_turns,
+                seed: seed ^ 0x7777_1111_u64.wrapping_add(c_idx as u64 * 9973),
+                threads,
+                blind_pool: blind_pool.clone(),
+            },
+        )
+        .score;
+        let passed = vs_old >= min_gate_wr;
+        eprintln!(
+            "  challenger {:20} vs Old-Nash = {:.4} ({:.1}%) -> {}",
+            id,
+            vs_old,
+            vs_old * 100.0,
+            if passed { "ADMITTED" } else { "REJECTED (below gate)" }
+        );
+        if passed {
+            ids.push(id);
+            sets_list.push(cand_sets);
+            raw_teams.push(canon);
+        }
+    }
+
+    let num_admitted = ids.len();
+    eprintln!("Admitted {num_admitted} verified challengers above {min_gate_wr:.3} gate.");
+
     for (idx, t) in gv["teams"].as_array().unwrap().iter().enumerate() {
         let id = t["id"]
             .as_str()
@@ -1058,9 +1123,25 @@ fn cmd_extract_nash(args: &[String]) {
     }
 
     let n = sets_list.len();
-    let mut payoff = vec![vec![0.5f64; n]; n];
+    let prior_pair_games: f64 = num(args, "--prior-pair-games", 6.0);
+    let mut raw_payoff = vec![vec![0.5f64; n]; n];
+    let mut shrunk_payoff = vec![vec![0.5f64; n]; n];
     for i in 0..n {
         for j in (i + 1)..n {
+            if let Some(&ref_p) = ref_payoff_map.get(&(ids[i].clone(), ids[j].clone())) {
+                raw_payoff[i][j] = ref_p;
+                raw_payoff[j][i] = 1.0 - ref_p;
+                shrunk_payoff[i][j] = ref_p;
+                shrunk_payoff[j][i] = 1.0 - ref_p;
+                eprintln!(
+                    "  pair ({:2}/{n}) {} vs {}: ref={:.3} (preserved)",
+                    i + 1,
+                    ids[i],
+                    ids[j],
+                    ref_p
+                );
+                continue;
+            }
             let p_ij = gauntlet_eval_weighted(
                 &dex,
                 &sets_list[i],
@@ -1077,13 +1158,24 @@ fn cmd_extract_nash(args: &[String]) {
                 },
             )
             .score;
-            payoff[i][j] = p_ij;
-            payoff[j][i] = 1.0 - p_ij;
-            eprintln!("  pair ({:2}/{n}) {} vs {}: {:.3}", i + 1, ids[i], ids[j], p_ij);
+            raw_payoff[i][j] = p_ij;
+            raw_payoff[j][i] = 1.0 - p_ij;
+            let g = eval_games as f64;
+            let s_ij = (p_ij * g + 0.5 * prior_pair_games) / (g + prior_pair_games);
+            shrunk_payoff[i][j] = s_ij;
+            shrunk_payoff[j][i] = 1.0 - s_ij;
+            eprintln!(
+                "  pair ({:2}/{n}) {} vs {}: raw={:.3} shrunk={:.3}",
+                i + 1,
+                ids[i],
+                ids[j],
+                p_ij,
+                s_ij
+            );
         }
     }
 
-    let weights = solve_symmetric_nash(&payoff, 200_000);
+    let weights = solve_symmetric_nash(&shrunk_payoff, 200_000);
     let mut support: Vec<Value> = Vec::new();
     for i in 0..n {
         if weights[i] >= 0.005 {
@@ -1106,7 +1198,8 @@ fn cmd_extract_nash(args: &[String]) {
         "format": "nc2000-eco-extracted-nash-v1",
         "candidates": ids,
         "weights": weights,
-        "payoff": payoff,
+        "payoff": raw_payoff,
+        "shrunk_payoff": shrunk_payoff,
         "teams": support,
     });
     if let Some(parent) = out_file.parent() {
@@ -1123,6 +1216,253 @@ fn cmd_extract_nash(args: &[String]) {
     }
 }
 
+fn cmd_verify_nash(args: &[String]) {
+    let dex = load_dex();
+    let root = repo_root();
+    let ls_text = std::fs::read_to_string(root.join("data/learnsets-gen2.json")).unwrap();
+    let pool_text = std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap();
+    let gen = TeamGen::new(&dex, &ls_text, &pool_text).unwrap();
+
+    let new_file = flag(args, "--new").expect("--new NEW_NASH.json");
+    let old_file = flag(args, "--old").unwrap_or_else(|| {
+        root.join("data/meta-nash-v3/pool-artifact.json")
+            .to_string_lossy()
+            .into_owned()
+    });
+    let eval_games: u32 = num(args, "--eval-games", 16);
+    let max_turns: u16 = num(args, "--max-turns", 300);
+    let seed: u64 = num(args, "--seed", 20269999);
+    let threads: usize = flag(args, "--threads")
+        .map(|v| v.parse().unwrap())
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(4)
+        });
+    let (agent_iters, agent_c, blind_pool) = parse_agent_spec(args, &root);
+
+    let (new_teams, new_weights) = load_gauntlet_file(&dex, &gen, &new_file);
+    let (old_teams, old_weights) = load_gauntlet_file(&dex, &gen, &old_file);
+
+    let nv: Value = serde_json::from_str(&std::fs::read_to_string(&new_file).unwrap()).unwrap();
+    let new_ids: Vec<String> = nv["teams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .enumerate()
+        .map(|(i, t)| t["id"].as_str().map(String::from).unwrap_or_else(|| format!("new-{i}")))
+        .collect();
+
+    println!(
+        "=== Out-of-Sample Head-to-Head Verification ({} new vs {} old, {} games/pair) ===",
+        new_teams.len(),
+        old_teams.len(),
+        eval_games
+    );
+    let mut total_ev = 0.0;
+    for (i, (cand, &w_i)) in new_teams.iter().zip(new_weights.iter()).enumerate() {
+        let score_i = gauntlet_eval_weighted(
+            &dex,
+            cand,
+            &old_teams,
+            &old_weights,
+            &WeightedEvalCfg {
+                games_per_opponent: eval_games,
+                agent_iters,
+                c: agent_c,
+                max_turns,
+                seed: seed ^ ((i as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15)),
+                threads,
+                blind_pool: blind_pool.clone(),
+            },
+        )
+        .score;
+        total_ev += w_i * score_i;
+        println!(
+            "  {:22} (w_new={:.4}) vs Old-Nash: {:.4} ({:.1}%)",
+            new_ids.get(i).map(String::as_str).unwrap_or("?"),
+            w_i,
+            score_i,
+            score_i * 100.0
+        );
+    }
+    println!(
+        "==> E[New-Nash vs Old-Nash] (out-of-sample) = {:.4} ({:.2}%)",
+        total_ev,
+        total_ev * 100.0
+    );
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct RingGenEntry {
+    gen: String,
+    teams: Vec<Value>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct RingBufferFile {
+    capacity: usize,
+    generations: Vec<RingGenEntry>,
+}
+
+/// Maintain a ring buffer of recent generation Nash/elite distributions (`--ring`)
+/// and export their time-averaged mixture (`--out`) as the evolutionary gauntlet
+/// (Fictitious Play / Historical Averaging to eliminate Red-Queen oscillation and
+/// absorb single-generation Nash estimation noise).
+fn cmd_update_ring(args: &[String]) {
+    let dex = load_dex();
+    let root = repo_root();
+    let ls_text = std::fs::read_to_string(root.join("data/learnsets-gen2.json")).unwrap();
+    let pool_text = std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap();
+    let gen = TeamGen::new(&dex, &ls_text, &pool_text).unwrap();
+
+    let ring_path = flag(args, "--ring")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| root.join("data/eco-ring/ring-buffer.json"));
+    let out_path = flag(args, "--out")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| root.join("data/eco-ring/ring-gauntlet.json"));
+    let capacity: usize = num(args, "--capacity", 5);
+    let max_per_gen: usize = num(args, "--max-per-gen", 4);
+
+    let mut ring: RingBufferFile = if ring_path.exists() {
+        serde_json::from_str(&std::fs::read_to_string(&ring_path).unwrap()).unwrap()
+    } else {
+        // Initialize slot 0 from baseline human Nash equilibrium (meta-nash-v3)
+        let base_file = root.join("data/meta-nash-v3/pool-artifact.json");
+        let bv: Value = serde_json::from_str(&std::fs::read_to_string(&base_file).unwrap()).unwrap();
+        let mut base_teams: Vec<Value> = Vec::new();
+        let mut w_sum = 0.0;
+        for t in bv["teams"].as_array().unwrap() {
+            let w = t["weight"]
+                .as_f64()
+                .or_else(|| t["drawWeight"].as_f64())
+                .unwrap_or(1.0);
+            w_sum += w;
+            base_teams.push(json!({
+                "id": t["id"],
+                "weight": w,
+                "sets": t["sets"],
+            }));
+        }
+        for t in &mut base_teams {
+            let w = t["weight"].as_f64().unwrap() / w_sum.max(1e-9);
+            t["weight"] = json!(w);
+        }
+        RingBufferFile {
+            capacity,
+            generations: vec![RingGenEntry {
+                gen: "g0-human-nash".into(),
+                teams: base_teams,
+            }],
+        }
+    };
+    ring.capacity = capacity;
+
+    if let Some(add_file) = flag(args, "--add-file") {
+        let gen_name = flag(args, "--gen-name").unwrap_or_else(|| format!("g{}", ring.generations.len()));
+        let av: Value = serde_json::from_str(&std::fs::read_to_string(&add_file).unwrap()).unwrap();
+        let mut gen_teams: Vec<Value> = Vec::new();
+        let mut w_sum = 0.0;
+        if let Some(arr) = av["teams"].as_array() {
+            for t in arr.iter().take(max_per_gen) {
+                let raw = t["sets"].as_array().unwrap().clone();
+                let Some(canon) = gen.canonize(&dex, &raw) else {
+                    continue;
+                };
+                let w = t["weight"]
+                    .as_f64()
+                    .or_else(|| t["drawWeight"].as_f64())
+                    .or_else(|| t["lcb95"].as_f64())
+                    .unwrap_or(1.0)
+                    .max(1e-3);
+                w_sum += w;
+                gen_teams.push(json!({
+                    "id": t["id"].as_str().unwrap_or("evolved"),
+                    "weight": w,
+                    "sets": canon,
+                }));
+            }
+        }
+        if !gen_teams.is_empty() {
+            for t in &mut gen_teams {
+                let w = t["weight"].as_f64().unwrap() / w_sum.max(1e-9);
+                t["weight"] = json!(w);
+            }
+            if let Some(pos) = ring.generations.iter().position(|g| g.gen == gen_name) {
+                ring.generations[pos].teams = gen_teams;
+            } else {
+                ring.generations.push(RingGenEntry {
+                    gen: gen_name,
+                    teams: gen_teams,
+                });
+            }
+            // Keep baseline g0-human-nash at index 0 + most recent (capacity - 1) evolved generations
+            while ring.generations.len() > ring.capacity && ring.generations.len() >= 2 {
+                ring.generations.remove(1);
+            }
+        }
+    }
+
+    // Export combined uniform-generation-averaged gauntlet
+    let num_gens = ring.generations.len().max(1) as f64;
+    let mut combined: Vec<Value> = Vec::new();
+    let mut key_to_idx: BTreeMap<String, usize> = BTreeMap::new();
+    for g in &ring.generations {
+        let g_share = 1.0 / num_gens;
+        for t in &g.teams {
+            let sets = t["sets"].as_array().unwrap();
+            let k = team_key(sets);
+            let w = t["weight"].as_f64().unwrap_or(0.0) * g_share;
+            if let Some(&idx) = key_to_idx.get(&k) {
+                let prev_w = combined[idx]["weight"].as_f64().unwrap_or(0.0);
+                combined[idx]["weight"] = json!(prev_w + w);
+                combined[idx]["drawWeight"] = json!(prev_w + w);
+            } else {
+                let idx = combined.len();
+                key_to_idx.insert(k, idx);
+                combined.push(json!({
+                    "id": t["id"],
+                    "gen": g.gen,
+                    "weight": w,
+                    "drawWeight": w,
+                    "sets": t["sets"],
+                }));
+            }
+        }
+    }
+
+    if let Some(p) = ring_path.parent() {
+        std::fs::create_dir_all(p).unwrap();
+    }
+    if let Some(p) = out_path.parent() {
+        std::fs::create_dir_all(p).unwrap();
+    }
+    write_json_atomic(&ring_path, &ring);
+    let out_json = json!({
+        "format": "nc2000-eco-ring-gauntlet-v1",
+        "capacity": ring.capacity,
+        "active_generations": ring.generations.iter().map(|g| &g.gen).collect::<Vec<_>>(),
+        "teams": combined,
+    });
+    write_json_atomic(&out_path, &out_json);
+    println!(
+        "Updated ring buffer ({}/{} generations, {} unique teams) -> {}",
+        ring.generations.len(),
+        ring.capacity,
+        combined.len(),
+        out_path.display()
+    );
+    for t in &combined {
+        println!(
+            "  [{:14}] {:20} weight={:.4}",
+            t["gen"].as_str().unwrap_or("?"),
+            t["id"].as_str().unwrap_or("?"),
+            t["weight"].as_f64().unwrap_or(0.0)
+        );
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let sub = args
@@ -1133,8 +1473,10 @@ fn main() {
         "evolve-island" => cmd_evolve_island(&args[1..]),
         "extract-pool" => cmd_extract_pool(&args[1..]),
         "extract-nash" => cmd_extract_nash(&args[1..]),
+        "verify-nash" => cmd_verify_nash(&args[1..]),
+        "update-ring" => cmd_update_ring(&args[1..]),
         other => panic!(
-            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash)"
+            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring)"
         ),
     }
 }

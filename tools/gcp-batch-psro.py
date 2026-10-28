@@ -85,6 +85,7 @@ STAGE_PATHS = [
     "data/team-inventory-v1/eval/teams.json",
     "data/psro-r1/checkpoints",
     "data/eco-r2/extracted-nash.json",
+    "data/eco-ring/ring-gauntlet.json",
 ]
 
 
@@ -668,7 +669,7 @@ def main() -> None:
     sp_eco.add_argument("--islands", type=int, default=6)
     sp_eco.add_argument("--island-offset", type=int, default=0)
     sp_eco.add_argument("--seed-base", type=int, default=20261028)
-    sp_eco.add_argument("--gauntlet-file", default="data/eco-r2/extracted-nash.json")
+    sp_eco.add_argument("--gauntlet-file", default="data/eco-ring/ring-gauntlet.json")
     sp_eco.add_argument("--seed-dir", default="none")
     sp_eco.add_argument("--agent", default="blind:1000:0.4")
     sp_eco.add_argument("--waves", type=int, default=9999)
