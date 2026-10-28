@@ -84,6 +84,7 @@ STAGE_PATHS = [
     "data/team-selection-v2/panel.json",
     "data/team-inventory-v1/eval/teams.json",
     "data/psro-r1/checkpoints",
+    "data/eco-r2/extracted-nash.json",
 ]
 
 
@@ -106,7 +107,7 @@ def build_source_tarball(root: pathlib.Path, out_tar: pathlib.Path) -> str:
         for rel in STAGE_PATHS:
             p = root / rel
             if not p.exists():
-                raise FileNotFoundError(f"missing staged path: {p}")
+                continue
             if p.is_file():
                 files = [p]
             else:
@@ -497,21 +498,20 @@ def cmd_submit_eco(args: argparse.Namespace) -> None:
     """Submit Continuous-Abundance Replicator-Mutator Archipelago (`meta_eco evolve-island`)."""
     src_hash = cmd_stage(args)
     bucket = BUCKETS[args.region]
-    staples = "snorlax,zapdos,cloyster,gengar,exeggutor"
 
-    # Build `args.islands` island configs, each hosting 4 diverse strategic niches:
+    # Build `args.islands` geographically isolated island configs.
+    # Each island has 4 independent founder lineages (`f0..f3`) with ZERO artificial
+    # constraints (`anchors=""`, `max_staples=""` — 100% the real NC2000 ruleset)
+    # initialized solely from that island's unique RNG seed (Founder Effect).
     islands = []
     for k in range(args.islands):
         global_idx = args.island_offset + k
-        a1 = QD_ANCHORS[(global_idx * 2) % len(QD_ANCHORS)]
-        a2 = QD_ANCHORS[(global_idx * 2 + 1) % len(QD_ANCHORS)]
-        cap = 1 if (global_idx % 2 == 0) else 2
-        niches = f"qd-{a1}|{a1}|;qd-{a2}|{a2}|;novel-cap{cap}||{staples}:{cap};free-br||"
+        niches = ";".join(f"f{b}-i{global_idx:02d}||" for b in range(4))
         islands.append(
             {
                 "name": f"island-r{args.round}-{global_idx:02d}",
                 "niches": niches,
-                "seed": args.seed_base + args.round * 10000 + global_idx * 137,
+                "seed": args.seed_base + args.round * 100003 + global_idx * 9973,
                 "gauntlet": args.gauntlet_file,
             }
         )
@@ -572,9 +572,10 @@ cmd = [
     "--island", cfg["name"],
     "--niches", cfg["niches"],
     "--gauntlet-file", cfg["gauntlet"],
-    "--seed-dir", "data/psro-r1/checkpoints",
+    "--seed-dir", "{args.seed_dir}",
     "--agent", "{args.agent}",
     "--waves", "{args.waves}",
+    "--max-seconds", "{args.max_seconds}",
     "--carry", "{args.carry}",
     "--buds", "{args.buds}",
     "--eval-games", "{args.eval_games}",
@@ -663,18 +664,20 @@ def main() -> None:
     sp_p0.set_defaults(func=cmd_submit_phase0)
 
     sp_eco = sub.add_parser("submit-eco", help="Submit Continuous-Abundance Replicator-Mutator islands")
-    sp_eco.add_argument("--round", type=int, default=2)
+    sp_eco.add_argument("--round", type=int, default=3)
     sp_eco.add_argument("--islands", type=int, default=6)
     sp_eco.add_argument("--island-offset", type=int, default=0)
     sp_eco.add_argument("--seed-base", type=int, default=20261028)
-    sp_eco.add_argument("--gauntlet-file", default="data/meta-nash-v3/pool-artifact.json")
+    sp_eco.add_argument("--gauntlet-file", default="data/eco-r2/extracted-nash.json")
+    sp_eco.add_argument("--seed-dir", default="none")
     sp_eco.add_argument("--agent", default="blind:1000:0.4")
-    sp_eco.add_argument("--waves", type=int, default=24)
-    sp_eco.add_argument("--carry", type=int, default=6)
-    sp_eco.add_argument("--buds", type=int, default=6)
+    sp_eco.add_argument("--waves", type=int, default=9999)
+    sp_eco.add_argument("--max-seconds", type=int, default=2400)
+    sp_eco.add_argument("--carry", type=int, default=8)
+    sp_eco.add_argument("--buds", type=int, default=4)
     sp_eco.add_argument("--eval-games", type=int, default=8)
-    sp_eco.add_argument("--eta", type=float, default=4.0)
-    sp_eco.add_argument("--env-self-weight", type=float, default=0.35)
+    sp_eco.add_argument("--eta", type=float, default=5.0)
+    sp_eco.add_argument("--env-self-weight", type=float, default=0.70)
     sp_eco.add_argument("--machine-type", default="c2d-highcpu-16")
     sp_eco.add_argument("--threads-per-task", type=int, default=16)
     sp_eco.add_argument("--parallelism", type=int, default=6)
