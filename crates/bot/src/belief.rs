@@ -599,6 +599,45 @@ impl Belief {
         self.pick_draws = Some((obs.revision(), plans));
     }
 
+    /// Condition a pinned (open-sheet) belief's hidden bench sampling on a
+    /// 60-action canonical preview policy `policy` (e.g., from a Nash equilibrium
+    /// over cores), mixed with `smoothing` over all 3-mon subsets containing
+    /// `obs`'s already-revealed opponent mons.
+    pub fn condition_canonical_pick_policy(
+        &mut self,
+        policy: &[f64],
+        smoothing: f64,
+        obs: &Observer,
+    ) {
+        let appeared = obs
+            .mons()
+            .iter()
+            .enumerate()
+            .fold(0u8, |mask, (i, m)| mask | (u8::from(m.appeared) << i));
+        let dist = crate::pick_prior::PickDistribution::from_canonical_policy(
+            policy, appeared, smoothing,
+        );
+        let plans = (0..self.cands.len())
+            .map(|_| {
+                crate::pick_prior::PickDistribution::from_canonical_policy(
+                    policy, appeared, smoothing,
+                )
+            })
+            .collect();
+        if dist.is_some() {
+            self.pick_draws = Some((obs.revision(), plans));
+        } else {
+            self.pick_draws = None;
+        }
+    }
+
+    /// True if an active `pick_draws` distribution is installed for `obs.revision()`.
+    pub fn has_active_pick_draws(&self, obs: &Observer) -> bool {
+        self.pick_draws
+            .as_ref()
+            .is_some_and(|(rev, plans)| *rev == obs.revision() && plans.iter().any(Option::is_some))
+    }
+
     pub(crate) fn sample_preview_prior(
         &self,
         pick: Option<usize>,

@@ -2920,6 +2920,783 @@ fn cmd_kodoku(args: &[String]) {
     );
 }
 
+struct CoreJob {
+    cell: usize,
+    ta: [u8; 3],
+    tb: [u8; 3],
+    swap: bool,
+    battle_seed: String,
+    agent_seed: u64,
+}
+
+fn push_core_jobs(
+    jobs: &mut Vec<CoreJob>,
+    cell: usize,
+    ta: [u8; 3],
+    tb: [u8; 3],
+    games: u32,
+    seed: u64,
+) {
+    let mut rng = SplitMix64::new(seed ^ (cell as u64).wrapping_mul(0x9FB2_1C65_1E98_DF25));
+    for g in 0..games {
+        jobs.push(CoreJob {
+            cell,
+            ta,
+            tb,
+            swap: g % 2 == 1,
+            battle_seed: rng.battle_seed(),
+            agent_seed: rng.next(),
+        });
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_forced_preview_games(
+    dex: &Dex,
+    row_sets: &[PokemonSet],
+    col_sets: &[PokemonSet],
+    jobs: &[CoreJob],
+    threads: usize,
+    max_turns: u16,
+    build_row_col: &(dyn Fn(&nc2000_engine::state::Battle, usize, usize, u64, u64) -> (Box<dyn nc2000_bot::Agent>, Box<dyn nc2000_bot::Agent>) + Sync),
+    log_enabled: bool,
+) -> Vec<(usize, f64)> {
+    use nc2000_bot::{play_game, GameResult};
+    use nc2000_engine::battle::{Outcome, SearchChoice};
+    use nc2000_engine::state::Battle;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let cursor = AtomicUsize::new(0);
+    let mut results: Vec<(usize, (usize, f64))> = Vec::with_capacity(jobs.len());
+    std::thread::scope(|scope| {
+        let mut handles = Vec::new();
+        for _ in 0..threads.max(1) {
+            let cursor = &cursor;
+            handles.push(scope.spawn(move || {
+                let mut out = Vec::new();
+                loop {
+                    let n = cursor.fetch_add(1, Ordering::Relaxed);
+                    if n >= jobs.len() {
+                        break;
+                    }
+                    let job = &jobs[n];
+                    let seed_a = job.agent_seed ^ 0xA24B_AED4_963E_E407;
+                    let seed_b = job.agent_seed ^ 0x9FB2_1C65_1E98_DF25;
+                    let (t1, t2, team1, team2, side_a, side_b) = if job.swap {
+                        (job.tb, job.ta, col_sets, row_sets, 1usize, 0usize)
+                    } else {
+                        (job.ta, job.tb, row_sets, col_sets, 0usize, 1usize)
+                    };
+                    let mut b = Battle::from_fixture(dex, &job.battle_seed, team1, team2).unwrap();
+                    b.set_log_enabled(log_enabled);
+                    let (mut agent_a, mut agent_b) =
+                        build_row_col(&b, side_a, side_b, seed_a, seed_b);
+                    b.apply_choices(
+                        dex,
+                        [Some(SearchChoice::Team(t1)), Some(SearchChoice::Team(t2))],
+                    )
+                    .unwrap();
+                    let res = if job.swap {
+                        play_game(dex, &mut b, &mut [agent_b.as_mut(), agent_a.as_mut()], max_turns)
+                    } else {
+                        play_game(dex, &mut b, &mut [agent_a.as_mut(), agent_b.as_mut()], max_turns)
+                    }
+                    .unwrap();
+                    let p1_score = match res {
+                        GameResult::Outcome(Outcome::P1Win) => 1.0,
+                        GameResult::Outcome(Outcome::P2Win) => 0.0,
+                        GameResult::Outcome(Outcome::Tie) | GameResult::TurnCapped => 0.5,
+                    };
+                    let score = if job.swap { 1.0 - p1_score } else { p1_score };
+                    out.push((n, (job.cell, score)));
+                }
+                out
+            }));
+        }
+        let mut all = Vec::new();
+        for h in handles {
+            all.extend(h.join().unwrap());
+        }
+        all.sort_by_key(|r| r.0);
+        results = all;
+    });
+    results.into_iter().map(|(_, r)| r).collect()
+}
+
+fn subset_3_sets(sets: &[PokemonSet], triple: [u8; 3]) -> Vec<PokemonSet> {
+    vec![
+        sets[(triple[0] - 1) as usize].clone(),
+        sets[(triple[1] - 1) as usize].clone(),
+        sets[(triple[2] - 1) as usize].clone(),
+    ]
+}
+
+/// Core-Nash Decomposition & Shadow-Context Verification (`meta_eco core-nash`):
+/// 1. Screens all legal 60x60 canonical lead+core cells between Team A and Team B.
+/// 2. Selects the top-k support cores per side via RM+ equilibrium + Best-Response ranking.
+/// 3. Evaluates the k x k support matrix under three information regimes:
+///    - Regime 0 (`Pure-3v3`): Only the 3 picked mons exist (`[1,2,3]`), zero shadow bench uncertainty.
+///    - Regime 1 (`Uniform-6v6`): Full 6-mon open sheet, forced Turn 0 pick, uniform belief over unrevealed bench.
+///    - Regime 2 (`Bayesian-Nash-6v6`): Full 6-mon open sheet, forced Turn 0 pick, hidden bench sampled from Stage-1 Nash policy `(p_a^(1), p_b^(1))`.
+/// 4. Computes exact per-slot Nash equilibrium pick rate `p_i*` and leave-one-out marginal value `\Delta V_{-i}`.
+/// 5. Runs a CRN-paired head-to-head duel: Nash-Core-Picker + `OpenAgent` vs standard Turn-0 `OpenAgent`.
+fn cmd_core_nash(args: &[String]) {
+    use nc2000_bot::preview::{
+        legal_action_indices, preview_actions, solve_pair, MatrixEst, PairSolution, RolloutAgent,
+    };
+    use nc2000_bot::smmcts::{solve_rm_plus, SelRule};
+    use nc2000_bot::{play_game, Agent, GameResult, OpenAgent, RmConfig};
+    use nc2000_engine::battle::{Outcome, SearchChoice};
+    use nc2000_engine::state::Battle;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let dex = load_dex();
+    let root = repo_root();
+    let ls_text = std::fs::read_to_string(root.join("data/learnsets-gen2.json")).unwrap();
+    let pool_text = std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap();
+    let gen = TeamGen::new(&dex, &ls_text, &pool_text).unwrap();
+
+    let pool_file = flag(args, "--pool").unwrap_or_else(|| {
+        root.join("data/team-pool-v2/team-pool.json")
+            .to_string_lossy()
+            .into_owned()
+    });
+    let pv: Value = serde_json::from_str(&std::fs::read_to_string(&pool_file).unwrap()).unwrap();
+    let teams_arr = pv["teams"].as_array().expect("pool teams array");
+
+    let team_a_spec = flag(args, "--team-a").unwrap_or_else(|| "sample-12".to_string());
+    let team_b_spec = flag(args, "--team-b").unwrap_or_else(|| "sample-07".to_string());
+
+    let find_team = |spec: &str| -> (String, Vec<Value>, Vec<PokemonSet>) {
+        if let Some(t) = teams_arr.iter().find(|t| t["id"].as_str() == Some(spec)) {
+            let id = t["id"].as_str().unwrap().to_string();
+            let canon = gen
+                .canonize(&dex, t["sets"].as_array().unwrap())
+                .expect("canonize");
+            let sets = to_sets(&canon).unwrap();
+            return (id, canon, sets);
+        }
+        if let Ok(idx) = spec.parse::<usize>() {
+            let t = &teams_arr[idx];
+            let id = t["id"].as_str().unwrap_or(spec).to_string();
+            let canon = gen
+                .canonize(&dex, t["sets"].as_array().unwrap())
+                .expect("canonize");
+            let sets = to_sets(&canon).unwrap();
+            return (id, canon, sets);
+        }
+        panic!("Team '{spec}' not found in {pool_file}");
+    };
+
+    let (id_a, canon_a, sets_a) = find_team(&team_a_spec);
+    let (id_b, canon_b, sets_b) = find_team(&team_b_spec);
+    let mirror = id_a == id_b;
+
+    let screen_games: u32 = num(args, "--screen-games", 8);
+    let refine_games: u32 = num(args, "--refine-games", 8);
+    let support_k: usize = num(args, "--support", 6);
+    let battle_iters: u32 = num(args, "--iters", 400);
+    let duel_games: u32 = num(args, "--duel-games", 64);
+    let c_val: f64 = num(args, "--c", 0.4);
+    let smoothing: f64 = num(args, "--smoothing", 0.15);
+    let max_turns: u16 = num(args, "--max-turns", 300);
+    let seed: u64 = num(args, "--seed", 2026102977);
+    let threads: usize = flag(args, "--threads")
+        .map(|v| v.parse().unwrap())
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(4)
+        });
+
+    let actions = preview_actions();
+    let levels_a: Vec<u8> = sets_a.iter().map(|s| s.level).collect();
+    let levels_b: Vec<u8> = sets_b.iter().map(|s| s.level).collect();
+    let legal_a = legal_action_indices(&actions, &levels_a);
+    let legal_b = legal_action_indices(&actions, &levels_b);
+
+    println!(
+        "=== Core-Nash Two-Layer Decomposition & Approximation Verification ===\n  Matchup: {} ({} legal actions) vs {} ({} legal actions)\n  Budgets: screen={}g/cell, refine={}g/cell @ open:{}:{}, support k={}",
+        id_a,
+        legal_a.len(),
+        id_b,
+        legal_b.len(),
+        screen_games,
+        refine_games,
+        battle_iters,
+        c_val,
+        support_k
+    );
+
+    // ---- Stage 1: Full-width screening (legal_a x legal_b)
+    let t0 = std::time::Instant::now();
+    let mut screen_jobs = Vec::new();
+    for &a in &legal_a {
+        for &b in &legal_b {
+            if mirror && b <= a {
+                continue;
+            }
+            push_core_jobs(
+                &mut screen_jobs,
+                a * 60 + b,
+                actions[a],
+                actions[b],
+                screen_games,
+                seed ^ 0x5C4E,
+            );
+        }
+    }
+    let screen_res = run_forced_preview_games(
+        &dex,
+        &sets_a,
+        &sets_b,
+        &screen_jobs,
+        threads,
+        max_turns,
+        &|_, _, _, sa, sb| {
+            (
+                Box::new(RolloutAgent::new(0.2, sa)),
+                Box::new(RolloutAgent::new(0.2, sb)),
+            )
+        },
+        false,
+    );
+    let mut screen = MatrixEst::new(60, 60);
+    for (cell, sc) in screen_res {
+        screen.record(cell, sc);
+    }
+    if mirror {
+        for a in 0..60 {
+            screen.v[a * 60 + a] = 0.5;
+            screen.n[a * 60 + a] = screen_games;
+            for b in (a + 1)..60 {
+                screen.v[b * 60 + a] = 1.0 - screen.v[a * 60 + b];
+                screen.n[b * 60 + a] = screen.n[a * 60 + b];
+            }
+        }
+    }
+
+    // Solve RM+ on legal_a x legal_b screen matrix
+    let screen_ref = &screen;
+    let sub: Vec<f64> = legal_a
+        .iter()
+        .flat_map(|&a| legal_b.iter().map(move |&b| screen_ref.at(a, b)))
+        .collect();
+    let (e0, e1) = solve_rm_plus(&sub, [legal_a.len(), legal_b.len()], 20_000);
+    let screen_val: f64 = (0..legal_a.len())
+        .map(|ia| {
+            (0..legal_b.len())
+                .map(|ib| screen.at(legal_a[ia], legal_b[ib]) * e0[ia] * e1[ib])
+                .sum::<f64>()
+        })
+        .sum();
+
+    let u_a: Vec<f64> = legal_a
+        .iter()
+        .map(|&a| {
+            legal_b
+                .iter()
+                .zip(&e1)
+                .map(|(&b, &p)| screen.at(a, b) * p)
+                .sum()
+        })
+        .collect();
+    let u_b: Vec<f64> = legal_b
+        .iter()
+        .map(|&b| {
+            legal_a
+                .iter()
+                .zip(&e0)
+                .map(|(&a, &p)| (1.0 - screen.at(a, b)) * p)
+                .sum()
+        })
+        .collect();
+
+    // Build support of size `support_k`: include positive-equilibrium-mass actions first, then top BR
+    let select_sup = |u: &[f64], eq: &[f64], legal: &[usize], k: usize| -> Vec<usize> {
+        let mut ord_eq: Vec<usize> = (0..legal.len()).collect();
+        ord_eq.sort_by(|&a, &b| eq[b].total_cmp(&eq[a]).then(u[b].total_cmp(&u[a])));
+        let mut sup = Vec::new();
+        for &idx in &ord_eq {
+            if sup.len() >= k {
+                break;
+            }
+            if eq[idx] >= 0.02 {
+                sup.push(legal[idx]);
+            }
+        }
+        let mut ord_br: Vec<usize> = (0..legal.len()).collect();
+        ord_br.sort_by(|&a, &b| u[b].total_cmp(&u[a]));
+        for &idx in &ord_br {
+            if sup.len() >= k {
+                break;
+            }
+            let act = legal[idx];
+            if !sup.contains(&act) {
+                sup.push(act);
+            }
+        }
+        sup.sort_unstable();
+        sup
+    };
+
+    let s0 = select_sup(&u_a, &e0, &legal_a, support_k);
+    let s1 = if mirror {
+        s0.clone()
+    } else {
+        select_sup(&u_b, &e1, &legal_b, support_k)
+    };
+    let (k0, k1) = (s0.len(), s1.len());
+    println!(
+        "  [Stage 1 Screen] {:.2}s ({} games) | Screen Nash Value = {:.4}",
+        t0.elapsed().as_secs_f64(),
+        screen_jobs.len(),
+        screen_val
+    );
+
+    let fmt_triple = |t: [u8; 3], canon: &[Value]| -> String {
+        let lead = canon[(t[0] - 1) as usize]["species"]
+            .as_str()
+            .unwrap_or("?");
+        let b1 = canon[(t[1] - 1) as usize]["species"]
+            .as_str()
+            .unwrap_or("?");
+        let b2 = canon[(t[2] - 1) as usize]["species"]
+            .as_str()
+            .unwrap_or("?");
+        format!("{lead}*+{b1}+{b2}")
+    };
+
+    println!(
+        "    Support A ({}): {}",
+        k0,
+        s0.iter()
+            .map(|&a| fmt_triple(actions[a], &canon_a))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    println!(
+        "    Support B ({}): {}",
+        k1,
+        s1.iter()
+            .map(|&b| fmt_triple(actions[b], &canon_b))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+
+    // ---- Stage 2A: Pure-3v3 (Context-Free 3-mon Roster, zero shadow bench)
+    let t_3v3 = std::time::Instant::now();
+    let mut mat_3v3 = MatrixEst::new(k0, k1);
+    let mut jobs_3v3 = Vec::new();
+    for ri in 0..k0 {
+        for ci in 0..k1 {
+            push_core_jobs(
+                &mut jobs_3v3,
+                ri * k1 + ci,
+                [1, 2, 3],
+                [1, 2, 3],
+                refine_games,
+                seed ^ 0x3333,
+            );
+        }
+    }
+    // Run Pure-3v3 where each cell uses 3-mon subsets so neither side sees the other 3 bench mons
+    let cursor = AtomicUsize::new(0);
+    let mut res_3v3: Vec<(usize, (usize, f64))> = Vec::with_capacity(jobs_3v3.len());
+    std::thread::scope(|scope| {
+        let mut handles = Vec::new();
+        for _ in 0..threads.max(1) {
+            let (cursor, jobs_ref, s0_ref, s1_ref, actions_ref, sets_a_ref, sets_b_ref, dex_ref) = (
+                &cursor, &jobs_3v3, &s0, &s1, &actions, &sets_a, &sets_b, &dex,
+            );
+            handles.push(scope.spawn(move || {
+                let mut out = Vec::new();
+                loop {
+                    let n = cursor.fetch_add(1, Ordering::Relaxed);
+                    if n >= jobs_ref.len() {
+                        break;
+                    }
+                    let job = &jobs_ref[n];
+                    let ri = job.cell / k1;
+                    let ci = job.cell % k1;
+                    let sub_a = subset_3_sets(sets_a_ref, actions_ref[s0_ref[ri]]);
+                    let sub_b = subset_3_sets(sets_b_ref, actions_ref[s1_ref[ci]]);
+                    let rm_cfg = RmConfig {
+                        iterations: battle_iters,
+                        rule: SelRule::Ucb,
+                        c: c_val,
+                        ..Default::default()
+                    };
+                    let mut p1 = OpenAgent::new(rm_cfg.clone(), None, job.agent_seed ^ 0xA24B_AED4_963E_E407);
+                    let mut p2 = OpenAgent::new(rm_cfg, None, job.agent_seed ^ 0x9FB2_1C65_1E98_DF25);
+                    let (team1, team2) = if job.swap {
+                        (&sub_b, &sub_a)
+                    } else {
+                        (&sub_a, &sub_b)
+                    };
+                    let mut b = Battle::from_fixture(dex_ref, &job.battle_seed, team1, team2).unwrap();
+                    b.set_log_enabled(true);
+                    p1.init_at_preview(&b, 0);
+                    p2.init_at_preview(&b, 1);
+                    b.apply_choices(
+                        dex_ref,
+                        [
+                            Some(SearchChoice::Team([1, 2, 3])),
+                            Some(SearchChoice::Team([1, 2, 3])),
+                        ],
+                    )
+                    .unwrap();
+                    let res = play_game(dex_ref, &mut b, &mut [&mut p1, &mut p2], max_turns).unwrap();
+                    let p1_score = match res {
+                        GameResult::Outcome(Outcome::P1Win) => 1.0,
+                        GameResult::Outcome(Outcome::P2Win) => 0.0,
+                        GameResult::Outcome(Outcome::Tie) | GameResult::TurnCapped => 0.5,
+                    };
+                    let score = if job.swap { 1.0 - p1_score } else { p1_score };
+                    out.push((n, (job.cell, score)));
+                }
+                out
+            }));
+        }
+        let mut all = Vec::new();
+        for h in handles {
+            all.extend(h.join().unwrap());
+        }
+        all.sort_by_key(|r| r.0);
+        res_3v3 = all;
+    });
+    for (_, (cell, sc)) in res_3v3 {
+        mat_3v3.record(cell, sc);
+    }
+    let sol_3v3 = solve_pair(&mat_3v3, &[s0.clone(), s1.clone()], 0.05, 50_000);
+    println!(
+        "  [Regime 0: Pure-3v3 (Context-Free)]   {:.2}s | Nash Value = {:.4}",
+        t_3v3.elapsed().as_secs_f64(),
+        sol_3v3.value
+    );
+
+    // ---- Stage 2B: Uniform-6v6 (6-mon Forced-Preview, Uniform hidden bench belief)
+    let t_u6 = std::time::Instant::now();
+    let mut jobs_6v6 = Vec::new();
+    for (ri, &a) in s0.iter().enumerate() {
+        for (ci, &b) in s1.iter().enumerate() {
+            push_core_jobs(
+                &mut jobs_6v6,
+                ri * k1 + ci,
+                actions[a],
+                actions[b],
+                refine_games,
+                seed ^ 0x3333,
+            );
+        }
+    }
+    let res_u6 = run_forced_preview_games(
+        &dex,
+        &sets_a,
+        &sets_b,
+        &jobs_6v6,
+        threads,
+        max_turns,
+        &|b, side_a, side_b, sa, sb| {
+            let rm_cfg = RmConfig {
+                iterations: battle_iters,
+                rule: SelRule::Ucb,
+                c: c_val,
+                ..Default::default()
+            };
+            let mut ag_a = OpenAgent::new(rm_cfg.clone(), None, sa);
+            let mut ag_b = OpenAgent::new(rm_cfg, None, sb);
+            ag_a.init_at_preview(b, side_a);
+            ag_b.init_at_preview(b, side_b);
+            (Box::new(ag_a), Box::new(ag_b))
+        },
+        true,
+    );
+    let mut mat_u6 = MatrixEst::new(k0, k1);
+    for (cell, sc) in res_u6 {
+        mat_u6.record(cell, sc);
+    }
+    let sol_u6: PairSolution = solve_pair(&mat_u6, &[s0.clone(), s1.clone()], 0.05, 50_000);
+    println!(
+        "  [Regime 1: Uniform-6v6 Shadow Bench]  {:.2}s | Nash Value = {:.4}",
+        t_u6.elapsed().as_secs_f64(),
+        sol_u6.value
+    );
+
+    // ---- Stage 2C: Bayesian-Nash-6v6 (Hidden bench conditioned on Stage-2B Nash policies p_a, p_b)
+    let t_bn6 = std::time::Instant::now();
+    let pol_a_prior = sol_u6.p_a.clone();
+    let pol_b_prior = sol_u6.p_b.clone();
+    let res_bn6 = run_forced_preview_games(
+        &dex,
+        &sets_a,
+        &sets_b,
+        &jobs_6v6,
+        threads,
+        max_turns,
+        &|b, side_a, side_b, sa, sb| {
+            let rm_cfg = RmConfig {
+                iterations: battle_iters,
+                rule: SelRule::Ucb,
+                c: c_val,
+                ..Default::default()
+            };
+            // Row agent A conditions on Column B's Nash pick distribution `pol_b_prior`;
+            // Column agent B conditions on Row A's Nash pick distribution `pol_a_prior`.
+            let mut ag_a = OpenAgent::new(rm_cfg.clone(), None, sa)
+                .with_opponent_pick_policy(pol_b_prior.clone(), smoothing);
+            let mut ag_b = OpenAgent::new(rm_cfg, None, sb)
+                .with_opponent_pick_policy(pol_a_prior.clone(), smoothing);
+            ag_a.init_at_preview(b, side_a);
+            ag_b.init_at_preview(b, side_b);
+            (Box::new(ag_a), Box::new(ag_b))
+        },
+        true,
+    );
+    let mut mat_bn6 = MatrixEst::new(k0, k1);
+    for (cell, sc) in res_bn6 {
+        mat_bn6.record(cell, sc);
+    }
+    let sol_bn6: PairSolution = solve_pair(&mat_bn6, &[s0.clone(), s1.clone()], 0.05, 50_000);
+    println!(
+        "  [Regime 2: Bayesian-Nash-6v6 Bench]   {:.2}s | Nash Value = {:.4}",
+        t_bn6.elapsed().as_secs_f64(),
+        sol_bn6.value
+    );
+
+    // ---- Compare Approximation Regimes (Cell MAE, Value diff, Strategy L1/Cosine)
+    let cell_mae = |m1: &MatrixEst, m2: &MatrixEst| -> f64 {
+        m1.v.iter()
+            .zip(m2.v.iter())
+            .map(|(a, b)| (a - b).abs())
+            .sum::<f64>()
+            / (m1.v.len().max(1) as f64)
+    };
+    let l1_dist = |p: &[f64], q: &[f64]| -> f64 {
+        p.iter().zip(q.iter()).map(|(a, b)| (a - b).abs()).sum::<f64>() * 0.5
+    };
+    println!("\n=== Approximation Fidelity Diagnostics ===");
+    println!(
+        "  Pure-3v3      vs Uniform-6v6 : |ΔValue| = {:+.4}, Cell MAE = {:.4}, TV(p_a) = {:.3}, TV(p_b) = {:.3}",
+        sol_3v3.value - sol_u6.value,
+        cell_mae(&mat_3v3, &mat_u6),
+        l1_dist(&sol_3v3.p_a, &sol_u6.p_a),
+        l1_dist(&sol_3v3.p_b, &sol_u6.p_b),
+    );
+    println!(
+        "  Uniform-6v6   vs BayesNash-6v6: |ΔValue| = {:+.4}, Cell MAE = {:.4}, TV(p_a) = {:.3}, TV(p_b) = {:.3}",
+        sol_u6.value - sol_bn6.value,
+        cell_mae(&mat_u6, &mat_bn6),
+        l1_dist(&sol_u6.p_a, &sol_bn6.p_a),
+        l1_dist(&sol_u6.p_b, &sol_bn6.p_b),
+    );
+    println!(
+        "  Pure-3v3      vs BayesNash-6v6: |ΔValue| = {:+.4}, Cell MAE = {:.4}, TV(p_a) = {:.3}, TV(p_b) = {:.3}",
+        sol_3v3.value - sol_bn6.value,
+        cell_mae(&mat_3v3, &mat_bn6),
+        l1_dist(&sol_3v3.p_a, &sol_bn6.p_a),
+        l1_dist(&sol_3v3.p_b, &sol_bn6.p_b),
+    );
+
+    // ---- Per-Slot Equilibrium Pick Share `p_i*` & Leave-One-Out Marginal Value `\Delta V_{-i}`
+    let print_slot_nash_analysis =
+        |label: &str, canon: &[Value], sup: &[usize], mat: &MatrixEst, sol: &PairSolution, is_row: bool| {
+            println!("\n=== Per-Slot Nash Equilibrium & Marginal Value: {} ===", label);
+            for slot in 0..canon.len().min(6) {
+                let s_idx = (slot + 1) as u8;
+                let sp = canon[slot]["species"].as_str().unwrap_or("?");
+                let lv = canon[slot]["level"].as_u64().unwrap_or(50);
+                let pol = if is_row { &sol.p_a } else { &sol.p_b };
+                let mut pick_share = 0.0;
+                let mut lead_share = 0.0;
+                for (a_idx, &pr) in pol.iter().enumerate() {
+                    if pr <= 0.0 {
+                        continue;
+                    }
+                    let tr = actions[a_idx];
+                    if tr.contains(&s_idx) {
+                        pick_share += pr;
+                    }
+                    if tr[0] == s_idx {
+                        lead_share += pr;
+                    }
+                }
+                // Leave-one-out: solve the subgame where `slot` cannot be picked by this side
+                let kept_indices: Vec<usize> = (0..sup.len())
+                    .filter(|&i| !actions[sup[i]].contains(&s_idx))
+                    .collect();
+                let delta_v = if kept_indices.is_empty() {
+                    // Mandatory ace (every support core contains this mon)
+                    f64::NAN
+                } else if is_row {
+                    let sub_v: Vec<f64> = kept_indices
+                        .iter()
+                        .flat_map(|&ri| (0..mat.cols).map(move |ci| mat.at(ri, ci)))
+                        .collect();
+                    let (s_a, s_b) = solve_rm_plus(&sub_v, [kept_indices.len(), mat.cols], 20_000);
+                    let v_without: f64 = (0..kept_indices.len())
+                        .map(|ia| {
+                            (0..mat.cols)
+                                .map(|ib| sub_v[ia * mat.cols + ib] * s_a[ia] * s_b[ib])
+                                .sum::<f64>()
+                        })
+                        .sum();
+                    sol.value - v_without
+                } else {
+                    let sub_v: Vec<f64> = (0..mat.rows)
+                        .flat_map(|ri| kept_indices.iter().map(move |&ci| mat.at(ri, ci)))
+                        .collect();
+                    let (s_a, s_b) = solve_rm_plus(&sub_v, [mat.rows, kept_indices.len()], 20_000);
+                    let v_a_without: f64 = (0..mat.rows)
+                        .map(|ia| {
+                            (0..kept_indices.len())
+                                .map(|ib| sub_v[ia * kept_indices.len() + ib] * s_a[ia] * s_b[ib])
+                                .sum::<f64>()
+                        })
+                        .sum();
+                    (1.0 - sol.value) - (1.0 - v_a_without)
+                };
+                let dv_str = if delta_v.is_nan() {
+                    "MANDATORY_ACE".to_string()
+                } else {
+                    format!("{:+.4} ({:+.1}pt)", delta_v, delta_v * 100.0)
+                };
+                println!(
+                    "  slot {}: {:12} L{:2} | Nash Pick={:5.1}% (Lead={:4.1}%) | Marginal ΔV={}",
+                    slot,
+                    sp,
+                    lv,
+                    pick_share * 100.0,
+                    lead_share * 100.0,
+                    dv_str
+                );
+            }
+        };
+
+    print_slot_nash_analysis(&id_a, &canon_a, &s0, &mat_bn6, &sol_bn6, true);
+    print_slot_nash_analysis(&id_b, &canon_b, &s1, &mat_bn6, &sol_bn6, false);
+
+    // ---- Stage 3: Live Duel Verification (Nash-Core-Picker vs Standard Turn-0 OpenAgent)
+    if duel_games > 0 {
+        let t_duel = std::time::Instant::now();
+        let n_duel = (duel_games + duel_games % 2) as usize;
+        let mut duel_jobs = Vec::with_capacity(n_duel);
+        let mut rng = SplitMix64::new(seed ^ 0xD0E1_CAFE);
+        let mut b_seed = String::new();
+        for g in 0..n_duel {
+            if g % 2 == 0 {
+                b_seed = rng.battle_seed();
+            }
+            duel_jobs.push((
+                g % 2 == 0,
+                b_seed.clone(),
+                rng.next(),
+                rng.next(),
+            ));
+        }
+
+        let cursor = AtomicUsize::new(0);
+        let mut duel_scores = vec![0.0; n_duel];
+        std::thread::scope(|scope| {
+            let mut handles = Vec::new();
+            for _ in 0..threads.max(1) {
+                let (cursor, duel_jobs_ref, sets_a_ref, sets_b_ref, sol_ref, actions_ref, dex_ref) = (
+                    &cursor, &duel_jobs, &sets_a, &sets_b, &sol_bn6, &actions, &dex,
+                );
+                handles.push(scope.spawn(move || {
+                    let mut local = Vec::new();
+                    loop {
+                        let i = cursor.fetch_add(1, Ordering::Relaxed);
+                        if i >= duel_jobs_ref.len() {
+                            break;
+                        }
+                        let (a_is_p1, ref bseed, sa, sb) = duel_jobs_ref[i];
+                        let rm_cfg = RmConfig {
+                            iterations: battle_iters,
+                            rule: SelRule::Ucb,
+                            c: c_val,
+                            ..Default::default()
+                        };
+                        // Side A uses solved Nash preview equilibrium + Bayesian-Nash bench belief;
+                        // Side B uses standard Turn-0 MCTS preview + uniform bench belief.
+                        let mut rng_a = SplitMix64::new(sa ^ 0x7777);
+                        let u = rng_a.next_f64();
+                        let mut acc = 0.0;
+                        let mut pick_idx = sol_ref.argmax_a;
+                        for (idx, &pr) in sol_ref.p_a.iter().enumerate() {
+                            acc += pr;
+                            if u < acc {
+                                pick_idx = idx;
+                                break;
+                            }
+                        }
+                        let nash_choice = SearchChoice::Team(actions_ref[pick_idx]);
+
+                        let mut agent_a = OpenAgent::new(rm_cfg.clone(), None, sa)
+                            .with_opponent_pick_policy(sol_ref.p_b.clone(), smoothing);
+                        let mut agent_b = OpenAgent::new(rm_cfg, None, sb);
+
+                        let (t1, t2) = if a_is_p1 {
+                            (sets_a_ref.as_slice(), sets_b_ref.as_slice())
+                        } else {
+                            (sets_b_ref.as_slice(), sets_a_ref.as_slice())
+                        };
+                        let mut b = Battle::from_fixture(dex_ref, bseed, t1, t2).unwrap();
+                        b.set_log_enabled(true);
+
+                        // Turn 0 preview: Side A plays `nash_choice`, Side B calls `agent_b.choose`
+                        let side_a = if a_is_p1 { 0 } else { 1 };
+                        let side_b = 1 - side_a;
+                        agent_a.init_at_preview(&b, side_a);
+                        let choices_b = b.legal_choices(dex_ref, side_b);
+                        let b_choice = agent_b.choose(&b, dex_ref, side_b, &choices_b);
+                        let joint = if a_is_p1 {
+                            [Some(nash_choice), Some(b_choice)]
+                        } else {
+                            [Some(b_choice), Some(nash_choice)]
+                        };
+                        b.apply_choices(dex_ref, joint).unwrap();
+
+                        let res = if a_is_p1 {
+                            play_game(dex_ref, &mut b, &mut [&mut agent_a, &mut agent_b], max_turns)
+                        } else {
+                            play_game(dex_ref, &mut b, &mut [&mut agent_b, &mut agent_a], max_turns)
+                        }
+                        .unwrap();
+                        let p1_sc = match res {
+                            GameResult::Outcome(Outcome::P1Win) => 1.0,
+                            GameResult::Outcome(Outcome::P2Win) => 0.0,
+                            GameResult::Outcome(Outcome::Tie) | GameResult::TurnCapped => 0.5,
+                        };
+                        let sc = if a_is_p1 { p1_sc } else { 1.0 - p1_sc };
+                        local.push((i, sc));
+                    }
+                    local
+                }));
+            }
+            for h in handles {
+                for (i, sc) in h.join().unwrap() {
+                    duel_scores[i] = sc;
+                }
+            }
+        });
+        let mean_duel: f64 = duel_scores.iter().sum::<f64>() / (n_duel as f64);
+        println!(
+            "\n=== Live Duel Verification ({} CRN games, {:.1}s) ===",
+            n_duel,
+            t_duel.elapsed().as_secs_f64()
+        );
+        println!(
+            "  {} (Core-Nash Picker + BayesBench) vs {} (Standard Turn-0 OpenAgent): {:.4} ({:.1}%) [Predicted Nash Value = {:.4}]",
+            id_a,
+            id_b,
+            mean_duel,
+            mean_duel * 100.0,
+            sol_bn6.value
+        );
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let sub = args
@@ -2935,8 +3712,9 @@ fn main() {
         "update-pool" => cmd_update_pool(&args[1..]),
         "tomography" => cmd_tomography(&args[1..]),
         "kodoku" => cmd_kodoku(&args[1..]),
+        "core-nash" => cmd_core_nash(&args[1..]),
         other => panic!(
-            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring | update-pool | tomography | kodoku)"
+            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring | update-pool | tomography | kodoku | core-nash)"
         ),
     }
 }

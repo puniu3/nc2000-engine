@@ -238,6 +238,7 @@ fn search_choose(
     prune: bool,
 ) -> SearchChoice {
     let mut bs = BlindSearch::with_rng(battle, dex, cfg.clone(), side, rng.clone());
+    bs.prune_preview_aliases(dex);
     if prune { bs.prune_dominated(); }
     debug_assert_eq!(bs.actions(), choices, "root action set drifted from caller's choices");
     for _ in 0..cfg.iterations {
@@ -656,7 +657,7 @@ impl BlindSearch {
             self.det_cache.clear();
             self.det_cache_obs_rev = obs_rev;
         }
-        if self.base.queue.is_empty() {
+        if self.base.queue.is_empty() && !belief.has_active_pick_draws(obs) {
             let mut rng_probe = self.rng.clone();
             let (post_qc_seed, qc, party_key, party_len) =
                 self.predict_determinization_draws(obs, &mut rng_probe);
@@ -1588,6 +1589,7 @@ pub struct OpenAgent {
     cfg: RmConfig,
     rng: SplitMix64,
     tables: Option<Arc<TableSet>>,
+    opp_pick_policy: Option<(Vec<f64>, f64)>,
     game: Option<GameState>,
 }
 
@@ -1595,7 +1597,34 @@ impl OpenAgent {
     /// Same config surface as `BlindAgent` (the RM root layer fields are
     /// ignored — the blind/open play rule is argmax over the global root).
     pub fn new(cfg: RmConfig, tables: Option<Arc<TableSet>>, seed: u64) -> Self {
-        OpenAgent { cfg, rng: SplitMix64::new(seed), tables, game: None }
+        OpenAgent {
+            cfg,
+            rng: SplitMix64::new(seed),
+            tables,
+            opp_pick_policy: None,
+            game: None,
+        }
+    }
+
+    /// Condition hidden opponent bench sampling during battle on a 60-action
+    /// canonical preview distribution `policy` (e.g., solved Nash equilibrium),
+    /// mixed with `smoothing` over all 3-mon subsets containing already-revealed mons.
+    pub fn with_opponent_pick_policy(mut self, policy: Vec<f64>, smoothing: f64) -> Self {
+        self.opp_pick_policy = Some((policy, smoothing));
+        self
+    }
+
+    /// Explicitly initialize the per-game observer & pinned belief at Team Preview
+    /// before an external forced Turn-0 preview choice is applied to `battle`.
+    pub fn init_at_preview(&mut self, battle: &Battle, side: usize) {
+        let observer = Observer::new(battle, side);
+        let belief = Belief::pinned_from_battle(battle, &observer);
+        self.game = Some(GameState {
+            side,
+            last_turn: battle.turn,
+            observer,
+            belief,
+        });
     }
 
     /// The live belief (None before the first decision) — test surface.
@@ -1637,6 +1666,9 @@ impl Agent for OpenAgent {
             g.last_turn = battle.turn;
             g.observer.observe(battle, dex);
             g.belief.sync(dex, &g.observer);
+            if let Some((ref pol, smoothing)) = self.opp_pick_policy {
+                g.belief.condition_canonical_pick_policy(pol, smoothing, &g.observer);
+            }
         }
 
         if choices.len() == 1 {
