@@ -597,58 +597,75 @@ fn cmd_evolve_island(args: &[String]) {
         let bench_n_games = (bench_games_per_opp as usize * slice_len) as f64;
         let eco_n_games = (eval_games as usize * eco_opps.len()) as f64;
 
-        // Evaluate every active strain against Living Island Ecosystem (primary) and Master Pool (secondary)
-        for s in &mut ledger.active_strains {
-            let cand = to_sets(&s.team).expect("valid strain team");
-            let bench_fit = gauntlet_eval_weighted(
-                &dex,
-                &cand,
-                &wave_bench_teams,
-                &wave_bench_weights,
-                &WeightedEvalCfg {
-                    games_per_opponent: bench_games_per_opp,
-                    agent_iters,
-                    c: agent_c,
-                    max_turns,
-                    seed: wave_seed,
-                    threads,
-                    blind_pool: blind_pool.clone(),
-                },
-            )
-            .score;
-            s.bench_games += bench_n_games;
-            s.bench_wins += bench_fit * bench_n_games;
+        // Evaluate all active strains concurrently across a single wave barrier so a single
+        // long-turn stall game on one strain never idles the other 15 CPU cores across 24 barriers.
+        let inner_threads = (threads / 4).max(2);
+        let dex_ref = &dex;
+        let wb_teams_ref = &wave_bench_teams;
+        let wb_weights_ref = &wave_bench_weights;
+        let eco_opps_ref = &eco_opps;
+        let eco_weights_ref = &eco_weights;
+        std::thread::scope(|scope| {
+            let mut handles = Vec::new();
+            for s in &mut ledger.active_strains {
+                let bp = blind_pool.clone();
+                handles.push(scope.spawn(move || {
+                    let cand = to_sets(&s.team).expect("valid strain team");
+                    let bench_fit = gauntlet_eval_weighted(
+                        dex_ref,
+                        &cand,
+                        wb_teams_ref,
+                        wb_weights_ref,
+                        &WeightedEvalCfg {
+                            games_per_opponent: bench_games_per_opp,
+                            agent_iters,
+                            c: agent_c,
+                            max_turns,
+                            seed: wave_seed,
+                            threads: inner_threads,
+                            blind_pool: bp.clone(),
+                        },
+                    )
+                    .score;
+                    s.bench_games += bench_n_games;
+                    s.bench_wins += bench_fit * bench_n_games;
 
-            let wave_fit = if !eco_opps.is_empty() && env_self_weight > 0.0 {
-                let eco_fit = gauntlet_eval_weighted(
-                    &dex,
-                    &cand,
-                    &eco_opps,
-                    &eco_weights,
-                    &WeightedEvalCfg {
-                        games_per_opponent: eval_games,
-                        agent_iters,
-                        c: agent_c,
-                        max_turns,
-                        seed: wave_seed ^ 0x5555_AAAA_5555_AAAA,
-                        threads,
-                        blind_pool: blind_pool.clone(),
-                    },
-                )
-                .score;
-                s.eco_games += eco_n_games;
-                s.eco_wins += eco_fit * eco_n_games;
-                (1.0 - env_self_weight) * bench_fit + env_self_weight * eco_fit
-            } else {
-                bench_fit
-            };
+                    let wave_fit = if !eco_opps_ref.is_empty() && env_self_weight > 0.0 {
+                        let eco_fit = gauntlet_eval_weighted(
+                            dex_ref,
+                            &cand,
+                            eco_opps_ref,
+                            eco_weights_ref,
+                            &WeightedEvalCfg {
+                                games_per_opponent: eval_games,
+                                agent_iters,
+                                c: agent_c,
+                                max_turns,
+                                seed: wave_seed ^ 0x5555_AAAA_5555_AAAA,
+                                threads: inner_threads,
+                                blind_pool: bp,
+                            },
+                        )
+                        .score;
+                        s.eco_games += eco_n_games;
+                        s.eco_wins += eco_fit * eco_n_games;
+                        (1.0 - env_self_weight) * bench_fit + env_self_weight * eco_fit
+                    } else {
+                        bench_fit
+                    };
 
-            let total_w_games = bench_n_games + if eco_opps.is_empty() { 0.0 } else { eco_n_games };
-            s.cum_games += total_w_games;
-            s.cum_wins += wave_fit * total_w_games;
-            s.last_wave_fit = wave_fit;
-            s.recompute_stats(prior_games);
-        }
+                    let total_w_games =
+                        bench_n_games + if eco_opps_ref.is_empty() { 0.0 } else { eco_n_games };
+                    s.cum_games += total_w_games;
+                    s.cum_wins += wave_fit * total_w_games;
+                    s.last_wave_fit = wave_fit;
+                    s.recompute_stats(prior_games);
+                }));
+            }
+            for h in handles {
+                h.join().unwrap();
+            }
+        });
 
         // Within-Niche Boltzmann-Replicator Update on continuous abundance w_i:
         // Each niche maintains its own abundance share (1 / num_niches of the island) so
