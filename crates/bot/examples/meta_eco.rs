@@ -158,6 +158,18 @@ fn recompute_population_wars(strains: &mut [Strain]) -> (f64, f64, f64) {
     (mu_50, mu_55, beta_l)
 }
 
+fn build_endogenous_pool(strains: &[Strain]) -> nc2000_bot::teamgen::EndogenousPool {
+    let mut pool = nc2000_bot::teamgen::EndogenousPool::default();
+    for s in strains.iter().filter(|s| s.cum_games > 0.0) {
+        let g = s.cum_games.max(1.0);
+        for i in 0..s.team.len().min(6) {
+            let pick_rate = (s.slot_picks[i] / g).clamp(0.0, 1.0);
+            pool.record_slot(&s.team[i], s.slot_wars[i], pick_rate, &s.move_dqs[i]);
+        }
+    }
+    pool
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct WaveSummary {
     wave: u32,
@@ -1149,6 +1161,7 @@ fn bud_next_wave_by_niche(
 
     // 5. Spawn fresh buds from the surviving veterans for remaining bud slots,
     //    using within-party vitality telemetry (`propose_targeted`) to target hitchhikers.
+    let endo_pool = build_endogenous_pool(&survivors);
     let num_parents = survivors.len().max(1);
     let new_buds_needed = buds.saturating_sub(kept_grace.len());
     let mut island_buds: Vec<Strain> = kept_grace;
@@ -1162,6 +1175,7 @@ fn bud_next_wave_by_niche(
             &parent.slot_wins,
             &parent.slot_wars,
             Some(&parent.move_dqs),
+            Some(&endo_pool),
             rng,
             &free_constraint,
             150,
@@ -3230,6 +3244,7 @@ struct CoreNashEvalResult {
     eval: nc2000_bot::teamgen::EvalResult,
     slot_marginals: [f64; 6],
     move_dqs: [[f64; 4]; 6],
+    opp_move_dqs: Vec<[[f64; 4]; 6]>,
 }
 
 struct TelemetryOpenAgent {
@@ -3295,6 +3310,7 @@ fn core_nash_eval_weighted(
             },
             slot_marginals: [0.0; 6],
             move_dqs: [[0.0; 4]; 6],
+            opp_move_dqs: Vec::new(),
         };
     }
 
@@ -3305,6 +3321,7 @@ fn core_nash_eval_weighted(
     let w_sum: f64 = weights.iter().sum::<f64>().max(1e-12);
     let mut total_score = 0.0f64;
     let mut per_opponent = Vec::with_capacity(opps.len());
+    let mut opp_move_dqs = Vec::with_capacity(opps.len());
     let mut slot_picks = [0.0f64; 6];
     let mut slot_wins = [0.0f64; 6];
     let mut slot_marginals = [0.0f64; 6];
@@ -3428,6 +3445,8 @@ fn core_nash_eval_weighted(
         let pb_ref = &p_b_s1;
         let smoothing = cfg.smoothing;
         let move_acc_ref = &move_acc;
+        let opp_acc = Arc::new(std::sync::Mutex::new(([[0.0f64; 4]; 6], [0u32; 6])));
+        let opp_acc_ref = &opp_acc;
         let refine_res = run_forced_preview_games(
             dex,
             cand,
@@ -3447,12 +3466,26 @@ fn core_nash_eval_weighted(
                         inner: oa,
                         sink: move_acc_ref.clone(),
                     }),
-                    Box::new(ob),
+                    Box::new(TelemetryOpenAgent {
+                        inner: ob,
+                        sink: opp_acc_ref.clone(),
+                    }),
                 )
             },
             true,
         );
         total_games += refine_jobs.len() as u32;
+        {
+            let og = opp_acc.lock().unwrap();
+            let mut o_mdq = [[0.0f64; 4]; 6];
+            for s in 0..6 {
+                let turns = (og.1[s] as f64).max(1.0);
+                for k in 0..4 {
+                    o_mdq[s][k] = og.0[s][k] / turns;
+                }
+            }
+            opp_move_dqs.push(o_mdq);
+        }
 
         let mut mat = MatrixEst::new(ka, kb);
         for (cell, sc) in refine_res {
@@ -3575,6 +3608,7 @@ fn core_nash_eval_weighted(
         },
         slot_marginals,
         move_dqs,
+        opp_move_dqs,
     }
 }
 
@@ -4365,6 +4399,8 @@ fn cmd_verify_1gen(args: &[String]) {
     let dex_ref = &dex;
     let bt_ref = &bench_teams;
     let bw_ref = &bench_weights;
+    let opp_mdq_sink: std::sync::Mutex<Vec<Vec<[[f64; 4]; 6]>>> = std::sync::Mutex::new(Vec::new());
+    let opp_sink_ref = &opp_mdq_sink;
     std::thread::scope(|scope| {
         let mut handles = Vec::new();
         for p in &mut parents {
@@ -4397,6 +4433,7 @@ fn cmd_verify_1gen(args: &[String]) {
                     p.slot_marginals[i] = r.slot_marginals[i] * w_games;
                 }
                 p.move_dqs = r.move_dqs;
+                opp_sink_ref.lock().unwrap().push(r.opp_move_dqs);
             }));
         }
         for h in handles {
@@ -4450,6 +4487,16 @@ fn cmd_verify_1gen(args: &[String]) {
         w2_move_dqs: [[f64; 4]; 6],
     }
 
+    let mut endo_pool = build_endogenous_pool(&parents);
+    for opp_list in opp_mdq_sink.into_inner().unwrap() {
+        for (m, o_mdq) in opp_list.iter().enumerate() {
+            if let Some(opp_team) = bench_teams.get(m) {
+                for (s, pset) in opp_team.iter().take(6).enumerate() {
+                    endo_pool.record_pokemon_set_moves(pset, &o_mdq[s]);
+                }
+            }
+        }
+    }
     let mut children: Vec<ChildCand> = Vec::new();
     for (p_idx, p) in parents.iter().enumerate() {
         let mut seen_t = BTreeSet::new();
@@ -4463,6 +4510,7 @@ fn cmd_verify_1gen(args: &[String]) {
                     &p.slot_wins,
                     &p.slot_wars,
                     Some(&p.move_dqs),
+                    Some(&endo_pool),
                     &mut rng_targ,
                     &free_constraint,
                     150,
@@ -4624,8 +4672,25 @@ fn cmd_verify_1gen(args: &[String]) {
         let slot_desc = if let Some(s) = c.mut_slot.filter(|&s| s < 6) {
             let old_sp = parents[c.parent_idx].team[s]["species"].as_str().unwrap_or("?");
             let new_sp = c.team[s]["species"].as_str().unwrap_or("?");
+            let old_moves: Vec<&str> = parents[c.parent_idx].team[s]["moves"]
+                .as_array()
+                .map(|a| a.iter().filter_map(Value::as_str).collect())
+                .unwrap_or_default();
+            let new_moves: Vec<&str> = c.team[s]["moves"]
+                .as_array()
+                .map(|a| a.iter().filter_map(Value::as_str).collect())
+                .unwrap_or_default();
+            let diff_detail = if old_sp != new_sp {
+                format!("{old_sp}->{new_sp}")
+            } else if old_moves != new_moves {
+                let dropped: Vec<&str> = old_moves.iter().copied().filter(|m| !new_moves.contains(m)).collect();
+                let added: Vec<&str> = new_moves.iter().copied().filter(|m| !old_moves.contains(m)).collect();
+                format!("{old_sp}[{:?}->{:?}]", dropped, added)
+            } else {
+                format!("{old_sp}->{new_sp}")
+            };
             format!(
-                "{old_sp}->{new_sp} (pick={:.0}%, WAR: {:+.1}pt -> {:+.1}pt, dWAR={:+.1}pt)",
+                "{diff_detail} (pick={:.0}%, WAR: {:+.1}pt -> {:+.1}pt, dWAR={:+.1}pt)",
                 c.w2_picks[s] * 100.0,
                 parent_w2_wars[c.parent_idx][s] * 100.0,
                 c.w2_wars[s] * 100.0,
@@ -4680,7 +4745,11 @@ fn cmd_verify_1gen(args: &[String]) {
     // Step 3: Criterion 3 (Out-of-Sample Full Turn-0 OpenAgent Verification on Top Surviving Children)
     let mut ranked_targ: Vec<&ChildCand> = children
         .iter()
-        .filter(|c| c.arm == "targeted")
+        .filter(|c| {
+            c.arm == "targeted"
+                && (c.op.starts_with("level-tweak")
+                    || c.mut_slot.is_none_or(|s| s < 6 && c.w2_picks[s] >= 0.08))
+        })
         .collect();
     ranked_targ.sort_by(|a, b| {
         let dva = a.w2_score - parent_w2_scores[a.parent_idx];

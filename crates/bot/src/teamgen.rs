@@ -293,6 +293,93 @@ pub struct NicheConstraint {
     pub staple_cap: Option<(BTreeSet<String>, usize)>,
 }
 
+/// A measured Pokemon slot from the active population, used for endogenous
+/// horizontal gene transfer (recombination) weighted by Wins Above Replacement (`war`).
+#[derive(Clone, Debug, Default)]
+pub struct EndogenousDonor {
+    pub set: Value,
+    pub war: f64,
+    pub pick_rate: f64,
+    pub move_dqs: [f64; 4],
+}
+
+/// Population-derived endogenous reservoir of measured Pokemon sets (`WAR`) and
+/// counterfactual move values (`\Delta Q_{-m_k}`). Zero hand-coded priors.
+#[derive(Clone, Debug, Default)]
+pub struct EndogenousPool {
+    pub donors: Vec<EndogenousDonor>,
+    /// Empirical `(sum_dq, count)` per `(species_id, move_id)` observed in battles.
+    pub species_move_dq: BTreeMap<(String, String), (f64, u32)>,
+    /// Empirical `(sum_dq, count)` per `move_id` across all species in battles.
+    pub global_move_dq: BTreeMap<String, (f64, u32)>,
+}
+
+impl EndogenousPool {
+    pub fn record_slot(&mut self, set: &Value, war: f64, pick_rate: f64, move_dqs: &[f64; 4]) {
+        self.donors.push(EndogenousDonor {
+            set: set.clone(),
+            war,
+            pick_rate,
+            move_dqs: *move_dqs,
+        });
+        if pick_rate <= 0.02 {
+            return;
+        }
+        let sid = species_id(set);
+        if let Some(arr) = set["moves"].as_array() {
+            for (k, mv) in arr.iter().take(4).enumerate() {
+                if let Some(m_str) = mv.as_str() {
+                    let mid = toid(m_str);
+                    let dq = move_dqs[k].max(0.0);
+                    let e_sp = self
+                        .species_move_dq
+                        .entry((sid.clone(), mid.clone()))
+                        .or_insert((0.0, 0));
+                    e_sp.0 += dq;
+                    e_sp.1 += 1;
+                    let e_gl = self.global_move_dq.entry(mid).or_insert((0.0, 0));
+                    e_gl.0 += dq;
+                    e_gl.1 += 1;
+                }
+            }
+        }
+    }
+
+    pub fn record_pokemon_set_moves(&mut self, set: &PokemonSet, move_dqs: &[f64; 4]) {
+        let sid = toid(&set.species);
+        for (k, mv) in set.moves.iter().take(4).enumerate() {
+            let mid = toid(mv);
+            let dq = move_dqs[k].max(0.0);
+            if dq <= 1e-6 {
+                continue;
+            }
+            let e_sp = self
+                .species_move_dq
+                .entry((sid.clone(), mid.clone()))
+                .or_insert((0.0, 0));
+            e_sp.0 += dq;
+            e_sp.1 += 1;
+            let e_gl = self.global_move_dq.entry(mid).or_insert((0.0, 0));
+            e_gl.0 += dq;
+            e_gl.1 += 1;
+        }
+    }
+
+    pub fn move_score(&self, sid: &str, mid: &str) -> f64 {
+        if let Some(&(sum, cnt)) = self.species_move_dq.get(&(sid.to_string(), mid.to_string())) {
+            if cnt > 0 {
+                return sum / (cnt as f64);
+            }
+        }
+        if let Some(&(sum, cnt)) = self.global_move_dq.get(mid) {
+            if cnt > 0 {
+                return 0.5 * (sum / (cnt as f64));
+            }
+        }
+        0.0
+    }
+}
+
 impl NicheConstraint {
     pub fn allows_team(&self, raw: &[Value], parent: Option<&[Value]>) -> bool {
         if let Some(p) = parent {
@@ -745,6 +832,7 @@ impl TeamGen {
         slot_wins: &[f64; 6],
         slot_wars: &[f64; 6],
         move_dqs: Option<&[[f64; 4]; 6]>,
+        endo_pool: Option<&EndogenousPool>,
         rng: &mut SplitMix64,
         constraint: &NicheConstraint,
         tries: usize,
@@ -788,85 +876,80 @@ impl TeamGen {
         };
 
         for _ in 0..tries {
-            let step_roll = rng.below(20);
-            let num_steps = if step_roll < 13 {
-                1
-            } else if step_roll < 18 {
-                2
+            let target_slot = sample_slot(rng, 0);
+            let war_i = slot_wars[target_slot];
+            let p_i = p_norm[target_slot];
+            let min_war = slot_wars
+                .iter()
+                .copied()
+                .fold(f64::INFINITY, f64::min);
+            // Only replace the species if the slot is genuinely below replacement AND not a
+            // >=55%-picked structural core workhorse (unless its WAR is catastrophic < -10pt).
+            let below_rep = (war_i < -0.020 && (p_i < 0.55 || war_i <= min_war + 0.005))
+                || (p_i < 0.15 && war_i <= 0.0)
+                || war_i < -0.10;
+            let above_rep = war_i >= 0.025 || p_i >= 0.55;
+            let roll = rng.below(20);
+            let op = if below_rep {
+                // Below replacement level: 65% SpeciesSwap, 20% MoveSwap, 10% ItemSwap, 5% LevelTweak
+                if roll < 13 {
+                    MutOp::SpeciesSwap
+                } else if roll < 17 {
+                    MutOp::MoveSwap
+                } else if roll < 19 {
+                    MutOp::ItemSwap
+                } else {
+                    MutOp::LevelTweak
+                }
+            } else if above_rep {
+                // Above-replacement pillar / high-pick workhorse: 60% MoveSwap, 25% ItemSwap, 10% LevelTweak, 5% SpeciesSwap
+                if roll < 12 {
+                    MutOp::MoveSwap
+                } else if roll < 17 {
+                    MutOp::ItemSwap
+                } else if roll < 19 {
+                    MutOp::LevelTweak
+                } else {
+                    MutOp::SpeciesSwap
+                }
             } else {
-                3
+                // Near-replacement flex slot: 35% SpeciesSwap, 40% MoveSwap, 15% ItemSwap, 10% LevelTweak
+                if roll < 7 {
+                    MutOp::SpeciesSwap
+                } else if roll < 15 {
+                    MutOp::MoveSwap
+                } else if roll < 18 {
+                    MutOp::ItemSwap
+                } else {
+                    MutOp::LevelTweak
+                }
+            };
+            let slot = if op == MutOp::SpeciesSwap && target_slot < constraint.anchor_slots {
+                if constraint.anchor_slots >= 6 {
+                    continue;
+                }
+                sample_slot(rng, constraint.anchor_slots)
+            } else {
+                target_slot
             };
             let mut raw = parent.to_vec();
-            let mut first_op = MutOp::MoveSwap;
-            let mut first_slot = 0usize;
-            let mut applied = 0usize;
-            for _ in 0..num_steps {
-                let target_slot = sample_slot(rng, 0);
-                let war_i = slot_wars[target_slot];
-                let below_rep = war_i < -0.020 || (p_norm[target_slot] < 0.12 && war_i <= 0.0);
-                let above_rep = war_i >= 0.030;
-                let roll = rng.below(20);
-                let op = if below_rep {
-                    // Below replacement level: 65% SpeciesSwap, 20% MoveSwap, 10% ItemSwap, 5% LevelTweak
-                    if roll < 13 {
-                        MutOp::SpeciesSwap
-                    } else if roll < 17 {
-                        MutOp::MoveSwap
-                    } else if roll < 19 {
-                        MutOp::ItemSwap
-                    } else {
-                        MutOp::LevelTweak
-                    }
-                } else if above_rep {
-                    // Above-replacement pillar: 55% MoveSwap, 25% ItemSwap, 10% LevelTweak, 10% SpeciesSwap (noise floor)
-                    if roll < 11 {
-                        MutOp::MoveSwap
-                    } else if roll < 16 {
-                        MutOp::ItemSwap
-                    } else if roll < 18 {
-                        MutOp::LevelTweak
-                    } else {
-                        MutOp::SpeciesSwap
-                    }
-                } else {
-                    // Near-replacement flex slot: 35% SpeciesSwap, 40% MoveSwap, 15% ItemSwap, 10% LevelTweak
-                    if roll < 7 {
-                        MutOp::SpeciesSwap
-                    } else if roll < 15 {
-                        MutOp::MoveSwap
-                    } else if roll < 18 {
-                        MutOp::ItemSwap
-                    } else {
-                        MutOp::LevelTweak
-                    }
-                };
-                let slot = if op == MutOp::SpeciesSwap && target_slot < constraint.anchor_slots {
-                    if constraint.anchor_slots >= 6 {
-                        continue;
-                    }
-                    sample_slot(rng, constraint.anchor_slots)
-                } else {
-                    target_slot
-                };
-                let slot_move_dq = move_dqs.map(|m| &m[slot]);
-                let ok = match op {
-                    MutOp::MoveSwap => self.mut_move_swap_weighted(dex, &mut raw, slot, slot_move_dq, rng),
-                    MutOp::ItemSwap => self.mut_item_swap(dex, &mut raw, slot, rng),
-                    MutOp::LevelTweak => self.mut_level_tweak(&mut raw, slot, rng),
-                    MutOp::SpeciesSwap => self.mut_species_swap(dex, &mut raw, slot, rng),
-                    MutOp::DvTweak | MutOp::EvTweak | MutOp::MonReplace => unreachable!(),
-                };
-                if ok.is_some() {
-                    if applied == 0 {
-                        first_op = op;
-                        first_slot = slot;
-                    }
-                    applied += 1;
+            let slot_move_dq = move_dqs.map(|m| &m[slot]);
+            let ok = match op {
+                MutOp::MoveSwap => {
+                    self.mut_move_swap_weighted(dex, &mut raw, slot, slot_move_dq, endo_pool, rng)
                 }
-            }
-            if applied == 0 {
+                MutOp::ItemSwap => self.mut_item_swap(dex, &mut raw, slot, rng),
+                MutOp::LevelTweak => self.mut_level_tweak(&mut raw, slot, rng),
+                MutOp::SpeciesSwap => {
+                    self.mut_species_swap_endogenous(dex, &mut raw, slot, endo_pool, rng)
+                }
+                MutOp::DvTweak | MutOp::EvTweak | MutOp::MonReplace => unreachable!(),
+            };
+            if ok.is_none() {
                 continue;
             }
+            let first_op = op;
+            let first_slot = slot;
             let saved_anchors: Vec<String> = (0..constraint.anchor_slots.min(6))
                 .map(|i| species_id(&parent[i]))
                 .collect();
@@ -1564,7 +1647,7 @@ impl TeamGen {
         slot: usize,
         rng: &mut SplitMix64,
     ) -> Option<()> {
-        self.mut_move_swap_weighted(dex, raw, slot, None, rng)
+        self.mut_move_swap_weighted(dex, raw, slot, None, None, rng)
     }
 
     fn mut_move_swap_weighted(
@@ -1573,6 +1656,7 @@ impl TeamGen {
         raw: &mut [Value],
         slot: usize,
         move_dq: Option<&[f64; 4]>,
+        endo_pool: Option<&EndogenousPool>,
         rng: &mut SplitMix64,
     ) -> Option<()> {
         let sid = species_id(&raw[slot]);
@@ -1580,20 +1664,56 @@ impl TeamGen {
         let cur = move_ids(&raw[slot]);
         let cur_bases: Vec<String> = cur.iter().map(|m| base_id(m)).collect();
         let non_dom = self.non_dominated_moves(dex, &sid, level, &cur);
-        let cands: Vec<&String> = non_dom.iter().filter(|m| !cur_bases.contains(*m)).collect();
-        if cands.is_empty() {
+        let mut cand_displays: Vec<String> = Vec::new();
+        for m in non_dom.iter().filter(|m| !cur_bases.contains(*m)) {
+            if *m == "hiddenpower" {
+                for hp in self.non_dominated_hp_types(dex, &sid, level) {
+                    cand_displays.push(move_name(dex, &hp));
+                }
+            } else {
+                cand_displays.push(move_name(dex, m));
+            }
+        }
+        if cand_displays.is_empty() {
             return None;
         }
-        let pick = cands[rng.below(cands.len())].clone();
-        let display = if pick == "hiddenpower" {
-            let typed = self.non_dominated_hp_types(dex, &sid, level);
-            if typed.is_empty() {
-                return None;
+        let display = if let Some(ep) = endo_pool {
+            let scores: Vec<f64> = cand_displays
+                .iter()
+                .map(|d| ep.move_score(&sid, &toid(d)))
+                .collect();
+            let pos_indices: Vec<usize> = (0..scores.len())
+                .filter(|&i| scores[i] > 1e-6)
+                .collect();
+            let eps_in = 0.15;
+            if pos_indices.is_empty() || rng.next_f64() < eps_in {
+                // 15% uniform exploration floor across all non-dominated legal moves
+                cand_displays[rng.below(cand_displays.len())].clone()
+            } else {
+                // 85% Boltzmann selection over moves with empirically positive \Delta Q in the population
+                let t_in = 0.010;
+                let mut raw_w = Vec::with_capacity(pos_indices.len());
+                let mut raw_sum = 0.0f64;
+                for &idx in &pos_indices {
+                    let w = (scores[idx].clamp(0.0, 0.20) / t_in).exp();
+                    raw_w.push(w);
+                    raw_sum += w;
+                }
+                let mut u = rng.next_f64() * raw_sum.max(1e-12);
+                let mut chosen_idx = *pos_indices.last().unwrap();
+                for (&idx, &w) in pos_indices.iter().zip(raw_w.iter()) {
+                    u -= w;
+                    if u <= 0.0 {
+                        chosen_idx = idx;
+                        break;
+                    }
+                }
+                cand_displays[chosen_idx].clone()
             }
-            move_name(dex, &typed[rng.below(typed.len())])
         } else {
-            move_name(dex, &pick)
+            cand_displays[rng.below(cand_displays.len())].clone()
         };
+        let pick_is_hp = toid(&display).starts_with("hiddenpower");
         let moves = raw[slot]["moves"].as_array_mut()?;
         if moves.is_empty() {
             return None;
@@ -1602,25 +1722,28 @@ impl TeamGen {
             moves.push(json!(display));
         } else {
             let hp_slot = cur.iter().position(|m| m.starts_with("hiddenpower"));
-            let p = if pick == "hiddenpower" && hp_slot.is_some() {
+            let p = if pick_is_hp && hp_slot.is_some() {
                 hp_slot.unwrap()
             } else if let Some(dq) = move_dq {
                 let m_len = moves.len().min(4);
-                let has_signal = dq[..m_len].iter().any(|&v| v > 1e-6);
-                if !has_signal {
+                let max_dq = dq[..m_len]
+                    .iter()
+                    .copied()
+                    .fold(0.0f64, f64::max);
+                if max_dq <= 1e-6 {
                     rng.below(m_len)
                 } else {
-                    // Stochastic Resonance Boltzmann move selection:
-                    // Finite temperature T_move = 0.035 + uniform drift floor eps = 0.24
-                    // protects high-\Delta Q signature/combo moves while letting single
-                    // \Delta Q = 0 prerequisite moves survive ~55-65% of move swaps
-                    // so their combo partner can arrive.
-                    let t_move = 0.035;
-                    let eps_move = 0.24;
+                    // Scale-invariant Stochastic Resonance Boltzmann move selection:
+                    // Normalize r_k = dq[k] / max_dq in [0, 1] so stall (many turns) and
+                    // offense (few turns) share the exact same dimensionless temperature
+                    // T_rel = 0.22 + uniform drift floor eps_move = 0.08.
+                    let t_rel = 0.22;
+                    let eps_move = 0.08;
                     let mut raw_w = [1.0f64; 4];
                     let mut raw_sum = 0.0f64;
                     for k in 0..m_len {
-                        raw_w[k] = (-dq[k].clamp(0.0, 0.50) / t_move).exp();
+                        let r_k = (dq[k].max(0.0) / max_dq).clamp(0.0, 1.0);
+                        raw_w[k] = (-r_k / t_rel).exp();
                         raw_sum += raw_w[k];
                     }
                     let mut u = rng.next_f64();
@@ -1759,6 +1882,108 @@ impl TeamGen {
             return None;
         }
         Some(())
+    }
+
+    fn mut_species_swap_endogenous(
+        &self,
+        dex: &Dex,
+        raw: &mut [Value],
+        slot: usize,
+        endo_pool: Option<&EndogenousPool>,
+        rng: &mut SplitMix64,
+    ) -> Option<()> {
+        let cur = species_id(&raw[slot]);
+        let teammates: Vec<String> = (0..raw.len())
+            .filter(|&i| i != slot)
+            .map(|i| species_id(&raw[i]))
+            .collect();
+
+        // 88% Endogenous Horizontal Transfer (Boltzmann over donor WAR + uniform floor),
+        // 12% Uniform Dex Exploration so novel species can still enter from scratch.
+        let eps_novel_species = 0.12;
+        if let Some(ep) = endo_pool {
+            if rng.next_f64() >= eps_novel_species {
+                let elig: Vec<&EndogenousDonor> = ep
+                    .donors
+                    .iter()
+                    .filter(|d| {
+                        let sid = species_id(&d.set);
+                        !sid.is_empty()
+                            && sid != cur
+                            && !teammates.contains(&sid)
+                            && d.pick_rate >= 0.05
+                    })
+                    .collect();
+                if !elig.is_empty() {
+                    let t_donor = 0.035;
+                    let eps_donor = 0.15;
+                    let n_e = elig.len();
+                    let mut raw_w = Vec::with_capacity(n_e);
+                    let mut raw_sum = 0.0f64;
+                    for d in &elig {
+                        let sig = d.war.clamp(-0.15, 0.25) + 0.06 * (d.pick_rate - 0.50);
+                        let w = (sig / t_donor).exp();
+                        raw_w.push(w);
+                        raw_sum += w;
+                    }
+                    let mut u = rng.next_f64();
+                    let mut chosen_idx = n_e - 1;
+                    for (idx, &w) in raw_w.iter().enumerate() {
+                        let prob = (1.0 - eps_donor) * (w / raw_sum.max(1e-12))
+                            + eps_donor / (n_e as f64);
+                        u -= prob;
+                        if u <= 0.0 {
+                            chosen_idx = idx;
+                            break;
+                        }
+                    }
+                    let donor = elig[chosen_idx];
+                    let sid = species_id(&donor.set);
+                    let level_hint = set_level(&raw[slot]);
+                    let min_lv = self.ls.species(&sid)?.min_level.max(50);
+                    if min_lv > level_hint {
+                        let swap_mate = (0..raw.len()).find(|&i| {
+                            i != slot
+                                && set_level(&raw[i]) >= min_lv
+                                && self
+                                    .ls
+                                    .species(&species_id(&raw[i]))
+                                    .is_none_or(|l| l.min_level.max(50) <= level_hint)
+                        })?;
+                        let donor_lv = set_level(&raw[swap_mate]);
+                        raw[swap_mate]["level"] = json!(level_hint);
+                        raw[slot]["level"] = json!(donor_lv);
+                    }
+                    let target_lv = set_level(&raw[slot]);
+                    let held = held_items(raw, slot);
+                    let mut grafted = donor.set.clone();
+                    grafted["level"] = json!(target_lv);
+                    raw[slot] = grafted;
+                    self.repair_orphaned_moves(dex, raw, slot, rng);
+                    let donor_item = toid(raw[slot]["item"].as_str().unwrap_or(""));
+                    if donor_item.is_empty() || held.contains(&donor_item) {
+                        let item_cands = self.non_dominated_items(dex, raw, slot, false);
+                        if !item_cands.is_empty() {
+                            raw[slot]["item"] = json!(item_cands[rng.below(item_cands.len())]);
+                        }
+                    }
+                    // With 30% probability, also refine the weakest move on the grafted donor set
+                    if rng.below(10) < 3 {
+                        let _ = self.mut_move_swap_weighted(
+                            dex,
+                            raw,
+                            slot,
+                            Some(&donor.move_dqs),
+                            endo_pool,
+                            rng,
+                        );
+                    }
+                    optimize_set_dvs_evs(dex, &mut raw[slot]);
+                    return Some(());
+                }
+            }
+        }
+        self.mut_species_swap(dex, raw, slot, rng)
     }
 
     fn mut_species_swap(
