@@ -83,10 +83,9 @@ STAGE_PATHS = [
     "data/meta-nash-v3/solution.json",
     "data/team-selection-v2/panel.json",
     "data/team-inventory-v1/eval/teams.json",
-    "data/psro-r1/checkpoints",
     "data/eco-r2/extracted-nash.json",
     "data/eco-ring/ring-gauntlet.json",
-    "data/eco-r3/islands",
+    "data/eco-r4/islands",
 ]
 
 

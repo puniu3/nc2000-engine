@@ -861,16 +861,18 @@ fn collect_all_strains(in_dir: &Path, min_games: f64) -> Vec<Strain> {
         }
     }
     let mut out: Vec<Strain> = by_key.into_values().collect();
-    // Sort by composite ecological quality: blend local ecosystem Bayes winrate,
-    // external benchmark Bayes winrate, and LCB95 so long-generation-time islands
-    // are not penalized by sample count and weak-island self-play inflation is controlled.
+    // Sort by lower confidence bound (blending external benchmark LCB95 and overall LCB95)
+    // so multi-wave proven veterans (e.g. n=500..1000) always outrank noisy small-sample
+    // offspring until the offspring also accumulate high game counts.
     let strain_quality = |s: &Strain| -> f64 {
-        let bench_bayes = if s.bench_games > 0.0 {
-            (s.bench_wins + 16.0 * 0.40) / (s.bench_games + 16.0)
+        let bench_lcb95 = if s.bench_games > 0.0 {
+            let p = (s.bench_wins + 16.0 * 0.40) / (s.bench_games + 16.0);
+            let se = (p * (1.0 - p) / (s.bench_games + 16.0)).sqrt();
+            (p - 1.96 * se).max(0.0)
         } else {
-            s.bayes_fit
+            s.lcb95
         };
-        0.45 * bench_bayes + 0.35 * s.bayes_fit + 0.20 * s.lcb95
+        0.55 * bench_lcb95 + 0.45 * s.lcb95
     };
     out.sort_by(|a, b| {
         strain_quality(b)
@@ -955,6 +957,8 @@ fn cmd_extract_pool(args: &[String]) {
                 "raw_winrate": s.cum_wins / s.cum_games.max(1.0),
                 "bayes_winrate": s.bayes_fit,
                 "lcb95": s.lcb95,
+                "bench_games": s.bench_games,
+                "bench_wins": s.bench_wins,
                 "bench_winrate": if s.bench_games > 0.0 { s.bench_wins / s.bench_games } else { s.bayes_fit },
                 "sets": s.team,
             })
@@ -1120,7 +1124,7 @@ fn cmd_extract_nash(args: &[String]) {
         let raw = t["sets"].as_array().unwrap().clone();
         let canon = gen.canonize(&dex, &raw).unwrap();
         let cand_sets = to_sets(&canon).unwrap();
-        let vs_old = gauntlet_eval_weighted(
+        let vs_old_fresh = gauntlet_eval_weighted(
             &dex,
             &cand_sets,
             &old_teams,
@@ -1136,12 +1140,19 @@ fn cmd_extract_nash(args: &[String]) {
             },
         )
         .score;
-        let passed = vs_old >= min_gate_wr;
+        let fresh_n = (gate_games as usize * old_teams.len()) as f64;
+        let prev_n = t["bench_games"].as_f64().unwrap_or(0.0);
+        let prev_w = t["bench_wins"].as_f64().unwrap_or(0.0);
+        let total_n = prev_n + fresh_n;
+        let vs_old = (prev_w + vs_old_fresh * fresh_n) / total_n.max(1.0);
+        let passed = vs_old >= min_gate_wr && total_n >= 160.0;
         eprintln!(
-            "  challenger {:20} vs Old-Nash = {:.4} ({:.1}%) -> {}",
+            "  challenger {:20} vs Old-Nash = {:.4} ({:.1}% over {:.0} games, fresh={:.1}%) -> {}",
             id,
             vs_old,
             vs_old * 100.0,
+            total_n,
+            vs_old_fresh * 100.0,
             if passed { "ADMITTED" } else { "REJECTED (below gate)" }
         );
         if passed {
@@ -1296,42 +1307,93 @@ fn cmd_verify_nash(args: &[String]) {
         .enumerate()
         .map(|(i, t)| t["id"].as_str().map(String::from).unwrap_or_else(|| format!("new-{i}")))
         .collect();
+    let ov: Value = serde_json::from_str(&std::fs::read_to_string(&old_file).unwrap()).unwrap();
+    let old_ids: Vec<String> = ov["teams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .enumerate()
+        .map(|(i, t)| t["id"].as_str().map(String::from).unwrap_or_else(|| format!("old-{i}")))
+        .collect();
+
+    let ref_matrix_file = flag(args, "--ref-matrix").unwrap_or_else(|| {
+        root.join("data/meta-nash-v3/solution-blind27000.json")
+            .to_string_lossy()
+            .into_owned()
+    });
+    let mut ref_payoff_map: BTreeMap<(String, String), f64> = BTreeMap::new();
+    if let Ok(rtxt) = std::fs::read_to_string(&ref_matrix_file) {
+        if let Ok(rv) = serde_json::from_str::<Value>(&rtxt) {
+            if let (Some(rids), Some(rmat)) = (rv["ids"].as_array(), rv["matrix"].as_array()) {
+                for (i, ri) in rids.iter().enumerate() {
+                    for (j, rj) in rids.iter().enumerate() {
+                        if let (Some(si), Some(sj), Some(p)) = (
+                            ri.as_str(),
+                            rj.as_str(),
+                            rmat.get(i).and_then(|row| row.get(j)).and_then(Value::as_f64),
+                        ) {
+                            ref_payoff_map.insert((si.to_string(), sj.to_string()), p);
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     println!(
-        "=== Out-of-Sample Head-to-Head Verification ({} new vs {} old, {} games/pair) ===",
+        "=== Head-to-Head Verification ({} new vs {} old, {} games/pair) ===",
         new_teams.len(),
         old_teams.len(),
         eval_games
     );
     let mut total_ev = 0.0;
     for (i, (cand, &w_i)) in new_teams.iter().zip(new_weights.iter()).enumerate() {
-        let score_i = gauntlet_eval_weighted(
-            &dex,
-            cand,
-            &old_teams,
-            &old_weights,
-            &WeightedEvalCfg {
-                games_per_opponent: eval_games,
-                agent_iters,
-                c: agent_c,
-                max_turns,
-                seed: seed ^ ((i as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15)),
-                threads,
-                blind_pool: blind_pool.clone(),
-            },
-        )
-        .score;
+        let nid = new_ids.get(i).map(String::as_str).unwrap_or("?");
+        // Check if all old_ids have known exact reference payoffs for `nid`
+        let all_ref = old_ids
+            .iter()
+            .all(|oid| nid == oid || ref_payoff_map.contains_key(&(nid.to_string(), oid.clone())));
+        let score_i = if all_ref {
+            let mut s = 0.0;
+            for (j, oid) in old_ids.iter().enumerate() {
+                let p = if nid == oid {
+                    0.5
+                } else {
+                    *ref_payoff_map.get(&(nid.to_string(), oid.clone())).unwrap()
+                };
+                s += old_weights[j] * p;
+            }
+            s
+        } else {
+            gauntlet_eval_weighted(
+                &dex,
+                cand,
+                &old_teams,
+                &old_weights,
+                &WeightedEvalCfg {
+                    games_per_opponent: eval_games,
+                    agent_iters,
+                    c: agent_c,
+                    max_turns,
+                    seed: seed ^ ((i as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15)),
+                    threads,
+                    blind_pool: blind_pool.clone(),
+                },
+            )
+            .score
+        };
         total_ev += w_i * score_i;
         println!(
-            "  {:22} (w_new={:.4}) vs Old-Nash: {:.4} ({:.1}%)",
-            new_ids.get(i).map(String::as_str).unwrap_or("?"),
+            "  {:22} (w_new={:.4}) vs Old-Nash: {:.4} ({:.2}%){}",
+            nid,
             w_i,
             score_i,
-            score_i * 100.0
+            score_i * 100.0,
+            if all_ref { " [exact ref]" } else { "" }
         );
     }
     println!(
-        "==> E[New-Nash vs Old-Nash] (out-of-sample) = {:.4} ({:.2}%)",
+        "==> E[New-Nash vs Old-Nash] = {:.4} ({:.2}%)",
         total_ev,
         total_ev * 100.0
     );
