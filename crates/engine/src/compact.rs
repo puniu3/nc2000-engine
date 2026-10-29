@@ -787,8 +787,6 @@ pub struct CompactMoveSpec {
     /// Self-targeted or target-applied stat boosts (`[(stat_idx_or_ff, delta); 3]`).
     pub boosts: [(u8, i8); 3],
     pub boosts_self: bool,
-    pub self_switch: bool,
-    pub force_switch: bool,
     /// Special move effect tag (`0` = None, `1` = Reflect, `2` = LightScreen, `3` = Safeguard,
     /// `4` = Spikes, `5` = Curse, `6` = BellyDrum, `7` = Roar/Whirlwind, `8` = Encore,
     /// `9` = Disable, `10` = SleepTalk, `11` = Counter, `12` = MirrorCoat, `13` = Flail/Reversal,
@@ -1115,8 +1113,6 @@ fn build_compact_dex_tables(dex: &Dex) -> CompactDexTables {
             sec_boost,
             boosts,
             boosts_self,
-            self_switch: ms.self_switch.is_some(),
-            force_switch: ms.force_switch,
             special_kind,
             var_bp_kind,
             fixed_damage,

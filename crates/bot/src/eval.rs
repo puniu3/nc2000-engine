@@ -1834,10 +1834,10 @@ pub fn extract_eval_features_with_eff(
             continue;
         }
         let ms = &table.move_specs[own_act_idx][m_i];
-        if ms.self_switch && own_alive_cnt > 1 {
+        if ms.special_kind == 18 && own_alive_cnt > 1 {
             has_self_switch = 1.0;
         }
-        if ms.force_switch && foe_alive_cnt > 1 {
+        if ms.special_kind == 7 && foe_alive_cnt > 1 {
             has_force_switch = 1.0;
         }
         if ms.boosts_self {
@@ -1877,7 +1877,7 @@ pub fn extract_eval_features_with_eff(
             continue;
         }
         let ms = &table.move_specs[foe_act_idx][m_i];
-        if ms.force_switch && own_alive_cnt > 1 {
+        if ms.special_kind == 7 && own_alive_cnt > 1 {
             foe_has_phaze = 1.0;
         }
     }
@@ -2156,10 +2156,10 @@ pub fn extract_rollout_state_and_actions(
     for &c in cs {
         if c < 4 {
             let ms = &table.move_specs[att_idx][c as usize];
-            if ms.self_switch && bench_alive {
+            if ms.special_kind == 18 && bench_alive {
                 own_has_self_switch = 1.0;
                 has_cap_move = true;
-            } else if (ms.force_switch && foe_bench_alive)
+            } else if (ms.special_kind == 7 && foe_bench_alive)
                 || ms.boosts_self
                 || matches!(ms.pseudo_kind, 5..=8)
                 || ms.is_substitute
@@ -2241,14 +2241,14 @@ pub fn extract_rollout_state_and_actions(
         if c < 4 {
             let ms = &table.move_specs[att_idx][c as usize];
             // a[0]: self_switch transfer
-            if ms.self_switch && bench_alive && (own_pos_boosts > 0.0 || own_has_sub > 0.0) {
+            if ms.special_kind == 18 && bench_alive && (own_pos_boosts > 0.0 || own_has_sub > 0.0) {
                 let receiver_edge =
                     (bench_best_stat.max(bench_best_eff) - stay_best_dmg + 0.5).clamp(0.1, 1.5);
                 a[0] = (own_pos_boosts + 0.6 * own_has_sub) * receiver_edge;
                 any_nonzero = true;
             }
             // a[1]: force_switch phaze against boosted/Substitute foe
-            if ms.force_switch
+            if ms.special_kind == 7
                 && foe_bench_alive
                 && own_hp_frac > foe_best_dmg
                 && (foe_pos_boosts > 0.0 || foe_has_sub > 0.0)
