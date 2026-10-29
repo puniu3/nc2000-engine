@@ -372,7 +372,7 @@ pub struct BlindSearch {
     /// Search resets omit the observer's protocol log.
     base: Battle,
     scratch: Option<Box<Battle>>,
-    det_cache: FxHashMap<(Option<usize>, [u8; 6], bool), CachedDetRoot>,
+    det_cache: FxHashMap<(Option<usize>, u64, [u8; 6], bool), CachedDetRoot>,
     det_cache_obs_rev: u64,
     turn_cap: u16,
     side: usize,
@@ -659,53 +659,57 @@ impl BlindSearch {
         }
         if self.base.queue.is_empty() && !belief.has_active_pick_draws(obs) {
             let mut rng_probe = self.rng.clone();
-            let (post_qc_seed, qc, party_key, party_len) =
-                self.predict_determinization_draws(obs, &mut rng_probe);
-            let cache_key = (pick, party_key, qc);
-            if let Some(cached) = self.det_cache.get(&cache_key) {
-                self.rng = rng_probe;
+            if let Some(fb_key) =
+                belief.predict_fallback_draws(pick, &self.base, 1 - self.side, &mut rng_probe)
+            {
+                let (post_qc_seed, qc, party_key, party_len) =
+                    self.predict_determinization_draws(obs, &mut rng_probe);
+                let cache_key = (pick, fb_key, party_key, qc);
+                if let Some(cached) = self.det_cache.get(&cache_key) {
+                    self.rng = rng_probe;
+                    let mut sim = match self.scratch.take() {
+                        Some(mut sim) => {
+                            sim.as_mut().clone_from(&cached.sim);
+                            sim
+                        }
+                        None => Box::new(cached.sim.clone()),
+                    };
+                    sim.reseed(post_qc_seed);
+                    std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
+                    return (sim, cached.root, cached.type_index);
+                }
+
                 let mut sim = match self.scratch.take() {
                     Some(mut sim) => {
-                        sim.as_mut().clone_from(&cached.sim);
+                        sim.as_mut().clone_from(&self.base);
                         sim
                     }
-                    None => Box::new(cached.sim.clone()),
+                    None => Box::new(self.base.clone()),
                 };
-                sim.reseed(post_qc_seed);
-                std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
-                return (sim, cached.root, cached.type_index);
-            }
-
-            let mut sim = match self.scratch.take() {
-                Some(mut sim) => {
-                    sim.as_mut().clone_from(&self.base);
-                    sim
+                belief.determinize_in_place(dex, &mut sim, obs, pick, &mut self.rng);
+                if self.cfg.unseen_claw_root && sim.is_idle_move_request() {
+                    sim.update_all_speeds(dex);
                 }
-                None => Box::new(self.base.clone()),
-            };
-            belief.determinize_in_place(dex, &mut sim, obs, pick, &mut self.rng);
-            if self.cfg.unseen_claw_root && sim.is_idle_move_request() {
-                sim.update_all_speeds(dex);
-            }
-            let opp = 1 - self.side;
-            let can_cache = self.rng.0 == rng_probe.0
-                && sim.sides[opp].party.as_slice() == &party_key[..party_len];
-            std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
-            let (root, type_index) = self.resolve_root(dex, &mut sim);
-            if can_cache {
+                let opp = 1 - self.side;
+                let can_cache = self.rng.0 == rng_probe.0
+                    && sim.sides[opp].party.as_slice() == &party_key[..party_len];
                 std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
-                let cached_sim = (*sim).clone();
-                std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
-                self.det_cache.insert(
-                    cache_key,
-                    CachedDetRoot {
-                        sim: cached_sim,
-                        root,
-                        type_index,
-                    },
-                );
+                let (root, type_index) = self.resolve_root(dex, &mut sim);
+                if can_cache {
+                    std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
+                    let cached_sim = (*sim).clone();
+                    std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
+                    self.det_cache.insert(
+                        cache_key,
+                        CachedDetRoot {
+                            sim: cached_sim,
+                            root,
+                            type_index,
+                        },
+                    );
+                }
+                return (sim, root, type_index);
             }
-            return (sim, root, type_index);
         }
 
         let mut sim = match self.scratch.take() {

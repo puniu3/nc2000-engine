@@ -371,18 +371,24 @@ struct LoadoutDraw {
 }
 
 impl LoadoutDraw {
-    fn draw(&self, rng: &mut SplitMix64) -> &Pokemon {
+    #[inline]
+    fn draw_index(&self, rng: &mut SplitMix64) -> usize {
         if self.entries.len() == 1 {
-            return &self.entries[0].0;
+            return 0;
         }
         let mut u = rng.next_f64() * self.total;
-        for (mon, weight) in &self.entries {
+        for (i, (_, weight)) in self.entries.iter().enumerate() {
             u -= weight;
             if u < 0.0 {
-                return mon;
+                return i;
             }
         }
-        &self.entries.last().unwrap().0
+        self.entries.len() - 1
+    }
+
+    #[inline]
+    fn draw(&self, rng: &mut SplitMix64) -> &Pokemon {
+        &self.entries[self.draw_index(rng)].0
     }
 }
 
@@ -1353,6 +1359,57 @@ impl Belief {
         draws.iter().any(Option::is_some).then_some(draws)
     }
 
+    /// Predicts the fallback loadout draw indices for `BlindSearch::det_cache`
+    /// while advancing `rng` identically to `sample_fallback_refs`.
+    /// Returns `None` if an uncacheable M18 marginal `MoveDraw` is active.
+    #[inline]
+    pub(crate) fn predict_fallback_draws(
+        &self,
+        pick: Option<usize>,
+        battle: &Battle,
+        opp: usize,
+        rng: &mut SplitMix64,
+    ) -> Option<u64> {
+        if pick.is_some() || self.pinned {
+            return Some(0);
+        }
+        let active = |slot: usize| match self.fallback_policy {
+            FallbackPolicy::EarlyPerish | FallbackPolicy::EarlyRest => {
+                !battle.sides[opp].roster[slot].fainted
+            }
+            FallbackPolicy::Bayesian => {
+                let r = &battle.sides[opp].roster[slot];
+                !r.fainted && (r.is_active || battle.active_id(opp).is_none())
+            }
+            _ => true,
+        };
+        if self.draws.is_none()
+            && self.loadout_draws.as_ref().is_none_or(|plans| {
+                !plans
+                    .iter()
+                    .enumerate()
+                    .any(|(slot, plan)| plan.is_some() && active(slot))
+            })
+        {
+            return Some(0);
+        }
+        let fallback = self.fallback.as_deref()?;
+        let mut key = 0u64;
+        for slot in 0..fallback.len() {
+            if !active(slot) {
+                continue;
+            }
+            if self.draws.as_ref().and_then(|d| d.get(slot)?.as_ref()).is_some() {
+                return None;
+            }
+            if let Some(draw) = self.loadout_draws.as_ref().and_then(|d| d.get(slot)?.as_ref()) {
+                let idx = draw.draw_index(rng);
+                key |= ((idx as u64 + 1) & 0xFF) << (slot * 8);
+            }
+        }
+        Some(key)
+    }
+
     /// The per-determinization fallback roster, or `None` to use the stored
     /// one unchanged. Consumes rng **only** when it actually samples.
     fn sample_fallback_refs(
@@ -1365,13 +1422,15 @@ impl Belief {
         if pick.is_some() || self.pinned {
             return None;
         }
-        let active = |slot: usize| {
-            !matches!(
-                self.fallback_policy,
-                FallbackPolicy::EarlyPerish
-                    | FallbackPolicy::EarlyRest
-                    | FallbackPolicy::Bayesian
-            ) || !battle.sides[opp].roster[slot].fainted
+        let active = |slot: usize| match self.fallback_policy {
+            FallbackPolicy::EarlyPerish | FallbackPolicy::EarlyRest => {
+                !battle.sides[opp].roster[slot].fainted
+            }
+            FallbackPolicy::Bayesian => {
+                let r = &battle.sides[opp].roster[slot];
+                !r.fainted && (r.is_active || battle.active_id(opp).is_none())
+            }
+            _ => true,
         };
         if self.draws.is_none() && self.loadout_draws.as_ref().is_none_or(|plans| {
             !plans.iter().enumerate().any(|(slot, plan)| plan.is_some() && active(slot))
@@ -1753,95 +1812,10 @@ impl Belief {
         &self,
         dex: &Dex,
         mo: &MonObs,
-        obs_mons: &[MonObs],
+        _obs_mons: &[MonObs],
         fallback_mon: &Pokemon,
     ) -> Option<LoadoutDraw> {
-        if !mo.appeared && mo.revealed_moves.is_empty() && mo.item.original.is_none() {
-            return None;
-        }
-        let carriers = self.bayesian_prior_carriers(dex, mo, obs_mons);
-        if carriers.is_empty() {
-            return None;
-        }
-        let species_key = dex.species.key(mo.species);
-        let move_consistent: Vec<(&PokemonSet, f64)> = carriers
-            .into_iter()
-            .filter(|(source, _)| {
-                !source.moves.is_empty()
-                    && source.moves.len() <= 4
-                    && source
-                        .moves
-                        .iter()
-                        .all(|m| format_move_legal_at_level(species_key, &toid(m), mo.level))
-                    && mo.revealed_moves.iter().all(|&revealed| {
-                        source
-                            .moves
-                            .iter()
-                            .filter_map(|m| dex.moves.id(&toid(m)))
-                            .any(|m| move_matches(dex, m, revealed))
-                    })
-            })
-            .collect();
-        if move_consistent.is_empty() {
-            return None;
-        }
-        let strict_item = |source: &PokemonSet| {
-            let item = dex.items.id(&toid(&source.item));
-            item.is_some() == mo.preview_has_item
-                && mo.item.original.is_none_or(|known| known == item)
-        };
-        let use_strict_item = move_consistent.iter().any(|(s, _)| strict_item(s));
-
-        let mon_sig = |p: &Pokemon| {
-            let mut mvs: Vec<u16> = p.base_move_slots.iter().map(|s| s.id.0).collect();
-            mvs.sort_unstable();
-            (
-                p.item.map(|i| i.0),
-                mvs,
-                p.base_stored_stats,
-                p.set_ivs,
-                p.happiness,
-            )
-        };
-
-        let mut entries: Vec<(Pokemon, f64)> = Vec::new();
-        for (source, weight) in move_consistent {
-            if use_strict_item && !strict_item(source) {
-                continue;
-            }
-            let mut set = source.clone();
-            set.level = mo.level;
-            set.name.clear();
-            if !use_strict_item {
-                set.item = match mo.item.original {
-                    Some(Some(x)) => dex.items.key(x).to_string(),
-                    Some(None) => String::new(),
-                    None if mo.preview_has_item => set.item,
-                    None => String::new(),
-                };
-            }
-            let Ok(built) = Battle::from_fixture(dex, "1,2,3,4", &[set.clone()], &[set]) else {
-                continue;
-            };
-            let mon = &built.sides[0].roster[0];
-            if mon.gender != mo.gender || !crate::hp_evidence::consistent(dex, mon, mo.hp_type_mask) {
-                continue;
-            }
-            let sig = mon_sig(mon);
-            match entries.iter_mut().find(|(existing, _)| mon_sig(existing) == sig) {
-                Some((_, w)) => *w += weight,
-                None => entries.push((mon.clone(), weight)),
-            }
-        }
-
-        if entries.is_empty() {
-            return None;
-        }
-        if entries.len() == 1 && mon_sig(&entries[0].0) == mon_sig(fallback_mon) {
-            return None;
-        }
-        let total = entries.iter().map(|(_, w)| *w).sum();
-        Some(LoadoutDraw { entries, total })
+        self.early_perish_draw(dex, mo, fallback_mon)
     }
 
     fn fallback_set(&self, dex: &Dex, mo: &MonObs) -> PokemonSet {
