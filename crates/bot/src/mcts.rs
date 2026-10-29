@@ -284,11 +284,7 @@ pub fn playout_value(
     }
     if matches!(playout, Playout::Heavy { .. })
         && rules.oracle == crate::oracle::OracleMode::Off
-        && !matches!(
-            rules.settlement,
-            crate::accounting::LeafSettlementMode::LegacyRollout
-                | crate::accounting::LeafSettlementMode::RolloutAcct0
-        )
+        && !rules.settlement.uses_legacy_playout_loop()
     {
         if let crate::accounting::LeafSettlementMode::StochAcctRollout { turns } = rules.settlement
         {
@@ -327,6 +323,8 @@ pub fn compact_playout_value(
                                 table,
                                 crate::accounting::LeafSettlementMode::Accounting0,
                             )
+                        } else if rules.settlement.uses_blindspot_leaf() {
+                            eval::compact_eval_leaf_blindspot(cb, table, weights)
                         } else {
                             eval::compact_eval_leaf(cb, table, weights)
                         }
@@ -622,6 +620,207 @@ fn compact_status_pseudo_score(
 }
 
 #[inline]
+fn compact_side_has_usable_heal(
+    cb: &nc2000_engine::compact::CompactBattle,
+    table: &nc2000_engine::compact::MatchTable,
+    side: usize,
+    slot: usize,
+) -> bool {
+    use nc2000_engine::compact::vol_bit;
+    let idx = side * 3 + slot;
+    let mon = &cb.mons[idx];
+    if (mon.vol_flags & vol_bit::PERISH_SONG) != 0 {
+        return false;
+    }
+    let dis = (mon.vol_flags & vol_bit::DISABLE) != 0;
+    let dis_slot = ((mon.slot_refs >> 4) & 0x03) as usize;
+    for m_i in 0..table.mons[idx].num_moves as usize {
+        if mon.pp[m_i] > 0 && !(dis && m_i == dis_slot) {
+            let ms = &table.move_specs[idx][m_i];
+            if ms.is_rest || ms.is_half_heal {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Surgical sign-error overrides inside the 8-turn `CompactBattle` rollout (`BlindSpotRollout` /
+/// `BlindSpotBoth`). Strictly deterministic (zero PRNG draws):
+/// - **R2a**: Defensive `Whirlwind`/`Roar`/`Haze` against already-stacked setup (`>= +2`) we cannot 2HKO.
+/// - **R3b**: Zero-damage free offensive switch on an already-sleeping (`status_counter >= 2`)
+///   non-`Sleep Talk` foe when our active mon deals `< 0.20` chip.
+/// - **R2b**: Bulky setup + recovery (`Curse`/`SD`/`Amnesia`/`Growth`) punishing a passive
+///   non-phazing wall (`foe_non_sd_hit < 0.22`), so switching a passive wall into a setup
+///   sweeper is punished inside the rollout.
+#[inline]
+fn compact_blindspot_tactical_override(
+    cb: &nc2000_engine::compact::CompactBattle,
+    table: &nc2000_engine::compact::MatchTable,
+    side: usize,
+    cs: &[u8],
+    best_score: f64,
+) -> Option<u8> {
+    use nc2000_engine::compact::vol_bit;
+    use nc2000_engine::state::Status;
+
+    let att_slot = cb.sides[side].active_idx as usize;
+    let att_idx = side * 3 + att_slot;
+    let def_side = 1 - side;
+    let def_slot = cb.sides[def_side].active_idx as usize;
+    let def_idx = def_side * 3 + def_slot;
+    let me = &cb.mons[att_idx];
+    let foe = &cb.mons[def_idx];
+    let me_maxhp = table.mons[att_idx].maxhp.max(1) as f64;
+    let foe_maxhp = table.mons[def_idx].maxhp.max(1) as f64;
+    let me_hp_frac = (me.hp() as f64) / me_maxhp;
+    let foe_hp_frac = (foe.hp() as f64) / foe_maxhp;
+
+    let foe_berry = foe.item != 0
+        && (table.mons[def_idx].is_mintberry || table.mons[def_idx].is_miracleberry);
+    let foe_guaranteed_asleep =
+        foe.status_raw() == Status::Slp as u8 && foe.status_counter() >= 2 && !foe_berry;
+    let mut foe_has_sleeptalk = false;
+    let f_dis = (foe.vol_flags & vol_bit::DISABLE) != 0;
+    let f_dis_slot = ((foe.slot_refs >> 4) & 0x03) as usize;
+    for m_i in 0..table.mons[def_idx].num_moves as usize {
+        if foe.pp[m_i] > 0 && !(f_dis && m_i == f_dis_slot) {
+            let ms = &table.move_specs[def_idx][m_i];
+            if ms.special_kind == 10 || ms.is_sleep_usable {
+                foe_has_sleeptalk = true;
+                break;
+            }
+        }
+    }
+
+    // R2a: Defensive phaze / Haze against stacked setup we cannot 2HKO
+    let foe_setup = foe.boosts[0].max(0) as i32
+        + foe.boosts[1].max(0) as i32
+        + foe.boosts[2].max(0) as i32
+        + foe.boosts[3].max(0) as i32
+        + 2 * (foe.boosts[6].max(0) as i32);
+    if foe_setup >= 2 && best_score < 0.48 * foe_hp_frac {
+        let foe_imm_hit = if foe_guaranteed_asleep && !foe_has_sleeptalk {
+            0.0
+        } else {
+            cb.best_hit_fraction(table, def_side, def_slot, side, att_slot, true)
+        };
+        let foe_bench = cb.sides[def_side].alive_mask.count_ones() >= 2;
+        for &c in cs {
+            if c < 4 {
+                let sk = table.move_specs[att_idx][c as usize].special_kind;
+                if sk == 27
+                    && (me_hp_frac > 0.75 * foe_imm_hit
+                        || cb.mon_action_speed(table, side, att_slot)
+                            > cb.mon_action_speed(table, def_side, def_slot))
+                {
+                    return Some(c);
+                }
+                if sk == 7 && foe_bench && me_hp_frac > 0.85 * foe_imm_hit {
+                    return Some(c);
+                }
+            }
+        }
+    }
+
+    // R3b: Free offensive pivot on guaranteed-sleeping non-SleepTalk foe when our active deals < 20%
+    if foe_guaranteed_asleep
+        && !foe_has_sleeptalk
+        && best_score < 0.20
+        && (me.vol_flags & vol_bit::TRAPPED_OR_LOCKED) == 0
+        && (me.vol_flags & vol_bit::SUBSTITUTE) == 0
+        && me.boosts[0] <= 0
+        && me.boosts[2] <= 0
+        && me.boosts[6] <= 0
+    {
+        let spikes_layers = (cb.sides[side].side_flags & 0x03) as usize;
+        let flying_mask = 1u32 << (table.flying_type & 31);
+        let mut best_sw: Option<(u8, f64)> = None;
+        for &c in cs {
+            if (4..7).contains(&c) {
+                let cand_slot = (c - 4) as usize;
+                let cand_idx = side * 3 + cand_slot;
+                let cand = &cb.mons[cand_idx];
+                let cst = cand.status_raw();
+                if cand.hp() <= 0 || cst == Status::Frz as u8 || cst == Status::Slp as u8 {
+                    continue;
+                }
+                let mut cand_hp_f =
+                    (cand.hp() as f64) / (table.mons[cand_idx].maxhp.max(1) as f64);
+                if spikes_layers > 0 && (table.mons[cand_idx].type_mask & flying_mask) == 0 {
+                    cand_hp_f -= 0.125;
+                }
+                if cand_hp_f <= 0.45 {
+                    continue;
+                }
+                let off = cb.best_hit_fraction(table, side, cand_slot, def_side, def_slot, true);
+                if off > best_score + 0.18 && best_sw.map_or(true, |(_, b)| off > b) {
+                    best_sw = Some((c, off));
+                }
+            }
+        }
+        if let Some((sw_act, _)) = best_sw {
+            return Some(sw_act);
+        }
+    }
+
+    // R2b: Healthy setup + recovery punishes passive non-phazing walls (`foe_non_sd_hit < 0.22`)
+    if compact_side_has_usable_heal(cb, table, side, att_slot)
+        && me_hp_frac >= 0.65
+        && (me.vol_flags & (vol_bit::ENCORE | vol_bit::PERISH_SONG)) == 0
+        && best_score < 0.45 * foe_hp_frac
+    {
+        let mut foe_non_sd_hit = 0.0f64;
+        let mut foe_has_counter = false;
+        if !(foe_guaranteed_asleep && !foe_has_sleeptalk)
+            && foe.status_raw() != Status::Frz as u8
+        {
+            for m_i in 0..table.mons[def_idx].num_moves as usize {
+                if foe.pp[m_i] == 0 || (f_dis && m_i == f_dis_slot) {
+                    continue;
+                }
+                let fms = &table.move_specs[def_idx][m_i];
+                if !fms.is_selfdestruct {
+                    let h = cb.expected_hit_fraction(
+                        table, def_side, def_slot, side, att_slot, m_i, true,
+                    );
+                    if h > foe_non_sd_hit {
+                        foe_non_sd_hit = h;
+                    }
+                }
+                if matches!(fms.special_kind, 7 | 8 | 19 | 27)
+                    || fms.primary_status == Status::Tox as u8
+                    || fms.pseudo_kind == 1
+                {
+                    foe_has_counter = true;
+                }
+            }
+        }
+        if foe_non_sd_hit < 0.22 && !foe_has_counter {
+            let is_ghost =
+                (table.mons[att_idx].type_mask & (1u32 << (table.ghost_type & 31))) != 0;
+            for &c in cs {
+                if c < 4 {
+                    let ms = &table.move_specs[att_idx][c as usize];
+                    let want = (ms.pseudo_kind == 5 && !is_ghost && me.boosts[0] < 2)
+                        || (ms.pseudo_kind == 6 && me.boosts[0] < 2)
+                        || (ms.pseudo_kind == 7 && me.boosts[3] < 2)
+                        || (ms.boosts_self
+                            && ms.boosts[0].0 == 2
+                            && ms.boosts[0].1 > 0
+                            && me.boosts[2] < 2);
+                    if want {
+                        return Some(c);
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+#[inline]
 fn compact_greedy_pick(
     cb: &nc2000_engine::compact::CompactBattle,
     table: &nc2000_engine::compact::MatchTable,
@@ -665,6 +864,18 @@ fn compact_greedy_pick(
         if let Some(la_pick) = crate::linear::compact_rollout_linear_pick(cb, table, side, cs) {
             return la_pick;
         }
+        let bs_rollout = rules.settlement.uses_blindspot_rollout();
+        let def_idx = def_side * 3 + def_slot;
+        let me_hp_frac = if bs_rollout {
+            (cb.mons[att_idx].hp() as f64) / (table.mons[att_idx].maxhp.max(1) as f64)
+        } else {
+            0.0
+        };
+        let foe_hp_frac = if bs_rollout {
+            (cb.mons[def_idx].hp() as f64) / (table.mons[def_idx].maxhp.max(1) as f64)
+        } else {
+            0.0
+        };
         let mut best: Option<(u8, f64, f64)> = None;
         for &c in cs {
             if c < 4 {
@@ -675,6 +886,20 @@ fn compact_greedy_pick(
                 let raw_score = cb.expected_hit_fraction(
                     table, side, att_slot, def_side, def_slot, m_slot, true,
                 );
+                // R1: Do not waste a healthy Pokemon's Explosion/Self-Destruct into a surviving healer
+                if bs_rollout
+                    && table.move_specs[att_idx][m_slot].is_selfdestruct
+                    && me_hp_frac >= 0.50
+                    && raw_score < 0.82 * foe_hp_frac
+                    && compact_side_has_usable_heal(cb, table, def_side, def_slot)
+                    && cb.best_hit_fraction(table, def_side, def_slot, side, att_slot, true)
+                        < 0.75 * me_hp_frac
+                {
+                    if best.is_none() {
+                        best = Some((c, 0.0, 0.0));
+                    }
+                    continue;
+                }
                 let mut score = if rules.capped_damage {
                     let accuracy =
                         cb.hit_probability(table, side, att_slot, def_side, def_slot, m_slot);
@@ -753,6 +978,14 @@ fn compact_greedy_pick(
                         best = Some((c, total, base));
                     }
                 }
+            }
+        }
+        if bs_rollout {
+            let stay_score = best.map_or(0.0, |(_, s, _)| s);
+            if let Some(tac_act) =
+                compact_blindspot_tactical_override(cb, table, side, cs, stay_score)
+            {
+                return tac_act;
             }
         }
         if let Some((c, score, _)) = best {

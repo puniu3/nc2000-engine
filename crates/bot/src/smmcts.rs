@@ -197,7 +197,7 @@ impl Default for RmConfig {
             key_no_damage: false,
             mask_rules: MaskRules::default(),
             oracle: crate::oracle::OracleMode::Off,
-            settlement: crate::accounting::LeafSettlementMode::AdaptiveMinimax1 { max_k: 2 },
+            settlement: crate::accounting::LeafSettlementMode::LegacyRollout,
         }
     }
 }
@@ -746,10 +746,14 @@ pub(crate) fn leaf_eval(cfg: &RmConfig, sim: &Battle, dex: &Dex) -> f64 {
         Playout::Uniform => crate::mcts::hp_eval(sim),
         Playout::Heavy { weights, .. } => match cfg.oracle {
             crate::oracle::OracleMode::Off => {
-                if cfg.settlement != crate::accounting::LeafSettlementMode::LegacyRollout {
-                    crate::accounting::battle_settled_leaf(sim, dex, cfg.settlement)
-                } else {
+                if cfg.settlement.uses_blindspot_leaf() {
+                    crate::eval::eval_leaf_blindspot(sim, dex, weights)
+                } else if cfg.settlement.uses_legacy_playout_loop()
+                    && cfg.settlement != crate::accounting::LeafSettlementMode::RolloutAcct0
+                {
                     crate::eval::eval_leaf(sim, dex, weights)
+                } else {
+                    crate::accounting::battle_settled_leaf(sim, dex, cfg.settlement)
                 }
             }
             crate::oracle::OracleMode::EchoBase => {
@@ -1474,6 +1478,16 @@ impl SkuctSearch {
     fn with_rng(battle: &Battle, dex: &Dex, mut cfg: RmConfig, rng: SplitMix64) -> SkuctSearch {
         if cfg.key_no_damage && battle.damage_bookkeeping_observable(dex) {
             cfg.key_no_damage = false;
+        }
+        if matches!(battle.request_state, nc2000_engine::state::RequestState::TeamPreview)
+            && matches!(
+                cfg.settlement,
+                crate::accounting::LeafSettlementMode::BlindSpotLeaf
+                    | crate::accounting::LeafSettlementMode::BlindSpotRollout
+                    | crate::accounting::LeafSettlementMode::BlindSpotBoth
+            )
+        {
+            cfg.settlement = crate::accounting::LeafSettlementMode::LegacyRollout;
         }
         let mut root = battle.clone();
         root.set_log_enabled(false);

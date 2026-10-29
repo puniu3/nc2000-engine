@@ -19,6 +19,7 @@ pub struct Spec {
     residual_scale: f64,
     rollout_residual: bool,
     baton_pass: bool,
+    settlement: nc2000_bot::LeafSettlementMode,
 }
 
 impl Spec {
@@ -35,6 +36,7 @@ impl Spec {
         let mut residual_scale = 0.0;
         let mut rollout_residual = shipped.rollout_residual;
         let mut baton_pass = shipped.rollout_baton_pass;
+        let mut settlement = shipped.settlement;
         for p in &parts[1..] {
             match *p {
                 "perish_escape" => (perish, combo) = (true, false),
@@ -46,6 +48,10 @@ impl Spec {
                 "-rres" => rollout_residual = false,
                 "bp" => baton_pass = true,
                 "-bp" => baton_pass = false,
+                "legacy" => settlement = nc2000_bot::LeafSettlementMode::LegacyRollout,
+                "bsleaf" => settlement = nc2000_bot::LeafSettlementMode::BlindSpotLeaf,
+                "bsroll" => settlement = nc2000_bot::LeafSettlementMode::BlindSpotRollout,
+                "bsboth" => settlement = nc2000_bot::LeafSettlementMode::BlindSpotBoth,
                 n => nums.push(n.parse::<f64>().unwrap_or_else(|_| panic!("bad field {n}"))),
             }
         }
@@ -58,6 +64,7 @@ impl Spec {
             residual_scale,
             rollout_residual,
             baton_pass,
+            settlement,
         }
     }
 
@@ -70,6 +77,7 @@ impl Spec {
             rollout_combo: self.combo,
             rollout_residual: self.rollout_residual,
             rollout_baton_pass: self.baton_pass,
+            settlement: self.settlement,
             ..Default::default()
         };
         if let nc2000_bot::mcts::Playout::Heavy { ref mut weights, .. } = cfg.playout {

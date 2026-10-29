@@ -455,6 +455,16 @@ impl BlindSearch {
         if cfg.key_no_damage && battle.damage_bookkeeping_observable(dex) {
             cfg.key_no_damage = false;
         }
+        if matches!(battle.request_state, nc2000_engine::state::RequestState::TeamPreview)
+            && matches!(
+                cfg.settlement,
+                crate::accounting::LeafSettlementMode::BlindSpotLeaf
+                    | crate::accounting::LeafSettlementMode::BlindSpotRollout
+                    | crate::accounting::LeafSettlementMode::BlindSpotBoth
+            )
+        {
+            cfg.settlement = crate::accounting::LeafSettlementMode::LegacyRollout;
+        }
         let mut base = battle.clone();
         base.set_log_enabled(false);
         if cfg.unseen_claw_root && base.is_idle_move_request() {

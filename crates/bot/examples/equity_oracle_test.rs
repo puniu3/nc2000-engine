@@ -139,6 +139,27 @@ fn parse_arm_spec(raw: &str) -> ArmSpec {
             iters_override,
         };
     }
+    if spec == "bsleaf" {
+        return ArmSpec {
+            oracle: OracleMode::Off,
+            settlement: LeafSettlementMode::BlindSpotLeaf,
+            iters_override,
+        };
+    }
+    if spec == "bsroll" {
+        return ArmSpec {
+            oracle: OracleMode::Off,
+            settlement: LeafSettlementMode::BlindSpotRollout,
+            iters_override,
+        };
+    }
+    if spec == "bsboth" {
+        return ArmSpec {
+            oracle: OracleMode::Off,
+            settlement: LeafSettlementMode::BlindSpotBoth,
+            iters_override,
+        };
+    }
     if spec == "acct0" {
         return ArmSpec {
             oracle: OracleMode::Off,
@@ -2137,11 +2158,11 @@ fn collect_blind_checkpoints(
         let mut bel0 = Belief::new(dex, belief_pool, &obs0);
         let mut bel1 = Belief::new(dex, belief_pool, &obs1);
 
-        // Alternate trajectory generator between Legacy and Shipped so states are balanced.
+        // Alternate trajectory generator between Legacy and AdaptiveMinimax1(2) so states are balanced.
         let gen_arm = if game_idx % 2 == 0 {
             parse_arm_spec("legacy")
         } else {
-            parse_arm_spec("shipped")
+            parse_arm_spec("amm1:2")
         };
         let gen_cfg = build_rm_config_arm(400, 0.4, gen_arm);
 

@@ -43,6 +43,14 @@ pub enum LeafSettlementMode {
     /// Legacy 8-turn `eps = 0.2` rollout + `eval::compact_eval_leaf`.
     #[default]
     LegacyRollout,
+    /// Legacy 8-turn `eps = 0.2` rollout + `eval::compact_eval_leaf_blindspot` (balance-sheet
+    /// setup/boost liability + frozen asset impairment + healer poison liability).
+    BlindSpotLeaf,
+    /// Surgical sign-error-guarded 8-turn `eps = 0.2` rollout + `eval::compact_eval_leaf`.
+    BlindSpotRollout,
+    /// Best-of-both-worlds ("いいとこ取り"): surgical sign-error-guarded 8-turn `CompactBattle`
+    /// rollout + `eval::compact_eval_leaf_blindspot`.
+    BlindSpotBoth,
     /// Legacy 8-turn `eps = 0.2` `CompactBattle` rollout + cached `Accounting0` (`AcctModel`) cutoff.
     RolloutAcct0,
     /// 0-ply accounting + residual NN after settling pending `request == 2` switches.
@@ -61,6 +69,30 @@ pub enum LeafSettlementMode {
     StochAcctRollout { turns: u8 },
     /// 1-ply $K_1 \times K_1$ Nash minimax + selective 2nd-ply $K_2 \times K_2$ tactical quiescence.
     Quiesce2 { k1: u8, k2: u8 },
+}
+
+impl LeafSettlementMode {
+    #[inline]
+    pub const fn uses_legacy_playout_loop(self) -> bool {
+        matches!(
+            self,
+            Self::LegacyRollout
+                | Self::BlindSpotLeaf
+                | Self::BlindSpotRollout
+                | Self::BlindSpotBoth
+                | Self::RolloutAcct0
+        )
+    }
+
+    #[inline]
+    pub const fn uses_blindspot_leaf(self) -> bool {
+        matches!(self, Self::BlindSpotLeaf | Self::BlindSpotBoth)
+    }
+
+    #[inline]
+    pub const fn uses_blindspot_rollout(self) -> bool {
+        matches!(self, Self::BlindSpotRollout | Self::BlindSpotBoth)
+    }
 }
 
 /// Telemetry counters for accounting / minimax leaf evaluations.
@@ -2562,6 +2594,9 @@ pub fn evaluate_settled_leaf(
 
     let mode_tag: u32 = match mode {
         LeafSettlementMode::LegacyRollout | LeafSettlementMode::RolloutAcct0 => 0xAC00_0000,
+        LeafSettlementMode::BlindSpotLeaf
+        | LeafSettlementMode::BlindSpotRollout
+        | LeafSettlementMode::BlindSpotBoth => 0xAC07_0000,
         LeafSettlementMode::Accounting0 => 0xAC00_0000,
         LeafSettlementMode::Minimax1 { max_k } => 0xAC01_0000 | (max_k as u32),
         LeafSettlementMode::AdaptiveMinimax1 { max_k } => 0xAC03_0000 | (max_k as u32),
@@ -2608,6 +2643,16 @@ pub fn evaluate_settled_leaf(
                         settle_forced_switches_then(c_cb, c_tab, sym_seed, |settled| {
                             compact_accounting_equity_with_model(settled, c_tab, &model)
                         })
+                    }
+                    LeafSettlementMode::BlindSpotLeaf
+                    | LeafSettlementMode::BlindSpotRollout
+                    | LeafSettlementMode::BlindSpotBoth => {
+                        let w = crate::eval::EvalWeights::default();
+                        if mode.uses_blindspot_leaf() {
+                            crate::eval::compact_eval_leaf_blindspot(c_cb, c_tab, &w)
+                        } else {
+                            crate::eval::compact_eval_leaf(c_cb, c_tab, &w)
+                        }
                     }
                     LeafSettlementMode::Minimax1 { max_k } => {
                         let k = (max_k as usize).clamp(1, 4);
