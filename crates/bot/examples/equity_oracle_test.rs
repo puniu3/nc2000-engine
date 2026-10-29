@@ -24,6 +24,11 @@ use std::time::Instant;
 
 use conformance::fixture::repo_root;
 use conformance::load_dex;
+use nc2000_bot::accounting::{
+    acct_stats, clear_acct_thread_caches, compact_accounting_equity, evaluate_settled_leaf,
+    extract_acct_components, get_active_acct_model, load_acct_model_from_file, reset_acct_stats,
+    sample_1ply_settled_child, LeafSettlementMode, ACCT_BASIS_DIM, ACCT_FEAT_DIM,
+};
 use nc2000_bot::agent::Agent;
 use nc2000_bot::corpus::{corpus_files, load_battle, load_sources, reconstruct};
 use nc2000_bot::duel::{run_duel, DuelSpec};
@@ -31,8 +36,8 @@ use nc2000_bot::eval::{compact_eval01, compact_eval_leaf, EvalWeights};
 use nc2000_bot::m17e_artifact::MergedArtifact;
 use nc2000_bot::mcts::Playout;
 use nc2000_bot::oracle::{
-    clear_oracle_thread_caches, oracle_equity, oracle_stats, reset_oracle_stats,
-    swap_compact_sides, OracleMode,
+    canonical_state_key_128, clear_oracle_thread_caches, oracle_equity, oracle_stats,
+    reset_oracle_stats, swap_compact_sides, OracleMode,
 };
 use nc2000_bot::preview::{load_meta_pool, MetaPool};
 use nc2000_bot::rng::SplitMix64;
@@ -40,7 +45,7 @@ use nc2000_bot::runner::{play_game, GameResult};
 use nc2000_bot::smmcts::{RmAgent, RmConfig, SelRule, SkuctSearch};
 use nc2000_bot::{BlindAgent, OpenAgent};
 use nc2000_engine::battle::{Outcome, PokemonSet, SearchChoice};
-use nc2000_engine::compact::CompactBattle;
+use nc2000_engine::compact::{CompactBattle, MatchTable};
 use nc2000_engine::dex::Dex;
 use nc2000_engine::state::{Battle, RequestKind};
 use serde_json::json;
@@ -91,33 +96,148 @@ fn flag_bool(args: &[String], name: &str, default: bool) -> bool {
     }
 }
 
-fn parse_oracle_mode(spec: &str) -> OracleMode {
-    if spec == "off" || spec == "base" {
-        return OracleMode::Off;
+#[derive(Clone, Copy, Debug)]
+struct ArmSpec {
+    oracle: OracleMode,
+    settlement: LeafSettlementMode,
+    iters_override: Option<u32>,
+}
+
+fn parse_arm_spec(raw: &str) -> ArmSpec {
+    let (spec, iters_override) = match raw.rsplit_once('@') {
+        Some((lhs, rhs)) => {
+            let n: u32 = rhs.parse().unwrap_or_else(|e| panic!("bad @iters in `{raw}`: {e}"));
+            (lhs, Some(n.max(1)))
+        }
+        None => (raw, None),
+    };
+    if matches!(spec, "off" | "base" | "legacy") {
+        return ArmSpec {
+            oracle: OracleMode::Off,
+            settlement: LeafSettlementMode::LegacyRollout,
+            iters_override,
+        };
+    }
+    if spec == "shipped" || spec == "default" {
+        return ArmSpec {
+            oracle: OracleMode::Off,
+            settlement: RmConfig::default().settlement,
+            iters_override,
+        };
     }
     if spec == "echo" {
-        return OracleMode::EchoBase;
+        return ArmSpec {
+            oracle: OracleMode::EchoBase,
+            settlement: LeafSettlementMode::LegacyRollout,
+            iters_override,
+        };
+    }
+    if spec == "acct0" {
+        return ArmSpec {
+            oracle: OracleMode::Off,
+            settlement: LeafSettlementMode::Accounting0,
+            iters_override,
+        };
+    }
+    if let Some(rest) = spec.strip_prefix("mm1:") {
+        let max_k: u8 = rest.parse().expect("mm1:<max_k>");
+        return ArmSpec {
+            oracle: OracleMode::Off,
+            settlement: LeafSettlementMode::Minimax1 { max_k },
+            iters_override,
+        };
+    }
+    if let Some(rest) = spec.strip_prefix("amm1:") {
+        let max_k: u8 = rest.parse().expect("amm1:<max_k>");
+        return ArmSpec {
+            oracle: OracleMode::Off,
+            settlement: LeafSettlementMode::AdaptiveMinimax1 { max_k },
+            iters_override,
+        };
+    }
+    if let Some(rest) = spec.strip_prefix("qh1:") {
+        let max_k: u8 = rest.parse().expect("qh1:<max_k>");
+        return ArmSpec {
+            oracle: OracleMode::Off,
+            settlement: LeafSettlementMode::QuiesceHot1 { max_k },
+            iters_override,
+        };
+    }
+    if let Some(rest) = spec.strip_prefix("rmm:") {
+        let (sk, st) = rest.split_once(',').unwrap_or((rest, "2"));
+        let max_k: u8 = sk.parse().expect("rmm:<max_k>,<turns>");
+        let rollout_turns: u8 = st.parse().expect("rmm:<max_k>,<turns>");
+        return ArmSpec {
+            oracle: OracleMode::Off,
+            settlement: LeafSettlementMode::RolloutMinimax {
+                max_k,
+                rollout_turns,
+            },
+            iters_override,
+        };
+    }
+    if let Some(rest) = spec.strip_prefix("saroll:") {
+        let turns: u8 = rest.parse().expect("saroll:<turns>");
+        return ArmSpec {
+            oracle: OracleMode::Off,
+            settlement: LeafSettlementMode::StochAcctRollout { turns },
+            iters_override,
+        };
+    }
+    if let Some(rest) = spec.strip_prefix("q2:") {
+        let (s1, s2) = rest.split_once(',').unwrap_or((rest, "2"));
+        let k1: u8 = s1.parse().expect("q2:<k1>,<k2>");
+        let k2: u8 = s2.parse().expect("q2:<k1>,<k2>");
+        return ArmSpec {
+            oracle: OracleMode::Off,
+            settlement: LeafSettlementMode::Quiesce2 { k1, k2 },
+            iters_override,
+        };
     }
     if let Some(rest) = spec.strip_prefix("cutoff:") {
         let leaf_iters: u32 = rest.parse().expect("cutoff:<leaf_iters>");
-        return OracleMode::Cutoff { leaf_iters };
+        return ArmSpec {
+            oracle: OracleMode::Cutoff { leaf_iters },
+            settlement: LeafSettlementMode::LegacyRollout,
+            iters_override,
+        };
     }
     if let Some(rest) = spec.strip_prefix("treeleaf:") {
         let leaf_iters: u32 = rest.parse().expect("treeleaf:<leaf_iters>");
-        return OracleMode::TreeLeaf { leaf_iters };
-    }
-    if let Some(rest) = spec.strip_prefix("coupled:") {
-        let (r_str, l_str) = rest
-            .split_once(',')
-            .unwrap_or((rest, rest));
-        let rollout_iters: u32 = r_str.parse().expect("coupled:<rollout_iters>,<leaf_iters>");
-        let leaf_iters: u32 = l_str.parse().expect("coupled:<rollout_iters>,<leaf_iters>");
-        return OracleMode::Coupled {
-            rollout_iters,
-            leaf_iters,
+        return ArmSpec {
+            oracle: OracleMode::TreeLeaf { leaf_iters },
+            settlement: LeafSettlementMode::LegacyRollout,
+            iters_override,
         };
     }
-    panic!("unknown oracle mode `{spec}` (expected off|echo|cutoff:M|treeleaf:M|coupled:Mr,Ml)");
+    if let Some(rest) = spec.strip_prefix("coupled:") {
+        let (r_str, l_str) = rest.split_once(',').unwrap_or((rest, rest));
+        let rollout_iters: u32 = r_str.parse().expect("coupled:<rollout_iters>,<leaf_iters>");
+        let leaf_iters: u32 = l_str.parse().expect("coupled:<rollout_iters>,<leaf_iters>");
+        return ArmSpec {
+            oracle: OracleMode::Coupled {
+                rollout_iters,
+                leaf_iters,
+            },
+            settlement: LeafSettlementMode::LegacyRollout,
+            iters_override,
+        };
+    }
+    panic!(
+        "unknown arm spec `{raw}` (expected legacy|off|echo|acct0|mm1:K|q2:K1,K2|cutoff:M|treeleaf:M|coupled:Mr,Ml[@iters])"
+    );
+}
+
+fn maybe_load_acct_json(args: &[String]) {
+    if let Some(path) = flag(args, "--acct-json") {
+        load_acct_model_from_file(Path::new(&path))
+            .unwrap_or_else(|e| panic!("failed to load --acct-json `{path}`: {e}"));
+        let m = get_active_acct_model();
+        println!(
+            "Loaded AcctModel from `{path}` (residual_active={}, residual_scale={:.3}, w_acct[0..4]=[{:.3},{:.3},{:.3},{:.3}])",
+            m.residual_active, m.residual_scale, m.w_acct[0], m.w_acct[1], m.w_acct[2], m.w_acct[3]
+        );
+    }
 }
 
 fn norm_id(s: &str) -> String {
@@ -197,8 +317,15 @@ fn build_rm_config(iters: u32, c: f64, oracle: OracleMode) -> RmConfig {
         rollout_switch: false,
         rollout_baton_pass: true,
         oracle,
+        settlement: LeafSettlementMode::LegacyRollout,
         ..Default::default()
     }
+}
+
+fn build_rm_config_arm(default_iters: u32, c: f64, spec: ArmSpec) -> RmConfig {
+    let mut cfg = build_rm_config(spec.iters_override.unwrap_or(default_iters), c, spec.oracle);
+    cfg.settlement = spec.settlement;
+    cfg
 }
 
 fn build_agent(
@@ -210,6 +337,22 @@ fn build_agent(
     seed: u64,
 ) -> Box<dyn Agent> {
     let cfg = build_rm_config(iters, c, oracle);
+    if is_blind {
+        Box::new(BlindAgent::new(cfg, belief_pool.clone(), None, seed))
+    } else {
+        Box::new(OpenAgent::new(cfg, None, seed))
+    }
+}
+
+fn build_agent_arm(
+    is_blind: bool,
+    default_iters: u32,
+    c: f64,
+    spec: ArmSpec,
+    belief_pool: &Arc<MetaPool>,
+    seed: u64,
+) -> Box<dyn Agent> {
+    let cfg = build_rm_config_arm(default_iters, c, spec);
     if is_blind {
         Box::new(BlindAgent::new(cfg, belief_pool.clone(), None, seed))
     } else {
@@ -616,7 +759,32 @@ fn classify_slice(cb: &CompactBattle, table: &nc2000_engine::compact::MatchTable
     }
 }
 
+#[derive(Clone, Copy)]
+enum CalibEvalKind {
+    Base01,
+    BaseLeaf,
+    Acct0,
+    Settled(LeafSettlementMode),
+    Oracle(u32),
+}
+
+fn eval_calib_kind(
+    kind: CalibEvalKind,
+    cb: &CompactBattle,
+    table: &MatchTable,
+    base_w: &EvalWeights,
+) -> f64 {
+    match kind {
+        CalibEvalKind::Base01 => compact_eval01(cb, table, base_w),
+        CalibEvalKind::BaseLeaf => compact_eval_leaf(cb, table, base_w),
+        CalibEvalKind::Acct0 => compact_accounting_equity(cb, table),
+        CalibEvalKind::Settled(mode) => evaluate_settled_leaf(cb, table, mode),
+        CalibEvalKind::Oracle(m) => oracle_equity(cb, table, m),
+    }
+}
+
 fn run_calibrate(args: &[String]) {
+    maybe_load_acct_json(args);
     let root = repo_root();
     let dex = load_dex();
     let threads = flag_usize(args, "--threads", default_threads());
@@ -624,12 +792,51 @@ fn run_calibrate(args: &[String]) {
     let teacher_iters = flag_u32(args, "--teacher-iters", 3000);
     let playoff_iters = flag_u32(args, "--playoff-iters", 150);
     let playoff_games = flag_usize(args, "--playoff-games", 8);
-    let budgets: [u32; 4] = [32, 64, 128, 256];
 
     let base_w = EvalWeights {
         residual_scale: 0.0,
         ..EvalWeights::default()
     };
+
+    let eval_suite: Vec<(&'static str, CalibEvalKind)> = vec![
+        ("Base-eval01", CalibEvalKind::Base01),
+        ("Base-eval_leaf", CalibEvalKind::BaseLeaf),
+        ("Acct0", CalibEvalKind::Acct0),
+        (
+            "QuiesceHot1(2)",
+            CalibEvalKind::Settled(LeafSettlementMode::QuiesceHot1 { max_k: 2 }),
+        ),
+        (
+            "AdaptiveMM1(2)",
+            CalibEvalKind::Settled(LeafSettlementMode::AdaptiveMinimax1 { max_k: 2 }),
+        ),
+        (
+            "RollMM(2,2)",
+            CalibEvalKind::Settled(LeafSettlementMode::RolloutMinimax {
+                max_k: 2,
+                rollout_turns: 2,
+            }),
+        ),
+        (
+            "Minimax1(K=2)",
+            CalibEvalKind::Settled(LeafSettlementMode::Minimax1 { max_k: 2 }),
+        ),
+        (
+            "Minimax1(K=3)",
+            CalibEvalKind::Settled(LeafSettlementMode::Minimax1 { max_k: 3 }),
+        ),
+        (
+            "Minimax1(K=4)",
+            CalibEvalKind::Settled(LeafSettlementMode::Minimax1 { max_k: 4 }),
+        ),
+        (
+            "Quiesce2(3,2)",
+            CalibEvalKind::Settled(LeafSettlementMode::Quiesce2 { k1: 3, k2: 2 }),
+        ),
+        ("Oracle(M=64)", CalibEvalKind::Oracle(64)),
+        ("Oracle(M=128)", CalibEvalKind::Oracle(128)),
+        ("Oracle(M=256)", CalibEvalKind::Oracle(256)),
+    ];
 
     // ---- Part 1A: Certified M17e Exact Endgame Anchors
     let anchor_path = root.join("tmp/m17e-merged-v4.json");
@@ -650,7 +857,7 @@ fn run_calibrate(args: &[String]) {
         let mut b_ids: Vec<usize> = by_battle.keys().copied().collect();
         b_ids.sort();
 
-        let mut anchors: Vec<(Battle, f64, f64)> = Vec::new();
+        let mut anchors: Vec<(MatchTable, CompactBattle, f64, f64)> = Vec::new();
         for bi in b_ids {
             let cb_file = load_battle(&files[bi]);
             for a in &by_battle[&bi] {
@@ -665,33 +872,21 @@ fn run_calibrate(args: &[String]) {
                     artifact.run.selection.reconstruction_seed,
                 )
                 .unwrap();
-                anchors.push((b, a.exact, a.width));
+                let (table, cb) = CompactBattle::from_battle(&b, &dex);
+                anchors.push((table, cb, a.exact, a.width));
             }
         }
 
-        let exact_targets: Vec<f64> = anchors.iter().map(|x| x.1).collect();
-        let eval_models: Vec<(String, Option<u32>, bool)> = vec![
-            ("Base-eval01".to_string(), None, false),
-            ("Base-eval_leaf".to_string(), None, true),
-            ("Oracle(M=32)".to_string(), Some(32), false),
-            ("Oracle(M=64)".to_string(), Some(64), false),
-            ("Oracle(M=128)".to_string(), Some(128), false),
-            ("Oracle(M=256)".to_string(), Some(256), false),
-        ];
-
-        for (label, m_opt, use_leaf) in eval_models {
+        let exact_targets: Vec<f64> = anchors.iter().map(|x| x.2).collect();
+        for &(label, kind) in &eval_suite {
             clear_oracle_thread_caches();
+            clear_acct_thread_caches();
             let t0 = Instant::now();
             let mut preds = Vec::with_capacity(anchors.len());
             let mut viols = 0usize;
             let mut viol_margin = 0.0f64;
-            for (b, exact, width) in &anchors {
-                let (table, cb) = CompactBattle::from_battle(b, &dex);
-                let p = match m_opt {
-                    None if !use_leaf => compact_eval01(&cb, &table, &base_w),
-                    None => compact_eval_leaf(&cb, &table, &base_w),
-                    Some(m) => oracle_equity(&cb, &table, m),
-                };
+            for (table, cb, exact, width) in &anchors {
+                let p = eval_calib_kind(kind, cb, table, &base_w);
                 preds.push(p);
                 let (lo, hi) = (exact - width / 2.0, exact + width / 2.0);
                 let v = (p - hi).max(lo - p).max(0.0);
@@ -700,12 +895,12 @@ fn run_calibrate(args: &[String]) {
                     viol_margin += v;
                 }
             }
+            let us_per_eval = t0.elapsed().as_secs_f64() * 1e6 / (anchors.len().max(1) as f64);
             let (rmse, mae, bias) = rmse_mae_bias(&preds, &exact_targets);
             let r = pearson_r(&preds, &exact_targets);
             println!(
-                "  {label:15} | viols={viols:2}/{} margin={viol_margin:.4} | RMSE={rmse:.4} MAE={mae:.4} bias={bias:+.4} r={r:.4} ({:.2}s)",
+                "  {label:15} | viols={viols:2}/{} margin={viol_margin:.4} | RMSE={rmse:.4} MAE={mae:.4} bias={bias:+.4} r={r:.4} ({us_per_eval:6.2} us/eval)",
                 anchors.len(),
-                t0.elapsed().as_secs_f64()
             );
         }
     }
@@ -864,26 +1059,21 @@ fn run_calibrate(args: &[String]) {
 
     let targets_sk: Vec<f64> = positions.iter().map(|p| p.v_skuct).collect();
     let targets_tm: Vec<f64> = positions.iter().map(|p| p.v_term).collect();
-
-    let mut model_specs: Vec<(String, Option<u32>)> = vec![("Base-eval01".to_string(), None)];
-    for &m in &budgets {
-        model_specs.push((format!("Oracle(M={m})"), Some(m)));
-    }
+    let prebuilt: Vec<(MatchTable, CompactBattle)> = positions
+        .iter()
+        .map(|pos| CompactBattle::from_battle(&pos.battle, &dex))
+        .collect();
 
     println!("\n  --- Overall Accuracy vs SkuctSearch({teacher_iters})x2 AND Terminal Playoff ---");
-    for (label, m_opt) in &model_specs {
+    for &(label, kind) in &eval_suite {
         clear_oracle_thread_caches();
+        clear_acct_thread_caches();
         let t0 = Instant::now();
-        let preds: Vec<f64> = positions
+        let preds: Vec<f64> = prebuilt
             .iter()
-            .map(|pos| {
-                let (table, cb) = CompactBattle::from_battle(&pos.battle, &dex);
-                match m_opt {
-                    None => compact_eval01(&cb, &table, &base_w),
-                    Some(m) => oracle_equity(&cb, &table, *m),
-                }
-            })
+            .map(|(table, cb)| eval_calib_kind(kind, cb, table, &base_w))
             .collect();
+        let us_per_eval = t0.elapsed().as_secs_f64() * 1e6 / (prebuilt.len().max(1) as f64);
         let (rmse_sk, mae_sk, bias_sk) = rmse_mae_bias(&preds, &targets_sk);
         let r_sk = pearson_r(&preds, &targets_sk);
         let (rmse_tm, _mae_tm, _bias_tm) = rmse_mae_bias(&preds, &targets_tm);
@@ -911,13 +1101,389 @@ fn run_calibrate(args: &[String]) {
         }
 
         println!(
-            "  {label:14} | vs Skuct: RMSE={rmse_sk:.4} MAE={mae_sk:.4} bias={bias_sk:+.4} r={r_sk:.4} | vs Term: RMSE={rmse_tm:.4} r={r_tm:.4} | slices[3v3={:.4}, bp={:.4}, stall={:.4}, 2v2={:.4}] ({:.2}s)",
+            "  {label:15} | vs Skuct: RMSE={rmse_sk:.4} MAE={mae_sk:.4} bias={bias_sk:+.4} r={r_sk:.4} | vs Term: RMSE={rmse_tm:.4} r={r_tm:.4} | slices[3v3={:.4}, bp={:.4}, stall={:.4}, 2v2={:.4}] ({us_per_eval:6.2} us/eval)",
             slice_rmses[0],
             slice_rmses[1],
             slice_rmses[2],
             slice_rmses[3],
-            t0.elapsed().as_secs_f64()
         );
+    }
+}
+
+// =========================================================================
+// Strict-Search Training Dataset Generator (`gendata`)
+// =========================================================================
+
+fn collect_heldout_canonical_keys(root: &Path, dex: &Dex) -> HashSet<(u64, u64)> {
+    let mut keys = HashSet::new();
+    let anchor_path = root.join("tmp/m17e-merged-v4.json");
+    let corpus_dir = root.join("tmp/corpus-spectator");
+    if anchor_path.exists() && corpus_dir.exists() {
+        let artifact: MergedArtifact =
+            serde_json::from_str(&std::fs::read_to_string(&anchor_path).unwrap()).unwrap();
+        let src = load_sources(dex, root);
+        let pool_path = root.join("data/meta-pool-v0/meta-pool.json");
+        let files = corpus_files(&corpus_dir);
+        let mut by_battle: std::collections::HashMap<usize, Vec<&nc2000_bot::m17e_artifact::Row>> =
+            std::collections::HashMap::new();
+        for row in &artifact.rows {
+            by_battle.entry(row.battle).or_default().push(row);
+        }
+        for (bi, rows) in by_battle {
+            let cb_file = load_battle(&files[bi]);
+            for a in rows {
+                let d = &cb_file.decisions[a.decision];
+                if let Some(b) = reconstruct(
+                    dex,
+                    &src,
+                    &pool_path,
+                    &cb_file.lines,
+                    &cb_file.evidence,
+                    d,
+                    artifact.run.selection.reconstruction_seed,
+                ) {
+                    let (table, cb) = CompactBattle::from_battle(&b, dex);
+                    let (_, _, klo, khi) = canonical_state_key_128(&cb, &table, 0);
+                    keys.insert((klo, khi));
+                }
+            }
+        }
+    }
+    keys
+}
+
+fn run_gendata(args: &[String]) {
+    maybe_load_acct_json(args);
+    let root = repo_root();
+    let dex = load_dex();
+    let threads = flag_usize(args, "--threads", default_threads());
+    let target_count = flag_usize(args, "--count", 50_000);
+    let oracle_iters = flag_u32(args, "--oracle-iters", 384);
+    let base_seed = flag_u64(args, "--seed", 0x57A1_C75E_A2C4_0001);
+    let out_bin = flag(args, "--out").unwrap_or_else(|| "acct_strict_train.bin".to_string());
+    let verify_json = flag(args, "--verify-out");
+
+    println!(
+        "=== Generating Strict-Search Accounting Dataset: count={target_count}, oracle_iters={oracle_iters}, threads={threads} ==="
+    );
+    let heldout_keys = collect_heldout_canonical_keys(&root, &dex);
+    println!(
+        "  Loaded {} held-out M17e canonical state keys for strict 0-leakage exclusion",
+        heldout_keys.len()
+    );
+
+    let teams = load_dedup_teams(
+        &root,
+        &[
+            "data/team-pool-v2/team-pool.json",
+            "data/belief-pool-v3/belief-pool.json",
+            "data/eco-pool/master-pool.json",
+        ],
+    );
+    let bp_teams: Vec<usize> = (0..teams.len())
+        .filter(|&i| teams[i].iter().any(is_setup_mon))
+        .collect();
+    let stall_teams: Vec<usize> = (0..teams.len())
+        .filter(|&i| carries_count(&teams[i], &["rest", "recover", "softboiled", "milkdrink"]) >= 3)
+        .collect();
+
+    struct RawState {
+        battle_id: u32,
+        slice_id: u32,
+        table: MatchTable,
+        cb: CompactBattle,
+    }
+
+    let t_gen = Instant::now();
+    let seen_keys: Mutex<HashSet<(u64, u64)>> = Mutex::new(heldout_keys);
+    let raw_states: Mutex<Vec<RawState>> = Mutex::new(Vec::with_capacity(target_count + 256));
+    let next_battle_id = AtomicUsize::new(0);
+
+    std::thread::scope(|scope| {
+        for tid in 0..threads {
+            let teams_ref = &teams;
+            let bp_ref = &bp_teams;
+            let stall_ref = &stall_teams;
+            let seen_ref = &seen_keys;
+            let out_ref = &raw_states;
+            let bid_ref = &next_battle_id;
+            let dex_ref = &dex;
+            scope.spawn(move || {
+                let mut rng = SplitMix64::new(
+                    base_seed ^ (tid as u64).wrapping_add(1).wrapping_mul(0x9E37_79B9_7F4A_7C15),
+                );
+                loop {
+                    if out_ref.lock().unwrap().len() >= target_count {
+                        break;
+                    }
+                    let bid = bid_ref.fetch_add(1, Ordering::Relaxed) as u32;
+                    let archetype_roll = bid % 5;
+                    let t0_idx = if archetype_roll == 1 && !bp_ref.is_empty() {
+                        bp_ref[rng.below(bp_ref.len())]
+                    } else if archetype_roll == 2 && !stall_ref.is_empty() {
+                        stall_ref[rng.below(stall_ref.len())]
+                    } else {
+                        rng.below(teams_ref.len())
+                    };
+                    let mut t1_idx = if archetype_roll == 3 && !bp_ref.is_empty() {
+                        bp_ref[rng.below(bp_ref.len())]
+                    } else {
+                        rng.below(teams_ref.len())
+                    };
+                    if t1_idx == t0_idx {
+                        t1_idx = (t0_idx + 1) % teams_ref.len();
+                    }
+
+                    let mut b = Battle::from_fixture(
+                        dex_ref,
+                        &rng.battle_seed(),
+                        &teams_ref[t0_idx],
+                        &teams_ref[t1_idx],
+                    )
+                    .unwrap();
+                    b.set_log_enabled(false);
+
+                    let l0 = b.legal_choices(dex_ref, 0);
+                    let l1 = b.legal_choices(dex_ref, 1);
+                    let p0 = if archetype_roll == 1 {
+                        setup_lead_slot_1based(&teams_ref[t0_idx])
+                            .and_then(|ld| {
+                                l0.iter()
+                                    .copied()
+                                    .find(|c| matches!(c, SearchChoice::Team(u) if u[0] == ld))
+                            })
+                            .unwrap_or(l0[rng.below(l0.len())])
+                    } else {
+                        l0[rng.below(l0.len())]
+                    };
+                    let p1 = l1[rng.below(l1.len())];
+                    let _ = b.apply_choices(dex_ref, [Some(p0), Some(p1)]);
+
+                    let (table, mut cb) = CompactBattle::from_battle(&b, dex_ref);
+                    let mut step_n = 0u32;
+                    let mut local_batch: Vec<RawState> = Vec::new();
+
+                    while cb.outcome == 0 && cb.turn <= 70 && step_n < 110 {
+                        if cb.sides[0].request == 1 && cb.sides[1].request == 1 {
+                            // Sample main-line state with probability 0.45
+                            if rng.next_f64() < 0.45 {
+                                let (_, _, klo, khi) = canonical_state_key_128(&cb, &table, 0);
+                                let is_new = seen_ref.lock().unwrap().insert((klo, khi));
+                                if is_new {
+                                    let sl = match classify_slice(&cb, &table) {
+                                        PosSlice::Standard3v3 => 0,
+                                        PosSlice::BoostedBp => 1,
+                                        PosSlice::RecoveryStall => 2,
+                                        PosSlice::Endgame2v2 => 3,
+                                    };
+                                    local_batch.push(RawState {
+                                        battle_id: bid,
+                                        slice_id: sl,
+                                        table: table.clone(),
+                                        cb,
+                                    });
+                                }
+                            }
+                            // Also sample a 1-ply settled child state (`Minimax1` leaf distribution!)
+                            if rng.next_f64() < 0.45 {
+                                if let Some(settled_child) =
+                                    sample_1ply_settled_child(&cb, &table, &mut rng)
+                                {
+                                    let (_, _, klo, khi) =
+                                        canonical_state_key_128(&settled_child, &table, 0);
+                                    let is_new = seen_ref.lock().unwrap().insert((klo, khi));
+                                    if is_new {
+                                        local_batch.push(RawState {
+                                            battle_id: bid,
+                                            slice_id: 4,
+                                            table: table.clone(),
+                                            cb: settled_child,
+                                        });
+                                    }
+                                }
+                            }
+                        }
+
+                        // Advance trajectory on CompactBattle with diverse mix of accounting-top
+                        // moves and 22% exploratory perturbations (off-policy blunders/switches/status).
+                        let pick_act = |st: &CompactBattle, side: usize, r: &mut SplitMix64| -> u8 {
+                            if st.sides[side].request == 0 {
+                                return 0xFF;
+                            }
+                            let mut buf = [0u8; 7];
+                            let len = st.legal_actions(&table, side, &mut buf);
+                            if len == 0 {
+                                return 0xFF;
+                            }
+                            if st.sides[side].request == 1 && r.next_f64() < 0.78 {
+                                let mut cands = [0u8; 4];
+                                let clen =
+                                    nc2000_bot::accounting::select_accounting_candidates(
+                                        st, &table, side, 3, &mut cands,
+                                    );
+                                if clen > 0 {
+                                    // Bias toward #1 candidate (60%), #2 (25%), #3 (15%)
+                                    let u = r.next_f64();
+                                    let idx = if u < 0.60 || clen == 1 {
+                                        0
+                                    } else if u < 0.85 || clen == 2 {
+                                        1
+                                    } else {
+                                        2
+                                    };
+                                    return cands[idx];
+                                }
+                            }
+                            buf[r.below(len)]
+                        };
+
+                        let a0 = pick_act(&cb, 0, &mut rng);
+                        let a1 = pick_act(&cb, 1, &mut rng);
+                        if a0 == 0xFF && a1 == 0xFF {
+                            break;
+                        }
+                        cb.prng_seed = rng.next() | 1;
+                        cb.quick_claw_roll = if (rng.next() & 0xFF) < 60 { 1 } else { 0 };
+                        cb.apply_actions(&table, [a0, a1]);
+                        step_n += 1;
+                    }
+
+                    if !local_batch.is_empty() {
+                        let mut guard = out_ref.lock().unwrap();
+                        for item in local_batch {
+                            if guard.len() < target_count {
+                                guard.push(item);
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    });
+
+    let mut states = raw_states.into_inner().unwrap();
+    states.truncate(target_count);
+    // Deterministic canonical ordering by (battle_id, turn)
+    states.sort_by_key(|s| (s.battle_id, s.cb.turn, s.slice_id));
+    println!(
+        "  Sampled {} unique non-overlapping CompactBattle states across {} battles in {:.2}s",
+        states.len(),
+        next_battle_id.load(Ordering::Relaxed),
+        t_gen.elapsed().as_secs_f64()
+    );
+
+    // Label all states with strict search `oracle_equity(cb, table, oracle_iters)` on `threads`
+    let t_lbl = Instant::now();
+    let model = get_active_acct_model();
+    let cursor = AtomicUsize::new(0);
+    #[allow(clippy::type_complexity)]
+    let labeled_mtx: Mutex<
+        Vec<(
+            usize,
+            u32,
+            u32,
+            u32,
+            f32,
+            [f32; ACCT_BASIS_DIM],
+            [f32; ACCT_FEAT_DIM],
+            [f32; ACCT_FEAT_DIM],
+        )>,
+    > = Mutex::new(Vec::with_capacity(states.len()));
+
+    std::thread::scope(|scope| {
+        for _ in 0..threads {
+            let st_ref = &states;
+            let cur_ref = &cursor;
+            let out_ref = &labeled_mtx;
+            scope.spawn(move || {
+                clear_oracle_thread_caches();
+                let mut local = Vec::new();
+                loop {
+                    let i = cur_ref.fetch_add(1, Ordering::Relaxed);
+                    if i >= st_ref.len() {
+                        break;
+                    }
+                    let rs = &st_ref[i];
+                    let y = oracle_equity(&rs.cb, &rs.table, oracle_iters) as f32;
+                    let (bd, f0, f1) =
+                        extract_acct_components(&rs.cb, &rs.table, &model.w_acct);
+                    let n0 = rs.cb.sides[0].alive_mask.count_ones();
+                    let n1 = rs.cb.sides[1].alive_mask.count_ones();
+                    let alive_pack = (n0 << 8) | n1;
+                    local.push((i, rs.battle_id, rs.slice_id, alive_pack, y, bd, f0, f1));
+                }
+                out_ref.lock().unwrap().extend(local);
+            });
+        }
+    });
+
+    let mut labeled = labeled_mtx.into_inner().unwrap();
+    labeled.sort_by_key(|r| r.0);
+    let lbl_secs = t_lbl.elapsed().as_secs_f64();
+    println!(
+        "  Labeled {} states with Oracle(M={oracle_iters}) in {:.2}s ({:.0} states/sec)",
+        labeled.len(),
+        lbl_secs,
+        (labeled.len() as f64) / lbl_secs.max(1e-6)
+    );
+
+    // Write fixed-width binary dataset (120 x 4-byte words = 480 bytes/sample)
+    if let Some(parent) = Path::new(&out_bin).parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+    }
+    let mut bytes = Vec::with_capacity(labeled.len() * 480);
+    let mut slice_counts = [0usize; 5];
+    for &(_, bid, sid, apack, y, ref bd, ref f0, ref f1) in &labeled {
+        if (sid as usize) < 5 {
+            slice_counts[sid as usize] += 1;
+        }
+        bytes.extend_from_slice(&bid.to_le_bytes());
+        bytes.extend_from_slice(&sid.to_le_bytes());
+        bytes.extend_from_slice(&apack.to_le_bytes());
+        bytes.extend_from_slice(&y.to_le_bytes());
+        for &v in bd {
+            bytes.extend_from_slice(&v.to_le_bytes());
+        }
+        for &v in f0 {
+            bytes.extend_from_slice(&v.to_le_bytes());
+        }
+        for &v in f1 {
+            bytes.extend_from_slice(&v.to_le_bytes());
+        }
+    }
+    std::fs::write(&out_bin, &bytes).unwrap();
+    println!(
+        "  Wrote {} bytes ({} rows) to `{out_bin}` | slices: 3v3={}, bp={}, stall={}, 2v2={}, settled_1ply={}",
+        bytes.len(),
+        labeled.len(),
+        slice_counts[0],
+        slice_counts[1],
+        slice_counts[2],
+        slice_counts[3],
+        slice_counts[4],
+    );
+
+    if let Some(vpath) = verify_json {
+        let mut samples = Vec::new();
+        for &(idx, bid, sid, _apack, y, ref bd, ref f0, ref f1) in labeled.iter().take(64) {
+            let rs = &states[idx];
+            let rust_eq = compact_accounting_equity(&rs.cb, &rs.table);
+            samples.push(json!({
+                "battle_id": bid,
+                "slice_id": sid,
+                "target": y,
+                "basis_diff": bd.as_slice(),
+                "feat0": f0.as_slice(),
+                "feat1": f1.as_slice(),
+                "rust_analytical_eq": rust_eq,
+            }));
+        }
+        std::fs::write(&vpath, serde_json::to_string_pretty(&samples).unwrap()).unwrap();
+        println!("  Wrote 64 parity verification samples to `{vpath}`");
     }
 }
 
@@ -967,8 +1533,8 @@ fn run_bp_gauntlet_duel(
     is_blind: bool,
     iters: u32,
     c_val: f64,
-    arm_oracle: OracleMode,
-    vs_oracle: OracleMode,
+    arm_spec: ArmSpec,
+    vs_spec: ArmSpec,
     games: usize,
     base_seed: u64,
     threads: usize,
@@ -1034,6 +1600,7 @@ fn run_bp_gauntlet_duel(
         .collect();
 
     reset_oracle_stats();
+    reset_acct_stats();
     let t0 = Instant::now();
     let cursor = AtomicUsize::new(0);
     let rows_mtx: Mutex<Vec<(usize, f64, u16)>> = Mutex::new(Vec::with_capacity(2 * games));
@@ -1048,12 +1615,12 @@ fn run_bp_gauntlet_duel(
                         break;
                     }
                     let g = &schedule[job / 2];
-                    let mode = if job % 2 == 0 { arm_oracle } else { vs_oracle };
+                    let spec = if job % 2 == 0 { arm_spec } else { vs_spec };
                     let arm_team = &teams[g.arm_team];
                     let opp_team = &teams[g.opp_team];
 
                     let mut arm_ag = ForcedSetupLead {
-                        inner: build_agent(is_blind, iters, c_val, mode, belief_pool, g.arm_seed),
+                        inner: build_agent_arm(is_blind, iters, c_val, spec, belief_pool, g.arm_seed),
                         lead: if g.defense {
                             None
                         } else {
@@ -1061,11 +1628,11 @@ fn run_bp_gauntlet_duel(
                         },
                     };
                     let mut foe_ag = ForcedSetupLead {
-                        inner: build_agent(
+                        inner: build_agent_arm(
                             is_blind,
                             iters,
                             c_val,
-                            OracleMode::Off,
+                            vs_spec,
                             belief_pool,
                             g.opp_seed,
                         ),
@@ -1111,6 +1678,7 @@ fn run_bp_gauntlet_duel(
     rows.sort_by_key(|r| r.0);
     let secs = t0.elapsed().as_secs_f64();
     let ostats = oracle_stats();
+    let astats = acct_stats();
 
     let arm_scores: Vec<f64> = rows.iter().step_by(2).map(|r| r.1).collect();
     let ref_scores: Vec<f64> = rows.iter().skip(1).step_by(2).map(|r| r.1).collect();
@@ -1133,9 +1701,9 @@ fn run_bp_gauntlet_duel(
     let worse = diffs.iter().filter(|&&d| d < -1e-9).count();
 
     println!(
-        "  [bp_gauntlet] arm={arm_mean:.4} vs ref={ref_mean:.4} | delta={diff_mean:+.4} +/- {ci95:.4} (better={better}, worse={worse}, n={games}) | eval_hit_rate={:.1}% | {secs:.2}s",
-        if ostats.eval_calls > 0 {
-            100.0 * (ostats.eval_hits as f64) / (ostats.eval_calls as f64)
+        "  [bp_gauntlet] arm={arm_mean:.4} vs ref={ref_mean:.4} | delta={diff_mean:+.4} +/- {ci95:.4} (better={better}, worse={worse}, n={games}) | acct_hit={:.1}% | {secs:.2}s",
+        if astats.leaf_calls > 0 {
+            100.0 * (astats.cache_hits as f64) / (astats.leaf_calls as f64)
         } else {
             0.0
         }
@@ -1153,12 +1721,13 @@ fn run_bp_gauntlet_duel(
         "secs": secs,
         "oracle_eval_calls": ostats.eval_calls,
         "oracle_eval_hits": ostats.eval_hits,
-        "oracle_pick_calls": ostats.pick_calls,
-        "oracle_pick_hits": ostats.pick_hits,
+        "acct_leaf_calls": astats.leaf_calls,
+        "acct_cache_hits": astats.cache_hits,
     })
 }
 
 fn run_duel_cmd(args: &[String]) {
+    maybe_load_acct_json(args);
     let root = repo_root();
     let dex = load_dex();
 
@@ -1171,10 +1740,11 @@ fn run_duel_cmd(args: &[String]) {
     let default_c = if is_blind { 0.4 } else { 1.0 };
     let c_val = flag_f64(args, "--c", default_c);
     let iters = flag_u32(args, "--iters", 300);
-    let arm_str = flag(args, "--arm").unwrap_or_else(|| "cutoff:128".to_string());
-    let vs_str = flag(args, "--vs").unwrap_or_else(|| "off".to_string());
-    let arm_oracle = parse_oracle_mode(&arm_str);
-    let vs_oracle = parse_oracle_mode(&vs_str);
+    let arm_str = flag(args, "--arm").unwrap_or_else(|| "mm1:3".to_string());
+    let vs_str = flag(args, "--vs").unwrap_or_else(|| "legacy".to_string());
+    let mut arm_spec = parse_arm_spec(&arm_str);
+    let vs_spec = parse_arm_spec(&vs_str);
+    let iso_time = flag_bool(args, "--iso-time", false);
     let stratum = flag(args, "--stratum").unwrap_or_else(|| "full".to_string());
     let games = flag_usize(args, "--games", 160);
     let base_seed = flag_u64(args, "--seed", 20261030);
@@ -1197,8 +1767,8 @@ fn run_duel_cmd(args: &[String]) {
             is_blind,
             iters,
             c_val,
-            arm_oracle,
-            vs_oracle,
+            arm_spec,
+            vs_spec,
             games,
             base_seed,
             threads,
@@ -1290,12 +1860,37 @@ fn run_duel_cmd(args: &[String]) {
         other => panic!("unknown --stratum `{other}` (expected full|wide|stall|bp_h2h|bp_gauntlet)"),
     };
 
+    if iso_time && arm_spec.iters_override.is_none() {
+        let mut warm_spec = DuelSpec::new(24, base_seed ^ 0x1507_14EC_A11B_2A70);
+        warm_spec.threads = threads;
+        warm_spec.max_turns = max_turns;
+        warm_spec.log_on = is_blind;
+        warm_spec.crn_agent_seeds = crn;
+        let warm = run_duel(
+            &dex,
+            &teams,
+            &|seed| build_agent_arm(is_blind, iters, c_val, arm_spec, &belief_pool, seed),
+            &|seed| build_agent_arm(is_blind, iters, c_val, vs_spec, &belief_pool, seed),
+            warm_spec,
+        );
+        let ratio = (warm.b_ms_per_move / warm.a_ms_per_move.max(0.05)) * 0.97;
+        let calibrated_iters = ((iters as f64) * ratio).round().clamp(30.0, 20_000.0) as u32;
+        arm_spec.iters_override = Some(calibrated_iters);
+        println!(
+            "  [Iso-Time Warmup] arm@{iters}={:.2}ms/mv vs ref@{iters}={:.2}ms/mv -> calibrated arm_iters={calibrated_iters}",
+            warm.a_ms_per_move, warm.b_ms_per_move
+        );
+    }
+
+    let eff_arm_iters = arm_spec.iters_override.unwrap_or(iters);
+    let eff_vs_iters = vs_spec.iters_override.unwrap_or(iters);
     println!(
-        "=== Duel [env={env_name} c={c_val} N={iters} stratum={stratum} ({} teams) crn={crn}]: {arm_str} vs {vs_str} ({games} games, threads={threads}) ===",
+        "=== Duel [env={env_name} c={c_val} N_A={eff_arm_iters} vs N_B={eff_vs_iters} iso_time={iso_time} stratum={stratum} ({} teams) crn={crn}]: {arm_str} vs {vs_str} ({games} games, threads={threads}) ===",
         teams.len()
     );
 
     reset_oracle_stats();
+    reset_acct_stats();
     let mut spec = DuelSpec::new(games, base_seed);
     spec.threads = threads;
     spec.max_turns = max_turns;
@@ -1305,22 +1900,18 @@ fn run_duel_cmd(args: &[String]) {
     let stats = run_duel(
         &dex,
         &teams,
-        &|seed| build_agent(is_blind, iters, c_val, arm_oracle, &belief_pool, seed),
-        &|seed| build_agent(is_blind, iters, c_val, vs_oracle, &belief_pool, seed),
+        &|seed| build_agent_arm(is_blind, iters, c_val, arm_spec, &belief_pool, seed),
+        &|seed| build_agent_arm(is_blind, iters, c_val, vs_spec, &belief_pool, seed),
         spec,
     );
     let ostats = oracle_stats();
+    let astats = acct_stats();
 
     let pair_wins = stats.pair_scores.iter().filter(|&&p| p > 0.5 + 1e-9).count();
     let pair_losses = stats.pair_scores.iter().filter(|&&p| p < 0.5 - 1e-9).count();
     let pair_ties = stats.pairs - pair_wins - pair_losses;
-    let eval_hit_pct = if ostats.eval_calls > 0 {
-        100.0 * (ostats.eval_hits as f64) / (ostats.eval_calls as f64)
-    } else {
-        0.0
-    };
-    let pick_hit_pct = if ostats.pick_calls > 0 {
-        100.0 * (ostats.pick_hits as f64) / (ostats.pick_calls as f64)
+    let acct_hit_pct = if astats.leaf_calls > 0 {
+        100.0 * (astats.cache_hits as f64) / (astats.leaf_calls as f64)
     } else {
         0.0
     };
@@ -1338,12 +1929,13 @@ fn run_duel_cmd(args: &[String]) {
         pair_ties
     );
     println!(
-        "  avg_turns={:.1} | A={:.2}ms/mv B={:.2}ms/mv | eval_calls={} ({eval_hit_pct:.1}% hit) pick_calls={} ({pick_hit_pct:.1}% hit) | {:.2}s",
+        "  avg_turns={:.1} | A={:.2}ms/mv (N={eff_arm_iters}) B={:.2}ms/mv (N={eff_vs_iters}) | acct_calls={} ({acct_hit_pct:.1}% hit) misses={} q_ext={} | {:.2}s",
         stats.avg_turns,
         stats.a_ms_per_move,
         stats.b_ms_per_move,
-        ostats.eval_calls,
-        ostats.pick_calls,
+        astats.leaf_calls,
+        astats.cache_misses,
+        astats.quiesce_ext,
         stats.secs
     );
 
@@ -1352,6 +1944,9 @@ fn run_duel_cmd(args: &[String]) {
         "env": env_name,
         "c": c_val,
         "iters": iters,
+        "eff_arm_iters": eff_arm_iters,
+        "eff_vs_iters": eff_vs_iters,
+        "iso_time": iso_time,
         "stratum": stratum,
         "num_teams": teams.len(),
         "crn": crn,
@@ -1374,9 +1969,10 @@ fn run_duel_cmd(args: &[String]) {
         "secs": stats.secs,
         "seed": base_seed,
         "oracle_eval_calls": ostats.eval_calls,
-        "oracle_eval_hits": ostats.eval_hits,
-        "oracle_pick_calls": ostats.pick_calls,
-        "oracle_pick_hits": ostats.pick_hits,
+        "acct_leaf_calls": astats.leaf_calls,
+        "acct_cache_hits": astats.cache_hits,
+        "acct_cache_misses": astats.cache_misses,
+        "acct_quiesce_ext": astats.quiesce_ext,
     });
 
     if let Some(path) = jsonl_out {
@@ -1395,7 +1991,8 @@ fn main() {
     match cmd {
         "seam" => run_seam(&args[1..]),
         "calibrate" => run_calibrate(&args[1..]),
+        "gendata" => run_gendata(&args[1..]),
         "duel" => run_duel_cmd(&args[1..]),
-        other => panic!("unknown subcommand `{other}` (expected seam | calibrate | duel)"),
+        other => panic!("unknown subcommand `{other}` (expected seam | calibrate | gendata | duel)"),
     }
 }

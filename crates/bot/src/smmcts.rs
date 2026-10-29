@@ -147,6 +147,8 @@ pub struct RmConfig {
     pub mask_rules: MaskRules,
     /// Optional external game-theoretic equity oracle mode (default `Off`).
     pub oracle: crate::oracle::OracleMode,
+    /// Leaf tactical settlement & accounting/residual evaluation mode.
+    pub settlement: crate::accounting::LeafSettlementMode,
 }
 
 impl RmConfig {
@@ -160,6 +162,7 @@ impl RmConfig {
             rollout_residual: self.rollout_residual,
             baton_pass: self.rollout_baton_pass,
             oracle: self.oracle,
+            settlement: self.settlement,
         }
     }
 }
@@ -194,6 +197,7 @@ impl Default for RmConfig {
             key_no_damage: false,
             mask_rules: MaskRules::default(),
             oracle: crate::oracle::OracleMode::Off,
+            settlement: crate::accounting::LeafSettlementMode::AdaptiveMinimax1 { max_k: 2 },
         }
     }
 }
@@ -741,7 +745,13 @@ pub(crate) fn leaf_eval(cfg: &RmConfig, sim: &Battle, dex: &Dex) -> f64 {
     match &cfg.playout {
         Playout::Uniform => crate::mcts::hp_eval(sim),
         Playout::Heavy { weights, .. } => match cfg.oracle {
-            crate::oracle::OracleMode::Off => crate::eval::eval_leaf(sim, dex, weights),
+            crate::oracle::OracleMode::Off => {
+                if cfg.settlement != crate::accounting::LeafSettlementMode::LegacyRollout {
+                    crate::accounting::battle_settled_leaf(sim, dex, cfg.settlement)
+                } else {
+                    crate::eval::eval_leaf(sim, dex, weights)
+                }
+            }
             crate::oracle::OracleMode::EchoBase => {
                 let (table, cb) = nc2000_engine::compact::CompactBattle::from_battle(sim, dex);
                 crate::oracle::echo_base_leaf(&cb, &table, weights)

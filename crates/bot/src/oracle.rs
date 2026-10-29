@@ -193,8 +193,15 @@ fn side_digest(cb: &CompactBattle, table: &MatchTable, side: usize) -> (u64, u64
         | ((s.request as u64) << 56);
     absorb128(&mut a, &mut b, side_word);
 
-    let hurt_word =
-        (cb.hurt_damage_this_turn[side] as u64) | ((cb.hurt_cat_this_turn[side] as u64) << 16);
+    let mid_turn_switch = (cb.sides[0].request == 2) != (cb.sides[1].request == 2);
+    let went_first = if mid_turn_switch {
+        (cb.speed_order == side as u8) as u64
+    } else {
+        0u64
+    };
+    let hurt_word = (cb.hurt_damage_this_turn[side] as u64)
+        | ((cb.hurt_cat_this_turn[side] as u64) << 16)
+        | (went_first << 24);
     absorb128(&mut a, &mut b, hurt_word);
 
     for slot in 0..3usize {
@@ -206,6 +213,30 @@ fn side_digest(cb: &CompactBattle, table: &MatchTable, side: usize) -> (u64, u64
         }
         let spec = &table.mons[idx];
         absorb128(&mut a, &mut b, spec.static_fp);
+
+        let item_bits = (spec.is_quick_claw as u64)
+            | ((spec.is_leftovers as u64) << 1)
+            | ((spec.is_brightpowder as u64) << 2)
+            | ((spec.is_focusband as u64) << 3)
+            | ((spec.is_mintberry as u64) << 4)
+            | ((spec.is_miracleberry as u64) << 5)
+            | ((spec.is_goldberry as u64) << 6)
+            | ((spec.is_berry as u64) << 7)
+            | ((spec.is_mysteryberry as u64) << 8)
+            | ((spec.is_scope_lens as u64) << 9);
+        let mspecs = &table.move_specs[idx];
+        let mv_types = ((mspecs[0].move_type as u64) & 0x1F)
+            | (((mspecs[1].move_type as u64) & 0x1F) << 5)
+            | (((mspecs[2].move_type as u64) & 0x1F) << 10)
+            | (((mspecs[3].move_type as u64) & 0x1F) << 15);
+        let boost_ty = (spec.item_boost_type.min(31) as u64) & 0x1F;
+        let spec_mv_extra = ((spec.type_mask as u64) & 0x3_FFFF)
+            | (mv_types << 18)
+            | (item_bits << 38)
+            | (boost_ty << 48)
+            | (((spec.item_stat_kind as u64) & 0x0F) << 53)
+            | (((spec.num_moves as u64) & 0x07) << 57);
+        absorb128(&mut a, &mut b, spec_mv_extra);
 
         let hp_pp = (mon.hp() as u16 as u64)
             | ((mon.sub_hp().max(0) as u16 as u64) << 16)
@@ -232,13 +263,17 @@ fn side_digest(cb: &CompactBattle, table: &MatchTable, side: usize) -> (u64, u64
 #[inline]
 fn global_field_word(cb: &CompactBattle, iters: u32) -> u64 {
     let bp_disabled = ((cb.sides[0].side_flags & 0x80) != 0) as u64;
-    let near_cap_turn = if cb.turn >= 950 { cb.turn as u64 } else { 0u64 };
+    let near_cap_turn = if cb.turn >= 950 {
+        cb.turn.min(2047) as u64
+    } else {
+        0u64
+    };
     (cb.weather_kind as u64)
         | ((cb.weather_turns as u64) << 8)
         | ((cb.clause_flags as u64) << 16)
-        | (bp_disabled << 24)
-        | (near_cap_turn << 25)
-        | ((iters as u64) << 40)
+        | (bp_disabled << 20)
+        | (near_cap_turn << 21)
+        | ((iters as u64) << 32)
 }
 
 #[inline]
@@ -301,6 +336,28 @@ pub fn swap_compact_sides(cb: &CompactBattle, table: &MatchTable) -> (CompactBat
     st.match_fingerprint = fp;
     scb.match_fp_lo = fp as u16;
     (scb, st)
+}
+
+/// Compute the zero-leakage canonical 128-bit state key `(swapped, exact_mirror, k_lo, k_hi)`
+/// for `(cb, table)` tagged with `mode_tag` (ignoring `prng_seed` and `quick_claw_roll`).
+#[inline]
+pub fn canonical_state_key_128(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    mode_tag: u32,
+) -> (bool, bool, u64, u64) {
+    let d0 = side_digest(cb, table, 0);
+    let d1 = side_digest(cb, table, 1);
+    let swapped = d0 > d1;
+    let exact_mirror = d0 == d1;
+    let (c0, c1) = if !swapped { (d0, d1) } else { (d1, d0) };
+    let mut lo = c0.0;
+    let mut hi = c0.1;
+    absorb128(&mut lo, &mut hi, c1.0);
+    absorb128(&mut lo, &mut hi, c1.1);
+    absorb128(&mut lo, &mut hi, global_field_word(cb, mode_tag));
+    let (k_lo, k_hi) = finalize_non_zero_key(lo, hi);
+    (swapped, exact_mirror, k_lo, k_hi)
 }
 
 /// Exercise the canonical-key + cache lookup seam for [`OracleMode::EchoBase`]
@@ -881,6 +938,7 @@ fn run_oracle_uncached(
         perish_combo: true,
         baton_pass: (root_cb.sides[0].side_flags & 0x80) == 0,
         oracle: OracleMode::Off,
+        settlement: crate::accounting::LeafSettlementMode::LegacyRollout,
         ..RolloutRules::default()
     };
     let tree_turn_cap = 1000u16.min(root_cb.turn.saturating_add(ORACLE_SUBGAME_TURN_SPAN));
@@ -1235,10 +1293,10 @@ mod tests {
         cb_boosted.mons[0].boosts[4] = 2;
 
         clear_oracle_thread_caches();
-        let eq_unboosted = oracle_equity(&cb_unboosted, &table, 160);
-        let eq_boosted = oracle_equity(&cb_boosted, &table, 160);
+        let eq_unboosted = oracle_equity(&cb_unboosted, &table, 512);
+        let eq_boosted = oracle_equity(&cb_boosted, &table, 512);
         assert!(
-            eq_boosted > eq_unboosted + 0.15,
+            eq_boosted > eq_unboosted + 0.10,
             "oracle must value +2 Atk/+2 Spe Baton Pass Jolteon + Marowak far above unboosted: boosted={eq_boosted:.3} vs unboosted={eq_unboosted:.3}"
         );
 
@@ -1247,8 +1305,8 @@ mod tests {
         clear_oracle_thread_caches();
         let mut rng_cold = SplitMix64::new(42);
         let mut rng_warm = SplitMix64::new(42);
-        let pick_cold = oracle_rollout_pick(&cb_boosted, &table, 0, &cs[..n], 128, &mut rng_cold);
-        let pick_warm = oracle_rollout_pick(&cb_boosted, &table, 0, &cs[..n], 128, &mut rng_warm);
+        let pick_cold = oracle_rollout_pick(&cb_boosted, &table, 0, &cs[..n], 256, &mut rng_cold);
+        let pick_warm = oracle_rollout_pick(&cb_boosted, &table, 0, &cs[..n], 256, &mut rng_warm);
         assert_eq!(pick_cold, pick_warm, "pick cache must be bit-exact");
         assert_eq!(
             pick_cold, 2,

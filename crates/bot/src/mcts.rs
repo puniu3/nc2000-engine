@@ -215,6 +215,7 @@ pub struct RolloutRules {
     pub rollout_residual: bool,
     pub baton_pass: bool,
     pub oracle: crate::oracle::OracleMode,
+    pub settlement: crate::accounting::LeafSettlementMode,
 }
 
 impl Default for RolloutRules {
@@ -228,6 +229,7 @@ impl Default for RolloutRules {
             rollout_residual: false,
             baton_pass: true,
             oracle: crate::oracle::OracleMode::Off,
+            settlement: crate::accounting::LeafSettlementMode::LegacyRollout,
         }
     }
 }
@@ -279,6 +281,16 @@ pub fn playout_value(
     }
     if let crate::oracle::OracleMode::TreeLeaf { leaf_iters } = rules.oracle {
         return crate::oracle::oracle_equity(&cb, &table, leaf_iters);
+    }
+    if matches!(playout, Playout::Heavy { .. })
+        && rules.oracle == crate::oracle::OracleMode::Off
+        && rules.settlement != crate::accounting::LeafSettlementMode::LegacyRollout
+    {
+        if let crate::accounting::LeafSettlementMode::StochAcctRollout { turns } = rules.settlement
+        {
+            return crate::accounting::stoch_accounting_rollout(&mut cb, &table, turns, rng);
+        }
+        return crate::accounting::evaluate_settled_leaf(&cb, &table, rules.settlement);
     }
     compact_playout_value(&mut cb, &table, playout, cutoff, rng, rules)
 }

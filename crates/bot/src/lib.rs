@@ -26,6 +26,7 @@
 #[global_allocator]
 static GLOBAL_ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
+pub mod accounting;
 pub mod agent;
 pub mod analysis;
 pub mod belief;
@@ -72,6 +73,7 @@ pub mod stall;
 pub mod teamgen;
 pub mod value;
 
+pub use accounting::{AcctModel, LeafSettlementMode};
 pub use agent::{Agent, MaxDamageAgent, RandomAgent};
 pub use belief::{Belief, FallbackPolicy, FallbackSource};
 pub use blind::{baked_preview_pick, open_preview_pick, BlindAgent, BlindSearch, OpenAgent};
