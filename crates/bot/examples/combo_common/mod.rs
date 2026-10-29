@@ -16,6 +16,8 @@ pub struct Spec {
     c: f64,
     perish: bool,
     combo: bool,
+    residual_scale: f64,
+    rollout_residual: bool,
 }
 
 impl Spec {
@@ -29,11 +31,17 @@ impl Spec {
         let mut nums = Vec::new();
         let shipped = RmConfig::default();
         let (mut perish, mut combo) = (shipped.rollout_perish, shipped.rollout_combo);
+        let mut residual_scale = 1.0;
+        let mut rollout_residual = shipped.rollout_residual;
         for p in &parts[1..] {
             match *p {
                 "perish_escape" => (perish, combo) = (true, false),
                 "perish_combo" => (perish, combo) = (false, true),
                 "-perish_combo" | "-perish_escape" => (perish, combo) = (false, false),
+                "res" => residual_scale = 1.0,
+                "-res" => residual_scale = 0.0,
+                "rres" => rollout_residual = true,
+                "-rres" => rollout_residual = false,
                 n => nums.push(n.parse::<f64>().unwrap_or_else(|_| panic!("bad field {n}"))),
             }
         }
@@ -43,18 +51,24 @@ impl Spec {
             c: nums.get(1).copied().unwrap_or(1.0),
             perish,
             combo,
+            residual_scale,
+            rollout_residual,
         }
     }
 
     pub fn build(&self, seed: u64, pool: &Arc<MetaPool>) -> Box<dyn Agent> {
-        let cfg = RmConfig {
+        let mut cfg = RmConfig {
             iterations: self.iterations,
             rule: SelRule::Ucb,
             c: self.c,
             rollout_perish: self.perish,
             rollout_combo: self.combo,
+            rollout_residual: self.rollout_residual,
             ..Default::default()
         };
+        if let nc2000_bot::mcts::Playout::Heavy { ref mut weights, .. } = cfg.playout {
+            weights.residual_scale = self.residual_scale;
+        }
         if self.blind {
             Box::new(BlindAgent::new(cfg, pool.clone(), None, seed))
         } else {
@@ -87,6 +101,7 @@ pub struct Tally {
     pub fielded: u32,
 }
 
+#[allow(dead_code)]
 impl Tally {
     pub fn add(&mut self, o: &Tally) {
         self.sing += o.sing;
@@ -251,6 +266,7 @@ pub fn play(
 }
 
 /// Whether a set carries the whole Perish trap.
+#[allow(dead_code)]
 pub fn is_trapper(set: &PokemonSet) -> bool {
     let moves: Vec<String> = set.moves.iter().map(|m| norm(m)).collect();
     moves.iter().any(|m| m == "perishsong")

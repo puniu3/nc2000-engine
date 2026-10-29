@@ -787,6 +787,8 @@ pub struct CompactMoveSpec {
     /// Self-targeted or target-applied stat boosts (`[(stat_idx_or_ff, delta); 3]`).
     pub boosts: [(u8, i8); 3],
     pub boosts_self: bool,
+    pub self_switch: bool,
+    pub force_switch: bool,
     /// Special move effect tag (`0` = None, `1` = Reflect, `2` = LightScreen, `3` = Safeguard,
     /// `4` = Spikes, `5` = Curse, `6` = BellyDrum, `7` = Roar/Whirlwind, `8` = Encore,
     /// `9` = Disable, `10` = SleepTalk, `11` = Counter, `12` = MirrorCoat, `13` = Flail/Reversal,
@@ -1113,6 +1115,8 @@ fn build_compact_dex_tables(dex: &Dex) -> CompactDexTables {
             sec_boost,
             boosts,
             boosts_self,
+            self_switch: ms.self_switch.is_some(),
+            force_switch: ms.force_switch,
             special_kind,
             var_bp_kind,
             fixed_damage,
@@ -1576,7 +1580,7 @@ impl CompactBattle {
                     }
                 }
             }
-            let side_flags = (spikes_layers & 0x03)
+            let mut side_flags = (spikes_layers & 0x03)
                 | ((side.fainted_this_turn.is_some() as u8) << 2);
             let request = match side.request_state() {
                 None | Some(RequestKind::Wait) => 0,
@@ -1584,6 +1588,22 @@ impl CompactBattle {
                 Some(RequestKind::Switch) => 2,
                 Some(RequestKind::TeamPreview) => 3,
             };
+            if request == 0 && active_idx < 3 {
+                let act_c_idx = side_n * 3 + active_idx as usize;
+                for q_act in &battle.queue {
+                    if q_act.pokemon.is_some_and(|pid| pid.side as usize == side_n) {
+                        if let crate::state::ActionKind::Move { move_id, .. } = q_act.choice {
+                            let num_m = static_mons[act_c_idx].num_moves as usize;
+                            if let Some(m_slot) = (0..num_m)
+                                .find(|&m_i| static_mons[act_c_idx].moves[m_i] == move_id)
+                            {
+                                side_flags |= 0x10 | (((m_slot as u8) & 0x03) << 5);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
 
             compact_sides[side_n] = CompactSide {
                 active_idx,
@@ -2682,19 +2702,44 @@ impl CompactBattle {
                 }
             }
             18 => {
-                // Baton Pass: switch to healthiest alive bench member passing boosts/sub/volatiles.
+                // Baton Pass: switch to best alive bench receiver passing boosts/sub/volatiles.
                 let mask = self.sides[side].alive_mask & !(1 << self.sides[side].active_idx);
                 if mask != 0 {
                     let mut best_slot = mask.trailing_zeros() as u8;
-                    let mut best_hp = -1i32;
-                    for s_i in 0..3u8 {
-                        if (mask & (1 << s_i)) != 0 {
-                            let idx = side * 3 + s_i as usize;
-                            let frac = (self.mons[idx].hp() as i32 * 1024)
-                                / (table.mons[idx].maxhp.max(1) as i32);
-                            if frac > best_hp {
-                                best_hp = frac;
-                                best_slot = s_i;
+                    if mask.count_ones() > 1 {
+                        let passed_boosts = self.mons[att_idx].boosts;
+                        let foe_slot = self.sides[foe_side].active_idx as usize;
+                        let foe_alive = (self.sides[foe_side].alive_mask & (1 << foe_slot)) != 0
+                            && self.mons[def_idx].hp() > 0;
+                        let mut best_score = -1.0f64;
+                        for s_i in 0..3u8 {
+                            if (mask & (1 << s_i)) != 0 {
+                                let idx = side * 3 + s_i as usize;
+                                let hp_frac = (self.mons[idx].hp() as f64)
+                                    / (table.mons[idx].maxhp.max(1) as f64);
+                                let hit = if foe_alive {
+                                    let saved = self.mons[idx].boosts;
+                                    self.mons[idx].boosts = passed_boosts;
+                                    let h = self
+                                        .best_hit_fraction(
+                                            table,
+                                            side,
+                                            s_i as usize,
+                                            foe_side,
+                                            foe_slot,
+                                            true,
+                                        )
+                                        .min(1.5);
+                                    self.mons[idx].boosts = saved;
+                                    h
+                                } else {
+                                    0.0
+                                };
+                                let score = hp_frac + hit;
+                                if score > best_score {
+                                    best_score = score;
+                                    best_slot = s_i;
+                                }
                             }
                         }
                     }
@@ -2933,12 +2978,28 @@ impl CompactBattle {
                     (self.sides[side].alive_mask.trailing_zeros() as u8).min(2)
                 };
                 if (self.sides[side].alive_mask & (1 << slot)) != 0 {
-                    self.exec_switch(table, side, slot, false);
+                    let act_idx = side * 3 + (self.sides[side].active_idx.min(2) as usize);
+                    let copy_vol = self.mons[act_idx].hp() > 0;
+                    self.exec_switch(table, side, slot, copy_vol);
                 }
             }
             self.sides[side].request = 1;
         }
         self.check_faints(table);
+        // If this was a mid-turn self-switch (e.g. faster Baton Pass) and the other side
+        // had a pending move queued for the second half of the turn, execute it now in CompactBattle.
+        if self.outcome == 0 && self.sides[0].request == 1 && self.sides[1].request == 1 {
+            for s in 0..2usize {
+                let flags = self.sides[s].side_flags;
+                if (flags & 0x10) != 0 {
+                    self.sides[s].side_flags &= !0x70;
+                    let m_slot = ((flags >> 5) & 0x03) as usize;
+                    self.exec_move(table, s, m_slot, true, &mut rng);
+                    self.check_faints(table);
+                    break;
+                }
+            }
+        }
         if self.outcome == 0 && self.sides[0].request == 1 && self.sides[1].request == 1 {
             self.exec_residuals(table, &mut rng);
             self.check_faints(table);

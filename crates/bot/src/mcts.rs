@@ -212,6 +212,7 @@ pub struct RolloutRules {
     /// Implies `perish_escape`, without which the combo kills its own singer.
     pub perish_combo: bool,
     pub capped_damage: bool,
+    pub rollout_residual: bool,
 }
 
 /// Unfinished rollouts return a leaf evaluation rather than a terminal outcome.
@@ -660,6 +661,39 @@ fn compact_greedy_pick(
                 }
             }
         }
+        if rules.rollout_residual {
+            let stay_dmg = best.map_or(0.0, |(_, s, _)| s) as f32;
+            if let Some(deltas) =
+                crate::eval::compute_rollout_action_residuals(cb, table, side, cs, stay_dmg)
+            {
+                for (i, &c) in cs.iter().take(7).enumerate() {
+                    if suicidal(c) {
+                        continue;
+                    }
+                    let dq = deltas[i] as f64;
+                    if dq <= 0.0 {
+                        continue;
+                    }
+                    let base = if c < 4 {
+                        cb.expected_hit_fraction(
+                            table,
+                            side,
+                            att_slot,
+                            def_side,
+                            def_slot,
+                            c as usize,
+                            true,
+                        )
+                    } else {
+                        0.0
+                    };
+                    let total = base + dq;
+                    if best.map_or(true, |(_, old_score, _)| total > old_score) {
+                        best = Some((c, total, base));
+                    }
+                }
+            }
+        }
         if let Some((c, score, _)) = best {
             if score > 0.0 {
                 return c;
@@ -668,16 +702,31 @@ fn compact_greedy_pick(
         }
     }
 
-    // Forced switch: healthiest bench target.
+    // Forced or self-switch target selection:
+    // When the outgoing active Pokemon is alive (`hp > 0`, i.e. `self_switch` / Baton Pass),
+    // score receivers by HP fraction + offensive effectiveness with passed boosts;
+    // when fainted (`hp <= 0`), keep exact healthiest-bench selection.
     let mut best_sw = None;
-    let mut best_hp = -1.0f64;
+    let mut best_score = -1.0f64;
+    let passing_alive = cb.sides[side].request == 2
+        && att_slot < 3
+        && cb.mons[att_idx].hp() > 0
+        && (cb.sides[def_side].alive_mask & (1 << def_slot)) != 0
+        && cb.mons[def_side * 3 + def_slot].hp() > 0;
     for &c in cs {
         if (4..7).contains(&c) {
             let slot = (c - 4) as usize;
             let idx = side * 3 + slot;
-            let frac = (cb.mons[idx].hp() as f64) / (table.mons[idx].maxhp.max(1) as f64);
-            if best_sw.is_none() || frac >= best_hp {
-                best_hp = frac;
+            let mut score = (cb.mons[idx].hp() as f64) / (table.mons[idx].maxhp.max(1) as f64);
+            if passing_alive {
+                let mut tmp = *cb;
+                tmp.mons[idx].boosts = cb.mons[att_idx].boosts;
+                score += tmp
+                    .best_hit_fraction(table, side, slot, def_side, def_slot, true)
+                    .min(1.5);
+            }
+            if best_sw.is_none() || score >= best_score {
+                best_score = score;
                 best_sw = Some(c);
             }
         }
