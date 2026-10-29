@@ -145,6 +145,8 @@ pub struct RmConfig {
     /// shipped; an arena arm flips one field to A/B a mask change, which is
     /// the only harness that can see one at all (see `root_dominated`).
     pub mask_rules: MaskRules,
+    /// Optional external game-theoretic equity oracle mode (default `Off`).
+    pub oracle: crate::oracle::OracleMode,
 }
 
 impl RmConfig {
@@ -157,6 +159,7 @@ impl RmConfig {
             capped_damage: self.rollout_capped_damage,
             rollout_residual: self.rollout_residual,
             baton_pass: self.rollout_baton_pass,
+            oracle: self.oracle,
         }
     }
 }
@@ -190,6 +193,7 @@ impl Default for RmConfig {
             threshold_key: false,
             key_no_damage: false,
             mask_rules: MaskRules::default(),
+            oracle: crate::oracle::OracleMode::Off,
         }
     }
 }
@@ -733,10 +737,22 @@ pub(crate) fn run_iteration_with_root_child_value(
     reward0
 }
 
-fn leaf_eval(cfg: &RmConfig, sim: &Battle, dex: &Dex) -> f64 {
+pub(crate) fn leaf_eval(cfg: &RmConfig, sim: &Battle, dex: &Dex) -> f64 {
     match &cfg.playout {
         Playout::Uniform => crate::mcts::hp_eval(sim),
-        Playout::Heavy { weights, .. } => crate::eval::eval_leaf(sim, dex, weights),
+        Playout::Heavy { weights, .. } => match cfg.oracle {
+            crate::oracle::OracleMode::Off => crate::eval::eval_leaf(sim, dex, weights),
+            crate::oracle::OracleMode::EchoBase => {
+                let (table, cb) = nc2000_engine::compact::CompactBattle::from_battle(sim, dex);
+                crate::oracle::echo_base_leaf(&cb, &table, weights)
+            }
+            crate::oracle::OracleMode::Cutoff { leaf_iters }
+            | crate::oracle::OracleMode::TreeLeaf { leaf_iters }
+            | crate::oracle::OracleMode::Coupled { leaf_iters, .. } => {
+                let (table, cb) = nc2000_engine::compact::CompactBattle::from_battle(sim, dex);
+                crate::oracle::oracle_equity(&cb, &table, leaf_iters)
+            }
+        },
     }
 }
 

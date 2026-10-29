@@ -214,6 +214,7 @@ pub struct RolloutRules {
     pub capped_damage: bool,
     pub rollout_residual: bool,
     pub baton_pass: bool,
+    pub oracle: crate::oracle::OracleMode,
 }
 
 impl Default for RolloutRules {
@@ -226,6 +227,7 @@ impl Default for RolloutRules {
             capped_damage: false,
             rollout_residual: false,
             baton_pass: true,
+            oracle: crate::oracle::OracleMode::Off,
         }
     }
 }
@@ -275,6 +277,9 @@ pub fn playout_value(
     if !rules.baton_pass {
         cb.sides[0].side_flags |= 0x80;
     }
+    if let crate::oracle::OracleMode::TreeLeaf { leaf_iters } = rules.oracle {
+        return crate::oracle::oracle_equity(&cb, &table, leaf_iters);
+    }
     compact_playout_value(&mut cb, &table, playout, cutoff, rng, rules)
 }
 
@@ -298,7 +303,18 @@ pub fn compact_playout_value(
         if cb.turn > cutoff {
             return match playout {
                 Playout::Uniform => compact_hp_eval(cb, table),
-                Playout::Heavy { weights, .. } => eval::compact_eval_leaf(cb, table, weights),
+                Playout::Heavy { weights, .. } => match rules.oracle {
+                    crate::oracle::OracleMode::Off | crate::oracle::OracleMode::TreeLeaf { .. } => {
+                        eval::compact_eval_leaf(cb, table, weights)
+                    }
+                    crate::oracle::OracleMode::EchoBase => {
+                        crate::oracle::echo_base_leaf(cb, table, weights)
+                    }
+                    crate::oracle::OracleMode::Cutoff { leaf_iters }
+                    | crate::oracle::OracleMode::Coupled { leaf_iters, .. } => {
+                        crate::oracle::oracle_equity(cb, table, leaf_iters)
+                    }
+                },
             };
         }
         let mut picks = [7u8; 2];
@@ -590,6 +606,9 @@ fn compact_greedy_pick(
     rng: &mut SplitMix64,
     rules: RolloutRules,
 ) -> u8 {
+    if let crate::oracle::OracleMode::Coupled { rollout_iters, .. } = rules.oracle {
+        return crate::oracle::oracle_rollout_pick(cb, table, side, cs, rollout_iters, rng);
+    }
     let att_slot = cb.sides[side].active_idx as usize;
     let att_idx = side * 3 + att_slot;
     let def_side = 1 - side;

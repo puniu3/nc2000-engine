@@ -791,10 +791,7 @@ impl BlindSearch {
                     if rollout {
                         crate::mcts::playout_value(sim, dex, &self.cfg.playout, self.turn_cap, rng, self.cfg.rollout_rules())
                     } else {
-                        match &self.cfg.playout {
-                            crate::mcts::Playout::Uniform => crate::mcts::hp_eval(sim),
-                            crate::mcts::Playout::Heavy { weights, .. } => crate::eval::eval_leaf(sim, dex, weights),
-                        }
+                        crate::smmcts::leaf_eval(&self.cfg, sim, dex)
                     }
                 }, Some(trace),
             )
