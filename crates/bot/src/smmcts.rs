@@ -197,7 +197,7 @@ impl Default for RmConfig {
             key_no_damage: false,
             mask_rules: MaskRules::default(),
             oracle: crate::oracle::OracleMode::Off,
-            settlement: crate::accounting::LeafSettlementMode::LegacyRollout,
+            settlement: crate::accounting::LeafSettlementMode::BlindSpotLeaf,
         }
     }
 }
