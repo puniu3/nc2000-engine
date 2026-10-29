@@ -284,7 +284,11 @@ pub fn playout_value(
     }
     if matches!(playout, Playout::Heavy { .. })
         && rules.oracle == crate::oracle::OracleMode::Off
-        && rules.settlement != crate::accounting::LeafSettlementMode::LegacyRollout
+        && !matches!(
+            rules.settlement,
+            crate::accounting::LeafSettlementMode::LegacyRollout
+                | crate::accounting::LeafSettlementMode::RolloutAcct0
+        )
     {
         if let crate::accounting::LeafSettlementMode::StochAcctRollout { turns } = rules.settlement
         {
@@ -317,7 +321,15 @@ pub fn compact_playout_value(
                 Playout::Uniform => compact_hp_eval(cb, table),
                 Playout::Heavy { weights, .. } => match rules.oracle {
                     crate::oracle::OracleMode::Off | crate::oracle::OracleMode::TreeLeaf { .. } => {
-                        eval::compact_eval_leaf(cb, table, weights)
+                        if rules.settlement == crate::accounting::LeafSettlementMode::RolloutAcct0 {
+                            crate::accounting::evaluate_settled_leaf(
+                                cb,
+                                table,
+                                crate::accounting::LeafSettlementMode::Accounting0,
+                            )
+                        } else {
+                            eval::compact_eval_leaf(cb, table, weights)
+                        }
                     }
                     crate::oracle::OracleMode::EchoBase => {
                         crate::oracle::echo_base_leaf(cb, table, weights)

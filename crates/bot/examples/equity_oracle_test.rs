@@ -42,8 +42,8 @@ use nc2000_bot::oracle::{
 use nc2000_bot::preview::{load_meta_pool, MetaPool};
 use nc2000_bot::rng::SplitMix64;
 use nc2000_bot::runner::{play_game, GameResult};
-use nc2000_bot::smmcts::{RmAgent, RmConfig, SelRule, SkuctSearch};
-use nc2000_bot::{BlindAgent, OpenAgent};
+use nc2000_bot::smmcts::{dominated_actions, RmAgent, RmConfig, SelRule, SkuctSearch};
+use nc2000_bot::{Belief, BlindAgent, BlindSearch, Observer, OpenAgent};
 use nc2000_engine::battle::{Outcome, PokemonSet, SearchChoice};
 use nc2000_engine::compact::{CompactBattle, MatchTable};
 use nc2000_engine::dex::Dex;
@@ -129,6 +129,13 @@ fn parse_arm_spec(raw: &str) -> ArmSpec {
         return ArmSpec {
             oracle: OracleMode::EchoBase,
             settlement: LeafSettlementMode::LegacyRollout,
+            iters_override,
+        };
+    }
+    if spec == "rollacct0" {
+        return ArmSpec {
+            oracle: OracleMode::Off,
+            settlement: LeafSettlementMode::RolloutAcct0,
             iters_override,
         };
     }
@@ -1985,6 +1992,952 @@ fn run_duel_cmd(args: &[String]) {
     }
 }
 
+// =========================================================================
+// Phase 3: Production-Budget Decision Divergence & Terminal Counterfactuals
+// =========================================================================
+
+#[derive(Clone)]
+struct BlindCheckpoint {
+    id: usize,
+    is_off_pool: bool,
+    phase: &'static str,
+    battle: Battle,
+    obs0: Observer,
+    obs1: Observer,
+}
+
+fn format_choice_readable(battle: &Battle, dex: &Dex, side: usize, c: SearchChoice) -> String {
+    match c {
+        SearchChoice::Move(id) => format!("mv:{}", dex.moves.key(id)),
+        SearchChoice::Switch(pos) => {
+            let sp = battle.sides[side]
+                .party
+                .get((pos as usize).saturating_sub(1))
+                .and_then(|&slot| battle.sides[side].roster.get(slot as usize))
+                .map(|m| dex.species.key(m.species))
+                .unwrap_or("?");
+            format!("sw:{sp}(#{pos})")
+        }
+        SearchChoice::Team(t) => format!("team:{}{}{}", t[0], t[1], t[2]),
+        SearchChoice::Pass => "pass".to_string(),
+    }
+}
+
+fn format_board_summary(battle: &Battle, dex: &Dex, belief_cands: usize) -> String {
+    let (table, cb) = CompactBattle::from_battle(battle, dex);
+    let side_str = |s: usize| -> String {
+        let act_slot = (cb.sides[s].active_idx as usize).min(2);
+        let mut parts = Vec::new();
+        for slot in 0..3usize {
+            if slot >= battle.sides[s].party.len() {
+                continue;
+            }
+            let r_idx = battle.sides[s].party[slot] as usize;
+            let sp = dex.species.key(battle.sides[s].roster[r_idx].species);
+            let idx = s * 3 + slot;
+            let m = &cb.mons[idx];
+            let maxhp = table.mons[idx].maxhp.max(1);
+            if (cb.sides[s].alive_mask & (1 << slot)) == 0 || m.hp() <= 0 {
+                parts.push(format!("{sp}:KO"));
+                continue;
+            }
+            let pct = ((m.hp() as f64) * 100.0 / (maxhp as f64)).round() as i32;
+            let st = match m.status_packed & 0x07 {
+                1 => " Par",
+                2 => " Slp",
+                3 => " Frz",
+                4 => " Brn",
+                5 => " Psn",
+                6 => " Tox",
+                _ => "",
+            };
+            let mut b_tags = String::new();
+            let b_names = ["A", "D", "SA", "SD", "S", "Ac", "Ev"];
+            for (bi, bn) in b_names.iter().enumerate() {
+                let bv = m.boosts[bi];
+                if bv != 0 {
+                    b_tags.push_str(&format!("{bn}{bv:+}"));
+                }
+            }
+            if m.sub_hp() > 0 {
+                b_tags.push_str(&format!(" Sub({})", m.sub_hp()));
+            }
+            let mark = if slot == act_slot { "*" } else { "" };
+            if b_tags.is_empty() {
+                parts.push(format!("{mark}{sp}:{pct}%{st}"));
+            } else {
+                parts.push(format!("{mark}{sp}:{pct}%{st}[{b_tags}]"));
+            }
+        }
+        let mut flags = Vec::new();
+        if (cb.sides[s].side_flags & 0x01) != 0 {
+            flags.push("Spikes");
+        }
+        if cb.sides[s].reflect_turns > 0 {
+            flags.push("Refl");
+        }
+        if cb.sides[s].lightscreen_turns > 0 {
+            flags.push("LScr");
+        }
+        if flags.is_empty() {
+            parts.join(" / ")
+        } else {
+            format!("{} {{{}}}", parts.join(" / "), flags.join(","))
+        }
+    };
+    let bel_tag = if belief_cands == 0 {
+        "fallback".to_string()
+    } else {
+        format!("pool:{belief_cands}")
+    };
+    format!(
+        "T{} ({bel_tag}) | P1: [{}] || P2: [{}]",
+        battle.turn,
+        side_str(0),
+        side_str(1)
+    )
+}
+
+fn collect_blind_checkpoints(
+    dex: &Dex,
+    cat_teams: &[Vec<PokemonSet>],
+    off_teams: &[Vec<PokemonSet>],
+    belief_pool: &MetaPool,
+    target_count: usize,
+    base_seed: u64,
+) -> Vec<BlindCheckpoint> {
+    let mut rng = SplitMix64::new(base_seed ^ 0xD17E_26E4_CE00_CAFE);
+    let mut out = Vec::new();
+    let mut game_idx = 0usize;
+
+    while out.len() < target_count && game_idx < target_count * 6 {
+        let is_off_pool = (game_idx % 3) == 2 && !off_teams.is_empty();
+        let t1 = &cat_teams[rng.below(cat_teams.len())];
+        let t2 = if is_off_pool {
+            let mut pick = &off_teams[rng.below(off_teams.len())];
+            for _ in 0..8 {
+                let cand = &off_teams[rng.below(off_teams.len())];
+                let sig = team_signature(cand);
+                if !cat_teams.iter().any(|ct| team_signature(ct) == sig) {
+                    pick = cand;
+                    break;
+                }
+            }
+            pick
+        } else {
+            &cat_teams[rng.below(cat_teams.len())]
+        };
+
+        let b_seed = rng.battle_seed();
+        let mut battle = Battle::from_fixture(dex, &b_seed, t1, t2).unwrap();
+        battle.set_log_enabled(true);
+
+        let mut obs0 = Observer::new(&battle, 0);
+        let mut obs1 = Observer::new(&battle, 1);
+        let mut bel0 = Belief::new(dex, belief_pool, &obs0);
+        let mut bel1 = Belief::new(dex, belief_pool, &obs1);
+
+        // Alternate trajectory generator between Legacy and Shipped so states are balanced.
+        let gen_arm = if game_idx % 2 == 0 {
+            parse_arm_spec("legacy")
+        } else {
+            parse_arm_spec("shipped")
+        };
+        let gen_cfg = build_rm_config_arm(400, 0.4, gen_arm);
+
+        let mut took_early = false;
+        let mut took_mid = false;
+        let mut took_late = false;
+
+        for _step in 0..220 {
+            if battle.outcome().is_some() {
+                break;
+            }
+            obs0.observe(&battle, dex);
+            obs1.observe(&battle, dex);
+            bel0.sync(dex, &obs0);
+            bel1.sync(dex, &obs1);
+
+            let is_prev = battle.sides[0].request_state() == Some(RequestKind::TeamPreview)
+                || battle.sides[1].request_state() == Some(RequestKind::TeamPreview);
+
+            if !is_prev && out.len() < target_count {
+                let c0 = battle.legal_choices(dex, 0);
+                if c0.len() >= 2 {
+                    let dom = dominated_actions(&battle, dex, 0);
+                    let eligible = c0
+                        .iter()
+                        .filter(|&&ch| !dom.iter().any(|(dc, _)| *dc == ch))
+                        .count();
+                    if eligible >= 2 {
+                        let (table, cb) = CompactBattle::from_battle(&battle, dex);
+                        let sl = classify_slice(&cb, &table);
+                        let t = battle.turn;
+                        let phase_opt = if !took_early && (2..=6).contains(&t) && rng.below(2) == 0 {
+                            took_early = true;
+                            Some("early_3v3")
+                        } else if !took_mid
+                            && ((7..=15).contains(&t) || matches!(sl, PosSlice::BoostedBp))
+                            && rng.below(2) == 0
+                        {
+                            took_mid = true;
+                            Some(match sl {
+                                PosSlice::BoostedBp => "boost_bp",
+                                PosSlice::RecoveryStall => "stall",
+                                _ => "midgame",
+                            })
+                        } else if !took_late
+                            && (t >= 16
+                                || matches!(sl, PosSlice::Endgame2v2 | PosSlice::RecoveryStall))
+                            && rng.below(2) == 0
+                        {
+                            took_late = true;
+                            Some(match sl {
+                                PosSlice::Endgame2v2 => "endgame",
+                                PosSlice::RecoveryStall => "stall",
+                                PosSlice::BoostedBp => "boost_bp",
+                                _ => "lategame",
+                            })
+                        } else {
+                            None
+                        };
+
+                        if let Some(phase) = phase_opt {
+                            out.push(BlindCheckpoint {
+                                id: out.len(),
+                                is_off_pool: bel0.candidate_count() == 0,
+                                phase,
+                                battle: battle.clone(),
+                                obs0: obs0.clone(),
+                                obs1: obs1.clone(),
+                            });
+                            if out.len() >= target_count {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            let mut picks = [None, None];
+            for (s, (obs, bel)) in [(&obs0, &bel0), (&obs1, &bel1)].into_iter().enumerate() {
+                let cs = battle.legal_choices(dex, s);
+                if cs.is_empty() {
+                    continue;
+                }
+                if cs.len() == 1 {
+                    picks[s] = Some(cs[0]);
+                    continue;
+                }
+                let iters = if is_prev { 250 } else { 400 };
+                let mut cfg = gen_cfg.clone();
+                cfg.iterations = iters;
+                let mut bs = BlindSearch::new(&battle, dex, cfg, s, rng.next());
+                bs.prune_preview_aliases(dex);
+                bs.step(dex, bel, obs, iters);
+                picks[s] = bs.best();
+            }
+            battle.apply_choices(dex, picks).unwrap();
+        }
+        game_idx += 1;
+    }
+    out
+}
+
+#[derive(Clone)]
+struct SearchSnap {
+    acts: Vec<SearchChoice>,
+    dominated: Vec<bool>,
+    visits: Vec<u32>,
+    wins: Vec<f64>,
+    best: SearchChoice,
+    elapsed_ms: f64,
+}
+
+impl SearchSnap {
+    fn total_visits(&self) -> u32 {
+        self.visits.iter().sum()
+    }
+    fn top1_share(&self) -> f64 {
+        let tot = self.total_visits().max(1) as f64;
+        let idx = self.acts.iter().position(|&a| a == self.best).unwrap_or(0);
+        (self.visits[idx] as f64) / tot
+    }
+    fn action_stats(&self, c: SearchChoice) -> (f64, f64) {
+        let tot = self.total_visits().max(1) as f64;
+        if let Some(i) = self.acts.iter().position(|&a| a == c) {
+            let v = self.visits[i];
+            let share = (v as f64) / tot;
+            let mean = if v > 0 { self.wins[i] / (v as f64) } else { 0.5 };
+            (share, mean)
+        } else {
+            (0.0, 0.5)
+        }
+    }
+    fn merge(&self, other: &SearchSnap) -> SearchSnap {
+        assert_eq!(self.acts, other.acts);
+        let visits: Vec<u32> = self
+            .visits
+            .iter()
+            .zip(&other.visits)
+            .map(|(&a, &b)| a + b)
+            .collect();
+        let wins: Vec<f64> = self
+            .wins
+            .iter()
+            .zip(&other.wins)
+            .map(|(&a, &b)| a + b)
+            .collect();
+        let any_safe = self.dominated.iter().any(|&d| !d);
+        let best_idx = (0..self.acts.len())
+            .filter(|&i| !any_safe || !self.dominated[i])
+            .max_by(|&a, &b| {
+                visits[a].cmp(&visits[b]).then_with(|| {
+                    let ma = if visits[a] > 0 {
+                        wins[a] / (visits[a] as f64)
+                    } else {
+                        0.5
+                    };
+                    let mb = if visits[b] > 0 {
+                        wins[b] / (visits[b] as f64)
+                    } else {
+                        0.5
+                    };
+                    ma.total_cmp(&mb)
+                })
+            })
+            .unwrap_or(0);
+        SearchSnap {
+            acts: self.acts.clone(),
+            dominated: self.dominated.clone(),
+            visits,
+            wins,
+            best: self.acts[best_idx],
+            elapsed_ms: self.elapsed_ms + other.elapsed_ms,
+        }
+    }
+}
+
+fn run_blind_snap(
+    cp: &BlindCheckpoint,
+    dex: &Dex,
+    belief: &Belief,
+    spec: ArmSpec,
+    iters: u32,
+    seed: u64,
+) -> SearchSnap {
+    let cfg = build_rm_config_arm(iters, 0.4, spec);
+    let t0 = Instant::now();
+    let mut bs = BlindSearch::new(&cp.battle, dex, cfg, 0, seed);
+    bs.step(dex, belief, &cp.obs0, iters);
+    let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
+    let acts = bs.actions().to_vec();
+    let dominated = bs.dominated().to_vec();
+    let visits = bs.visits().to_vec();
+    let means = bs.means();
+    let wins: Vec<f64> = visits
+        .iter()
+        .zip(&means)
+        .map(|(&v, &m)| (v as f64) * m)
+        .collect();
+    let best = bs.best().unwrap();
+    SearchSnap {
+        acts,
+        dominated,
+        visits,
+        wins,
+        best,
+        elapsed_ms,
+    }
+}
+
+fn play_counterfactual_branch(
+    cp: &BlindCheckpoint,
+    dex: &Dex,
+    belief_pool: &MetaPool,
+    forced_p1: SearchChoice,
+    forced_p2: Option<SearchChoice>,
+    battle_seed: u64,
+    cont_spec: ArmSpec,
+    cont_iters: u32,
+    cont_seed: u64,
+    record_trace: bool,
+) -> (f64, u16, Vec<String>) {
+    let mut sim = cp.battle.clone();
+    sim.set_log_enabled(true);
+    sim.reseed(battle_seed);
+
+    let mut obs0 = cp.obs0.clone();
+    let mut obs1 = cp.obs1.clone();
+    let mut bel0 = Belief::new(dex, belief_pool, &obs0);
+    let mut bel1 = Belief::new(dex, belief_pool, &obs1);
+    bel0.sync(dex, &obs0);
+    bel1.sync(dex, &obs1);
+
+    let mut rng = SplitMix64::new(cont_seed);
+    let mut trace = Vec::new();
+    let start_turn = sim.turn;
+
+    if record_trace {
+        let p2_str = forced_p2
+            .map(|c| format_choice_readable(&sim, dex, 1, c))
+            .unwrap_or_else(|| "-".to_string());
+        trace.push(format!(
+            "T{}[FORK]: P1={} vs P2={}",
+            sim.turn,
+            format_choice_readable(&sim, dex, 0, forced_p1),
+            p2_str
+        ));
+    }
+    sim.apply_choices(dex, [Some(forced_p1), forced_p2])
+        .unwrap();
+
+    let cont_cfg = build_rm_config_arm(cont_iters, 0.4, cont_spec);
+    for _ply in 0..260 {
+        if sim.outcome().is_some() || sim.turn > start_turn.saturating_add(160) {
+            break;
+        }
+        obs0.observe(&sim, dex);
+        obs1.observe(&sim, dex);
+        bel0.sync(dex, &obs0);
+        bel1.sync(dex, &obs1);
+
+        let mut picks = [None, None];
+        for (s, (obs, bel)) in [(&obs0, &bel0), (&obs1, &bel1)].into_iter().enumerate() {
+            let cs = sim.legal_choices(dex, s);
+            if cs.is_empty() {
+                continue;
+            }
+            if cs.len() == 1 {
+                picks[s] = Some(cs[0]);
+                continue;
+            }
+            let mut bs = BlindSearch::new(&sim, dex, cont_cfg.clone(), s, rng.next());
+            bs.step(dex, bel, obs, cont_iters);
+            picks[s] = bs.best();
+        }
+        if record_trace && trace.len() < 12 {
+            let s0 = picks[0]
+                .map(|c| format_choice_readable(&sim, dex, 0, c))
+                .unwrap_or_else(|| "-".into());
+            let s1 = picks[1]
+                .map(|c| format_choice_readable(&sim, dex, 1, c))
+                .unwrap_or_else(|| "-".into());
+            let (_tab, cb) = CompactBattle::from_battle(&sim, dex);
+            trace.push(format!(
+                "T{}(alive {}v{}): {} vs {}",
+                sim.turn,
+                cb.sides[0].alive_mask.count_ones(),
+                cb.sides[1].alive_mask.count_ones(),
+                s0,
+                s1
+            ));
+        }
+        sim.apply_choices(dex, picks).unwrap();
+    }
+
+    let score = match sim.outcome() {
+        Some(Outcome::P1Win) => 1.0,
+        Some(Outcome::P2Win) => 0.0,
+        Some(Outcome::Tie) | None => 0.5,
+    };
+    if record_trace {
+        let out_tag = match sim.outcome() {
+            Some(Outcome::P1Win) => "P1_WIN(1.0)",
+            Some(Outcome::P2Win) => "P2_WIN(0.0)",
+            Some(Outcome::Tie) => "TIE(0.5)",
+            None => "TURN_CAP(0.5)",
+        };
+        trace.push(format!("-> END T{}: {out_tag}", sim.turn));
+    }
+    (score, sim.turn.saturating_sub(start_turn), trace)
+}
+
+fn run_divergence(args: &[String]) {
+    maybe_load_acct_json(args);
+    let root = repo_root();
+    let dex = load_dex();
+
+    let n_checkpoints = flag_usize(args, "--checkpoints", 60);
+    let iters = flag_u32(args, "--iters", 27_000);
+    let extra_seeds = flag_usize(args, "--seeds", 3).max(2);
+    let cont_trials = flag_usize(args, "--cont-trials", 24).max(4);
+    let cont_iters = flag_u32(args, "--cont-iters", 1_500);
+    let arm_str = flag(args, "--arm").unwrap_or_else(|| "shipped".to_string());
+    let vs_str = flag(args, "--vs").unwrap_or_else(|| "legacy".to_string());
+    let arm_spec = parse_arm_spec(&arm_str);
+    let vs_spec = parse_arm_spec(&vs_str);
+    let threads = flag_usize(args, "--threads", default_threads());
+    let base_seed = flag_u64(args, "--seed", 20261030);
+
+    let belief_pool = Arc::new(load_meta_pool(
+        &root.join("data/belief-pool-v3/belief-pool.json"),
+    ));
+    let cat_teams = load_dedup_teams(&root, &["data/team-pool-v2/team-pool.json"]);
+    let off_teams = load_dedup_teams(
+        &root,
+        &[
+            "data/meta-pool-v0/meta-pool.json",
+            "data/eco-pool/master-pool.json",
+        ],
+    );
+
+    println!(
+        "=== Step 1: Collecting {n_checkpoints} Nontrivial Blind Decision Checkpoints (catalog + off-pool fallback) ==="
+    );
+    let t_col = Instant::now();
+    let checkpoints = collect_blind_checkpoints(
+        &dex,
+        &cat_teams,
+        &off_teams,
+        &belief_pool,
+        n_checkpoints,
+        base_seed,
+    );
+    let off_cnt = checkpoints.iter().filter(|c| c.is_off_pool).count();
+    println!(
+        "  Collected {} checkpoints ({} pool-identified, {} fallback-imputed) in {:.2}s\n",
+        checkpoints.len(),
+        checkpoints.len() - off_cnt,
+        off_cnt,
+        t_col.elapsed().as_secs_f64()
+    );
+
+    println!(
+        "=== Step 2: Production-Budget Screen (Blind c=0.4, standard N={iters}, strong N={} = {extra_seeds}x{iters}, threads={threads}) ===",
+        (iters as usize) * extra_seeds
+    );
+
+    struct ScreenRow {
+        cp_idx: usize,
+        belief_cands: usize,
+        vs_s1: SearchSnap,
+        vs_s2: SearchSnap,
+        arm_s1: SearchSnap,
+        arm_s2: SearchSnap,
+        vs_full: SearchSnap,
+        arm_full: SearchSnap,
+    }
+
+    let t_scr = Instant::now();
+    let cursor = AtomicUsize::new(0);
+    let rows_mutex: Mutex<Vec<ScreenRow>> = Mutex::new(Vec::with_capacity(checkpoints.len()));
+
+    std::thread::scope(|s| {
+        for _ in 0..threads {
+            let dex = &dex;
+            let cps = &checkpoints;
+            let bpool = &belief_pool;
+            let cur = &cursor;
+            let out_m = &rows_mutex;
+            s.spawn(move || {
+                clear_acct_thread_caches();
+                clear_oracle_thread_caches();
+                let mut local = Vec::new();
+                loop {
+                    let i = cur.fetch_add(1, Ordering::Relaxed);
+                    if i >= cps.len() {
+                        break;
+                    }
+                    let cp = &cps[i];
+                    let mut bel = Belief::new(dex, bpool, &cp.obs0);
+                    bel.sync(dex, &cp.obs0);
+                    let belief_cands = bel.candidate_count();
+
+                    let s1 = base_seed ^ ((i as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15));
+                    let s2 = base_seed ^ ((i as u64 + 1).wrapping_mul(0xBF58_476D_1CE4_E5B9));
+
+                    let vs_s1 = run_blind_snap(cp, dex, &bel, vs_spec, iters, s1);
+                    let vs_s2 = run_blind_snap(cp, dex, &bel, vs_spec, iters, s2);
+                    let arm_s1 = run_blind_snap(cp, dex, &bel, arm_spec, iters, s1);
+                    let arm_s2 = run_blind_snap(cp, dex, &bel, arm_spec, iters, s2);
+
+                    let mut vs_full = vs_s1.merge(&vs_s2);
+                    let mut arm_full = arm_s1.merge(&arm_s2);
+
+                    let any_diff = arm_s1.best != vs_s1.best
+                        || arm_s2.best != vs_s2.best
+                        || arm_full.best != vs_full.best;
+
+                    if any_diff && extra_seeds > 2 {
+                        for k in 2..extra_seeds {
+                            let sk = s1.wrapping_add((k as u64).wrapping_mul(0x94D0_49BB_1331_11EB));
+                            let vs_sk = run_blind_snap(cp, dex, &bel, vs_spec, iters, sk);
+                            let arm_sk = run_blind_snap(cp, dex, &bel, arm_spec, iters, sk);
+                            vs_full = vs_full.merge(&vs_sk);
+                            arm_full = arm_full.merge(&arm_sk);
+                        }
+                    }
+
+                    local.push(ScreenRow {
+                        cp_idx: i,
+                        belief_cands,
+                        vs_s1,
+                        vs_s2,
+                        arm_s1,
+                        arm_s2,
+                        vs_full,
+                        arm_full,
+                    });
+                }
+                out_m.lock().unwrap().extend(local);
+            });
+        }
+    });
+
+    let mut rows = rows_mutex.into_inner().unwrap();
+    rows.sort_by_key(|r| r.cp_idx);
+
+    let total = rows.len().max(1) as f64;
+    let vs_seed_flips = rows
+        .iter()
+        .filter(|r| r.vs_s1.best != r.vs_s2.best)
+        .count();
+    let arm_seed_flips = rows
+        .iter()
+        .filter(|r| r.arm_s1.best != r.arm_s2.best)
+        .count();
+    let s1_divergences = rows
+        .iter()
+        .filter(|r| r.arm_s1.best != r.vs_s1.best)
+        .count();
+    let s1_class_divs = rows
+        .iter()
+        .filter(|r| {
+            r.arm_s1.best != r.vs_s1.best
+                && matches!(r.arm_s1.best, SearchChoice::Switch(_))
+                    != matches!(r.vs_s1.best, SearchChoice::Switch(_))
+        })
+        .count();
+    let full_divergences: Vec<&ScreenRow> = rows
+        .iter()
+        .filter(|r| r.arm_full.best != r.vs_full.best)
+        .collect();
+
+    let mean_vs_ms = rows.iter().map(|r| r.vs_s1.elapsed_ms).sum::<f64>() / total;
+    let mean_arm_ms = rows.iter().map(|r| r.arm_s1.elapsed_ms).sum::<f64>() / total;
+
+    println!(
+        "  Screen finished in {:.2}s | Single-decision latency @{iters} (under {threads}-thread load): {vs_str}={mean_vs_ms:.1}ms, {arm_str}={mean_arm_ms:.1}ms ({:.2}x)",
+        t_scr.elapsed().as_secs_f64(),
+        mean_arm_ms / mean_vs_ms.max(0.1)
+    );
+    println!(
+        "  [{vs_str} @{iters}] Seed-flip floor (s1 != s2):       {:2}/{} ({:.1}%)",
+        vs_seed_flips,
+        rows.len(),
+        100.0 * (vs_seed_flips as f64) / total
+    );
+    println!(
+        "  [{arm_str} @{iters}] Seed-flip floor (s1 != s2):       {:2}/{} ({:.1}%)",
+        arm_seed_flips,
+        rows.len(),
+        100.0 * (arm_seed_flips as f64) / total
+    );
+    println!(
+        "  [{arm_str} vs {vs_str} @{iters}] Top-1 divergence:     {:2}/{} ({:.1}%)  [action-class move<->switch: {}/{} ({:.1}%)]",
+        s1_divergences,
+        rows.len(),
+        100.0 * (s1_divergences as f64) / total,
+        s1_class_divs,
+        rows.len(),
+        100.0 * (s1_class_divs as f64) / total
+    );
+    println!(
+        "  [STRONG @{} = {extra_seeds}x{iters}] Confirmed divergences: {:2}/{} ({:.1}%)",
+        (iters as usize) * extra_seeds,
+        full_divergences.len(),
+        rows.len(),
+        100.0 * (full_divergences.len() as f64) / total
+    );
+
+    // Confidence-band breakdown
+    for (label, lo, hi) in [
+        ("Low-conf   (<0.55)", 0.0, 0.55),
+        ("Mid-conf (0.55-0.75)", 0.55, 0.75),
+        ("High-conf  (>=0.75)", 0.75, 1.01),
+    ] {
+        let band_rows: Vec<&ScreenRow> = rows
+            .iter()
+            .filter(|r| {
+                let sh = r.vs_s1.top1_share();
+                sh >= lo && sh < hi
+            })
+            .collect();
+        let n = band_rows.len();
+        if n > 0 {
+            let sf = band_rows
+                .iter()
+                .filter(|r| r.vs_s1.best != r.vs_s2.best)
+                .count();
+            let dv = band_rows
+                .iter()
+                .filter(|r| r.arm_s1.best != r.vs_s1.best)
+                .count();
+            let dv81 = band_rows
+                .iter()
+                .filter(|r| r.arm_full.best != r.vs_full.best)
+                .count();
+            println!(
+                "    Band {label}: n={n:2} | {vs_str} seed-flip={sf:2} ({:4.1}%) | @{iters} div={dv:2} ({:4.1}%) | @strong div={dv81:2} ({:4.1}%)",
+                100.0 * (sf as f64) / (n as f64),
+                100.0 * (dv as f64) / (n as f64),
+                100.0 * (dv81 as f64) / (n as f64),
+            );
+        }
+    }
+
+    if full_divergences.is_empty() {
+        println!("\nNo confirmed strong-budget divergences found.");
+        return;
+    }
+
+    println!(
+        "\n=== Step 3: Counterfactual Play-Out to Terminal Outcome on All {} Confirmed Strong-Budget Divergences ===",
+        full_divergences.len()
+    );
+    println!(
+        "  Each divergence played out for {cont_trials} CRN-paired games to terminal outcome (half {vs_str}@{cont_iters} cont, half {arm_str}@{cont_iters} cont).\n"
+    );
+
+    let mut all_deltas: Vec<f64> = Vec::new();
+    let mut pos_wins = 0usize;
+    let mut pos_losses = 0usize;
+    let mut pos_ties = 0usize;
+
+    for (rank, row) in full_divergences.iter().enumerate() {
+        let cp = &checkpoints[row.cp_idx];
+        let a_vs = row.vs_full.best;
+        let a_arm = row.arm_full.best;
+
+        // Also check True-Board SkuctSearch(iters) for both arms to separate hidden-info vs true-board!
+        let true_vs_cfg = build_rm_config_arm(iters, 1.0, vs_spec);
+        let mut sk_vs = SkuctSearch::new(&cp.battle, &dex, true_vs_cfg, base_seed ^ 0x1111_2222);
+        sk_vs.step(&dex, iters);
+        let true_vs_pick = sk_vs.best(0).unwrap();
+
+        let true_arm_cfg = build_rm_config_arm(iters, 1.0, arm_spec);
+        let mut sk_arm = SkuctSearch::new(&cp.battle, &dex, true_arm_cfg, base_seed ^ 0x1111_2222);
+        sk_arm.step(&dex, iters);
+        let true_arm_pick = sk_arm.best(0).unwrap();
+
+        // Run CRN-paired terminal continuations across threads
+        let trial_cursor = AtomicUsize::new(0);
+        struct TrialOut {
+            t_idx: usize,
+            is_arm_cont: bool,
+            s_vs: f64,
+            s_arm: f64,
+            turns_vs: u16,
+            turns_arm: u16,
+            trace_vs: Vec<String>,
+            trace_arm: Vec<String>,
+        }
+        let tout_m: Mutex<Vec<TrialOut>> = Mutex::new(Vec::with_capacity(cont_trials));
+
+        std::thread::scope(|s| {
+            for _ in 0..threads.min(cont_trials) {
+                let dex = &dex;
+                let bpool = &belief_pool;
+                let tcur = &trial_cursor;
+                let out_v = &tout_m;
+                s.spawn(move || {
+                    clear_acct_thread_caches();
+                    loop {
+                        let t = tcur.fetch_add(1, Ordering::Relaxed);
+                        if t >= cont_trials {
+                            break;
+                        }
+                        let is_arm_cont = (t % 2) == 1;
+                        let c_spec = if is_arm_cont { arm_spec } else { vs_spec };
+                        let b_seed = base_seed
+                            ^ ((row.cp_idx as u64 + 100).wrapping_mul(0xD1B5_4A32_D192_ED03))
+                            ^ ((t as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15));
+                        let opp_seed = b_seed ^ 0xA5A5_5A5A_F0F0_0F0F;
+                        let cont_seed = b_seed ^ 0x3C3C_C3C3_6969_9696;
+
+                        // Neutral simultaneous opponent move at the fork turn
+                        let opp_legal = cp.battle.clone().legal_choices(dex, 1);
+                        let forced_p2 = if opp_legal.is_empty() {
+                            None
+                        } else if opp_legal.len() == 1 {
+                            Some(opp_legal[0])
+                        } else {
+                            let mut bel1 = Belief::new(dex, bpool, &cp.obs1);
+                            bel1.sync(dex, &cp.obs1);
+                            let opp_cfg = build_rm_config_arm(3_000, 0.4, c_spec);
+                            let mut bs1 = BlindSearch::new(&cp.battle, dex, opp_cfg, 1, opp_seed);
+                            bs1.step(dex, &bel1, &cp.obs1, 3_000);
+                            bs1.best()
+                        };
+
+                        let rec_trace = t < 4;
+                        let (s_vs, turns_vs, trace_vs) = play_counterfactual_branch(
+                            cp,
+                            dex,
+                            bpool,
+                            a_vs,
+                            forced_p2,
+                            b_seed,
+                            c_spec,
+                            cont_iters,
+                            cont_seed,
+                            rec_trace,
+                        );
+                        let (s_arm, turns_arm, trace_arm) = play_counterfactual_branch(
+                            cp,
+                            dex,
+                            bpool,
+                            a_arm,
+                            forced_p2,
+                            b_seed,
+                            c_spec,
+                            cont_iters,
+                            cont_seed,
+                            rec_trace,
+                        );
+                        out_v.lock().unwrap().push(TrialOut {
+                            t_idx: t,
+                            is_arm_cont,
+                            s_vs,
+                            s_arm,
+                            turns_vs,
+                            turns_arm,
+                            trace_vs,
+                            trace_arm,
+                        });
+                    }
+                });
+            }
+        });
+
+        let mut touts = tout_m.into_inner().unwrap();
+        touts.sort_by_key(|x| x.t_idx);
+
+        let n_t = touts.len() as f64;
+        let mean_vs = touts.iter().map(|x| x.s_vs).sum::<f64>() / n_t;
+        let mean_arm = touts.iter().map(|x| x.s_arm).sum::<f64>() / n_t;
+        let delta = mean_arm - mean_vs;
+        let var = touts
+            .iter()
+            .map(|x| ((x.s_arm - x.s_vs) - delta).powi(2))
+            .sum::<f64>()
+            / (n_t - 1.0).max(1.0);
+        let se = (var / n_t).sqrt();
+
+        let leg_c: Vec<&TrialOut> = touts.iter().filter(|x| !x.is_arm_cont).collect();
+        let arm_c: Vec<&TrialOut> = touts.iter().filter(|x| x.is_arm_cont).collect();
+        let delta_leg_c = leg_c.iter().map(|x| x.s_arm - x.s_vs).sum::<f64>()
+            / (leg_c.len().max(1) as f64);
+        let delta_arm_c = arm_c.iter().map(|x| x.s_arm - x.s_vs).sum::<f64>()
+            / (arm_c.len().max(1) as f64);
+        let avg_rem_turns = touts
+            .iter()
+            .map(|x| 0.5 * (x.turns_vs as f64 + x.turns_arm as f64))
+            .sum::<f64>()
+            / n_t;
+
+        if delta > 0.02 {
+            pos_wins += 1;
+        } else if delta < -0.02 {
+            pos_losses += 1;
+        } else {
+            pos_ties += 1;
+        }
+        all_deltas.push(delta);
+
+        let (vs_sh_on_vs, vs_q_on_vs) = row.vs_full.action_stats(a_vs);
+        let (vs_sh_on_arm, vs_q_on_arm) = row.vs_full.action_stats(a_arm);
+        let (arm_sh_on_arm, arm_q_on_arm) = row.arm_full.action_stats(a_arm);
+        let (arm_sh_on_vs, arm_q_on_vs) = row.arm_full.action_stats(a_vs);
+
+        println!(
+            "--------------------------------------------------------------------------------"
+        );
+        println!(
+            "[Div #{:02} | cp={} | phase={}] {}",
+            rank + 1,
+            cp.id,
+            cp.phase,
+            format_board_summary(&cp.battle, &dex, row.belief_cands)
+        );
+        println!(
+            "  {vs_str}@strong pick : {:18} (vis {:5.1}%, Q={:.3}) | alt {:18} (vis {:5.1}%, Q={:.3}) | TrueSkuct: {}",
+            format_choice_readable(&cp.battle, &dex, 0, a_vs),
+            100.0 * vs_sh_on_vs,
+            vs_q_on_vs,
+            format_choice_readable(&cp.battle, &dex, 0, a_arm),
+            100.0 * vs_sh_on_arm,
+            vs_q_on_arm,
+            format_choice_readable(&cp.battle, &dex, 0, true_vs_pick),
+        );
+        println!(
+            "  {arm_str}@strong pick: {:18} (vis {:5.1}%, Q={:.3}) | alt {:18} (vis {:5.1}%, Q={:.3}) | TrueSkuct: {}",
+            format_choice_readable(&cp.battle, &dex, 0, a_arm),
+            100.0 * arm_sh_on_arm,
+            arm_q_on_arm,
+            format_choice_readable(&cp.battle, &dex, 0, a_vs),
+            100.0 * arm_sh_on_vs,
+            arm_q_on_vs,
+            format_choice_readable(&cp.battle, &dex, 0, true_arm_pick),
+        );
+        println!(
+            "  TERMINAL OUTCOME ({cont_trials} CRN games, avg +{avg_rem_turns:.1} turns to end): W({arm_str})={mean_arm:.3} vs W({vs_str})={mean_vs:.3} => dEquity = {delta:+.3} +/- {se:.3} (under {vs_str}-cont: {delta_leg_c:+.3}, {arm_str}-cont: {delta_arm_c:+.3})"
+        );
+
+        // Pick a trace where the outcome differed (or t=0 if all tied)
+        if let Some(ex) = touts
+            .iter()
+            .filter(|x| !x.trace_vs.is_empty())
+            .find(|x| (x.s_arm - x.s_vs).abs() > 0.1)
+            .or_else(|| touts.iter().find(|x| !x.trace_vs.is_empty()))
+        {
+            println!(
+                "  Sample Terminal Line ({vs_str} branch -> {:.1}): {}",
+                ex.s_vs,
+                ex.trace_vs.join(" -> ")
+            );
+            println!(
+                "  Sample Terminal Line ({arm_str} branch -> {:.1}): {}",
+                ex.s_arm,
+                ex.trace_arm.join(" -> ")
+            );
+        }
+    }
+
+    let n_d = all_deltas.len().max(1) as f64;
+    let mean_delta = all_deltas.iter().sum::<f64>() / n_d;
+    let d_var = all_deltas
+        .iter()
+        .map(|&d| (d - mean_delta).powi(2))
+        .sum::<f64>()
+        / (n_d - 1.0).max(1.0);
+    let d_se = (d_var / n_d).sqrt();
+    let implied_per_decision = mean_delta * (full_divergences.len() as f64) / total;
+
+    println!("================================================================================");
+    println!(
+        "SUMMARY @ Production Strong Budget ({} iters, {} checkpoints):",
+        (iters as usize) * extra_seeds,
+        rows.len()
+    );
+    println!(
+        "  Confirmed Divergence Rate : {}/{} ({:.1}%)",
+        full_divergences.len(),
+        rows.len(),
+        100.0 * (full_divergences.len() as f64) / total
+    );
+    println!(
+        "  Divergence Record         : {pos_wins} improved (>+2%), {pos_losses} regressed (<-2%), {pos_ties} neutral (|d|<=2%)"
+    );
+    println!(
+        "  Mean dEquity on Diverged  : {mean_delta:+.4} +/- {d_se:.4} (1 SE)"
+    );
+    println!(
+        "  Implied Per-Decision Lift : {implied_per_decision:+.4} equity/turn"
+    );
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let cmd = args.first().map(|s| s.as_str()).unwrap_or("seam");
@@ -1993,6 +2946,9 @@ fn main() {
         "calibrate" => run_calibrate(&args[1..]),
         "gendata" => run_gendata(&args[1..]),
         "duel" => run_duel_cmd(&args[1..]),
-        other => panic!("unknown subcommand `{other}` (expected seam | calibrate | gendata | duel)"),
+        "divergence" => run_divergence(&args[1..]),
+        other => panic!(
+            "unknown subcommand `{other}` (expected seam | calibrate | gendata | duel | divergence)"
+        ),
     }
 }

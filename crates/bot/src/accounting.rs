@@ -43,6 +43,8 @@ pub enum LeafSettlementMode {
     /// Legacy 8-turn `eps = 0.2` rollout + `eval::compact_eval_leaf`.
     #[default]
     LegacyRollout,
+    /// Legacy 8-turn `eps = 0.2` `CompactBattle` rollout + cached `Accounting0` (`AcctModel`) cutoff.
+    RolloutAcct0,
     /// 0-ply accounting + residual NN after settling pending `request == 2` switches.
     Accounting0,
     /// 1-ply $K \times K$ accounting-guided simultaneous Nash minimax + accounting/residual NN.
@@ -2559,7 +2561,7 @@ pub fn evaluate_settled_leaf(
     }
 
     let mode_tag: u32 = match mode {
-        LeafSettlementMode::LegacyRollout => 0xFFFF_0000,
+        LeafSettlementMode::LegacyRollout | LeafSettlementMode::RolloutAcct0 => 0xAC00_0000,
         LeafSettlementMode::Accounting0 => 0xAC00_0000,
         LeafSettlementMode::Minimax1 { max_k } => 0xAC01_0000 | (max_k as u32),
         LeafSettlementMode::AdaptiveMinimax1 { max_k } => 0xAC03_0000 | (max_k as u32),
@@ -2600,7 +2602,9 @@ pub fn evaluate_settled_leaf(
             let sym_seed = k_lo ^ k_hi.rotate_left(29) ^ 0x6A09_E667_F3BC_C908;
             let compute_on = |c_cb: &CompactBattle, c_tab: &MatchTable| -> f64 {
                 match mode {
-                    LeafSettlementMode::LegacyRollout | LeafSettlementMode::Accounting0 => {
+                    LeafSettlementMode::LegacyRollout
+                    | LeafSettlementMode::RolloutAcct0
+                    | LeafSettlementMode::Accounting0 => {
                         settle_forced_switches_then(c_cb, c_tab, sym_seed, |settled| {
                             compact_accounting_equity_with_model(settled, c_tab, &model)
                         })
