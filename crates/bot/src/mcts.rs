@@ -197,7 +197,7 @@ const PSEUDO_HEAL: f64 = 0.25;
 /// Optional rules layered over the heavy rollout's ε-greedy pick. The
 /// default is none of them; the shipped set is
 /// `RmConfig::default().rollout_rules()`.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RolloutRules {
     /// Parked M16c upgrade: status-move pseudo-values
     /// (`RmConfig::rollout_status`).
@@ -213,6 +213,21 @@ pub struct RolloutRules {
     pub perish_combo: bool,
     pub capped_damage: bool,
     pub rollout_residual: bool,
+    pub baton_pass: bool,
+}
+
+impl Default for RolloutRules {
+    fn default() -> Self {
+        RolloutRules {
+            status: false,
+            switch: false,
+            perish_escape: false,
+            perish_combo: false,
+            capped_damage: false,
+            rollout_residual: false,
+            baton_pass: true,
+        }
+    }
 }
 
 /// Unfinished rollouts return a leaf evaluation rather than a terminal outcome.
@@ -257,6 +272,9 @@ pub fn playout_value(
     }
 
     let (table, mut cb) = nc2000_engine::compact::CompactBattle::from_battle(sim, dex);
+    if !rules.baton_pass {
+        cb.sides[0].side_flags |= 0x80;
+    }
     compact_playout_value(&mut cb, &table, playout, cutoff, rng, rules)
 }
 
@@ -708,9 +726,11 @@ fn compact_greedy_pick(
     // when fainted (`hp <= 0`), keep exact healthiest-bench selection.
     let mut best_sw = None;
     let mut best_score = -1.0f64;
-    let passing_alive = cb.sides[side].request == 2
+    let passing_alive = rules.baton_pass
+        && cb.sides[side].request == 2
         && att_slot < 3
         && cb.mons[att_idx].hp() > 0
+        && (cb.mons[att_idx].boosts[0] > 0 || cb.mons[att_idx].boosts[2] > 0)
         && (cb.sides[def_side].alive_mask & (1 << def_slot)) != 0
         && cb.mons[def_side * 3 + def_slot].hp() > 0;
     for &c in cs {
@@ -719,11 +739,11 @@ fn compact_greedy_pick(
             let idx = side * 3 + slot;
             let mut score = (cb.mons[idx].hp() as f64) / (table.mons[idx].maxhp.max(1) as f64);
             if passing_alive {
+                let base_h = cb.best_hit_fraction(table, side, slot, def_side, def_slot, true);
                 let mut tmp = *cb;
                 tmp.mons[idx].boosts = cb.mons[att_idx].boosts;
-                score += tmp
-                    .best_hit_fraction(table, side, slot, def_side, def_slot, true)
-                    .min(1.5);
+                let boosted_h = tmp.best_hit_fraction(table, side, slot, def_side, def_slot, true);
+                score += (boosted_h - base_h).clamp(0.0, 1.0);
             }
             if best_sw.is_none() || score >= best_score {
                 best_score = score;

@@ -18,6 +18,7 @@ pub struct Spec {
     combo: bool,
     residual_scale: f64,
     rollout_residual: bool,
+    baton_pass: bool,
 }
 
 impl Spec {
@@ -31,8 +32,9 @@ impl Spec {
         let mut nums = Vec::new();
         let shipped = RmConfig::default();
         let (mut perish, mut combo) = (shipped.rollout_perish, shipped.rollout_combo);
-        let mut residual_scale = 1.0;
+        let mut residual_scale = 0.0;
         let mut rollout_residual = shipped.rollout_residual;
+        let mut baton_pass = shipped.rollout_baton_pass;
         for p in &parts[1..] {
             match *p {
                 "perish_escape" => (perish, combo) = (true, false),
@@ -42,6 +44,8 @@ impl Spec {
                 "-res" => residual_scale = 0.0,
                 "rres" => rollout_residual = true,
                 "-rres" => rollout_residual = false,
+                "bp" => baton_pass = true,
+                "-bp" => baton_pass = false,
                 n => nums.push(n.parse::<f64>().unwrap_or_else(|_| panic!("bad field {n}"))),
             }
         }
@@ -53,6 +57,7 @@ impl Spec {
             combo,
             residual_scale,
             rollout_residual,
+            baton_pass,
         }
     }
 
@@ -64,6 +69,7 @@ impl Spec {
             rollout_perish: self.perish,
             rollout_combo: self.combo,
             rollout_residual: self.rollout_residual,
+            rollout_baton_pass: self.baton_pass,
             ..Default::default()
         };
         if let nc2000_bot::mcts::Playout::Heavy { ref mut weights, .. } = cfg.playout {

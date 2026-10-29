@@ -133,6 +133,7 @@ pub struct RmConfig {
     pub rollout_combo: bool,
     pub rollout_capped_damage: bool,
     pub rollout_residual: bool,
+    pub rollout_baton_pass: bool,
     /// M17 cluster-2 probe: replace the uniform HP grid in the node key with
     /// a threshold-preserving class for the two ACTIVE mons. See `hp_class`.
     pub threshold_key: bool,
@@ -155,6 +156,7 @@ impl RmConfig {
             perish_combo: self.rollout_combo,
             capped_damage: self.rollout_capped_damage,
             rollout_residual: self.rollout_residual,
+            baton_pass: self.rollout_baton_pass,
         }
     }
 }
@@ -184,6 +186,7 @@ impl Default for RmConfig {
             rollout_combo: true,
             rollout_capped_damage: false,
             rollout_residual: false,
+            rollout_baton_pass: true,
             threshold_key: false,
             key_no_damage: false,
             mask_rules: MaskRules::default(),

@@ -92,13 +92,35 @@ fn positions(dex: &Dex, pool: &MetaPool) -> Vec<Position> {
 fn measure(p: &Position, dex: &Dex, pool: &MetaPool, mode: &str, iters: u32, id: usize) -> Value {
     let mut belief = Belief::new(dex, pool, &p.observer);
     belief.sync(dex, &p.observer);
-    let cfg = RmConfig { iterations: iters, c: 0.4, rule: SelRule::Ucb, ..Default::default() };
+    let nobp = mode.ends_with("-nobp");
+    let with_res = mode.ends_with("-res");
+    let base_mode = mode
+        .strip_suffix("-nobp")
+        .or_else(|| mode.strip_suffix("-res"))
+        .or_else(|| mode.strip_suffix("-nores"))
+        .unwrap_or(mode);
+    let playout = nc2000_bot::Playout::Heavy {
+        eps: 0.2,
+        turns: 8,
+        weights: nc2000_bot::EvalWeights {
+            residual_scale: if with_res { 1.0 } else { 0.0 },
+            ..nc2000_bot::EvalWeights::default()
+        },
+    };
+    let cfg = RmConfig {
+        iterations: iters,
+        c: 0.4,
+        rule: SelRule::Ucb,
+        playout,
+        rollout_baton_pass: !nobp,
+        ..Default::default()
+    };
     let start = Instant::now();
-    let signature = match mode {
+    let signature = match base_mode {
         "blind" | "budget" => {
             let mut s = BlindSearch::new(&p.battle, dex, cfg, 0, id as u64 + 71);
             let mut completed = 0;
-            if mode == "budget" {
+            if base_mode == "budget" {
                 while start.elapsed().as_secs_f64() < iters as f64 {
                     s.step(dex,&belief,&p.observer,64);
                     completed += 64;
@@ -133,6 +155,22 @@ fn measure(p: &Position, dex: &Dex, pool: &MetaPool, mode: &str, iters: u32, id:
                 sum += nc2000_bot::mcts::playout_value(&mut b,dex,&cfg.playout,cap,&mut rng,cfg.rollout_rules());
             }
             sum.to_bits()
+        }
+        "rollout-cutoff" => {
+            let mut rng = SplitMix64::new(71);
+            let mut terminal = 0u64;
+            let mut leaf_eval = 0u64;
+            for _ in 0..iters {
+                let mut b = belief.determinize(dex, &p.battle, &p.observer, &mut rng);
+                let cap = b.turn.saturating_add(cfg.horizon);
+                let v = nc2000_bot::mcts::playout_value(&mut b, dex, &cfg.playout, cap, &mut rng, cfg.rollout_rules());
+                if v == 0.0 || v == 1.0 {
+                    terminal += 1;
+                } else {
+                    leaf_eval += 1;
+                }
+            }
+            return json!({"id":id,"tag":p.tag,"turn":p.battle.turn,"terminal":terminal,"leaf_eval":leaf_eval,"leaf_eval_frac":leaf_eval as f64 / (terminal + leaf_eval) as f64});
         }
         "step" => {
             let mut root = p.battle.clone();

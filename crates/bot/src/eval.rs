@@ -190,7 +190,7 @@ impl Default for EvalWeights {
             exchange: 0.0,
             confusion: 0.0,
             exchange_v2: false,
-            residual_scale: 1.0,
+            residual_scale: 0.0,
         }
     }
 }
@@ -239,7 +239,7 @@ impl EvalWeights {
             exchange: 0.0,
             confusion: 0.0,
             exchange_v2: false,
-            residual_scale: 1.0,
+            residual_scale: 0.0,
         }
     }
 

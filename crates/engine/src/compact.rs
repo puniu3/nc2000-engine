@@ -2705,11 +2705,27 @@ impl CompactBattle {
                 // Baton Pass: switch to best alive bench receiver passing boosts/sub/volatiles.
                 let mask = self.sides[side].alive_mask & !(1 << self.sides[side].active_idx);
                 if mask != 0 {
+                    let bp_fix = (self.sides[0].side_flags & 0x80) == 0;
                     let mut best_slot = mask.trailing_zeros() as u8;
-                    if mask.count_ones() > 1 {
+                    if !bp_fix {
+                        let mut best_hp = -1i32;
+                        for s_i in 0..3u8 {
+                            if (mask & (1 << s_i)) != 0 {
+                                let idx = side * 3 + s_i as usize;
+                                let frac = (self.mons[idx].hp() as i32 * 1024)
+                                    / (table.mons[idx].maxhp.max(1) as i32);
+                                if frac > best_hp {
+                                    best_hp = frac;
+                                    best_slot = s_i;
+                                }
+                            }
+                        }
+                    } else if mask.count_ones() > 1 {
                         let passed_boosts = self.mons[att_idx].boosts;
+                        let has_off_boost = passed_boosts[0] > 0 || passed_boosts[2] > 0;
                         let foe_slot = self.sides[foe_side].active_idx as usize;
-                        let foe_alive = (self.sides[foe_side].alive_mask & (1 << foe_slot)) != 0
+                        let foe_alive = has_off_boost
+                            && (self.sides[foe_side].alive_mask & (1 << foe_slot)) != 0
                             && self.mons[def_idx].hp() > 0;
                         let mut best_score = -1.0f64;
                         for s_i in 0..3u8 {
@@ -2717,25 +2733,31 @@ impl CompactBattle {
                                 let idx = side * 3 + s_i as usize;
                                 let hp_frac = (self.mons[idx].hp() as f64)
                                     / (table.mons[idx].maxhp.max(1) as f64);
-                                let hit = if foe_alive {
+                                let boost_gain = if foe_alive {
+                                    let base_h = self.best_hit_fraction(
+                                        table,
+                                        side,
+                                        s_i as usize,
+                                        foe_side,
+                                        foe_slot,
+                                        true,
+                                    );
                                     let saved = self.mons[idx].boosts;
                                     self.mons[idx].boosts = passed_boosts;
-                                    let h = self
-                                        .best_hit_fraction(
-                                            table,
-                                            side,
-                                            s_i as usize,
-                                            foe_side,
-                                            foe_slot,
-                                            true,
-                                        )
-                                        .min(1.5);
+                                    let boosted_h = self.best_hit_fraction(
+                                        table,
+                                        side,
+                                        s_i as usize,
+                                        foe_side,
+                                        foe_slot,
+                                        true,
+                                    );
                                     self.mons[idx].boosts = saved;
-                                    h
+                                    (boosted_h - base_h).clamp(0.0, 1.0)
                                 } else {
                                     0.0
                                 };
-                                let score = hp_frac + hit;
+                                let score = hp_frac + boost_gain;
                                 if score > best_score {
                                     best_score = score;
                                     best_slot = s_i;
@@ -2969,6 +2991,7 @@ impl CompactBattle {
     /// with 2 bench options remaining (`request == 2`).
     pub fn step_switch(&mut self, table: &MatchTable, switch_actions: [u8; 2]) {
         let mut rng = Prng::new(self.prng_seed);
+        let bp_fix = (self.sides[0].side_flags & 0x80) == 0;
         for side in 0..2usize {
             if self.sides[side].request == 2 {
                 let act = switch_actions[side];
@@ -2979,7 +3002,7 @@ impl CompactBattle {
                 };
                 if (self.sides[side].alive_mask & (1 << slot)) != 0 {
                     let act_idx = side * 3 + (self.sides[side].active_idx.min(2) as usize);
-                    let copy_vol = self.mons[act_idx].hp() > 0;
+                    let copy_vol = bp_fix && self.mons[act_idx].hp() > 0;
                     self.exec_switch(table, side, slot, copy_vol);
                 }
             }
@@ -2988,7 +3011,7 @@ impl CompactBattle {
         self.check_faints(table);
         // If this was a mid-turn self-switch (e.g. faster Baton Pass) and the other side
         // had a pending move queued for the second half of the turn, execute it now in CompactBattle.
-        if self.outcome == 0 && self.sides[0].request == 1 && self.sides[1].request == 1 {
+        if bp_fix && self.outcome == 0 && self.sides[0].request == 1 && self.sides[1].request == 1 {
             for s in 0..2usize {
                 let flags = self.sides[s].side_flags;
                 if (flags & 0x10) != 0 {
