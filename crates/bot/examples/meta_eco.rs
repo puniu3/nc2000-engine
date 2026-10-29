@@ -1161,7 +1161,19 @@ fn bud_next_wave_by_niche(
 
     // 5. Spawn fresh buds from the surviving veterans for remaining bud slots,
     //    using within-party vitality telemetry (`propose_targeted`) to target hitchhikers.
-    let endo_pool = build_endogenous_pool(&survivors);
+    let mut endo_pool = build_endogenous_pool(&survivors);
+    for s in kept_grace.iter().chain(ledger.archived_strains.iter()) {
+        if s.cum_games <= 0.0 {
+            continue;
+        }
+        let g = s.cum_games.max(1.0);
+        for i in 0..s.team.len().min(6) {
+            if s.slot_wars[i] >= 0.0 {
+                let pick_rate = (s.slot_picks[i] / g).clamp(0.0, 1.0);
+                endo_pool.record_slot(&s.team[i], s.slot_wars[i], pick_rate, &s.move_dqs[i]);
+            }
+        }
+    }
     let num_parents = survivors.len().max(1);
     let new_buds_needed = buds.saturating_sub(kept_grace.len());
     let mut island_buds: Vec<Strain> = kept_grace;
@@ -1545,8 +1557,17 @@ fn cmd_extract_nash(args: &[String]) {
     let mut raw_teams: Vec<Vec<Value>> = Vec::new();
     let mut sets_list: Vec<Vec<PokemonSet>> = Vec::new();
 
-    // 2. Out-of-Sample Entry Gate: only admit evolved challengers that strictly beat Old-Nash
-    // (`score_vs_old >= min_gate_wr`) on independent verification seeds!
+    let mut existing_old_keys: BTreeSet<String> = BTreeSet::new();
+    for t in gv["teams"].as_array().unwrap() {
+        let raw = t["sets"].as_array().unwrap().clone();
+        if let Some(canon) = gen.canonize(&dex, &raw) {
+            existing_old_keys.insert(team_key(&canon));
+        }
+    }
+
+    // 2. Out-of-Sample Entry Gate: only admit evolved challengers (`born_wave > 0`, distinct from
+    //    `old_teams`) that strictly beat Old-Nash (`score_vs_old >= min_gate_wr` and `fresh >= 0.495`)
+    //    on independent verification seeds!
     let pv: Value = serde_json::from_str(&std::fs::read_to_string(&pool_file).unwrap()).unwrap();
     eprintln!(
         "=== Step 1: Out-of-Sample Challenger Entry Gate vs Old-Nash (min_gate_wr={min_gate_wr:.3}, {gate_games} games/opp) ==="
@@ -1555,12 +1576,16 @@ fn cmd_extract_nash(args: &[String]) {
         .as_array()
         .unwrap()
         .iter()
+        .filter(|t| t["born_wave"].as_u64().unwrap_or(1) > 0)
         .take(top_evolved)
         .enumerate()
     {
         let id = t["id"].as_str().unwrap().to_string();
         let raw = t["sets"].as_array().unwrap().clone();
         let canon = gen.canonize(&dex, &raw).unwrap();
+        if existing_old_keys.contains(&team_key(&canon)) {
+            continue;
+        }
         let cand_sets = to_sets(&canon).unwrap();
         let vs_old_fresh = gauntlet_eval_weighted(
             &dex,
@@ -1584,7 +1609,7 @@ fn cmd_extract_nash(args: &[String]) {
         let prev_w = t["bench_wins"].as_f64().unwrap_or(0.0);
         let total_n = prev_n + fresh_n;
         let vs_old = (prev_w + vs_old_fresh * fresh_n) / total_n.max(1.0);
-        let passed = vs_old >= min_gate_wr && total_n >= 160.0;
+        let passed = vs_old >= min_gate_wr && vs_old_fresh >= 0.495 && total_n >= 160.0;
         eprintln!(
             "  challenger {:20} vs Old-Nash = {:.4} ({:.1}% over {:.0} games, fresh={:.1}%) -> {}",
             id,
