@@ -43,6 +43,83 @@ struct NicheSpec {
     max_staples: String,
 }
 
+fn default_one() -> f64 {
+    1.0
+}
+
+type PreviewSig = Vec<(String, i64, String, bool)>;
+
+fn preview_sig(team: &[Value]) -> PreviewSig {
+    let mut v: PreviewSig = team
+        .iter()
+        .map(|s| {
+            let sp = toid(s["species"].as_str().unwrap_or(""));
+            let lv = s["level"].as_i64().unwrap_or(50);
+            let g = s["gender"].as_str().unwrap_or("").to_uppercase();
+            let item = !toid(s["item"].as_str().unwrap_or("")).is_empty();
+            (sp, lv, g, item)
+        })
+        .collect();
+    v.sort();
+    v
+}
+
+fn preview_sig_sets(sets: &[PokemonSet]) -> PreviewSig {
+    let mut v: PreviewSig = sets
+        .iter()
+        .map(|s| {
+            let sp = toid(&s.species);
+            let lv = s.level as i64;
+            let g = s.gender.as_deref().unwrap_or("").to_uppercase();
+            let item = !toid(&s.item).is_empty();
+            (sp, lv, g, item)
+        })
+        .collect();
+    v.sort();
+    v
+}
+
+/// Normalize a `MetaPool` in-memory so that any catalog team whose special-only Pokemon
+/// had their Attack DV / gender optimized (e.g. `M -> F`) or had a dominated item upgraded
+/// is ALSO present in its canonicalized form inside `mp.teams`. This guarantees 100%
+/// Team Preview recognition by `Belief::build_refs` (`roster[i].gender == mo.gender`)
+/// without altering the frozen `data/belief-pool-v3/belief-pool.json` SHA-256 on disk.
+fn normalize_belief_pool(dex: &Dex, gen: &TeamGen, mp: &MetaPool) -> MetaPool {
+    let mut out = mp.clone();
+    let mut rng = SplitMix64::new(0xC0DE_BA5E_2026_1029);
+    let mut extras = Vec::new();
+    for t in &mp.teams {
+        let Ok(v) = serde_json::to_value(&t.sets) else {
+            continue;
+        };
+        let Some(arr) = v.as_array() else {
+            continue;
+        };
+        let mut upgraded = arr.clone();
+        gen.optimize_team_dominance(dex, &mut upgraded, &mut rng);
+        let Some(canon) = gen.canonize(dex, &upgraded) else {
+            continue;
+        };
+        let Ok(c_sets) = to_sets(&canon) else {
+            continue;
+        };
+        let diff_gender_or_item = t
+            .sets
+            .iter()
+            .zip(c_sets.iter())
+            .any(|(a, b)| a.gender != b.gender || a.item.is_empty() != b.item.is_empty());
+        if diff_gender_or_item {
+            extras.push(nc2000_bot::preview::MetaTeam {
+                id: format!("{}-opt", t.id),
+                sets: c_sets,
+                weight: t.weight,
+            });
+        }
+    }
+    out.teams.extend(extras);
+    out
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct Strain {
     id: String,
@@ -79,6 +156,12 @@ struct Strain {
     last_wave_slot_marginals: [f64; 6],
     #[serde(default)]
     effective_cores: f64,
+    #[serde(default)]
+    symbiont_of: Option<String>,
+    #[serde(default = "default_one")]
+    mix_alpha: f64,
+    #[serde(default)]
+    deme_bonus: f64,
     team: Vec<Value>,
 }
 
@@ -235,7 +318,12 @@ fn build_constraint(dex: &Dex, anchors_str: &str, max_staples_str: &str) -> (Vec
     (anchor_list, constraint)
 }
 
-fn parse_agent_spec(args: &[String], root: &Path) -> (u32, f64, Option<Arc<MetaPool>>, bool) {
+fn parse_agent_spec(
+    args: &[String],
+    root: &Path,
+    dex: &Dex,
+    gen: &TeamGen,
+) -> (u32, f64, Option<Arc<MetaPool>>, bool) {
     if let Some(spec) = flag(args, "--agent") {
         let parts: Vec<&str> = spec.split(':').collect();
         assert!(
@@ -254,7 +342,8 @@ fn parse_agent_spec(args: &[String], root: &Path) -> (u32, f64, Option<Arc<MetaP
                 let btext = std::fs::read_to_string(&bpath)
                     .unwrap_or_else(|e| panic!("read belief-pool {}: {e}", bpath.display()));
                 let mp: MetaPool = serde_json::from_str(&btext).expect("parse belief-pool");
-                (it, c, Some(Arc::new(mp)), false)
+                let norm_mp = normalize_belief_pool(dex, gen, &mp);
+                (it, c, Some(Arc::new(norm_mp)), false)
             }
             "skuct" => (it, c, None, false),
             other => panic!("unsupported --agent kind {other} (expected open, blind, or skuct)"),
@@ -440,7 +529,7 @@ fn cmd_evolve_island(args: &[String]) {
     let gfile = flag(args, "--gauntlet-file")
         .unwrap_or_else(|| root.join("data/meta-nash-v3/pool-artifact.json").to_string_lossy().into_owned());
     let (bench_teams, bench_weights) = load_gauntlet_file(&dex, &gen, &gfile);
-    let (agent_iters, agent_c, blind_pool, open_sheet) = parse_agent_spec(args, &root);
+    let (agent_iters, agent_c, blind_pool, open_sheet) = parse_agent_spec(args, &root, &dex, &gen);
     let max_per_archetype: usize = num(args, "--max-per-archetype", 2);
 
     let niches_spec = flag(args, "--niches").unwrap_or_else(|| "rand||".into());
@@ -586,6 +675,9 @@ fn cmd_evolve_island(args: &[String]) {
                 last_wave_slot_picks: [0.0; 6],
                 last_wave_slot_marginals: [0.0; 6],
                 effective_cores: 1.0,
+                symbiont_of: None,
+                mix_alpha: 1.0,
+                deme_bonus: 0.0,
                 team,
             });
         }
@@ -964,25 +1056,56 @@ fn bud_next_wave_by_niche(
     }
 
     veterans.sort_by(|a, b| {
-        b.bayes_fit
-            .partial_cmp(&a.bayes_fit)
+        let qa = a.bayes_fit + a.deme_bonus;
+        let qb = b.bayes_fit + b.deme_bonus;
+        qb.partial_cmp(&qa)
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     grace_buds.sort_by(|a, b| {
-        b.bayes_fit
-            .partial_cmp(&a.bayes_fit)
+        let qa = a.bayes_fit + a.deme_bonus;
+        let qb = b.bayes_fit + b.deme_bonus;
+        qb.partial_cmp(&qa)
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    let top_vet_fit = veterans.first().map(|s| s.bayes_fit).unwrap_or(0.35);
+    let top_vet_fit = veterans
+        .first()
+        .map(|s| s.bayes_fit + s.deme_bonus)
+        .unwrap_or(0.35);
 
-    // 1. Select up to `carry` survivors island-wide subject to:
+    // Separate certified Symbionts (`symbiont_of.is_some()`) from Primary Deme candidates
+    // so Symbionts ride along with their Primary Deme and never consume a `carry` slot
+    // or evict their parent Primary.
+    let mut symbiont_pool: BTreeMap<String, Strain> = BTreeMap::new();
+    let mut primary_veterans: Vec<Strain> = Vec::new();
+    for s in veterans {
+        if let Some(ref pid) = s.symbiont_of {
+            symbiont_pool.entry(pid.clone()).or_insert(s);
+        } else {
+            primary_veterans.push(s);
+        }
+    }
+    let mut primary_grace: Vec<Strain> = Vec::new();
+    for s in grace_buds {
+        if let Some(ref pid) = s.symbiont_of {
+            symbiont_pool.entry(pid.clone()).or_insert(s);
+        } else {
+            primary_grace.push(s);
+        }
+    }
+
+    // 1. Select up to `carry` Primary Demes island-wide subject to:
+    //    - Same-Signature Deme Uniqueness: at most 1 Primary per `preview_sig` (`seen_sigs`),
+    //      so a MoveSwap/ItemSwap child with the same preview signature competes for Primary
+    //      of its Deme rather than duplicating or evicting another Deme.
     //    - Viability floor: veterans with >= 20 bench games that have < 26% Master Pool
     //      winrate or trail `top_vet_fit` by > 0.14 (dead founder lineages) are evicted.
     //    - Structural Archetype Cap: at most `max_per_archetype` (2) survivors may share >= 4 species.
+    let mut seen_sigs: BTreeSet<PreviewSig> = BTreeSet::new();
     let mut survivors: Vec<Strain> = Vec::new();
-    for s in veterans {
+    for s in primary_veterans {
         let k = team_key(&s.team);
+        let sig = preview_sig(&s.team);
         let b_wr = if s.bench_games > 0.0 {
             s.bench_wins / s.bench_games
         } else {
@@ -991,12 +1114,13 @@ fn bud_next_wave_by_niche(
         let viable = if max_per_archetype == usize::MAX {
             b_wr >= 0.32 || survivors.len() < carry
         } else {
-            s.bench_games < 20.0 || (b_wr >= 0.26 && s.bayes_fit + 0.14 >= top_vet_fit)
+            s.bench_games < 20.0 || (b_wr >= 0.26 && s.bayes_fit + s.deme_bonus + 0.14 >= top_vet_fit)
         };
         let sp = s.species_set();
         if survivors.len() < carry
             && viable
             && count_same_archetype(&sp, &survivors) < max_per_archetype
+            && seen_sigs.insert(sig)
             && seen_keys.insert(k)
         {
             survivors.push(s);
@@ -1009,8 +1133,9 @@ fn bud_next_wave_by_niche(
     //    viable distinct-archetype strain in `archived_strains` can fill a slot.
     if survivors.len() < carry && !ledger.archived_strains.is_empty() {
         ledger.archived_strains.sort_by(|a, b| {
-            b.bayes_fit
-                .partial_cmp(&a.bayes_fit)
+            let qa = a.bayes_fit + a.deme_bonus;
+            let qb = b.bayes_fit + b.deme_bonus;
+            qb.partial_cmp(&qa)
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
         let mut remaining_archive = Vec::with_capacity(ledger.archived_strains.len());
@@ -1018,6 +1143,7 @@ fn bud_next_wave_by_niche(
             s.anchors.clear();
             s.max_staples.clear();
             let k = team_key(&s.team);
+            let sig = preview_sig(&s.team);
             let b_wr = if s.bench_games > 0.0 {
                 s.bench_wins / s.bench_games
             } else {
@@ -1026,12 +1152,14 @@ fn bud_next_wave_by_niche(
             let viable = if max_per_archetype == usize::MAX {
                 b_wr >= 0.35
             } else {
-                s.bench_games >= 20.0 && b_wr >= 0.28 && s.bayes_fit + 0.12 >= top_vet_fit
+                s.bench_games >= 20.0 && b_wr >= 0.28 && s.bayes_fit + s.deme_bonus + 0.12 >= top_vet_fit
             };
             let sp = s.species_set();
-            if survivors.len() < carry
+            if s.symbiont_of.is_none()
+                && survivors.len() < carry
                 && viable
                 && count_same_archetype(&sp, &survivors) < max_per_archetype
+                && seen_sigs.insert(sig)
                 && seen_keys.insert(k)
             {
                 survivors.push(s);
@@ -1122,6 +1250,9 @@ fn bud_next_wave_by_niche(
                     last_wave_slot_picks: [0.0; 6],
                     last_wave_slot_marginals: [0.0; 6],
                     effective_cores: 1.0,
+                    symbiont_of: None,
+                    mix_alpha: 1.0,
+                    deme_bonus: 0.0,
                     team,
                 });
             }
@@ -1133,7 +1264,7 @@ fn bud_next_wave_by_niche(
     //    buds get a 2nd wave of evaluation while every wave also spawns fresh mutations.
     let max_grace = (buds / 2).max(1);
     let mut kept_grace: Vec<Strain> = Vec::new();
-    for s in grace_buds {
+    for s in primary_grace {
         let k = team_key(&s.team);
         let b_wr = if s.bench_games > 0.0 {
             s.bench_wins / s.bench_games
@@ -1151,7 +1282,7 @@ fn bud_next_wave_by_niche(
         let promising = active_graft
             && s.last_wave_fit + 0.03 >= s.parent_prior
             && (s.bench_games < 16.0 || b_wr >= 0.28)
-            && s.bayes_fit + 0.14 >= top_vet_fit;
+            && s.bayes_fit + s.deme_bonus + 0.14 >= top_vet_fit;
         if kept_grace.len() < max_grace && promising && seen_keys.insert(k) {
             kept_grace.push(s);
         } else {
@@ -1223,12 +1354,36 @@ fn bud_next_wave_by_niche(
                     last_wave_slot_picks: [0.0; 6],
                     last_wave_slot_marginals: [0.0; 6],
                     effective_cores: parent.effective_cores,
+                    symbiont_of: None,
+                    mix_alpha: 1.0,
+                    deme_bonus: 0.0,
                     team: prop.team,
                 });
             }
         }
     }
 
+    // 6. Attach any certified Symbiont (`symbiont_pool`) whose Primary survived in `survivors`.
+    let mut attached_symbionts: Vec<Strain> = Vec::new();
+    for p in &mut survivors {
+        if let Some(sym) = symbiont_pool.remove(&p.id) {
+            let k = team_key(&sym.team);
+            if seen_keys.insert(k) {
+                p.mix_alpha = (1.0 - sym.mix_alpha).clamp(0.50, 0.95);
+                attached_symbionts.push(sym);
+            } else {
+                ledger.archived_strains.push(sym);
+            }
+        } else {
+            p.mix_alpha = 1.0;
+            p.deme_bonus = 0.0;
+        }
+    }
+    for (_, orphan_sym) in symbiont_pool {
+        ledger.archived_strains.push(orphan_sym);
+    }
+
+    survivors.extend(attached_symbionts);
     survivors.extend(island_buds);
     let total_w: f64 = survivors.iter().map(|s| s.abundance.max(1e-4)).sum();
     for s in &mut survivors {
@@ -1516,7 +1671,7 @@ fn cmd_extract_nash(args: &[String]) {
                 .map(|n| n.get())
                 .unwrap_or(4)
         });
-    let (agent_iters, agent_c, blind_pool, open_sheet) = parse_agent_spec(args, &root);
+    let (agent_iters, agent_c, blind_pool, open_sheet) = parse_agent_spec(args, &root, &dex, &gen);
 
     // 1. Load existing Old-Nash benchmark teams and weights
     let gfile = flag(args, "--gauntlet-file").unwrap_or_else(|| {
@@ -1779,7 +1934,7 @@ fn cmd_verify_nash(args: &[String]) {
                 .map(|n| n.get())
                 .unwrap_or(4)
         });
-    let (agent_iters, agent_c, blind_pool, open_sheet) = parse_agent_spec(args, &root);
+    let (agent_iters, agent_c, blind_pool, open_sheet) = parse_agent_spec(args, &root, &dex, &gen);
 
     let (new_teams, new_weights) = load_gauntlet_file(&dex, &gen, &new_file);
     let (old_teams, old_weights) = load_gauntlet_file(&dex, &gen, &old_file);
@@ -2088,7 +2243,7 @@ fn cmd_update_pool(args: &[String]) {
     let max_turns: u16 = num(args, "--max-turns", 300);
     let threads: usize = num(args, "--threads", 8);
     let seed: u64 = num(args, "--seed", 2026102850);
-    let (agent_iters, agent_c, blind_pool, open_sheet) = parse_agent_spec(args, &root);
+    let (agent_iters, agent_c, blind_pool, open_sheet) = parse_agent_spec(args, &root, &dex, &gen);
 
     let mut master_teams: Vec<Value> = if master_path.exists() {
         let mv: Value = serde_json::from_str(&std::fs::read_to_string(&master_path).unwrap()).unwrap();
@@ -2423,7 +2578,7 @@ fn cmd_tomography(args: &[String]) {
                 .map(|n| n.get())
                 .unwrap_or(4)
         });
-    let (agent_iters, agent_c, blind_pool, open_sheet) = parse_agent_spec(args, &root);
+    let (agent_iters, agent_c, blind_pool, open_sheet) = parse_agent_spec(args, &root, &dex, &gen);
 
     let (bench_teams, bench_weights) = load_gauntlet_file(&dex, &gen, &gfile);
     let pv: Value = serde_json::from_str(&std::fs::read_to_string(&pool_file).unwrap()).unwrap();
@@ -2637,7 +2792,7 @@ fn cmd_kodoku(args: &[String]) {
                 .map(|n| n.get())
                 .unwrap_or(4)
         });
-    let (agent_iters, agent_c, blind_pool, open_sheet) = parse_agent_spec(args, &root);
+    let (agent_iters, agent_c, blind_pool, open_sheet) = parse_agent_spec(args, &root, &dex, &gen);
 
     let gfile = flag(args, "--gauntlet-file").unwrap_or_else(|| {
         root.join("data/team-pool-v2/team-pool.json")
@@ -2650,6 +2805,13 @@ fn cmd_kodoku(args: &[String]) {
         .to_string_lossy()
         .into_owned();
     let (catalog_teams, _) = load_gauntlet_file(&dex, &gen, &catalog_path);
+    let belief_path = flag(args, "--belief-pool")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| root.join("data/belief-pool-v3/belief-pool.json"));
+    let bp_text = std::fs::read_to_string(&belief_path).unwrap();
+    let raw_mp: MetaPool = serde_json::from_str(&bp_text).expect("parse belief-pool");
+    let deme_base_mp = normalize_belief_pool(&dex, &gen, &raw_mp);
+    let deme_cand_pool = Arc::new(deme_base_mp.clone());
 
     let t_run_start = std::time::Instant::now();
     let mut ledger: IslandLedger = if ledger_path.exists() {
@@ -2726,6 +2888,9 @@ fn cmd_kodoku(args: &[String]) {
                     last_wave_slot_picks: [0.0; 6],
                     last_wave_slot_marginals: [0.0; 6],
                     effective_cores: 1.0,
+                    symbiont_of: None,
+                    mix_alpha: 1.0,
+                    deme_bonus: 0.0,
                     team: canon,
                 });
             }
@@ -3192,9 +3357,154 @@ fn cmd_kodoku(args: &[String]) {
 
         let (mu_50, mu_55, beta_l) = recompute_population_wars(&mut ledger.active_strains);
 
+        // Pass 3 (Same-Signature Deme Synergy Certification):
+        // When a single-slot MoveSwap or ItemSwap child `C` shares the exact same Team Preview
+        // signature `preview_sig(&C.team) == preview_sig(&P.team)` as its parent `P`:
+        // - `P` and `C` belong to the same Preview Deme `\Sigma`, where the Primary is the higher
+        //   `bayes_fit` strain (`P`) and the Secondary is the lower `bayes_fit` strain (`C`).
+        // - If `0.0 < P.bayes_fit - C.bayes_fit <= 0.06` and the mutated slot was actively picked
+        //   (`>= 12%`), test whether mixing `C` at equilibrium weight `\alpha^* = 0.20` (4:1)
+        //   raises the Deme's blind expected winrate (`V_deme(0.20) > V_blind(P|0) + 0.002`)
+        //   and boosts `P` (`V_blind(P|0.20) >= V_blind(P|0)`). If so, certify `C` as `P`'s Symbiont!
+        let mut p_blind0_cache: BTreeMap<String, f64> = BTreeMap::new();
+        let n_active = ledger.active_strains.len();
+        for c_idx in 0..n_active {
+            if ledger.active_strains[c_idx].born_wave == 0
+                || ledger.active_strains[c_idx].symbiont_of.is_some()
+            {
+                continue;
+            }
+            let op = ledger.active_strains[c_idx].last_op.clone();
+            let Some((op_kind, slot_str)) = op.split_once('@') else {
+                continue;
+            };
+            if !matches!(op_kind, "move-swap" | "item-swap") {
+                continue;
+            }
+            let Ok(ms) = slot_str.parse::<usize>() else {
+                continue;
+            };
+            if ms >= 6 {
+                continue;
+            }
+            let pid = ledger.active_strains[c_idx].parent_id.clone();
+            let Some(p_idx) = ledger.active_strains.iter().position(|x| x.id == pid) else {
+                continue;
+            };
+            if preview_sig(&ledger.active_strains[c_idx].team)
+                != preview_sig(&ledger.active_strains[p_idx].team)
+            {
+                continue;
+            }
+            // Identify Primary (higher open `bayes_fit`) and Secondary (lower open `bayes_fit`)
+            let (prim_idx, sec_idx) = if ledger.active_strains[c_idx].bayes_fit
+                > ledger.active_strains[p_idx].bayes_fit
+            {
+                (c_idx, p_idx)
+            } else {
+                (p_idx, c_idx)
+            };
+            let prim_fit = ledger.active_strains[prim_idx].bayes_fit;
+            let sec_fit = ledger.active_strains[sec_idx].bayes_fit;
+            let sec_pick = ledger.active_strains[sec_idx].last_wave_slot_picks[ms];
+            if prim_fit - sec_fit > 0.06 || sec_pick < 0.12 {
+                continue;
+            }
+            let prim_id = ledger.active_strains[prim_idx].id.clone();
+            let sec_id = ledger.active_strains[sec_idx].id.clone();
+            let prim_sets = to_sets(&ledger.active_strains[prim_idx].team).unwrap();
+            let sec_sets = to_sets(&ledger.active_strains[sec_idx].team).unwrap();
+            let deme_sig = preview_sig_sets(&prim_sets);
+            let deme_seed = wave_seed ^ 0xDE3E_51B1_u64;
+            let v_p0 = *p_blind0_cache.entry(prim_id.clone()).or_insert_with(|| {
+                let mut mp0 = deme_base_mp.clone();
+                mp0.teams.retain(|t| preview_sig_sets(&t.sets) != deme_sig);
+                mp0.teams.push(nc2000_bot::preview::MetaTeam {
+                    id: format!("{prim_id}-pure"),
+                    sets: prim_sets.clone(),
+                    weight: Some(0.5),
+                });
+                eval_blind_asymmetric_prior(
+                    &dex,
+                    &prim_sets,
+                    &wave_bench_teams,
+                    &wave_bench_weights,
+                    deme_cand_pool.clone(),
+                    Arc::new(mp0),
+                    2,
+                    agent_iters.max(400),
+                    agent_c,
+                    max_turns,
+                    threads,
+                    deme_seed,
+                )
+                .score
+            });
+            let alpha_star = 0.20;
+            let mut mp_mix = deme_base_mp.clone();
+            mp_mix.teams.retain(|t| preview_sig_sets(&t.sets) != deme_sig);
+            mp_mix.teams.push(nc2000_bot::preview::MetaTeam {
+                id: format!("{prim_id}-prim"),
+                sets: prim_sets.clone(),
+                weight: Some(0.5 * (1.0 - alpha_star)),
+            });
+            mp_mix.teams.push(nc2000_bot::preview::MetaTeam {
+                id: format!("{sec_id}-sec"),
+                sets: sec_sets.clone(),
+                weight: Some(0.5 * alpha_star),
+            });
+            let opp_mix = Arc::new(mp_mix);
+            let v_p_mix = eval_blind_asymmetric_prior(
+                &dex,
+                &prim_sets,
+                &wave_bench_teams,
+                &wave_bench_weights,
+                deme_cand_pool.clone(),
+                opp_mix.clone(),
+                2,
+                agent_iters.max(400),
+                agent_c,
+                max_turns,
+                threads,
+                deme_seed,
+            )
+            .score;
+            let v_s_mix = eval_blind_asymmetric_prior(
+                &dex,
+                &sec_sets,
+                &wave_bench_teams,
+                &wave_bench_weights,
+                deme_cand_pool.clone(),
+                opp_mix,
+                2,
+                agent_iters.max(400),
+                agent_c,
+                max_turns,
+                threads,
+                deme_seed,
+            )
+            .score;
+            let v_deme = (1.0 - alpha_star) * v_p_mix + alpha_star * v_s_mix;
+            let d_deme = v_deme - v_p0;
+            eprintln!(
+                "  [deme-check wave {w}] Primary={prim_id} (open={prim_fit:.3}) + Symbiont={sec_id} ({op}, open={sec_fit:.3}): V_blind(P|0)={v_p0:.3} -> V_blind(P|0.20)={v_p_mix:.3}, V_blind(S|0.20)={v_s_mix:.3} | V_deme={v_deme:.3} (dDeme={:+.2}pt)",
+                d_deme * 100.0
+            );
+            if d_deme >= 0.002 && v_p_mix >= v_p0 {
+                if d_deme > ledger.active_strains[prim_idx].deme_bonus {
+                    ledger.active_strains[prim_idx].deme_bonus = d_deme;
+                    ledger.active_strains[prim_idx].mix_alpha = 1.0 - alpha_star;
+                    ledger.active_strains[sec_idx].symbiont_of = Some(prim_id);
+                    ledger.active_strains[sec_idx].mix_alpha = alpha_star;
+                    ledger.active_strains[sec_idx].deme_bonus = d_deme;
+                }
+            }
+        }
+
         ledger.active_strains.sort_by(|a, b| {
-            b.bayes_fit
-                .partial_cmp(&a.bayes_fit)
+            let qa = a.bayes_fit + a.deme_bonus;
+            let qb = b.bayes_fit + b.deme_bonus;
+            qb.partial_cmp(&qa)
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
 
@@ -3291,8 +3601,8 @@ fn cmd_kodoku(args: &[String]) {
         .cloned()
         .collect();
     all_measured.sort_by(|a, b| {
-        let qa = 0.5 * a.bayes_fit + 0.5 * a.lcb95;
-        let qb = 0.5 * b.bayes_fit + 0.5 * b.lcb95;
+        let qa = 0.5 * (a.bayes_fit + a.deme_bonus) + 0.5 * a.lcb95;
+        let qb = 0.5 * (b.bayes_fit + b.deme_bonus) + 0.5 * b.lcb95;
         qb.partial_cmp(&qa).unwrap()
     });
 
@@ -3344,6 +3654,9 @@ fn cmd_kodoku(args: &[String]) {
             "parent_id": s.parent_id,
             "born_wave": s.born_wave,
             "last_op": s.last_op,
+            "symbiont_of": s.symbiont_of,
+            "mix_alpha": s.mix_alpha,
+            "deme_bonus": s.deme_bonus,
             "cum_games": s.cum_games,
             "raw_winrate": s.cum_wins / g,
             "bayes_winrate": s.bayes_fit,
@@ -3353,8 +3666,8 @@ fn cmd_kodoku(args: &[String]) {
             "bench_winrate": s.bench_wins / s.bench_games.max(1.0),
             "effective_cores": s.effective_cores,
             "slot_telemetry": slot_telemetry,
-            "weight": 1.0,
-            "drawWeight": 1.0,
+            "weight": s.mix_alpha,
+            "drawWeight": s.mix_alpha,
             "sets": s.team,
         }));
     }
@@ -4797,7 +5110,7 @@ fn cmd_verify_1gen(args: &[String]) {
                 .map(|n| n.get())
                 .unwrap_or(8)
         });
-    let (agent_iters, agent_c, blind_pool, open_sheet) = parse_agent_spec(args, &root);
+    let (agent_iters, agent_c, blind_pool, open_sheet) = parse_agent_spec(args, &root, &dex, &gen);
 
     let bench_file = flag(args, "--bench-file").unwrap_or_else(|| {
         root.join("data/team-pool-v2/team-pool.json")
@@ -4868,6 +5181,9 @@ fn cmd_verify_1gen(args: &[String]) {
                 last_wave_slot_picks: [0.0; 6],
                 last_wave_slot_marginals: [0.0; 6],
                 effective_cores: 1.0,
+                symbiont_of: None,
+                mix_alpha: 1.0,
+                deme_bonus: 0.0,
                 team: canon,
             });
         }
@@ -5430,7 +5746,8 @@ fn cmd_audit_elites(args: &[String]) {
     let heldout_weights = vec![1.0 / (heldout_teams.len().max(1) as f64); heldout_teams.len()];
 
     let bp_text = std::fs::read_to_string(&belief_file).unwrap();
-    let mp: MetaPool = serde_json::from_str(&bp_text).expect("parse belief-pool");
+    let raw_mp: MetaPool = serde_json::from_str(&bp_text).expect("parse belief-pool");
+    let mp = normalize_belief_pool(&dex, &gen, &raw_mp);
     let blind_pool = Some(Arc::new(mp));
 
     let ev: Value = serde_json::from_str(&std::fs::read_to_string(&elites_file).unwrap()).unwrap();
@@ -5712,6 +6029,412 @@ fn cmd_audit_elites(args: &[String]) {
     }
 }
 
+fn eval_blind_asymmetric_prior(
+    dex: &Dex,
+    candidate: &[PokemonSet],
+    gauntlet: &[Vec<PokemonSet>],
+    weights: &[f64],
+    cand_pool: Arc<MetaPool>,
+    opp_pool: Arc<MetaPool>,
+    games_per_opponent: u32,
+    agent_iters: u32,
+    c: f64,
+    max_turns: u16,
+    threads: usize,
+    seed: u64,
+) -> nc2000_bot::teamgen::EvalResult {
+    use nc2000_bot::runner::{play_game, GameResult};
+    use nc2000_bot::smmcts::{RmConfig, SelRule};
+    use nc2000_bot::{Agent, BlindAgent};
+    use nc2000_engine::battle::Outcome;
+    use nc2000_engine::state::Battle;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct Job {
+        opp: usize,
+        battle_seed: String,
+        cand_seed: u64,
+        opp_seed: u64,
+        cand_is_p1: bool,
+    }
+
+    let games = (games_per_opponent + games_per_opponent % 2) as usize;
+    let mut jobs = Vec::with_capacity(gauntlet.len() * games);
+    for opp in 0..gauntlet.len() {
+        let mut rng =
+            SplitMix64::new(seed ^ (opp as u64 + 1).wrapping_mul(0x9FB2_1C65_1E98_DF25));
+        let mut battle_seed = String::new();
+        for g in 0..games {
+            if g % 2 == 0 {
+                battle_seed = rng.battle_seed();
+            }
+            jobs.push(Job {
+                opp,
+                battle_seed: battle_seed.clone(),
+                cand_seed: rng.next(),
+                opp_seed: rng.next(),
+                cand_is_p1: g % 2 == 0,
+            });
+        }
+    }
+
+    let cursor = AtomicUsize::new(0);
+    let mut results: Vec<(usize, f64, u8)> = Vec::with_capacity(jobs.len());
+    std::thread::scope(|scope| {
+        let mut handles = Vec::new();
+        for _ in 0..threads.max(1) {
+            let (jobs, cursor, cand_pool, opp_pool) = (&jobs, &cursor, &cand_pool, &opp_pool);
+            handles.push(scope.spawn(move || {
+                let mut out: Vec<(usize, (usize, f64, u8))> = Vec::new();
+                loop {
+                    let i = cursor.fetch_add(1, Ordering::Relaxed);
+                    if i >= jobs.len() {
+                        break;
+                    }
+                    let job = &jobs[i];
+                    let rm_cfg = RmConfig {
+                        iterations: agent_iters,
+                        rule: SelRule::Ucb,
+                        c,
+                        ..Default::default()
+                    };
+                    let mut cand_agent: Box<dyn Agent> =
+                        Box::new(BlindAgent::new(rm_cfg.clone(), cand_pool.clone(), None, job.cand_seed));
+                    let mut opp_agent: Box<dyn Agent> =
+                        Box::new(BlindAgent::new(rm_cfg, opp_pool.clone(), None, job.opp_seed));
+                    let (t1, t2) = if job.cand_is_p1 {
+                        (candidate, gauntlet[job.opp].as_slice())
+                    } else {
+                        (gauntlet[job.opp].as_slice(), candidate)
+                    };
+                    let mut b = Battle::from_fixture(dex, &job.battle_seed, t1, t2).unwrap();
+                    b.set_log_enabled(true);
+                    let res = if job.cand_is_p1 {
+                        play_game(
+                            dex,
+                            &mut b,
+                            &mut [cand_agent.as_mut(), opp_agent.as_mut()],
+                            max_turns,
+                        )
+                    } else {
+                        play_game(
+                            dex,
+                            &mut b,
+                            &mut [opp_agent.as_mut(), cand_agent.as_mut()],
+                            max_turns,
+                        )
+                    }
+                    .unwrap();
+                    let p1_score = match res {
+                        GameResult::Outcome(Outcome::P1Win) => 1.0,
+                        GameResult::Outcome(Outcome::P2Win) => 0.0,
+                        GameResult::Outcome(Outcome::Tie) | GameResult::TurnCapped => 0.5,
+                    };
+                    let score = if job.cand_is_p1 { p1_score } else { 1.0 - p1_score };
+                    let cand_side = if job.cand_is_p1 { 0 } else { 1 };
+                    let mut cmask = 0u8;
+                    for &slot in &b.sides[cand_side].party {
+                        if (slot as usize) < 6 {
+                            cmask |= 1 << slot;
+                        }
+                    }
+                    out.push((i, (job.opp, score, cmask)));
+                }
+                out
+            }));
+        }
+        let mut all: Vec<(usize, (usize, f64, u8))> = Vec::new();
+        for h in handles {
+            all.extend(h.join().unwrap());
+        }
+        all.sort_by_key(|r| r.0);
+        results = all
+            .into_iter()
+            .map(|(i, (_, s, cm))| (jobs[i].opp, s, cm))
+            .collect();
+    });
+
+    let wsum: f64 = if weights.len() == gauntlet.len() {
+        weights.iter().sum::<f64>().max(1e-12)
+    } else {
+        gauntlet.len().max(1) as f64
+    };
+    let mut per: Vec<(f64, usize)> = vec![(0.0, 0); gauntlet.len()];
+    let mut slot_picks = [0.0f64; 6];
+    let mut slot_wins = [0.0f64; 6];
+    let mut core_stats: BTreeMap<u8, (f64, f64)> = BTreeMap::new();
+    for &(opp, s, cm) in &results {
+        per[opp].0 += s;
+        per[opp].1 += 1;
+        let opp_w = if weights.len() == gauntlet.len() {
+            weights[opp] / wsum
+        } else {
+            1.0 / wsum
+        };
+        let w_game = opp_w / (games.max(1) as f64);
+        let entry = core_stats.entry(cm).or_insert((0.0, 0.0));
+        entry.0 += w_game;
+        entry.1 += w_game * s;
+        for slot in 0..6 {
+            if (cm & (1 << slot)) != 0 {
+                slot_picks[slot] += w_game;
+                slot_wins[slot] += w_game * s;
+            }
+        }
+    }
+    let per_opponent: Vec<f64> = per.iter().map(|&(s, n)| s / n.max(1) as f64).collect();
+    let score = if weights.len() == gauntlet.len() {
+        per_opponent
+            .iter()
+            .zip(weights.iter())
+            .map(|(s, w)| s * w)
+            .sum::<f64>()
+            / wsum
+    } else {
+        per_opponent.iter().sum::<f64>() / per_opponent.len().max(1) as f64
+    };
+    nc2000_bot::teamgen::EvalResult {
+        score,
+        per_opponent,
+        games: results.len(),
+        slot_picks,
+        slot_wins,
+        core_stats,
+    }
+}
+
+fn cmd_sibling_mix(args: &[String]) {
+    let t_start = std::time::Instant::now();
+    let dex = load_dex();
+    let root = repo_root();
+    let ls_text = std::fs::read_to_string(root.join("data/learnsets-gen2.json")).unwrap();
+    let pool_text = std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap();
+    let gen = TeamGen::new(&dex, &ls_text, &pool_text).unwrap();
+
+    let elites_file = flag(args, "--elites")
+        .unwrap_or_else(|| "/tmp/kodoku-clean-v1/kodoku-elites.json".to_string());
+    let child_id = flag(args, "--child").unwrap_or_else(|| "kodoku-s0018".to_string());
+    let bench_file = flag(args, "--bench").unwrap_or_else(|| {
+        root.join("data/meta-nash-v3/pool-artifact.json")
+            .to_string_lossy()
+            .into_owned()
+    });
+    let catalog_file = flag(args, "--catalog").unwrap_or_else(|| {
+        root.join("data/team-pool-v2/team-pool.json")
+            .to_string_lossy()
+            .into_owned()
+    });
+    let belief_file = flag(args, "--belief").unwrap_or_else(|| {
+        root.join("data/belief-pool-v3/belief-pool.json")
+            .to_string_lossy()
+            .into_owned()
+    });
+    let out_file = flag(args, "--out").map(PathBuf::from);
+    let games_per_opp: u32 = num(args, "--games", 16);
+    let iters: u32 = num(args, "--iters", 2000);
+    let max_turns: u16 = num(args, "--max-turns", 250);
+    let seed: u64 = num(args, "--seed", 20261029);
+    let threads: usize = flag(args, "--threads")
+        .map(|v| v.parse().unwrap())
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(4)
+        });
+
+    let (bench_teams, bench_weights) = load_gauntlet_file(&dex, &gen, &bench_file);
+    let bv: Value = serde_json::from_str(&std::fs::read_to_string(&bench_file).unwrap()).unwrap();
+    let cv: Value = serde_json::from_str(&std::fs::read_to_string(&catalog_file).unwrap()).unwrap();
+    let mut parent_map: BTreeMap<String, Vec<Value>> = BTreeMap::new();
+    for src in [&bv, &cv] {
+        for t in src["teams"].as_array().unwrap() {
+            let id = t["id"].as_str().unwrap().to_string();
+            let raw = t["sets"].as_array().unwrap().clone();
+            let canon = gen.canonize(&dex, &raw).unwrap();
+            parent_map.insert(id, canon);
+        }
+    }
+    let ledger_file = PathBuf::from(&elites_file)
+        .parent()
+        .map(|p| p.join("kodoku-ledger.json"))
+        .unwrap_or_else(|| PathBuf::from("/tmp/kodoku-clean-v1/kodoku-ledger.json"));
+    if let Ok(ltxt) = std::fs::read_to_string(&ledger_file) {
+        if let Ok(lv) = serde_json::from_str::<Value>(&ltxt) {
+            for key in ["active_strains", "archived_strains"] {
+                if let Some(arr) = lv[key].as_array() {
+                    for s in arr {
+                        if let (Some(id), Some(team)) = (s["id"].as_str(), s["team"].as_array()) {
+                            if let Some(canon) = gen.canonize(&dex, team) {
+                                parent_map.entry(id.to_string()).or_insert(canon);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let ev: Value = serde_json::from_str(&std::fs::read_to_string(&elites_file).unwrap()).unwrap();
+    let child_val = ev["teams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["id"].as_str() == Some(child_id.as_str()))
+        .expect("child_id not found in elites");
+    let pid = child_val["parent_id"].as_str().unwrap();
+    let op = child_val["last_op"].as_str().unwrap_or("?");
+    let mut_slot: usize = op
+        .split_once('@')
+        .and_then(|(_, s)| s.parse::<usize>().ok())
+        .unwrap_or(0);
+    let c_raw = child_val["sets"].as_array().unwrap().clone();
+    let c_canon = gen.canonize(&dex, &c_raw).unwrap();
+    let p_canon = parent_map.get(pid).expect("parent not found").clone();
+    let c_sets = to_sets(&c_canon).unwrap();
+    let p_sets = to_sets(&p_canon).unwrap();
+
+    let bp_text = std::fs::read_to_string(&belief_file).unwrap();
+    let raw_mp: MetaPool = serde_json::from_str(&bp_text).expect("parse belief-pool");
+    let base_mp = normalize_belief_pool(&dex, &gen, &raw_mp);
+    let cand_pool = Arc::new(base_mp.clone());
+    let deme_sig = preview_sig_sets(&p_sets);
+
+    let alphas: Vec<f64> = flag(args, "--alphas")
+        .map(|s| s.split(',').map(|x| x.trim().parse::<f64>().unwrap()).collect())
+        .unwrap_or_else(|| vec![0.0, 0.0001, 0.15, 0.25, 0.40, 0.60, 0.9999]);
+
+    eprintln!(
+        "=== Same-Signature Deme Equilibrium Sweep: Parent={} vs Child={} ({}) ===",
+        pid, child_id, op
+    );
+    eprintln!(
+        "  Regime: blind:{} ({}g/opp = {}g CRN-paired vs {} Meta-Nash-v3 teams)",
+        iters,
+        games_per_opp,
+        games_per_opp as usize * bench_teams.len(),
+        bench_teams.len()
+    );
+
+    let pair_seed = seed ^ 0x3333;
+    let mut sweep_records = Vec::new();
+    for &alpha in &alphas {
+        let mut mp = base_mp.clone();
+        // Remove any existing candidate in `mp` that collides with P/C's preview signature,
+        // then insert P with weight `0.5 * (1 - alpha)` and C with weight `0.5 * alpha`.
+        mp.teams.retain(|t| preview_sig_sets(&t.sets) != deme_sig);
+        if alpha <= 0.0 {
+            mp.teams.push(nc2000_bot::preview::MetaTeam {
+                id: pid.to_string(),
+                sets: p_sets.clone(),
+                weight: Some(0.5),
+            });
+        } else if alpha >= 1.0 {
+            mp.teams.push(nc2000_bot::preview::MetaTeam {
+                id: child_id.clone(),
+                sets: c_sets.clone(),
+                weight: Some(0.5),
+            });
+        } else {
+            mp.teams.push(nc2000_bot::preview::MetaTeam {
+                id: pid.to_string(),
+                sets: p_sets.clone(),
+                weight: Some((0.5 * (1.0 - alpha)).max(1e-9)),
+            });
+            mp.teams.push(nc2000_bot::preview::MetaTeam {
+                id: child_id.clone(),
+                sets: c_sets.clone(),
+                weight: Some((0.5 * alpha).max(1e-9)),
+            });
+        }
+        let opp_pool = Arc::new(mp);
+
+        // Sanity check that `Belief` sees both P and C alive at preview when `0 < alpha < 1`
+        {
+            let tb = nc2000_engine::state::Battle::from_fixture(&dex, "1,2,3,4", &p_sets, &c_sets).unwrap();
+            let obs_p = nc2000_bot::Observer::new(&tb, 1); // observing side 0 (P)
+            let bel_p = nc2000_bot::Belief::new(&dex, &opp_pool, &obs_p);
+            let obs_c = nc2000_bot::Observer::new(&tb, 0); // observing side 1 (C)
+            let bel_c = nc2000_bot::Belief::new(&dex, &opp_pool, &obs_c);
+            let expected_alive = if alpha <= 0.0 || alpha >= 1.0 { 1 } else { 2 };
+            assert_eq!(
+                bel_p.candidate_count(),
+                expected_alive,
+                "preview alive count for P must equal {}",
+                expected_alive
+            );
+            assert_eq!(
+                bel_c.candidate_count(),
+                expected_alive,
+                "preview alive count for C must equal {}",
+                expected_alive
+            );
+        }
+
+        let p_res = eval_blind_asymmetric_prior(
+            &dex,
+            &p_sets,
+            &bench_teams,
+            &bench_weights,
+            cand_pool.clone(),
+            opp_pool.clone(),
+            games_per_opp,
+            iters,
+            0.5,
+            max_turns,
+            threads,
+            pair_seed,
+        );
+        let c_res = eval_blind_asymmetric_prior(
+            &dex,
+            &c_sets,
+            &bench_teams,
+            &bench_weights,
+            cand_pool.clone(),
+            opp_pool,
+            games_per_opp,
+            iters,
+            0.5,
+            max_turns,
+            threads,
+            pair_seed,
+        );
+        let group_wr = (1.0 - alpha) * p_res.score + alpha * c_res.score;
+        let gap = c_res.score - p_res.score;
+        eprintln!(
+            "  alpha={:6.4} | V_blind(P|a)={:.4} (pick={:.1}%) | V_blind(C|a)={:.4} (pick={:.1}%) | C-P={:+.2}pt | V_deme(a)={:.4}",
+            alpha,
+            p_res.score,
+            p_res.slot_picks[mut_slot] * 100.0,
+            c_res.score,
+            c_res.slot_picks[mut_slot] * 100.0,
+            gap * 100.0,
+            group_wr
+        );
+        sweep_records.push(json!({
+            "alpha": alpha,
+            "parent_wr": p_res.score,
+            "child_wr": c_res.score,
+            "child_minus_parent": gap,
+            "deme_wr": group_wr,
+            "parent_mut_pick": p_res.slot_picks[mut_slot],
+            "child_mut_pick": c_res.slot_picks[mut_slot],
+        }));
+    }
+
+    if let Some(path) = out_file {
+        write_json_atomic(
+            &path,
+            &json!({
+                "elapsed_secs": t_start.elapsed().as_secs_f64(),
+                "parent_id": pid,
+                "child_id": child_id,
+                "op": op,
+                "sweep": sweep_records,
+            }),
+        );
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let sub = args
@@ -5730,8 +6453,9 @@ fn main() {
         "core-nash" => cmd_core_nash(&args[1..]),
         "verify-1gen" => cmd_verify_1gen(&args[1..]),
         "audit-elites" => cmd_audit_elites(&args[1..]),
+        "sibling-mix" => cmd_sibling_mix(&args[1..]),
         other => panic!(
-            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring | update-pool | tomography | kodoku | core-nash | verify-1gen | audit-elites)"
+            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring | update-pool | tomography | kodoku | core-nash | verify-1gen | audit-elites | sibling-mix)"
         ),
     }
 }

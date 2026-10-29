@@ -1564,15 +1564,16 @@ impl TeamGen {
             if id == "berry" || (id == "berryjuice" && gold_free) {
                 continue;
             }
-            // Dominated status berries: single-condition cure berries are strictly dominated by
-            // non-exhaustible competitive items even when Miracle Berry is held by a teammate.
+            // Dominated status berries: single-condition cure berries for poison/burn/freeze
+            // are strictly dominated by non-exhaustible competitive items, whereas PRZ Cure Berry
+            // and Bitter Berry remain valid when Miracle Berry is already held by a teammate.
             if id == "mintberry" && !has_rest && miracle_free {
                 continue;
             }
-            if matches!(
-                id.as_str(),
-                "przcureberry" | "psncureberry" | "burntberry" | "iceberry" | "bitterberry"
-            ) {
+            if matches!(id.as_str(), "przcureberry" | "bitterberry") && miracle_free {
+                continue;
+            }
+            if matches!(id.as_str(), "psncureberry" | "burntberry" | "iceberry") {
                 continue;
             }
             out.push(item_name.clone());
