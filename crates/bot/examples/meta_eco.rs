@@ -1576,7 +1576,27 @@ fn cmd_extract_nash(args: &[String]) {
         .as_array()
         .unwrap()
         .iter()
-        .filter(|t| t["born_wave"].as_u64().unwrap_or(1) > 0)
+        .filter(|t| {
+            if t["born_wave"].as_u64().unwrap_or(1) == 0 {
+                return false;
+            }
+            // Reject "Addition by Subtraction" dead-slot mutations (`pick_rate < 0.10`)
+            if let Some(op) = t["last_op"].as_str() {
+                if !op.starts_with("level-tweak") {
+                    if let Some((_kind, slot_str)) = op.split_once('@') {
+                        if let Ok(mut_slot) = slot_str.parse::<usize>() {
+                            if let Some(tel) = t["slot_telemetry"].as_array().and_then(|a| a.get(mut_slot)) {
+                                let pr = tel["pick_rate"].as_f64().unwrap_or(0.0);
+                                if pr < 0.10 {
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            true
+        })
         .take(top_evolved)
         .enumerate()
     {
@@ -2923,15 +2943,11 @@ fn cmd_kodoku(args: &[String]) {
             for h in handles {
                 let (s, bench_res, bench_marg, bench_mdq, eco_res, eco_marg, eco_mdq) =
                     h.join().expect("kodoku eval thread panicked");
-                let bench_score = bench_res.score;
-                let eco_score = eco_res.score;
-                let wave_score = 0.70 * bench_score + 0.30 * eco_score;
+                let mut bench_score = bench_res.score;
+                let mut eco_score = eco_res.score;
+                let mut wave_score = 0.70 * bench_score + 0.30 * eco_score;
                 let prev_g = s.cum_games;
                 let new_g = prev_g + total_w_games;
-                s.bench_games += bench_n_games;
-                s.bench_wins += bench_score * bench_n_games;
-                s.eco_games += eco_n_games;
-                s.eco_wins += eco_score * eco_n_games;
                 for slot in 0..6 {
                     let wp = bench_res.slot_picks[slot] * bench_n_games
                         + eco_res.slot_picks[slot] * eco_n_games;
@@ -2950,41 +2966,39 @@ fn cmd_kodoku(args: &[String]) {
                             (s.move_dqs[slot][mk] * prev_g + w_mdq * total_w_games) / new_g.max(1.0);
                     }
                 }
+                // Active-Pick Deconfounding & Addition-by-Subtraction Guard:
+                // A single-slot mutation whose mutated slot is picked < 10% of games (dead/crippled slot)
+                // cannot claim a positive fitness delta over its parent's prior (`s.parent_prior`).
+                if s.born_wave > 0 && !s.last_op.starts_with("level-tweak") {
+                    if let Some((_op, slot_str)) = s.last_op.split_once('@') {
+                        if let Ok(mut_slot) = slot_str.parse::<usize>() {
+                            if mut_slot < 6 && s.last_wave_slot_picks[mut_slot] < 0.10 {
+                                if wave_score > s.parent_prior {
+                                    wave_score = s.parent_prior;
+                                }
+                                if bench_score > s.parent_prior {
+                                    bench_score = s.parent_prior;
+                                }
+                                if eco_score > s.parent_prior {
+                                    eco_score = s.parent_prior;
+                                }
+                            }
+                        }
+                    }
+                }
+                s.bench_games += bench_n_games;
+                s.bench_wins += bench_score * bench_n_games;
+                s.eco_games += eco_n_games;
+                s.eco_wins += eco_score * eco_n_games;
                 s.effective_cores = 0.70 * bench_res.effective_cores()
                     + 0.30 * eco_res.effective_cores();
                 s.last_wave_fit = wave_score;
             }
         });
 
-        let wave_scores_by_id: BTreeMap<String, f64> = ledger
-            .active_strains
-            .iter()
-            .map(|s| (s.id.clone(), s.last_wave_fit))
-            .collect();
-
         for s in &mut ledger.active_strains {
-            if s.cum_games == 0.0 {
-                if let Some(&p_wave) = wave_scores_by_id.get(&s.parent_id) {
-                    s.parent_prior = p_wave;
-                }
-            }
-            // Active-Pick Deconfounding: unpicked single-slot mutation cannot claim positive wave delta
-            let mut effective_wave_score = s.last_wave_fit;
-            if s.cum_games == 0.0 && !s.last_op.starts_with("level-tweak") {
-                if let Some((_op, slot_str)) = s.last_op.split_once('@') {
-                    if let Ok(mut_slot) = slot_str.parse::<usize>() {
-                        if mut_slot < 6
-                            && s.last_wave_slot_picks[mut_slot] <= 1e-6
-                            && effective_wave_score > s.parent_prior
-                        {
-                            effective_wave_score = s.parent_prior;
-                        }
-                    }
-                }
-            }
-            s.last_wave_fit = effective_wave_score;
             s.cum_games += total_w_games;
-            s.cum_wins += effective_wave_score * total_w_games;
+            s.cum_wins += s.last_wave_fit * total_w_games;
             s.recompute_stats(prior_games);
         }
 
@@ -3061,7 +3075,22 @@ fn cmd_kodoku(args: &[String]) {
         .active_strains
         .iter()
         .chain(ledger.archived_strains.iter())
-        .filter(|s| s.cum_games >= 24.0)
+        .filter(|s| {
+            if s.cum_games < 24.0 {
+                return false;
+            }
+            if s.born_wave > 0 && !s.last_op.starts_with("level-tweak") {
+                if let Some((_op, slot_str)) = s.last_op.split_once('@') {
+                    if let Ok(mut_slot) = slot_str.parse::<usize>() {
+                        let g = s.cum_games.max(1.0);
+                        if mut_slot < 6 && s.slot_picks[mut_slot] / g < 0.10 {
+                            return false;
+                        }
+                    }
+                }
+            }
+            true
+        })
         .cloned()
         .collect();
     all_measured.sort_by(|a, b| b.bayes_fit.partial_cmp(&a.bayes_fit).unwrap());
@@ -4879,6 +4908,370 @@ fn cmd_verify_1gen(args: &[String]) {
     }
 }
 
+fn cmd_audit_elites(args: &[String]) {
+    let t_start = std::time::Instant::now();
+    let dex = load_dex();
+    let root = repo_root();
+    let ls_text = std::fs::read_to_string(root.join("data/learnsets-gen2.json")).unwrap();
+    let pool_text = std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap();
+    let gen = TeamGen::new(&dex, &ls_text, &pool_text).unwrap();
+
+    let elites_file = flag(args, "--elites").unwrap_or_else(|| "/tmp/kodoku-endo-v1/kodoku-elites.json".to_string());
+    let bench_file = flag(args, "--bench").unwrap_or_else(|| {
+        root.join("data/meta-nash-v3/pool-artifact.json")
+            .to_string_lossy()
+            .into_owned()
+    });
+    let catalog_file = flag(args, "--catalog").unwrap_or_else(|| {
+        root.join("data/team-pool-v2/team-pool.json")
+            .to_string_lossy()
+            .into_owned()
+    });
+    let belief_file = flag(args, "--belief").unwrap_or_else(|| {
+        root.join("data/belief-pool-v3/belief-pool.json")
+            .to_string_lossy()
+            .into_owned()
+    });
+    let out_file = flag(args, "--out").map(PathBuf::from);
+    let open200_games: u32 = num(args, "--open200-games", 40);
+    let open2000_games: u32 = num(args, "--open2000-games", 16);
+    let blind2000_games: u32 = num(args, "--blind2000-games", 16);
+    let heldout_games: u32 = num(args, "--heldout-games", 8);
+    let max_turns: u16 = num(args, "--max-turns", 250);
+    let seed: u64 = num(args, "--seed", 20261029);
+    let threads: usize = flag(args, "--threads")
+        .map(|v| v.parse().unwrap())
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(4)
+        });
+
+    let (bench_teams, bench_weights) = load_gauntlet_file(&dex, &gen, &bench_file);
+    let bv: Value = serde_json::from_str(&std::fs::read_to_string(&bench_file).unwrap()).unwrap();
+    let bench_ids: BTreeSet<String> = bv["teams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|t| t["id"].as_str().map(String::from))
+        .collect();
+
+    let cv: Value = serde_json::from_str(&std::fs::read_to_string(&catalog_file).unwrap()).unwrap();
+    let mut parent_map: BTreeMap<String, Vec<Value>> = BTreeMap::new();
+    let mut heldout_teams: Vec<Vec<PokemonSet>> = Vec::new();
+    for t in cv["teams"].as_array().unwrap() {
+        let id = t["id"].as_str().unwrap().to_string();
+        let raw = t["sets"].as_array().unwrap().clone();
+        let canon = gen.canonize(&dex, &raw).unwrap();
+        parent_map.insert(id.clone(), canon.clone());
+        if !bench_ids.contains(&id) {
+            heldout_teams.push(to_sets(&canon).unwrap());
+        }
+    }
+    let ledger_file = PathBuf::from(&elites_file)
+        .parent()
+        .map(|p| p.join("kodoku-ledger.json"))
+        .unwrap_or_else(|| PathBuf::from("/tmp/kodoku-endo-v1/kodoku-ledger.json"));
+    if let Ok(ltxt) = std::fs::read_to_string(&ledger_file) {
+        if let Ok(lv) = serde_json::from_str::<Value>(&ltxt) {
+            for key in ["active_strains", "archived_strains"] {
+                if let Some(arr) = lv[key].as_array() {
+                    for s in arr {
+                        if let (Some(id), Some(team)) = (s["id"].as_str(), s["team"].as_array()) {
+                            if let Some(canon) = gen.canonize(&dex, team) {
+                                parent_map.entry(id.to_string()).or_insert(canon);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let heldout_weights = vec![1.0 / (heldout_teams.len().max(1) as f64); heldout_teams.len()];
+
+    let bp_text = std::fs::read_to_string(&belief_file).unwrap();
+    let mp: MetaPool = serde_json::from_str(&bp_text).expect("parse belief-pool");
+    let blind_pool = Some(Arc::new(mp));
+
+    let ev: Value = serde_json::from_str(&std::fs::read_to_string(&elites_file).unwrap()).unwrap();
+    let evolved: Vec<&Value> = ev["teams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|t| t["born_wave"].as_u64().unwrap_or(0) > 0)
+        .take(5)
+        .collect();
+
+    eprintln!(
+        "=== Adversarial Verification of {} Evolved Strains ===",
+        evolved.len()
+    );
+    eprintln!(
+        "  Regimes: open:200 ({}g/opp = {}g), open:2000 ({}g/opp = {}g), blind:2000 ({}g/opp = {}g), HeldOut-19 open:200 ({}g/opp = {}g)",
+        open200_games,
+        open200_games as usize * bench_teams.len(),
+        open2000_games,
+        open2000_games as usize * bench_teams.len(),
+        blind2000_games,
+        blind2000_games as usize * bench_teams.len(),
+        heldout_games,
+        heldout_games as usize * heldout_teams.len(),
+    );
+
+    let mut parent_cache_200: BTreeMap<String, nc2000_bot::teamgen::EvalResult> = BTreeMap::new();
+    let mut parent_cache_2000: BTreeMap<String, nc2000_bot::teamgen::EvalResult> = BTreeMap::new();
+    let mut parent_cache_blind: BTreeMap<String, nc2000_bot::teamgen::EvalResult> = BTreeMap::new();
+    let mut parent_cache_heldout: BTreeMap<String, nc2000_bot::teamgen::EvalResult> = BTreeMap::new();
+
+    let mut records = Vec::new();
+    for t in evolved.iter() {
+        let cid = t["id"].as_str().unwrap();
+        let pid = t["parent_id"].as_str().unwrap();
+        let op = t["last_op"].as_str().unwrap_or("?");
+        let mut_slot: Option<usize> = op
+            .split_once('@')
+            .and_then(|(_, s)| s.parse::<usize>().ok());
+        let c_raw = t["sets"].as_array().unwrap().clone();
+        let c_canon = gen.canonize(&dex, &c_raw).unwrap();
+        let p_canon = parent_map.get(pid).expect("parent not found in catalog").clone();
+        let c_sets = to_sets(&c_canon).unwrap();
+        let p_sets = to_sets(&p_canon).unwrap();
+
+        let pair_seed = seed;
+
+        // 1. open:200 vs Meta-Nash-v3 (CRN-paired)
+        let p_open200 = parent_cache_200
+            .entry(pid.to_string())
+            .or_insert_with(|| {
+                gauntlet_eval_weighted(
+                    &dex,
+                    &p_sets,
+                    &bench_teams,
+                    &bench_weights,
+                    &WeightedEvalCfg {
+                        games_per_opponent: open200_games,
+                        agent_iters: 200,
+                        c: 0.5,
+                        max_turns,
+                        seed: pair_seed ^ 0x1111,
+                        threads,
+                        blind_pool: None,
+                        open_sheet: true,
+                    },
+                )
+            })
+            .clone();
+        let c_open200 = gauntlet_eval_weighted(
+            &dex,
+            &c_sets,
+            &bench_teams,
+            &bench_weights,
+            &WeightedEvalCfg {
+                games_per_opponent: open200_games,
+                agent_iters: 200,
+                c: 0.5,
+                max_turns,
+                seed: pair_seed ^ 0x1111,
+                threads,
+                blind_pool: None,
+                open_sheet: true,
+            },
+        );
+
+        // 2. open:2000 vs Meta-Nash-v3 (CRN-paired, 10x search budget)
+        let p_open2000 = parent_cache_2000
+            .entry(pid.to_string())
+            .or_insert_with(|| {
+                gauntlet_eval_weighted(
+                    &dex,
+                    &p_sets,
+                    &bench_teams,
+                    &bench_weights,
+                    &WeightedEvalCfg {
+                        games_per_opponent: open2000_games,
+                        agent_iters: 2000,
+                        c: 0.5,
+                        max_turns,
+                        seed: pair_seed ^ 0x2222,
+                        threads,
+                        blind_pool: None,
+                        open_sheet: true,
+                    },
+                )
+            })
+            .clone();
+        let c_open2000 = gauntlet_eval_weighted(
+            &dex,
+            &c_sets,
+            &bench_teams,
+            &bench_weights,
+            &WeightedEvalCfg {
+                games_per_opponent: open2000_games,
+                agent_iters: 2000,
+                c: 0.5,
+                max_turns,
+                seed: pair_seed ^ 0x2222,
+                threads,
+                blind_pool: None,
+                open_sheet: true,
+            },
+        );
+
+        // 3. blind:2000 vs Meta-Nash-v3 (CRN-paired, hidden info)
+        let p_blind2000 = parent_cache_blind
+            .entry(pid.to_string())
+            .or_insert_with(|| {
+                gauntlet_eval_weighted(
+                    &dex,
+                    &p_sets,
+                    &bench_teams,
+                    &bench_weights,
+                    &WeightedEvalCfg {
+                        games_per_opponent: blind2000_games,
+                        agent_iters: 2000,
+                        c: 0.5,
+                        max_turns,
+                        seed: pair_seed ^ 0x3333,
+                        threads,
+                        blind_pool: blind_pool.clone(),
+                        open_sheet: false,
+                    },
+                )
+            })
+            .clone();
+        let c_blind2000 = gauntlet_eval_weighted(
+            &dex,
+            &c_sets,
+            &bench_teams,
+            &bench_weights,
+            &WeightedEvalCfg {
+                games_per_opponent: blind2000_games,
+                agent_iters: 2000,
+                c: 0.5,
+                max_turns,
+                seed: pair_seed ^ 0x3333,
+                threads,
+                blind_pool: blind_pool.clone(),
+                open_sheet: false,
+            },
+        );
+
+        // 4. Held-Out 19 Teams (open:200, CRN-paired)
+        let p_heldout = parent_cache_heldout
+            .entry(pid.to_string())
+            .or_insert_with(|| {
+                gauntlet_eval_weighted(
+                    &dex,
+                    &p_sets,
+                    &heldout_teams,
+                    &heldout_weights,
+                    &WeightedEvalCfg {
+                        games_per_opponent: heldout_games,
+                        agent_iters: 200,
+                        c: 0.5,
+                        max_turns,
+                        seed: pair_seed ^ 0x4444,
+                        threads,
+                        blind_pool: None,
+                        open_sheet: true,
+                    },
+                )
+            })
+            .clone();
+        let c_heldout = gauntlet_eval_weighted(
+            &dex,
+            &c_sets,
+            &heldout_teams,
+            &heldout_weights,
+            &WeightedEvalCfg {
+                games_per_opponent: heldout_games,
+                agent_iters: 200,
+                c: 0.5,
+                max_turns,
+                seed: pair_seed ^ 0x4444,
+                threads,
+                blind_pool: None,
+                open_sheet: true,
+            },
+        );
+
+        let (p_pick_200, c_pick_200, p_pick_2000, c_pick_2000) = if let Some(s) = mut_slot {
+            (
+                p_open200.slot_picks[s],
+                c_open200.slot_picks[s],
+                p_open2000.slot_picks[s],
+                c_open2000.slot_picks[s],
+            )
+        } else {
+            (0.0, 0.0, 0.0, 0.0)
+        };
+
+        eprintln!(
+            "  {:12} (from {:13}, {:14}):\n    open:200   P={:.3} -> C={:.3} (dWR={:+.2}pt) | mut_pick: {:.1}% -> {:.1}%\n    open:2000  P={:.3} -> C={:.3} (dWR={:+.2}pt) | mut_pick: {:.1}% -> {:.1}%\n    blind:2000 P={:.3} -> C={:.3} (dWR={:+.2}pt)\n    HeldOut-19 P={:.3} -> C={:.3} (dWR={:+.2}pt)",
+            cid,
+            pid,
+            op,
+            p_open200.score,
+            c_open200.score,
+            (c_open200.score - p_open200.score) * 100.0,
+            p_pick_200 * 100.0,
+            c_pick_200 * 100.0,
+            p_open2000.score,
+            c_open2000.score,
+            (c_open2000.score - p_open2000.score) * 100.0,
+            p_pick_2000 * 100.0,
+            c_pick_2000 * 100.0,
+            p_blind2000.score,
+            c_blind2000.score,
+            (c_blind2000.score - p_blind2000.score) * 100.0,
+            p_heldout.score,
+            c_heldout.score,
+            (c_heldout.score - p_heldout.score) * 100.0,
+        );
+
+        records.push(json!({
+            "child_id": cid,
+            "parent_id": pid,
+            "op": op,
+            "mut_slot": mut_slot,
+            "open200": {
+                "parent_wr": p_open200.score,
+                "child_wr": c_open200.score,
+                "dwr": c_open200.score - p_open200.score,
+                "parent_mut_pick": p_pick_200,
+                "child_mut_pick": c_pick_200,
+            },
+            "open2000": {
+                "parent_wr": p_open2000.score,
+                "child_wr": c_open2000.score,
+                "dwr": c_open2000.score - p_open2000.score,
+                "parent_mut_pick": p_pick_2000,
+                "child_mut_pick": c_pick_2000,
+            },
+            "blind2000": {
+                "parent_wr": p_blind2000.score,
+                "child_wr": c_blind2000.score,
+                "dwr": c_blind2000.score - p_blind2000.score,
+            },
+            "heldout19_open200": {
+                "parent_wr": p_heldout.score,
+                "child_wr": c_heldout.score,
+                "dwr": c_heldout.score - p_heldout.score,
+            },
+        }));
+    }
+
+    if let Some(path) = out_file {
+        write_json_atomic(
+            &path,
+            &json!({
+                "elapsed_secs": t_start.elapsed().as_secs_f64(),
+                "records": records,
+            }),
+        );
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let sub = args
@@ -4896,8 +5289,9 @@ fn main() {
         "kodoku" => cmd_kodoku(&args[1..]),
         "core-nash" => cmd_core_nash(&args[1..]),
         "verify-1gen" => cmd_verify_1gen(&args[1..]),
+        "audit-elites" => cmd_audit_elites(&args[1..]),
         other => panic!(
-            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring | update-pool | tomography | kodoku | core-nash | verify-1gen)"
+            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring | update-pool | tomography | kodoku | core-nash | verify-1gen | audit-elites)"
         ),
     }
 }

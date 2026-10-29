@@ -1506,10 +1506,30 @@ impl TeamGen {
         }
 
         let gold_free = !held.contains(&"goldberry".to_string());
-        let juice_free = !held.contains(&"berryjuice".to_string());
         let miracle_free = !held.contains(&"miracleberry".to_string());
         let pinkbow_free = !held.contains(&"pinkbow".to_string());
         let thickclub_free = !held.contains(&"thickclub".to_string());
+        let lightball_free = !held.contains(&"lightball".to_string());
+
+        // Exclusive doubling items (Thick Club on Cubone/Marowak, Light Ball on Pikachu)
+        // strictly dominate generic items whenever the carrier has damaging moves.
+        if matches!(sid.as_str(), "cubone" | "marowak")
+            && (thickclub_free || cur_item == "thickclub")
+            && (dmg_types.contains("Ground") || dmg_types.contains("Rock") || dmg_types.contains("Normal"))
+        {
+            return if include_current || cur_item != "thickclub" {
+                vec!["Thick Club".to_string()]
+            } else {
+                Vec::new()
+            };
+        }
+        if sid == "pikachu" && (lightball_free || cur_item == "lightball") && !dmg_types.is_empty() {
+            return if include_current || cur_item != "lightball" {
+                vec!["Light Ball".to_string()]
+            } else {
+                Vec::new()
+            };
+        }
 
         let mut out = Vec::new();
         for item_name in &self.all_items {
@@ -1544,22 +1564,20 @@ impl TeamGen {
                     continue;
                 }
             }
-            // Dominated HP berries: Berry (10 HP) < Berry Juice (20 HP) < Gold Berry (30 HP)
-            if matches!(id.as_str(), "berry" | "berryjuice") && gold_free {
+            // Dominated HP berries: Berry (10 HP) is always dominated by non-exhaustible competitive items;
+            // Berry Juice (20 HP) is dominated when Gold Berry (30 HP) is free.
+            if id == "berry" || (id == "berryjuice" && gold_free) {
                 continue;
             }
-            if id == "berry" && juice_free {
-                continue;
-            }
-            // Dominated status berries
+            // Dominated status berries: single-condition cure berries are strictly dominated by
+            // non-exhaustible competitive items even when Miracle Berry is held by a teammate.
             if id == "mintberry" && !has_rest && miracle_free {
                 continue;
             }
             if matches!(
                 id.as_str(),
                 "przcureberry" | "psncureberry" | "burntberry" | "iceberry" | "bitterberry"
-            ) && miracle_free
-            {
+            ) {
                 continue;
             }
             out.push(item_name.clone());
