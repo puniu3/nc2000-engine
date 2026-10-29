@@ -833,6 +833,9 @@ struct Side1DOps {
     half_heal_bin: [u8; B16 + 1],
     /// `eot_bin[cured][b]` -> post-residual bin in `0..=16`
     eot_bin: [[u8; B16 + 1]; 2],
+    /// Minimum and maximum non-zero surviving HP bin across `b in 1..=16` for `kind in 0..3`
+    min_surv_bin: [u8; 3],
+    max_surv_bin: [u8; 3],
     /// `incoming[kind][b]` where `kind = 0` (no foe attack), `1` (foe awake attack), `2` (foe Sleep Talk)
     incoming: [[BinDist16; B16 + 1]; 3],
 }
@@ -945,8 +948,9 @@ impl Side1DOps {
             * (if foe_conf { 0.50f32 } else { 1.0f32 });
 
         let mut incoming = [[BinDist16::identity(0); B16 + 1]; 3];
+        let mut min_surv_bin = [1u8, B16 as u8 + 1, B16 as u8 + 1];
+        let mut max_surv_bin = [B16 as u8, 0u8, 0u8];
         for b in 1..=B16 {
-            incoming[0][b] = BinDist16::identity(b as u8);
             let hp = Self::b16_to_hp(b, maxhp);
 
             let mut d1 = BinDist16 {
@@ -986,7 +990,25 @@ impl Side1DOps {
                         d2.push(Self::to_b16(post_hp, maxhp), p_foe_act * prob);
                     }
                 }
+                for i in 0..d2.len {
+                    let mb = d2.bins[i].0;
+                    if mb < min_surv_bin[2] {
+                        min_surv_bin[2] = mb;
+                    }
+                    if mb > max_surv_bin[2] {
+                        max_surv_bin[2] = mb;
+                    }
+                }
                 incoming[2][b] = d2;
+            }
+            for i in 0..d1.len {
+                let mb = d1.bins[i].0;
+                if mb < min_surv_bin[1] {
+                    min_surv_bin[1] = mb;
+                }
+                if mb > max_surv_bin[1] {
+                    max_surv_bin[1] = mb;
+                }
             }
         }
 
@@ -998,6 +1020,8 @@ impl Side1DOps {
             has_berry,
             half_heal_bin,
             eot_bin,
+            min_surv_bin,
+            max_surv_bin,
             incoming,
         }
     }
@@ -1038,13 +1062,29 @@ impl Side1DOps {
         let (hh0, hr0, hst0) = scan_moves(s0, slot0);
         let (hh1, hr1, hst1) = scan_moves(s1, slot1);
 
-        let max_s0 = if hr0 || cb.mons[s0 * 3 + slot0].status_raw() == Status::Slp as u8 {
+        let idx0 = s0 * 3 + slot0;
+        let idx1 = s1 * 3 + slot1;
+        let m0 = &cb.mons[idx0];
+        let m1 = &cb.mons[idx1];
+        let sp0 = &table.mons[idx0];
+        let sp1 = &table.mons[idx1];
+        let berry0 = m0.item != 0 && (sp0.is_mintberry || sp0.is_miracleberry);
+        let berry1 = m1.item != 0 && (sp1.is_mintberry || sp1.is_miracleberry);
+        let perish0 = (m0.vol_flags & vol_bit::PERISH_SONG) != 0;
+        let perish1 = (m1.vol_flags & vol_bit::PERISH_SONG) != 0;
+        let frz0 = m0.status_raw() == Status::Frz as u8 && !(m0.item != 0 && sp0.is_miracleberry);
+        let frz1 = m1.status_raw() == Status::Frz as u8 && !(m1.item != 0 && sp1.is_miracleberry);
+        let max_s0 = if !perish0 && !frz0 && !hh0 && hr0 && !berry0 {
             2usize
+        } else if m0.status_raw() == Status::Slp as u8 && !berry0 && m0.status_counter() >= 3 {
+            1usize
         } else {
             0usize
         };
-        let max_s1 = if hr1 || cb.mons[s1 * 3 + slot1].status_raw() == Status::Slp as u8 {
+        let max_s1 = if !perish1 && !frz1 && !hh1 && hr1 && !berry1 {
             2usize
+        } else if m1.status_raw() == Status::Slp as u8 && !berry1 && m1.status_counter() >= 3 {
+            1usize
         } else {
             0usize
         };
@@ -1263,16 +1303,24 @@ fn eval_exact_root_table(
     }
 
     let k_att = [
-        DmgKernel1D::best_attack(cb, table, s0, slot0, s1, slot1),
-        DmgKernel1D::best_attack(cb, table, s1, slot1, s0, slot0),
+        if slp[0] == 0 && p_act[0] > 0.0 {
+            DmgKernel1D::best_attack(cb, table, s0, slot0, s1, slot1)
+        } else {
+            DmgKernel1D::zero()
+        },
+        if slp[1] == 0 && p_act[1] > 0.0 {
+            DmgKernel1D::best_attack(cb, table, s1, slot1, s0, slot0)
+        } else {
+            DmgKernel1D::zero()
+        },
     ];
     let k_st = [
-        if slp[0] > 0 && has_st[0] {
+        if slp[0] > 0 && has_st[0] && p_act[0] > 0.0 {
             DmgKernel1D::sleep_talk(cb, table, s0, slot0, s1, slot1)
         } else {
             DmgKernel1D::zero()
         },
-        if slp[1] > 0 && has_st[1] {
+        if slp[1] > 0 && has_st[1] && p_act[1] > 0.0 {
             DmgKernel1D::sleep_talk(cb, table, s1, slot1, s0, slot0)
         } else {
             DmgKernel1D::zero()
@@ -1680,8 +1728,8 @@ impl CachedBellman {
     }
 }
 
-const L1_SETS: usize = 2048;
-const L1_WAYS: usize = 2;
+const L1_SETS: usize = 4096;
+const L1_WAYS: usize = 4;
 const L2_SETS: usize = 512;
 const L2_WAYS: usize = 4;
 const MAX_CACHE_SLOTS: usize = L2_SETS * L2_WAYS;
@@ -1720,17 +1768,27 @@ impl BellmanCache {
     fn record_l1(&mut self, l1_key: Key128, slot: u16, gen: u32) {
         let l1_idx = (l1_key.0 as usize) & (L1_SETS - 1);
         let set = &mut self.l1[l1_idx];
-        if set[0].key == l1_key {
-            set[0].slot = slot;
-            set[0].gen = gen;
-        } else {
-            set[1] = set[0];
-            set[0] = L1Way {
-                key: l1_key,
-                gen,
-                slot,
-            };
+        for way in 0..L1_WAYS {
+            if set[way].key == l1_key {
+                for w in (1..=way).rev() {
+                    set[w] = set[w - 1];
+                }
+                set[0] = L1Way {
+                    key: l1_key,
+                    gen,
+                    slot,
+                };
+                return;
+            }
         }
+        for w in (1..L1_WAYS).rev() {
+            set[w] = set[w - 1];
+        }
+        set[0] = L1Way {
+            key: l1_key,
+            gen,
+            slot,
+        };
     }
 }
 
@@ -1758,102 +1816,110 @@ fn l1_state_key(
     h.write_u64(sp0.static_fp);
     h.write_u64(sp1.static_fp);
 
+    let avail_mask = |m: &nc2000_engine::compact::CompactMon, num_moves: u8| -> u8 {
+        let dis = (m.vol_flags & vol_bit::DISABLE) != 0;
+        let dis_slot = (m.slot_refs >> 4) & 0x03;
+        let mut mask = 0u8;
+        for m_i in 0..num_moves {
+            if m.pp[m_i as usize] > 0 && !(dis && m_i == dis_slot) {
+                mask |= 1u8 << m_i;
+            }
+        }
+        mask | (((m.item != 0) as u8) << 4)
+    };
+    let av0 = avail_mask(m0, sp0.num_moves);
+    let av1 = avail_mask(m1, sp1.num_moves);
+
+    let spd0 = cb.mon_action_speed(table, s0, slot0);
+    let spd1 = cb.mon_action_speed(table, s1, slot1);
+    let spd_ord = if spd0 < spd1 {
+        0u8
+    } else if spd0 == spd1 {
+        1u8
+    } else {
+        2u8
+    };
+
+    let item_flags = |m: &nc2000_engine::compact::CompactMon,
+                      sp: &nc2000_engine::compact::StaticMonSpec|
+     -> u8 {
+        if m.item != 0 {
+            (sp.is_leftovers as u8)
+                | ((sp.is_brightpowder as u8) << 1)
+                | ((sp.is_mintberry as u8) << 2)
+                | ((sp.is_miracleberry as u8) << 3)
+                | ((sp.is_scope_lens as u8) << 4)
+        } else {
+            0
+        }
+    };
+
     let w_b0 = u64::from_le_bytes([
         m0.boosts[0] as u8,
         m0.boosts[1] as u8,
         m0.boosts[2] as u8,
         m0.boosts[3] as u8,
-        m0.boosts[4] as u8,
         m0.boosts[5] as u8,
         m0.boosts[6] as u8,
-        m0.item,
+        av0,
+        spd_ord | (item_flags(m0, sp0) << 2),
     ]);
     let w_b1 = u64::from_le_bytes([
         m1.boosts[0] as u8,
         m1.boosts[1] as u8,
         m1.boosts[2] as u8,
         m1.boosts[3] as u8,
-        m1.boosts[4] as u8,
         m1.boosts[5] as u8,
         m1.boosts[6] as u8,
-        m1.item,
+        av1,
+        item_flags(m1, sp1),
     ]);
     h.write_u64(w_b0);
     h.write_u64(w_b1);
 
     const VOL_MASK: u16 = vol_bit::LEECH_SEED
         | vol_bit::CONFUSION
-        | vol_bit::DISABLE
         | vol_bit::FORESIGHT
         | vol_bit::PERISH_SONG
-        | vol_bit::PAR_SPEED_DROP
         | vol_bit::BRN_ATK_DROP;
     let vol0 = m0.vol_flags & VOL_MASK;
     let vol1 = m1.vol_flags & VOL_MASK;
 
-    let st0_packed = if m0.status_raw() == Status::Slp as u8 {
-        Status::Slp as u8
-    } else {
-        m0.status_packed
-    };
-    let st1_packed = if m1.status_raw() == Status::Slp as u8 {
-        Status::Slp as u8
-    } else {
-        m1.status_packed
-    };
-    let pp0 = ((m0.pp[0] > 0) as u8)
-        | (((m0.pp[1] > 0) as u8) << 1)
-        | (((m0.pp[2] > 0) as u8) << 2)
-        | (((m0.pp[3] > 0) as u8) << 3)
-        | if (vol0 & vol_bit::DISABLE) != 0 {
-            m0.slot_refs & 0x30
+    let canon_st = |m: &nc2000_engine::compact::CompactMon| -> u8 {
+        let raw = m.status_raw();
+        let cnt = m.status_counter();
+        if raw == Status::Tox as u8
+            || ((cnt & 0x10) != 0 && (raw == Status::Psn as u8 || raw == Status::Brn as u8))
+        {
+            raw | 0x80 | (((cnt & 0x0F).max(2)) << 3)
+        } else if raw == Status::Slp as u8 {
+            raw | (((cnt >= 3) as u8) << 3)
         } else {
-            0
-        };
-    let pp1 = ((m1.pp[0] > 0) as u8)
-        | (((m1.pp[1] > 0) as u8) << 1)
-        | (((m1.pp[2] > 0) as u8) << 2)
-        | (((m1.pp[3] > 0) as u8) << 3)
-        | if (vol1 & vol_bit::DISABLE) != 0 {
-            m1.slot_refs & 0x30
-        } else {
-            0
-        };
-    let w_dyn = (st0_packed as u64)
-        | ((st1_packed as u64) << 8)
-        | ((vol0 as u64) << 16)
-        | ((vol1 as u64) << 32)
-        | ((pp0 as u64) << 48)
-        | ((pp1 as u64) << 56);
-    h.write_u64(w_dyn);
+            raw
+        }
+    };
+    let st0_packed = canon_st(m0);
+    let st1_packed = canon_st(m1);
 
-    let item_flags = |sp: &nc2000_engine::compact::StaticMonSpec| -> u64 {
-        (sp.is_quick_claw as u64)
-            | ((sp.is_leftovers as u64) << 1)
-            | ((sp.is_brightpowder as u64) << 2)
-            | ((sp.is_mintberry as u64) << 3)
-            | ((sp.is_miracleberry as u64) << 4)
-            | ((sp.is_scope_lens as u64) << 5)
-    };
-    let qc0 = ((cb.quick_claw_roll != 0) & (m0.item != 0) & sp0.is_quick_claw) as u64;
-    let qc1 = ((cb.quick_claw_roll != 0) & (m1.item != 0) & sp1.is_quick_claw) as u64;
     let weather_active = if cb.weather_turns > 0 {
         (cb.weather_kind as u64) + 1
     } else {
         0
     };
-    let w_field = qc0
-        | (qc1 << 1)
-        | (((cb.sides[s0].alive_mask.count_ones() <= 1) as u64) << 2)
-        | (((cb.sides[s1].alive_mask.count_ones() <= 1) as u64) << 3)
-        | (((cb.sides[s0].reflect_turns > 0) as u64) << 4)
-        | (((cb.sides[s0].lightscreen_turns > 0) as u64) << 5)
-        | (((cb.sides[s1].reflect_turns > 0) as u64) << 6)
-        | (((cb.sides[s1].lightscreen_turns > 0) as u64) << 7)
-        | (weather_active << 8)
-        | (item_flags(sp0) << 16)
-        | (item_flags(sp1) << 24);
-    h.write_u64(w_field);
+    let w_field = ((cb.sides[s0].alive_mask.count_ones() <= 1) as u64)
+        | (((cb.sides[s1].alive_mask.count_ones() <= 1) as u64) << 1)
+        | (((cb.sides[s0].reflect_turns > 0) as u64) << 2)
+        | (((cb.sides[s0].lightscreen_turns > 0) as u64) << 3)
+        | (((cb.sides[s1].reflect_turns > 0) as u64) << 4)
+        | (((cb.sides[s1].lightscreen_turns > 0) as u64) << 5)
+        | (weather_active << 6);
+
+    let w_dyn = (st0_packed as u64)
+        | ((st1_packed as u64) << 8)
+        | ((vol0 as u64) << 16)
+        | ((vol1 as u64) << 32)
+        | (w_field << 48);
+    h.write_u64(w_dyn);
 
     h.finish()
 }
@@ -1988,6 +2054,9 @@ fn fill_ordered_q_plane(
             } else {
                 (0, false, 1usize, 0u8)
             };
+            if second_pass_avg && k_fir == 0 && k_sec == 0 {
+                continue;
+            }
             let b_sec_max = if a_sec == 1 { B16 - 1 } else { B16 };
             let eot_sec = &ops[second].eot_bin[cured_sec as usize];
             let (ns0, ns1) = if first == 0 {
@@ -1997,7 +2066,30 @@ fn fill_ordered_q_plane(
             };
             let v_plane = &v_table[ns0][ns1];
 
-            let mut prev_b_fir_mid = usize::MAX;
+            let mut end_of_m = [0u8; B16 + 1];
+            if sec_mode == 2 {
+                for m in 1..=B16 {
+                    end_of_m[m] = eot_sec[ops[second].half_heal_bin[m] as usize];
+                }
+            } else if sec_mode == 0 {
+                end_of_m = *eot_sec;
+            }
+            let (min_end, max_end) = if sec_mode == 1 {
+                let e = eot_sec[B16] as usize;
+                (e, e)
+            } else if k_fir == 0 {
+                (end_of_m[1] as usize, end_of_m[b_sec_max] as usize)
+            } else {
+                let min_m = ops[second].min_surv_bin[k_fir] as usize;
+                let max_m = ops[second].max_surv_bin[k_fir] as usize;
+                if min_m <= max_m {
+                    (end_of_m[min_m] as usize, end_of_m[max_m] as usize)
+                } else {
+                    (1usize, 0usize)
+                }
+            };
+
+            let mut prev_row_key = usize::MAX;
             let mut last_row = [0.0f32; B16 + 1];
 
             for b_fir in 1..=b_fir_max {
@@ -2010,49 +2102,81 @@ fn fill_ordered_q_plane(
                 } else {
                     b_fir
                 };
+                let row_key = if k_sec == 0 {
+                    eot_fir[b_fir_mid] as usize
+                } else if ops[first].incoming[k_sec][b_fir_mid].len == 0 {
+                    0usize
+                } else {
+                    b_fir_mid
+                };
 
-                if b_fir_mid != prev_b_fir_mid {
-                    prev_b_fir_mid = b_fir_mid;
-                    let dist_fir = &ops[first].incoming[k_sec][b_fir_mid];
-
-                    let eval_bv_at_end = |b_sec_end: usize| -> f32 {
-                        let mut branch_val = dist_fir.ko_prob * win_second;
-                        if b_sec_end == 0 {
-                            for i_fir in 0..dist_fir.len {
-                                let (b_fir_post_u8, p_fir) = dist_fir.bins[i_fir];
-                                let b_fir_end = eot_fir[b_fir_post_u8 as usize] as usize;
-                                let cont = if b_fir_end == 0 { 0.5f32 } else { win_first };
-                                branch_val += p_fir * cont;
+                if row_key != prev_row_key {
+                    prev_row_key = row_key;
+                    let mut bv_end = [0.0f32; B16 + 1];
+                    if min_end <= max_end {
+                        if k_sec == 0 {
+                            let b_fir_end = row_key;
+                            if min_end == 0 {
+                                bv_end[0] = if b_fir_end == 0 { 0.5f32 } else { win_first };
                             }
-                        } else if first == 0 {
-                            for i_fir in 0..dist_fir.len {
-                                let (b_fir_post_u8, p_fir) = dist_fir.bins[i_fir];
-                                let b_fir_end = eot_fir[b_fir_post_u8 as usize] as usize;
-                                let cont = if b_fir_end == 0 {
-                                    win_second
+                            let e_lo = min_end.max(1);
+                            if e_lo <= max_end {
+                                if b_fir_end == 0 {
+                                    for cell in &mut bv_end[e_lo..=max_end] {
+                                        *cell = win_second;
+                                    }
+                                } else if first == 0 {
+                                    let v_row = &v_plane[b_fir_end];
+                                    for end in e_lo..=max_end {
+                                        bv_end[end] = GAMMA * v_row[end] + (1.0 - GAMMA) * 0.5;
+                                    }
                                 } else {
-                                    GAMMA * v_plane[b_fir_end][b_sec_end] + (1.0 - GAMMA) * 0.5
-                                };
-                                branch_val += p_fir * cont;
+                                    for end in e_lo..=max_end {
+                                        bv_end[end] =
+                                            GAMMA * v_plane[end][b_fir_end] + (1.0 - GAMMA) * 0.5;
+                                    }
+                                }
                             }
                         } else {
-                            let v_col = &v_plane[b_sec_end];
+                            let dist_fir = &ops[first].incoming[k_sec][b_fir_mid];
+                            let base_ko = dist_fir.ko_prob * win_second;
+                            for cell in &mut bv_end[min_end..=max_end] {
+                                *cell = base_ko;
+                            }
+                            let e_lo = min_end.max(1);
                             for i_fir in 0..dist_fir.len {
                                 let (b_fir_post_u8, p_fir) = dist_fir.bins[i_fir];
                                 let b_fir_end = eot_fir[b_fir_post_u8 as usize] as usize;
-                                let cont = if b_fir_end == 0 {
-                                    win_second
-                                } else {
-                                    GAMMA * v_col[b_fir_end] + (1.0 - GAMMA) * 0.5
-                                };
-                                branch_val += p_fir * cont;
+                                if min_end == 0 {
+                                    let cont0 = if b_fir_end == 0 { 0.5f32 } else { win_first };
+                                    bv_end[0] += p_fir * cont0;
+                                }
+                                if e_lo <= max_end {
+                                    if b_fir_end == 0 {
+                                        let add = p_fir * win_second;
+                                        for cell in &mut bv_end[e_lo..=max_end] {
+                                            *cell += add;
+                                        }
+                                    } else if first == 0 {
+                                        let v_row = &v_plane[b_fir_end];
+                                        for end in e_lo..=max_end {
+                                            let cont = GAMMA * v_row[end] + (1.0 - GAMMA) * 0.5;
+                                            bv_end[end] += p_fir * cont;
+                                        }
+                                    } else {
+                                        for end in e_lo..=max_end {
+                                            let cont = GAMMA * v_plane[end][b_fir_end]
+                                                + (1.0 - GAMMA) * 0.5;
+                                            bv_end[end] += p_fir * cont;
+                                        }
+                                    }
+                                }
                             }
                         }
-                        branch_val
-                    };
+                    }
 
                     if sec_mode == 1 {
-                        let bv = eval_bv_at_end(eot_sec[B16] as usize);
+                        let bv = bv_end[min_end];
                         if k_fir == 0 {
                             let clamped = bv.clamp(0.0, 1.0);
                             for cell in &mut last_row[1..=b_sec_max] {
@@ -2068,37 +2192,28 @@ fn fill_ordered_q_plane(
                                 last_row[b_sec] = total_val.clamp(0.0, 1.0);
                             }
                         }
-                    } else {
-                        let mut bv_mid = [0.0f32; B16 + 1];
-                        let mut prev_sec_end = usize::MAX;
-                        let mut prev_bv = 0.0f32;
-                        for m in 1..=B16 {
-                            let post = if sec_mode == 2 {
-                                ops[second].half_heal_bin[m] as usize
-                            } else {
-                                m
-                            };
-                            let end = eot_sec[post] as usize;
-                            if end != prev_sec_end {
-                                prev_sec_end = end;
-                                prev_bv = eval_bv_at_end(end);
-                            }
-                            bv_mid[m] = prev_bv;
+                    } else if k_fir == 0 {
+                        for b_sec in 1..=b_sec_max {
+                            let end = end_of_m[b_sec] as usize;
+                            last_row[b_sec] = bv_end[end].clamp(0.0, 1.0);
                         }
-                        if k_fir == 0 {
-                            for b_sec in 1..=b_sec_max {
-                                last_row[b_sec] = bv_mid[b_sec].clamp(0.0, 1.0);
+                    } else {
+                        let min_m = ops[second].min_surv_bin[k_fir] as usize;
+                        let max_m = ops[second].max_surv_bin[k_fir] as usize;
+                        let mut bv_m = [0.0f32; B16 + 1];
+                        if min_m <= max_m {
+                            for m in min_m..=max_m {
+                                bv_m[m] = bv_end[end_of_m[m] as usize];
                             }
-                        } else {
-                            for b_sec in 1..=b_sec_max {
-                                let dist_sec = &ops[second].incoming[k_fir][b_sec];
-                                let mut total_val = dist_sec.ko_prob * win_first;
-                                for i_sec in 0..dist_sec.len {
-                                    let (m, p_sec) = dist_sec.bins[i_sec];
-                                    total_val += p_sec * bv_mid[m as usize];
-                                }
-                                last_row[b_sec] = total_val.clamp(0.0, 1.0);
+                        }
+                        for b_sec in 1..=b_sec_max {
+                            let dist_sec = &ops[second].incoming[k_fir][b_sec];
+                            let mut total_val = dist_sec.ko_prob * win_first;
+                            for i_sec in 0..dist_sec.len {
+                                let (m_u8, p_sec) = dist_sec.bins[i_sec];
+                                total_val += p_sec * bv_m[m_u8 as usize];
                             }
+                            last_row[b_sec] = total_val.clamp(0.0, 1.0);
                         }
                     }
                 }
@@ -2138,13 +2253,12 @@ fn solve_bellman_into(
 ) {
     let max_s_sum = max_s0 + max_s1;
     out.v_table = [[[[0.5f32; B16 + 1]; B16 + 1]; 3]; 3];
-    for slp0 in 0..3 {
-        for slp1 in 0..3 {
+    for slp0 in 0..=max_s0 {
+        for slp1 in 0..=max_s1 {
             for b in 1..=B16 {
                 out.v_table[slp0][slp1][0][b] = 0.0;
                 out.v_table[slp0][slp1][b][0] = 1.0;
             }
-            out.v_table[slp0][slp1][0][0] = 0.5;
         }
     }
 
@@ -2153,7 +2267,11 @@ fn solve_bellman_into(
                         slp1: usize,
                         vt: &[[[[f32; B16 + 1]; B16 + 1]; 3]; 3],
                         qp: &mut [[[[f32; 2]; 2]; B16 + 1]; B16 + 1]| {
-        if spd_ord == 2 {
+        if slp1 > 0 && !ops[1].has_st {
+            fill_ordered_q_plane(0, slp0, slp1, ops, vt, false, qp);
+        } else if slp0 > 0 && !ops[0].has_st {
+            fill_ordered_q_plane(1, slp0, slp1, ops, vt, false, qp);
+        } else if spd_ord == 2 {
             fill_ordered_q_plane(0, slp0, slp1, ops, vt, false, qp);
         } else if spd_ord == 0 {
             fill_ordered_q_plane(1, slp0, slp1, ops, vt, false, qp);
@@ -2168,29 +2286,54 @@ fn solve_bellman_into(
 
     for _iter in 0..18 {
         // 1. Bottom-up Schur-complement elimination over the sleeping DAG `s_sum = 1..=max_s_sum`.
-        // No plane at `slp0 + slp1 == s_sum` ever transitions into another state with `ns0 + ns1 == s_sum`,
-        // so updating `out.v_table[slp0][slp1]` in place is bit-exact without copying the 10.4KB table.
         for s_sum in 1..=max_s_sum {
             for slp0 in 0..=max_s0 {
                 for slp1 in 0..=max_s1 {
                     if slp0 + slp1 != s_sum {
                         continue;
                     }
-                    eval_plane_q(slp0, slp1, &out.v_table, &mut q_plane);
-                    for b0 in 1..=B16 {
-                        let n0 = if slp0 == 0 && ops[0].has_heal && b0 < B16 {
-                            2
-                        } else {
-                            1
-                        };
-                        for b1 in 1..=B16 {
-                            let n1 = if slp1 == 0 && ops[1].has_heal && b1 < B16 {
-                                2
+                    if slp0 > 0 && slp1 > 0 && !ops[0].has_st && !ops[1].has_st {
+                        let eot0 = &ops[0].eot_bin[ops[0].has_rest as usize];
+                        let eot1 = &ops[1].eot_bin[ops[1].has_rest as usize];
+                        let prev = out.v_table[slp0 - 1][slp1 - 1];
+                        let dst = &mut out.v_table[slp0][slp1];
+                        for b0 in 1..=B16 {
+                            let e0 = eot0[b0] as usize;
+                            if e0 == 0 {
+                                for b1 in 1..=B16 {
+                                    let e1 = eot1[b1] as usize;
+                                    dst[b0][b1] = if e1 == 0 { 0.5 } else { 0.0 };
+                                }
                             } else {
-                                1
-                            };
-                            let (val, _, _) = solve_stage_game_2x2(&q_plane[b0][b1], n0, n1);
-                            out.v_table[slp0][slp1][b0][b1] = val;
+                                for b1 in 1..=B16 {
+                                    let e1 = eot1[b1] as usize;
+                                    dst[b0][b1] = if e1 == 0 {
+                                        1.0
+                                    } else {
+                                        (GAMMA * prev[e0][e1] + (1.0 - GAMMA) * 0.5).clamp(0.0, 1.0)
+                                    };
+                                }
+                            }
+                        }
+                        continue;
+                    }
+                    eval_plane_q(slp0, slp1, &out.v_table, &mut q_plane);
+                    let c0 = slp0 == 0 && ops[0].has_heal;
+                    let c1 = slp1 == 0 && ops[1].has_heal;
+                    if !c0 && !c1 {
+                        for b0 in 1..=B16 {
+                            for b1 in 1..=B16 {
+                                out.v_table[slp0][slp1][b0][b1] = q_plane[b0][b1][0][0];
+                            }
+                        }
+                    } else {
+                        for b0 in 1..=B16 {
+                            let n0 = if c0 && b0 < B16 { 2 } else { 1 };
+                            for b1 in 1..=B16 {
+                                let n1 = if c1 && b1 < B16 { 2 } else { 1 };
+                                let (val, _, _) = solve_stage_game_2x2(&q_plane[b0][b1], n0, n1);
+                                out.v_table[slp0][slp1][b0][b1] = val;
+                            }
                         }
                     }
                 }
@@ -2396,20 +2539,20 @@ fn with_solved_bellman<R>(
 
     if let Some(res) = BELLMAN_CACHE.with(|c| {
         let mut cache = c.borrow_mut();
-        let w0 = cache.l1[l1_idx][0];
-        if w0.key == l1_key {
-            let slot = w0.slot as usize;
-            if slot < cache.pool.len() && cache.slot_gen[slot] == w0.gen {
-                return Some((f_opt.take().unwrap())(&cache.pool[slot]));
-            }
-        }
-        let w1 = cache.l1[l1_idx][1];
-        if w1.key == l1_key {
-            let slot = w1.slot as usize;
-            if slot < cache.pool.len() && cache.slot_gen[slot] == w1.gen {
-                cache.l1[l1_idx][1] = w0;
-                cache.l1[l1_idx][0] = w1;
-                return Some((f_opt.take().unwrap())(&cache.pool[slot]));
+        let set = cache.l1[l1_idx];
+        for way in 0..L1_WAYS {
+            let w_entry = set[way];
+            if w_entry.key == l1_key {
+                let slot = w_entry.slot as usize;
+                if slot < cache.pool.len() && cache.slot_gen[slot] == w_entry.gen {
+                    if way > 0 {
+                        for w in (1..=way).rev() {
+                            cache.l1[l1_idx][w] = set[w - 1];
+                        }
+                        cache.l1[l1_idx][0] = w_entry;
+                    }
+                    return Some((f_opt.take().unwrap())(&cache.pool[slot]));
+                }
             }
         }
         None
