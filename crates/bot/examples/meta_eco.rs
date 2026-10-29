@@ -2645,6 +2645,11 @@ fn cmd_kodoku(args: &[String]) {
             .into_owned()
     });
     let (bench_teams, bench_weights) = load_gauntlet_file(&dex, &gen, &gfile);
+    let catalog_path = root
+        .join("data/team-pool-v2/team-pool.json")
+        .to_string_lossy()
+        .into_owned();
+    let (catalog_teams, _) = load_gauntlet_file(&dex, &gen, &catalog_path);
 
     let t_run_start = std::time::Instant::now();
     let mut ledger: IslandLedger = if ledger_path.exists() {
@@ -2774,7 +2779,7 @@ fn cmd_kodoku(args: &[String]) {
             );
         }
 
-        // Top 4 Kodoku leaders form the co-evolutionary apex predator panel
+        // Co-evolutionary apex predator panel (top 2 active leaders) + Rotating Full-Catalog Reservoir (2 teams from `team-pool-v2`)
         let mut vet_indices: Vec<usize> = (0..ledger.active_strains.len())
             .filter(|&i| ledger.active_strains[i].cum_games > 0.0)
             .collect();
@@ -2789,9 +2794,17 @@ fn cmd_kodoku(args: &[String]) {
         });
         let mut eco_opps: Vec<Vec<PokemonSet>> = Vec::new();
         let mut eco_weights: Vec<f64> = Vec::new();
-        for &vi in vet_indices.iter().take(4) {
+        for &vi in vet_indices.iter().take(2) {
             if let Ok(sets) = to_sets(&ledger.active_strains[vi].team) {
                 eco_opps.push(sets);
+                eco_weights.push(1.0);
+            }
+        }
+        if !catalog_teams.is_empty() {
+            let cat_start = ((w as usize).saturating_sub(1) * 2) % catalog_teams.len();
+            for k in 0..2.min(catalog_teams.len()) {
+                let c_idx = (cat_start + k) % catalog_teams.len();
+                eco_opps.push(catalog_teams[c_idx].clone());
                 eco_weights.push(1.0);
             }
         }
@@ -2802,7 +2815,7 @@ fn cmd_kodoku(args: &[String]) {
             }
         }
 
-        // Rotate a 12-team slice of the 24-team benchmark each wave so every 2 waves covers all 24
+        // Rotate a 12-team slice of the benchmark each wave
         let slice_len = bench_teams.len().min(12);
         let start_idx = ((w as usize).saturating_sub(1) * slice_len) % bench_teams.len().max(1);
         let mut wave_bench_teams = Vec::with_capacity(slice_len);
@@ -2842,13 +2855,57 @@ fn cmd_kodoku(args: &[String]) {
         let wb_weights_ref = &wave_bench_weights;
         let eco_opps_ref = &eco_opps;
         let eco_weights_ref = &eco_weights;
+
+        // Partition active strains into Pass-1 (founders/parents) and Pass-2 (single-slot children
+        // whose parent is evaluated in Pass 1) so Pass-2 children inherit `R_{-ms}(P)` verbatim.
+        let active_id_set: BTreeSet<String> = ledger
+            .active_strains
+            .iter()
+            .map(|s| s.id.clone())
+            .collect();
+        let single_slot_mut = |s: &Strain| -> Option<usize> {
+            if !use_core_nash || s.born_wave == 0 || s.last_op.starts_with("level-tweak") {
+                return None;
+            }
+            let (_op, slot_str) = s.last_op.split_once('@')?;
+            let ms = slot_str.parse::<usize>().ok()?;
+            if ms < 6 { Some(ms) } else { None }
+        };
+        let pass1_id_set: BTreeSet<String> = ledger
+            .active_strains
+            .iter()
+            .filter(|s| single_slot_mut(s).is_none() || !active_id_set.contains(&s.parent_id))
+            .map(|s| s.id.clone())
+            .collect();
+
+        let mut parent_subgames: BTreeMap<String, (Vec<OpponentStage2Subgame>, Vec<OpponentStage2Subgame>, f64)> =
+            BTreeMap::new();
+        let mut eval_outputs: BTreeMap<
+            String,
+            (
+                nc2000_bot::teamgen::EvalResult,
+                [f64; 6],
+                [[f64; 4]; 6],
+                nc2000_bot::teamgen::EvalResult,
+                [f64; 6],
+                [[f64; 4]; 6],
+            ),
+        > = BTreeMap::new();
+
+        // Pass 1: Evaluate all parents / veterans / multi-slot strains
         std::thread::scope(|scope| {
             let mut handles = Vec::new();
-            for s in &mut ledger.active_strains {
+            for s in ledger
+                .active_strains
+                .iter()
+                .filter(|s| pass1_id_set.contains(&s.id))
+            {
+                let sid = s.id.clone();
+                let team_c = s.team.clone();
                 let bp = blind_pool.clone();
                 handles.push(scope.spawn(move || {
-                    let cand = to_sets(&s.team).expect("valid strain team");
-                    let (bench_res, bench_marg, bench_mdq) = if use_core_nash {
+                    let cand = to_sets(&team_c).expect("valid strain team");
+                    let (bench_res, bench_marg, bench_mdq, bench_sub) = if use_core_nash {
                         let r = core_nash_eval_weighted(
                             dex_ref,
                             &cand,
@@ -2864,9 +2921,10 @@ fn cmd_kodoku(args: &[String]) {
                                 max_turns,
                                 seed: wave_seed ^ 0xA5A5_5A5A_u64,
                                 threads: inner_threads,
+                                inherited: None,
                             },
                         );
-                        (r.eval, r.slot_marginals, r.move_dqs)
+                        (r.eval, r.slot_marginals, r.move_dqs, r.subgames)
                     } else {
                         let r = gauntlet_eval_weighted(
                             dex_ref,
@@ -2884,9 +2942,9 @@ fn cmd_kodoku(args: &[String]) {
                                 open_sheet,
                             },
                         );
-                        (r, [0.0; 6], [[0.0; 4]; 6])
+                        (r, [0.0; 6], [[0.0; 4]; 6], Vec::new())
                     };
-                    let (eco_res, eco_marg, eco_mdq) = if eco_opps_ref.is_empty() {
+                    let (eco_res, eco_marg, eco_mdq, eco_sub) = if eco_opps_ref.is_empty() {
                         (
                             nc2000_bot::teamgen::EvalResult {
                                 score: bench_res.score,
@@ -2898,6 +2956,7 @@ fn cmd_kodoku(args: &[String]) {
                             },
                             [0.0; 6],
                             [[0.0; 4]; 6],
+                            Vec::new(),
                         )
                     } else if use_core_nash {
                         let r = core_nash_eval_weighted(
@@ -2915,9 +2974,10 @@ fn cmd_kodoku(args: &[String]) {
                                 max_turns,
                                 seed: wave_seed ^ 0x5A5A_A5A5_u64,
                                 threads: inner_threads,
+                                inherited: None,
                             },
                         );
-                        (r.eval, r.slot_marginals, r.move_dqs)
+                        (r.eval, r.slot_marginals, r.move_dqs, r.subgames)
                     } else {
                         let r = gauntlet_eval_weighted(
                             dex_ref,
@@ -2935,14 +2995,146 @@ fn cmd_kodoku(args: &[String]) {
                                 open_sheet,
                             },
                         );
-                        (r, [0.0; 6], [[0.0; 4]; 6])
+                        (r, [0.0; 6], [[0.0; 4]; 6], Vec::new())
                     };
-                    (s, bench_res, bench_marg, bench_mdq, eco_res, eco_marg, eco_mdq)
+                    (
+                        sid,
+                        bench_res,
+                        bench_marg,
+                        bench_mdq,
+                        bench_sub,
+                        eco_res,
+                        eco_marg,
+                        eco_mdq,
+                        eco_sub,
+                    )
                 }));
             }
             for h in handles {
-                let (s, bench_res, bench_marg, bench_mdq, eco_res, eco_marg, eco_mdq) =
-                    h.join().expect("kodoku eval thread panicked");
+                let (
+                    sid,
+                    bench_res,
+                    bench_marg,
+                    bench_mdq,
+                    bench_sub,
+                    eco_res,
+                    eco_marg,
+                    eco_mdq,
+                    eco_sub,
+                ) = h.join().expect("kodoku pass1 eval thread panicked");
+                let w_sc = 0.70 * bench_res.score + 0.30 * eco_res.score;
+                parent_subgames.insert(sid.clone(), (bench_sub, eco_sub, w_sc));
+                eval_outputs.insert(
+                    sid,
+                    (bench_res, bench_marg, bench_mdq, eco_res, eco_marg, eco_mdq),
+                );
+            }
+        });
+
+        // Pass 2: Evaluate single-slot mutated children with Monotonic Subgame Inheritance `R_{-ms}(P)`
+        let p_sub_ref = &parent_subgames;
+        std::thread::scope(|scope| {
+            let mut handles = Vec::new();
+            for s in ledger
+                .active_strains
+                .iter()
+                .filter(|s| !pass1_id_set.contains(&s.id))
+            {
+                let sid = s.id.clone();
+                let pid = s.parent_id.clone();
+                let ms_opt = single_slot_mut(s);
+                let team_c = s.team.clone();
+                handles.push(scope.spawn(move || {
+                    let cand = to_sets(&team_c).expect("valid strain team");
+                    let p_entry = p_sub_ref.get(&pid);
+                    let inh_bench = ms_opt.zip(p_entry.map(|(bs, _, _)| bs.as_slice()));
+                    let inh_eco = ms_opt.zip(p_entry.map(|(_, es, _)| es.as_slice()));
+                    let r_bench = core_nash_eval_weighted(
+                        dex_ref,
+                        &cand,
+                        wb_teams_ref,
+                        wb_weights_ref,
+                        &CoreNashGauntletCfg {
+                            screen_games,
+                            refine_games,
+                            support_k,
+                            agent_iters,
+                            c: agent_c,
+                            smoothing: 0.15,
+                            max_turns,
+                            seed: wave_seed ^ 0xA5A5_5A5A_u64,
+                            threads: inner_threads,
+                            inherited: inh_bench,
+                        },
+                    );
+                    let (eco_res, eco_marg, eco_mdq) = if eco_opps_ref.is_empty() {
+                        (
+                            nc2000_bot::teamgen::EvalResult {
+                                score: r_bench.eval.score,
+                                per_opponent: Vec::new(),
+                                games: 0,
+                                slot_picks: [0.0; 6],
+                                slot_wins: [0.0; 6],
+                                core_stats: BTreeMap::new(),
+                            },
+                            [0.0; 6],
+                            [[0.0; 4]; 6],
+                        )
+                    } else {
+                        let r_eco = core_nash_eval_weighted(
+                            dex_ref,
+                            &cand,
+                            eco_opps_ref,
+                            eco_weights_ref,
+                            &CoreNashGauntletCfg {
+                                screen_games,
+                                refine_games,
+                                support_k,
+                                agent_iters,
+                                c: agent_c,
+                                smoothing: 0.15,
+                                max_turns,
+                                seed: wave_seed ^ 0x5A5A_A5A5_u64,
+                                threads: inner_threads,
+                                inherited: inh_eco,
+                            },
+                        );
+                        (r_eco.eval, r_eco.slot_marginals, r_eco.move_dqs)
+                    };
+                    (
+                        sid,
+                        r_bench.eval,
+                        r_bench.slot_marginals,
+                        r_bench.move_dqs,
+                        eco_res,
+                        eco_marg,
+                        eco_mdq,
+                    )
+                }));
+            }
+            for h in handles {
+                let (sid, bench_res, bench_marg, bench_mdq, eco_res, eco_marg, eco_mdq) =
+                    h.join().expect("kodoku pass2 eval thread panicked");
+                eval_outputs.insert(
+                    sid,
+                    (bench_res, bench_marg, bench_mdq, eco_res, eco_marg, eco_mdq),
+                );
+            }
+        });
+
+        // Update Pass-1 parents first so their updated `bayes_fit` is available to anchor Pass-2 children
+        let mut parent_bayes_by_id: BTreeMap<String, f64> = BTreeMap::new();
+        for pass in 0..2 {
+            for s in &mut ledger.active_strains {
+                let is_p1 = pass1_id_set.contains(&s.id);
+                if (pass == 0) != is_p1 {
+                    continue;
+                }
+                let Some((bench_res, bench_marg, bench_mdq, eco_res, eco_marg, eco_mdq)) =
+                    eval_outputs.remove(&s.id)
+                else {
+                    continue;
+                };
                 let mut bench_score = bench_res.score;
                 let mut eco_score = eco_res.score;
                 let mut wave_score = 0.70 * bench_score + 0.30 * eco_score;
@@ -2966,24 +3158,20 @@ fn cmd_kodoku(args: &[String]) {
                             (s.move_dqs[slot][mk] * prev_g + w_mdq * total_w_games) / new_g.max(1.0);
                     }
                 }
-                // Active-Pick Deconfounding & Addition-by-Subtraction Guard:
-                // A single-slot mutation whose mutated slot is picked < 10% of games (dead/crippled slot)
-                // cannot claim a positive fitness delta over its parent's prior (`s.parent_prior`).
-                if s.born_wave > 0 && !s.last_op.starts_with("level-tweak") {
-                    if let Some((_op, slot_str)) = s.last_op.split_once('@') {
-                        if let Ok(mut_slot) = slot_str.parse::<usize>() {
-                            if mut_slot < 6 && s.last_wave_slot_picks[mut_slot] < 0.10 {
-                                if wave_score > s.parent_prior {
-                                    wave_score = s.parent_prior;
-                                }
-                                if bench_score > s.parent_prior {
-                                    bench_score = s.parent_prior;
-                                }
-                                if eco_score > s.parent_prior {
-                                    eco_score = s.parent_prior;
-                                }
-                            }
-                        }
+                // Paired Subgame Delta Anchoring for Pass-2 children:
+                // Because Child `C` and Parent `P` share the exact same Stage-2 submatrix `R_{-ms}(P)`
+                // on this wave, `wave_score - p_wave_score` is the exact counterfactual marginal delta
+                // `\Delta V_{-ms}(C) - \Delta V_{-ms}(P)` (<= 0 whenever `p_{ms}^*(C) == 0`).
+                if !is_p1 {
+                    if let (Some(&p_bayes), Some(&(_, _, p_wave))) = (
+                        parent_bayes_by_id.get(&s.parent_id),
+                        parent_subgames.get(&s.parent_id),
+                    ) {
+                        let paired_dv = wave_score - p_wave;
+                        s.parent_prior = p_bayes;
+                        wave_score = (p_bayes + paired_dv).clamp(0.0, 1.0);
+                        bench_score = (p_bayes + paired_dv).clamp(0.0, 1.0);
+                        eco_score = (p_bayes + paired_dv).clamp(0.0, 1.0);
                     }
                 }
                 s.bench_games += bench_n_games;
@@ -2993,13 +3181,13 @@ fn cmd_kodoku(args: &[String]) {
                 s.effective_cores = 0.70 * bench_res.effective_cores()
                     + 0.30 * eco_res.effective_cores();
                 s.last_wave_fit = wave_score;
+                s.cum_games += total_w_games;
+                s.cum_wins += wave_score * total_w_games;
+                s.recompute_stats(prior_games);
+                if is_p1 {
+                    parent_bayes_by_id.insert(s.id.clone(), s.bayes_fit);
+                }
             }
-        });
-
-        for s in &mut ledger.active_strains {
-            s.cum_games += total_w_games;
-            s.cum_wins += s.last_wave_fit * total_w_games;
-            s.recompute_stats(prior_games);
         }
 
         let (mu_50, mu_55, beta_l) = recompute_population_wars(&mut ledger.active_strains);
@@ -3071,6 +3259,10 @@ fn cmd_kodoku(args: &[String]) {
     }
 
     // Export top Kodoku elites with full per-slot vitality + marginal value telemetry
+    // Require evolved strains (`born_wave > 0`) to have survived at least 2 waves (`cum_games >= 400.0`
+    // when multi-wave) and sort conservatively by `0.5 * bayes_fit + 0.5 * lcb95` to eliminate 1-wave
+    // Winner's Curse spikes.
+    let min_evolved_games = if waves >= 2 { 400.0 } else { 24.0 };
     let mut all_measured: Vec<Strain> = ledger
         .active_strains
         .iter()
@@ -3079,12 +3271,17 @@ fn cmd_kodoku(args: &[String]) {
             if s.cum_games < 24.0 {
                 return false;
             }
-            if s.born_wave > 0 && !s.last_op.starts_with("level-tweak") {
-                if let Some((_op, slot_str)) = s.last_op.split_once('@') {
-                    if let Ok(mut_slot) = slot_str.parse::<usize>() {
-                        let g = s.cum_games.max(1.0);
-                        if mut_slot < 6 && s.slot_picks[mut_slot] / g < 0.10 {
-                            return false;
+            if s.born_wave > 0 {
+                if s.cum_games < min_evolved_games {
+                    return false;
+                }
+                if !s.last_op.starts_with("level-tweak") {
+                    if let Some((_op, slot_str)) = s.last_op.split_once('@') {
+                        if let Ok(mut_slot) = slot_str.parse::<usize>() {
+                            let g = s.cum_games.max(1.0);
+                            if mut_slot < 6 && s.slot_picks[mut_slot] / g < 0.10 {
+                                return false;
+                            }
                         }
                     }
                 }
@@ -3093,7 +3290,11 @@ fn cmd_kodoku(args: &[String]) {
         })
         .cloned()
         .collect();
-    all_measured.sort_by(|a, b| b.bayes_fit.partial_cmp(&a.bayes_fit).unwrap());
+    all_measured.sort_by(|a, b| {
+        let qa = 0.5 * a.bayes_fit + 0.5 * a.lcb95;
+        let qb = 0.5 * b.bayes_fit + 0.5 * b.lcb95;
+        qb.partial_cmp(&qa).unwrap()
+    });
 
     let mut elite_json = Vec::new();
     let mut seen_k = BTreeSet::new();
@@ -3282,7 +3483,16 @@ fn subset_3_sets(sets: &[PokemonSet], triple: [u8; 3]) -> Vec<PokemonSet> {
     ]
 }
 
-struct CoreNashGauntletCfg {
+#[derive(Clone, Debug)]
+struct OpponentStage2Subgame {
+    sup_a: Vec<usize>,
+    sup_b: Vec<usize>,
+    p_a_s1: Vec<f64>,
+    p_b_s1: Vec<f64>,
+    mat_v: Vec<f64>,
+}
+
+struct CoreNashGauntletCfg<'a> {
     screen_games: u32,
     refine_games: u32,
     support_k: usize,
@@ -3292,13 +3502,16 @@ struct CoreNashGauntletCfg {
     max_turns: u16,
     seed: u64,
     threads: usize,
+    inherited: Option<(usize, &'a [OpponentStage2Subgame])>,
 }
 
+#[derive(Clone, Debug)]
 struct CoreNashEvalResult {
     eval: nc2000_bot::teamgen::EvalResult,
     slot_marginals: [f64; 6],
     move_dqs: [[f64; 4]; 6],
     opp_move_dqs: Vec<[[f64; 4]; 6]>,
+    subgames: Vec<OpponentStage2Subgame>,
 }
 
 struct TelemetryOpenAgent {
@@ -3335,18 +3548,78 @@ impl Drop for TelemetryOpenAgent {
     }
 }
 
+fn select_top_k_orthogonal(
+    actions: &[[u8; 3]],
+    legal: &[usize],
+    eq: &[f64],
+    br: &[f64],
+    k: usize,
+) -> Vec<usize> {
+    let core_mask = |t: [u8; 3]| -> u8 {
+        (1u8 << (t[0] - 1)) | (1u8 << (t[1] - 1)) | (1u8 << (t[2] - 1))
+    };
+    let mut order: Vec<usize> = (0..legal.len()).collect();
+    order.sort_by(|&i, &j| {
+        let si = (eq[i] >= 0.01, eq[i] + 0.05 * br[i]);
+        let sj = (eq[j] >= 0.01, eq[j] + 0.05 * br[j]);
+        sj.0.cmp(&si.0).then_with(|| sj.1.partial_cmp(&si.1).unwrap())
+    });
+
+    // Pass 1: select up to `k` distinct 3-mon cores so lead permutations of a single core
+    // cannot crowd out alternative 3-mon combinations.
+    let target = k.min(legal.len());
+    let mut sup: Vec<usize> = Vec::with_capacity(target + 2);
+    let mut seen_masks: BTreeSet<u8> = BTreeSet::new();
+    for &idx in &order {
+        if sup.len() >= target {
+            break;
+        }
+        let a = legal[idx];
+        let m = core_mask(actions[a]);
+        if seen_masks.insert(m) {
+            sup.push(a);
+        }
+    }
+    for &idx in &order {
+        if sup.len() >= target {
+            break;
+        }
+        let a = legal[idx];
+        if !sup.contains(&a) {
+            sup.push(a);
+        }
+    }
+
+    // Pass 2 (Leave-One-Out Anti-Monopoly Guarantee): if any slot `s` appears in 100% of `sup`,
+    // append the highest-ranked legal action excluding `s` so `rem_rows` is never empty.
+    if !sup.is_empty() {
+        for s1 in 1u8..=6u8 {
+            if sup.iter().all(|&a| actions[a].contains(&s1)) {
+                if let Some(&idx) = order.iter().find(|&&i| !actions[legal[i]].contains(&s1)) {
+                    let a_alt = legal[idx];
+                    if !sup.contains(&a_alt) {
+                        sup.push(a_alt);
+                    }
+                }
+            }
+        }
+    }
+    sup
+}
+
 /// Evaluate a candidate 6-mon party against a weighted opponent gauntlet via Two-Stage
 /// Forced-Preview 6v6 Core-Nash (`RolloutAgent` screen -> top-k + leave-one-out coverage
 /// support -> `OpenAgent` with `Bayesian-Nash-6v6` hidden bench).
-/// Returns exact per-opponent Nash values, per-slot Nash pick share `p_i^*`, conditional
-/// winrate `w_i^*`, and leave-one-out marginal contribution `\Delta V_{-i}` with zero extra
-/// battle simulations.
+/// When `cfg.inherited = Some((mut_slot, parent_subgames))` is provided for a single-slot
+/// mutation, inherits the parent's exact Stage-2 rows excluding `mut_slot` (`R_{-ms}(P)`)
+/// and evaluates only the newly mutated slot's rows (`R_{+ms}(C)`), guaranteeing exact
+/// minimax subgame monotonicity (`p_{ms}^*(C) = 0 => V^*(C) = V_{-ms}^*(P) <= V^*(P)`).
 fn core_nash_eval_weighted(
     dex: &Dex,
     cand: &[PokemonSet],
     opps: &[Vec<PokemonSet>],
     weights: &[f64],
-    cfg: &CoreNashGauntletCfg,
+    cfg: &CoreNashGauntletCfg<'_>,
 ) -> CoreNashEvalResult {
     use nc2000_bot::preview::{legal_action_indices, preview_actions, MatrixEst, RolloutAgent};
     use nc2000_bot::smmcts::{solve_rm_plus, SelRule};
@@ -3365,6 +3638,7 @@ fn core_nash_eval_weighted(
             slot_marginals: [0.0; 6],
             move_dqs: [[0.0; 4]; 6],
             opp_move_dqs: Vec::new(),
+            subgames: Vec::new(),
         };
     }
 
@@ -3376,6 +3650,7 @@ fn core_nash_eval_weighted(
     let mut total_score = 0.0f64;
     let mut per_opponent = Vec::with_capacity(opps.len());
     let mut opp_move_dqs = Vec::with_capacity(opps.len());
+    let mut subgames = Vec::with_capacity(opps.len());
     let mut slot_picks = [0.0f64; 6];
     let mut slot_wins = [0.0f64; 6];
     let mut slot_marginals = [0.0f64; 6];
@@ -3390,161 +3665,355 @@ fn core_nash_eval_weighted(
         let levels_b: Vec<u8> = opp.iter().map(|s| s.level).collect();
         let legal_b = legal_action_indices(&actions, &levels_b);
 
-        // Stage 1: Full-width Rollout screening on legal_a x legal_b
-        let mut screen_jobs = Vec::with_capacity(legal_a.len() * legal_b.len() * cfg.screen_games as usize);
-        for &a in &legal_a {
-            for &b in &legal_b {
-                push_core_jobs(
-                    &mut screen_jobs,
-                    a * 60 + b,
-                    actions[a],
-                    actions[b],
-                    cfg.screen_games.max(1),
-                    opp_seed ^ 0x5C4E,
+        let inherited_opt = cfg
+            .inherited
+            .and_then(|(ms, subs)| subs.get(m).map(|ps| (ms, ps)));
+
+        let (sup_a, sup_b, p_a_s1, p_b_s1, mat) = if let Some((mut_slot, p_sub)) = inherited_opt {
+            // Monotonic Subgame Inheritance:
+            // 1. Inherit all parent Stage-2 rows `R_{-ms}(P)` that do NOT contain `mut_slot` verbatim.
+            let ms1 = (mut_slot + 1) as u8;
+            let inherited_ia: Vec<usize> = (0..p_sub.sup_a.len())
+                .filter(|&ia| !actions[p_sub.sup_a[ia]].contains(&ms1))
+                .collect();
+            let sup_b = p_sub.sup_b.clone();
+            let kb = sup_b.len();
+            let p_b_s1 = p_sub.p_b_s1.clone();
+
+            // 2. Screen candidate's legal rows containing `mut_slot` (`R_{+ms}(C)`) against `sup_b`.
+            let legal_a_mut: Vec<usize> = legal_a
+                .iter()
+                .copied()
+                .filter(|&a| actions[a].contains(&ms1))
+                .collect();
+            let new_sup_a: Vec<usize> = if legal_a_mut.is_empty() {
+                Vec::new()
+            } else {
+                let mut screen_jobs =
+                    Vec::with_capacity(legal_a_mut.len() * kb * cfg.screen_games as usize);
+                for (ia_m, &a) in legal_a_mut.iter().enumerate() {
+                    for (ib, &b) in sup_b.iter().enumerate() {
+                        push_core_jobs(
+                            &mut screen_jobs,
+                            ia_m * kb + ib,
+                            actions[a],
+                            actions[b],
+                            cfg.screen_games.max(1),
+                            opp_seed ^ 0x5C4E,
+                        );
+                    }
+                }
+                let screen_res = run_forced_preview_games(
+                    dex,
+                    cand,
+                    opp,
+                    &screen_jobs,
+                    cfg.threads,
+                    cfg.max_turns,
+                    &|_, _, _, sa, sb| {
+                        (
+                            Box::new(RolloutAgent::new(0.2, sa)),
+                            Box::new(RolloutAgent::new(0.2, sb)),
+                        )
+                    },
+                    false,
                 );
-            }
-        }
-        let screen_res = run_forced_preview_games(
-            dex,
-            cand,
-            opp,
-            &screen_jobs,
-            cfg.threads,
-            cfg.max_turns,
-            &|_, _, _, sa, sb| {
-                (
-                    Box::new(RolloutAgent::new(0.2, sa)),
-                    Box::new(RolloutAgent::new(0.2, sb)),
-                )
-            },
-            false,
-        );
-        let mut screen = MatrixEst::new(60, 60);
-        for (cell, sc) in screen_res {
-            screen.record(cell, sc);
-        }
-        let screen_ref = &screen;
-        let sub: Vec<f64> = legal_a
-            .iter()
-            .flat_map(|&a| legal_b.iter().map(move |&b| screen_ref.at(a, b)))
-            .collect();
-        let (e0, e1) = solve_rm_plus(&sub, [legal_a.len(), legal_b.len()], 8_000);
+                let mut screen_mut = MatrixEst::new(legal_a_mut.len(), kb);
+                for (cell, sc) in screen_res {
+                    screen_mut.record(cell, sc);
+                }
+                let sm_ref = &screen_mut;
+                let sub_m: Vec<f64> = (0..legal_a_mut.len())
+                    .flat_map(|ia_m| (0..kb).map(move |ib| sm_ref.at(ia_m, ib)))
+                    .collect();
+                let (e0_m, e1_m) = solve_rm_plus(&sub_m, [legal_a_mut.len(), kb], 4_000);
+                let u_a_m: Vec<f64> = (0..legal_a_mut.len())
+                    .map(|ia_m| {
+                        (0..kb)
+                            .zip(&e1_m)
+                            .map(|(ib, &wb)| screen_mut.at(ia_m, ib) * wb)
+                            .sum()
+                    })
+                    .collect();
+                let k_mut = (cfg.support_k / 2).max(2).min(legal_a_mut.len());
+                let core_mask = |t: [u8; 3]| -> u8 {
+                    (1u8 << (t[0] - 1)) | (1u8 << (t[1] - 1)) | (1u8 << (t[2] - 1))
+                };
+                let mut order: Vec<usize> = (0..legal_a_mut.len()).collect();
+                order.sort_by(|&i, &j| {
+                    let si = (e0_m[i] >= 0.01, e0_m[i] + 0.05 * u_a_m[i]);
+                    let sj = (e0_m[j] >= 0.01, e0_m[j] + 0.05 * u_a_m[j]);
+                    sj.0.cmp(&si.0).then_with(|| sj.1.partial_cmp(&si.1).unwrap())
+                });
+                let mut picked = Vec::with_capacity(k_mut);
+                let mut seen_masks = BTreeSet::new();
+                for &idx in &order {
+                    if picked.len() >= k_mut {
+                        break;
+                    }
+                    let a = legal_a_mut[idx];
+                    if seen_masks.insert(core_mask(actions[a])) {
+                        picked.push(a);
+                    }
+                }
+                for &idx in &order {
+                    if picked.len() >= k_mut {
+                        break;
+                    }
+                    let a = legal_a_mut[idx];
+                    if !picked.contains(&a) {
+                        picked.push(a);
+                    }
+                }
+                picked
+            };
 
-        let u_a: Vec<f64> = legal_a
-            .iter()
-            .map(|&a| {
-                legal_b
-                    .iter()
-                    .zip(&e1)
-                    .map(|(&b, &wb)| screen.at(a, b) * wb)
-                    .sum()
-            })
-            .collect();
-        let u_b: Vec<f64> = legal_b
-            .iter()
-            .map(|&b| {
-                legal_a
-                    .iter()
-                    .zip(&e0)
-                    .map(|(&a, &wa)| (1.0 - screen.at(a, b)) * wa)
-                    .sum()
-            })
-            .collect();
-
-        let select_top_k = |legal: &[usize], eq: &[f64], br: &[f64], k: usize| -> Vec<usize> {
-            let mut order: Vec<usize> = (0..legal.len()).collect();
-            order.sort_by(|&i, &j| {
-                let si = (eq[i] >= 0.01, eq[i] + 0.05 * br[i]);
-                let sj = (eq[j] >= 0.01, eq[j] + 0.05 * br[j]);
-                sj.0.cmp(&si.0).then_with(|| sj.1.partial_cmp(&si.1).unwrap())
-            });
-            order.into_iter().take(k.min(legal.len())).map(|i| legal[i]).collect()
-        };
-
-        let sup_a = select_top_k(&legal_a, &e0, &u_a, cfg.support_k);
-        let sup_b = select_top_k(&legal_b, &e1, &u_b, cfg.support_k);
-
-        let mut p_a_s1 = vec![0.0f64; 60];
-        let mut p_b_s1 = vec![0.0f64; 60];
-        for (ia, &a) in legal_a.iter().enumerate() {
-            p_a_s1[a] = e0[ia];
-        }
-        for (ib, &b) in legal_b.iter().enumerate() {
-            p_b_s1[b] = e1[ib];
-        }
-
-        // Stage 2: Strictly symmetric k x k Forced-Preview 6v6 OpenAgent with Bayesian-Nash-6v6 bench
-        let ka = sup_a.len();
-        let kb = sup_b.len();
-        let mut refine_jobs = Vec::with_capacity(ka * kb * cfg.refine_games as usize);
-        for ia in 0..ka {
-            for ib in 0..kb {
-                push_core_jobs(
-                    &mut refine_jobs,
-                    ia * kb + ib,
-                    actions[sup_a[ia]],
-                    actions[sup_b[ib]],
-                    cfg.refine_games.max(2),
-                    opp_seed ^ 0x2222,
-                );
-            }
-        }
-        let rm_cfg = RmConfig {
-            iterations: cfg.agent_iters,
-            c: cfg.c,
-            rule: SelRule::Ucb,
-            ..RmConfig::default()
-        };
-        let pa_ref = &p_a_s1;
-        let pb_ref = &p_b_s1;
-        let smoothing = cfg.smoothing;
-        let move_acc_ref = &move_acc;
-        let opp_acc = Arc::new(std::sync::Mutex::new(([[0.0f64; 4]; 6], [0u32; 6])));
-        let opp_acc_ref = &opp_acc;
-        let refine_res = run_forced_preview_games(
-            dex,
-            cand,
-            opp,
-            &refine_jobs,
-            cfg.threads,
-            cfg.max_turns,
-            &|b, side_a, side_b, sa, sb| {
-                let mut oa = OpenAgent::new(rm_cfg.clone(), None, sa)
-                    .with_opponent_pick_policy(pb_ref.clone(), smoothing);
-                let mut ob = OpenAgent::new(rm_cfg.clone(), None, sb)
-                    .with_opponent_pick_policy(pa_ref.clone(), smoothing);
-                oa.init_at_preview(b, side_a);
-                ob.init_at_preview(b, side_b);
-                (
-                    Box::new(TelemetryOpenAgent {
-                        inner: oa,
-                        sink: move_acc_ref.clone(),
-                    }),
-                    Box::new(TelemetryOpenAgent {
-                        inner: ob,
-                        sink: opp_acc_ref.clone(),
-                    }),
-                )
-            },
-            true,
-        );
-        total_games += refine_jobs.len() as u32;
-        {
-            let og = opp_acc.lock().unwrap();
-            let mut o_mdq = [[0.0f64; 4]; 6];
-            for s in 0..6 {
-                let turns = (og.1[s] as f64).max(1.0);
-                for k in 0..4 {
-                    o_mdq[s][k] = og.0[s][k] / turns;
+            let mut sup_a: Vec<usize> = inherited_ia.iter().map(|&ia| p_sub.sup_a[ia]).collect();
+            for &a in &new_sup_a {
+                if !sup_a.contains(&a) {
+                    sup_a.push(a);
                 }
             }
-            opp_move_dqs.push(o_mdq);
-        }
+            let n_inh = inherited_ia.len();
+            let ka = sup_a.len();
+            let mut p_a_s1 = p_sub.p_a_s1.clone();
+            let share_new = 1.0 / (ka.max(1) as f64);
+            for &a in &sup_a[n_inh..] {
+                p_a_s1[a] = share_new;
+            }
 
-        let mut mat = MatrixEst::new(ka, kb);
-        for (cell, sc) in refine_res {
-            mat.record(cell, sc);
-        }
+            // 3. Simulate Stage-2 OpenAgent games ONLY for the newly added `sup_a[n_inh..]` rows!
+            let n_new = ka.saturating_sub(n_inh);
+            let mut refine_jobs = Vec::with_capacity(n_new * kb * cfg.refine_games as usize);
+            for ia_new in 0..n_new {
+                let ia = n_inh + ia_new;
+                for ib in 0..kb {
+                    push_core_jobs(
+                        &mut refine_jobs,
+                        ia_new * kb + ib,
+                        actions[sup_a[ia]],
+                        actions[sup_b[ib]],
+                        cfg.refine_games.max(2),
+                        opp_seed ^ 0x2222,
+                    );
+                }
+            }
+            let rm_cfg = RmConfig {
+                iterations: cfg.agent_iters,
+                c: cfg.c,
+                rule: SelRule::Ucb,
+                ..RmConfig::default()
+            };
+            let pa_ref = &p_a_s1;
+            let pb_ref = &p_b_s1;
+            let smoothing = cfg.smoothing;
+            let move_acc_ref = &move_acc;
+            let opp_acc = Arc::new(std::sync::Mutex::new(([[0.0f64; 4]; 6], [0u32; 6])));
+            let opp_acc_ref = &opp_acc;
+            let refine_res = run_forced_preview_games(
+                dex,
+                cand,
+                opp,
+                &refine_jobs,
+                cfg.threads,
+                cfg.max_turns,
+                &|b, side_a, side_b, sa, sb| {
+                    let mut oa = OpenAgent::new(rm_cfg.clone(), None, sa)
+                        .with_opponent_pick_policy(pb_ref.clone(), smoothing);
+                    let mut ob = OpenAgent::new(rm_cfg.clone(), None, sb)
+                        .with_opponent_pick_policy(pa_ref.clone(), smoothing);
+                    oa.init_at_preview(b, side_a);
+                    ob.init_at_preview(b, side_b);
+                    (
+                        Box::new(TelemetryOpenAgent {
+                            inner: oa,
+                            sink: move_acc_ref.clone(),
+                        }),
+                        Box::new(TelemetryOpenAgent {
+                            inner: ob,
+                            sink: opp_acc_ref.clone(),
+                        }),
+                    )
+                },
+                true,
+            );
+            total_games += refine_jobs.len() as u32;
+            {
+                let og = opp_acc.lock().unwrap();
+                let mut o_mdq = [[0.0f64; 4]; 6];
+                for s in 0..6 {
+                    let turns = (og.1[s] as f64).max(1.0);
+                    for k in 0..4 {
+                        o_mdq[s][k] = og.0[s][k] / turns;
+                    }
+                }
+                opp_move_dqs.push(o_mdq);
+            }
+
+            let mut mat = MatrixEst::new(ka, kb);
+            for (r_idx, &old_ia) in inherited_ia.iter().enumerate() {
+                for ib in 0..kb {
+                    let v = p_sub.mat_v[old_ia * kb + ib];
+                    mat.record(r_idx * kb + ib, v);
+                }
+            }
+            for (cell, sc) in refine_res {
+                let ia_new = cell / kb;
+                let ib = cell % kb;
+                mat.record((n_inh + ia_new) * kb + ib, sc);
+            }
+            (sup_a, sup_b, p_a_s1, p_b_s1, mat)
+        } else {
+            // Full Two-Stage Evaluation with Orthogonal Leave-One-Out Support
+            let mut screen_jobs =
+                Vec::with_capacity(legal_a.len() * legal_b.len() * cfg.screen_games as usize);
+            for &a in &legal_a {
+                for &b in &legal_b {
+                    push_core_jobs(
+                        &mut screen_jobs,
+                        a * 60 + b,
+                        actions[a],
+                        actions[b],
+                        cfg.screen_games.max(1),
+                        opp_seed ^ 0x5C4E,
+                    );
+                }
+            }
+            let screen_res = run_forced_preview_games(
+                dex,
+                cand,
+                opp,
+                &screen_jobs,
+                cfg.threads,
+                cfg.max_turns,
+                &|_, _, _, sa, sb| {
+                    (
+                        Box::new(RolloutAgent::new(0.2, sa)),
+                        Box::new(RolloutAgent::new(0.2, sb)),
+                    )
+                },
+                false,
+            );
+            let mut screen = MatrixEst::new(60, 60);
+            for (cell, sc) in screen_res {
+                screen.record(cell, sc);
+            }
+            let screen_ref = &screen;
+            let sub: Vec<f64> = legal_a
+                .iter()
+                .flat_map(|&a| legal_b.iter().map(move |&b| screen_ref.at(a, b)))
+                .collect();
+            let (e0, e1) = solve_rm_plus(&sub, [legal_a.len(), legal_b.len()], 8_000);
+
+            let u_a: Vec<f64> = legal_a
+                .iter()
+                .map(|&a| {
+                    legal_b
+                        .iter()
+                        .zip(&e1)
+                        .map(|(&b, &wb)| screen.at(a, b) * wb)
+                        .sum()
+                })
+                .collect();
+            let u_b: Vec<f64> = legal_b
+                .iter()
+                .map(|&b| {
+                    legal_a
+                        .iter()
+                        .zip(&e0)
+                        .map(|(&a, &wa)| (1.0 - screen.at(a, b)) * wa)
+                        .sum()
+                })
+                .collect();
+
+            let sup_a = select_top_k_orthogonal(&actions, &legal_a, &e0, &u_a, cfg.support_k);
+            let sup_b = select_top_k_orthogonal(&actions, &legal_b, &e1, &u_b, cfg.support_k);
+
+            let mut p_a_s1 = vec![0.0f64; 60];
+            let mut p_b_s1 = vec![0.0f64; 60];
+            for (ia, &a) in legal_a.iter().enumerate() {
+                p_a_s1[a] = e0[ia];
+            }
+            for (ib, &b) in legal_b.iter().enumerate() {
+                p_b_s1[b] = e1[ib];
+            }
+
+            let ka = sup_a.len();
+            let kb = sup_b.len();
+            let mut refine_jobs = Vec::with_capacity(ka * kb * cfg.refine_games as usize);
+            for ia in 0..ka {
+                for ib in 0..kb {
+                    push_core_jobs(
+                        &mut refine_jobs,
+                        ia * kb + ib,
+                        actions[sup_a[ia]],
+                        actions[sup_b[ib]],
+                        cfg.refine_games.max(2),
+                        opp_seed ^ 0x2222,
+                    );
+                }
+            }
+            let rm_cfg = RmConfig {
+                iterations: cfg.agent_iters,
+                c: cfg.c,
+                rule: SelRule::Ucb,
+                ..RmConfig::default()
+            };
+            let pa_ref = &p_a_s1;
+            let pb_ref = &p_b_s1;
+            let smoothing = cfg.smoothing;
+            let move_acc_ref = &move_acc;
+            let opp_acc = Arc::new(std::sync::Mutex::new(([[0.0f64; 4]; 6], [0u32; 6])));
+            let opp_acc_ref = &opp_acc;
+            let refine_res = run_forced_preview_games(
+                dex,
+                cand,
+                opp,
+                &refine_jobs,
+                cfg.threads,
+                cfg.max_turns,
+                &|b, side_a, side_b, sa, sb| {
+                    let mut oa = OpenAgent::new(rm_cfg.clone(), None, sa)
+                        .with_opponent_pick_policy(pb_ref.clone(), smoothing);
+                    let mut ob = OpenAgent::new(rm_cfg.clone(), None, sb)
+                        .with_opponent_pick_policy(pa_ref.clone(), smoothing);
+                    oa.init_at_preview(b, side_a);
+                    ob.init_at_preview(b, side_b);
+                    (
+                        Box::new(TelemetryOpenAgent {
+                            inner: oa,
+                            sink: move_acc_ref.clone(),
+                        }),
+                        Box::new(TelemetryOpenAgent {
+                            inner: ob,
+                            sink: opp_acc_ref.clone(),
+                        }),
+                    )
+                },
+                true,
+            );
+            total_games += refine_jobs.len() as u32;
+            {
+                let og = opp_acc.lock().unwrap();
+                let mut o_mdq = [[0.0f64; 4]; 6];
+                for s in 0..6 {
+                    let turns = (og.1[s] as f64).max(1.0);
+                    for k in 0..4 {
+                        o_mdq[s][k] = og.0[s][k] / turns;
+                    }
+                }
+                opp_move_dqs.push(o_mdq);
+            }
+
+            let mut mat = MatrixEst::new(ka, kb);
+            for (cell, sc) in refine_res {
+                mat.record(cell, sc);
+            }
+            (sup_a, sup_b, p_a_s1, p_b_s1, mat)
+        };
+
+        let ka = sup_a.len();
+        let kb = sup_b.len();
         let (x_star, y_star) = solve_rm_plus(&mat.v, [ka, kb], 10_000);
         let v_star: f64 = (0..ka)
             .map(|ia| {
@@ -3553,15 +4022,6 @@ fn core_nash_eval_weighted(
                     .sum::<f64>()
             })
             .sum();
-
-        // Calibrate Stage-2 minus Stage-1 offset on the evaluated k x k support
-        let mut s2_s1_diff = 0.0f64;
-        for ia in 0..ka {
-            for ib in 0..kb {
-                s2_s1_diff += mat.at(ia, ib) - screen.at(sup_a[ia], sup_b[ib]);
-            }
-        }
-        let s2_s1_offset = s2_s1_diff / ((ka * kb).max(1) as f64);
 
         total_score += w_m * v_star;
         per_opponent.push(v_star);
@@ -3585,7 +4045,7 @@ fn core_nash_eval_weighted(
             entry.1 += w_m * p_row * ev_row;
         }
 
-        // Exact Leave-One-Out Marginal Contribution \Delta V_{-s}^{(m)}
+        // Exact Leave-One-Out Marginal Contribution \Delta V_{-s}^{(m)} from Stage-2 matrix
         for s in 0..6usize {
             let s1 = (s + 1) as u8;
             let rem_rows: Vec<usize> = (0..ka)
@@ -3606,39 +4066,19 @@ fn core_nash_eval_weighted(
                     })
                     .sum()
             } else {
-                // Slot `s` appears in 100% of top-k rows; use Stage-1 screen rows without `s`
-                // against `sup_b`, calibrated by `s2_s1_offset`.
-                let rem_s1: Vec<usize> = legal_a
-                    .iter()
-                    .copied()
-                    .filter(|&a| !actions[a].contains(&s1))
-                    .collect();
-                if rem_s1.is_empty() {
-                    0.0
-                } else {
-                    let screen_ref = &screen;
-                    let sup_b_ref = &sup_b;
-                    let sub_s1: Vec<f64> = rem_s1
-                        .iter()
-                        .flat_map(|&a| {
-                            sup_b_ref
-                                .iter()
-                                .map(move |&b| (screen_ref.at(a, b) + s2_s1_offset).clamp(0.0, 1.0))
-                        })
-                        .collect();
-                    let (xr, yr) = solve_rm_plus(&sub_s1, [rem_s1.len(), kb], 8_000);
-                    (0..rem_s1.len())
-                        .map(|ir| {
-                            (0..kb)
-                                .map(|ib| sub_s1[ir * kb + ib] * xr[ir] * yr[ib])
-                                .sum::<f64>()
-                        })
-                        .sum()
-                }
+                v_star
             };
             let dv = (v_star - v_minus_s).max(0.0);
             slot_marginals[s] += w_m * dv;
         }
+
+        subgames.push(OpponentStage2Subgame {
+            sup_a,
+            sup_b,
+            p_a_s1,
+            p_b_s1,
+            mat_v: mat.v,
+        });
     }
 
     {
@@ -3663,6 +4103,7 @@ fn core_nash_eval_weighted(
         slot_marginals,
         move_dqs,
         opp_move_dqs,
+        subgames,
     }
 }
 
@@ -4475,6 +4916,7 @@ fn cmd_verify_1gen(args: &[String]) {
                         max_turns,
                         seed: seed_w1,
                         threads: inner_threads,
+                        inherited: None,
                     },
                 );
                 p.cum_games = w_games;
@@ -4622,6 +5064,7 @@ fn cmd_verify_1gen(args: &[String]) {
     let mut parent_w2_scores = vec![0.0f64; parents.len()];
     let mut parent_w2_marginals = vec![[0.0f64; 6]; parents.len()];
     let mut parent_w2_wars = vec![[0.0f64; 6]; parents.len()];
+    let mut parent_w2_subgames: Vec<Vec<OpponentStage2Subgame>> = vec![Vec::new(); parents.len()];
     std::thread::scope(|scope| {
         let mut p_handles = Vec::new();
         for (idx, p) in parents.iter().enumerate() {
@@ -4643,15 +5086,29 @@ fn cmd_verify_1gen(args: &[String]) {
                         max_turns,
                         seed: seed_w2,
                         threads: inner_threads,
+                        inherited: None,
                     },
                 );
-                (idx, r.eval.score, r.slot_marginals)
+                (idx, r.eval.score, r.slot_marginals, r.subgames)
             }));
         }
+        for h in p_handles {
+            let (idx, sc, marg, subs) = h.join().unwrap();
+            parent_w2_scores[idx] = sc;
+            parent_w2_marginals[idx] = marg;
+            parent_w2_subgames[idx] = subs;
+        }
+    });
+    let p_subs_ref = &parent_w2_subgames;
+    std::thread::scope(|scope| {
         let mut c_handles = Vec::new();
         for c in &mut children {
             c_handles.push(scope.spawn(move || {
                 let cand = to_sets(&c.team).unwrap();
+                let inh = c
+                    .mut_slot
+                    .filter(|&ms| ms < 6 && !c.op.starts_with("level-tweak"))
+                    .map(|ms| (ms, p_subs_ref[c.parent_idx].as_slice()));
                 let r = core_nash_eval_weighted(
                     dex_ref,
                     &cand,
@@ -4667,6 +5124,7 @@ fn cmd_verify_1gen(args: &[String]) {
                         max_turns,
                         seed: seed_w2,
                         threads: inner_threads,
+                        inherited: inh,
                     },
                 );
                 c.w2_score = r.eval.score;
@@ -4674,11 +5132,6 @@ fn cmd_verify_1gen(args: &[String]) {
                 c.w2_marginals = r.slot_marginals;
                 c.w2_move_dqs = r.move_dqs;
             }));
-        }
-        for h in p_handles {
-            let (idx, sc, marg) = h.join().unwrap();
-            parent_w2_scores[idx] = sc;
-            parent_w2_marginals[idx] = marg;
         }
         for h in c_handles {
             h.join().unwrap();
@@ -4708,15 +5161,7 @@ fn cmd_verify_1gen(args: &[String]) {
 
     for c in &children {
         let p_sc = parent_w2_scores[c.parent_idx];
-        let mut dv = c.w2_score - p_sc;
-        // Active-Pick Deconfounding: unpicked mutated slot cannot claim positive gain
-        if !c.op.starts_with("level-tweak") {
-            if let Some(ms) = c.mut_slot {
-                if ms < 6 && c.w2_picks[ms] <= 1e-6 && dv > 0.0 {
-                    dv = 0.0;
-                }
-            }
-        }
+        let dv = c.w2_score - p_sc;
         let dwar = c
             .mut_slot
             .filter(|&s| s < 6)
