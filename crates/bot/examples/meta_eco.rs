@@ -4800,14 +4800,9 @@ fn cmd_verify_1gen(args: &[String]) {
     let (agent_iters, agent_c, blind_pool, open_sheet) = parse_agent_spec(args, &root);
 
     let bench_file = flag(args, "--bench-file").unwrap_or_else(|| {
-        let m = root.join("data/eco-pool/master-pool.json");
-        if m.exists() {
-            m.to_string_lossy().into_owned()
-        } else {
-            root.join("data/meta-nash-v3/pool-artifact.json")
-                .to_string_lossy()
-                .into_owned()
-        }
+        root.join("data/team-pool-v2/team-pool.json")
+            .to_string_lossy()
+            .into_owned()
     });
     let (all_bench_teams, all_bench_weights) = load_gauntlet_file(&dex, &gen, &bench_file);
     let slice_len = all_bench_teams.len().min(10);

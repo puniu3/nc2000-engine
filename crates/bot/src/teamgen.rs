@@ -371,11 +371,6 @@ impl EndogenousPool {
                 return sum / (cnt as f64);
             }
         }
-        if let Some(&(sum, cnt)) = self.global_move_dq.get(mid) {
-            if cnt > 0 {
-                return 0.5 * (sum / (cnt as f64));
-            }
-        }
         0.0
     }
 }
@@ -1680,15 +1675,114 @@ impl TeamGen {
         let sid = species_id(&raw[slot]);
         let level = set_level(&raw[slot]);
         let cur = move_ids(&raw[slot]);
+        if cur.is_empty() {
+            return None;
+        }
+        let append_new = cur.len() < 4 && rng.below(2) == 0;
+        let drop_idx: Option<usize> = if append_new {
+            None
+        } else if let Some(dq) = move_dq {
+            let m_len = cur.len().min(4);
+            let max_dq = dq[..m_len].iter().copied().fold(0.0f64, f64::max);
+            if max_dq <= 1e-6 {
+                Some(rng.below(m_len))
+            } else {
+                // Scale-invariant Stochastic Resonance Boltzmann move selection:
+                // Normalize r_k = dq[k] / max_dq in [0, 1] so stall (many turns) and
+                // offense (few turns) share the exact same dimensionless temperature
+                // T_rel = 0.22 + uniform drift floor eps_move = 0.08.
+                let t_rel = 0.22;
+                let eps_move = 0.08;
+                let mut raw_w = [1.0f64; 4];
+                let mut raw_sum = 0.0f64;
+                for k in 0..m_len {
+                    let r_k = (dq[k].max(0.0) / max_dq).clamp(0.0, 1.0);
+                    raw_w[k] = (-r_k / t_rel).exp();
+                    raw_sum += raw_w[k];
+                }
+                let mut u = rng.next_f64();
+                let mut chosen = m_len - 1;
+                for k in 0..m_len {
+                    let prob = (1.0 - eps_move) * (raw_w[k] / raw_sum.max(1e-12))
+                        + eps_move / (m_len as f64);
+                    u -= prob;
+                    if u <= 0.0 {
+                        chosen = k;
+                        break;
+                    }
+                }
+                Some(chosen)
+            }
+        } else {
+            Some(rng.below(cur.len()))
+        };
+
+        // Determine standard damaging move types already covered by the remaining moves
+        let is_special_utility_attack = |m: &str| -> bool {
+            matches!(
+                m,
+                "explosion"
+                    | "selfdestruct"
+                    | "rapidspin"
+                    | "pursuit"
+                    | "counter"
+                    | "mirrorcoat"
+                    | "seismictoss"
+                    | "nightshade"
+                    | "superfang"
+                    | "extremespeed"
+                    | "quickattack"
+                    | "machpunch"
+            )
+        };
+        let mut covered_dmg_types: BTreeSet<String> = BTreeSet::new();
+        let mut rem_has_hp = false;
+        for (idx, m) in cur.iter().enumerate() {
+            if Some(idx) == drop_idx {
+                continue;
+            }
+            if m.starts_with("hiddenpower") {
+                rem_has_hp = true;
+            }
+            if is_special_utility_attack(m) {
+                continue;
+            }
+            if let Some(mid) = dex.moves.id(m) {
+                let md = dex.moves.get(mid);
+                if md.category != "Status" && (md.base_power > 0 || m == "return") {
+                    covered_dmg_types.insert(md.move_type.clone());
+                }
+            }
+        }
+
         let cur_bases: Vec<String> = cur.iter().map(|m| base_id(m)).collect();
         let non_dom = self.non_dominated_moves(dex, &sid, level, &cur);
         let mut cand_displays: Vec<String> = Vec::new();
         for m in non_dom.iter().filter(|m| !cur_bases.contains(*m)) {
             if *m == "hiddenpower" {
+                if rem_has_hp {
+                    continue;
+                }
                 for hp in self.non_dominated_hp_types(dex, &sid, level) {
-                    cand_displays.push(move_name(dex, &hp));
+                    if let Some(mid) = dex.moves.id(&hp) {
+                        let md = dex.moves.get(mid);
+                        if !covered_dmg_types.contains(&md.move_type) {
+                            cand_displays.push(move_name(dex, &hp));
+                        }
+                    }
                 }
             } else {
+                if !is_special_utility_attack(m) {
+                    if let Some(mid) = dex.moves.id(m) {
+                        let md = dex.moves.get(mid);
+                        if md.category != "Status"
+                            && (md.base_power > 0 || m == "return")
+                            && covered_dmg_types.contains(&md.move_type)
+                        {
+                            continue;
+                        }
+                    }
+                }
                 cand_displays.push(move_name(dex, m));
             }
         }
@@ -1708,7 +1802,7 @@ impl TeamGen {
                 // 15% uniform exploration floor across all non-dominated legal moves
                 cand_displays[rng.below(cand_displays.len())].clone()
             } else {
-                // 85% Boltzmann selection over moves with empirically positive \Delta Q in the population
+                // 85% Boltzmann selection over moves with empirically positive \Delta Q on this species
                 let t_in = 0.010;
                 let mut raw_w = Vec::with_capacity(pos_indices.len());
                 let mut raw_sum = 0.0f64;
@@ -1731,56 +1825,11 @@ impl TeamGen {
         } else {
             cand_displays[rng.below(cand_displays.len())].clone()
         };
-        let pick_is_hp = toid(&display).starts_with("hiddenpower");
         let moves = raw[slot]["moves"].as_array_mut()?;
-        if moves.is_empty() {
-            return None;
-        }
-        if moves.len() < 4 && rng.below(2) == 0 {
-            moves.push(json!(display));
-        } else {
-            let hp_slot = cur.iter().position(|m| m.starts_with("hiddenpower"));
-            let p = if pick_is_hp && hp_slot.is_some() {
-                hp_slot.unwrap()
-            } else if let Some(dq) = move_dq {
-                let m_len = moves.len().min(4);
-                let max_dq = dq[..m_len]
-                    .iter()
-                    .copied()
-                    .fold(0.0f64, f64::max);
-                if max_dq <= 1e-6 {
-                    rng.below(m_len)
-                } else {
-                    // Scale-invariant Stochastic Resonance Boltzmann move selection:
-                    // Normalize r_k = dq[k] / max_dq in [0, 1] so stall (many turns) and
-                    // offense (few turns) share the exact same dimensionless temperature
-                    // T_rel = 0.22 + uniform drift floor eps_move = 0.08.
-                    let t_rel = 0.22;
-                    let eps_move = 0.08;
-                    let mut raw_w = [1.0f64; 4];
-                    let mut raw_sum = 0.0f64;
-                    for k in 0..m_len {
-                        let r_k = (dq[k].max(0.0) / max_dq).clamp(0.0, 1.0);
-                        raw_w[k] = (-r_k / t_rel).exp();
-                        raw_sum += raw_w[k];
-                    }
-                    let mut u = rng.next_f64();
-                    let mut chosen = m_len - 1;
-                    for k in 0..m_len {
-                        let prob = (1.0 - eps_move) * (raw_w[k] / raw_sum.max(1e-12))
-                            + eps_move / (m_len as f64);
-                        u -= prob;
-                        if u <= 0.0 {
-                            chosen = k;
-                            break;
-                        }
-                    }
-                    chosen
-                }
-            } else {
-                rng.below(moves.len())
-            };
+        if let Some(p) = drop_idx {
             moves[p] = json!(display);
+        } else {
+            moves.push(json!(display));
         }
         Some(())
     }
