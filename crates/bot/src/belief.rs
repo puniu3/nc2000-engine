@@ -100,6 +100,7 @@ use crate::rng::SplitMix64;
 /// pedigree order.
 const COMMUNITY_RENTALS_JSON: &str =
     include_str!("../../../data/community-rentals-v0/teams.json");
+const SUPPLEMENTAL_PRIOR_JSON: &str = include_str!("belief_supplement_v1.json");
 const FORMAT_LEARNSETS_JSON: &str = include_str!("../../../data/learnsets-gen2.json");
 
 #[derive(serde::Deserialize)]
@@ -111,6 +112,19 @@ struct CommunityRentalDb {
 struct CommunityRentalTeam {
     #[serde(default)]
     archetype: String,
+    sets: Vec<PokemonSet>,
+}
+
+#[derive(serde::Deserialize)]
+struct SupplementalPriorDb {
+    teams: Vec<SupplementalPriorTeam>,
+}
+
+#[derive(Clone, serde::Deserialize)]
+struct SupplementalPriorTeam {
+    #[allow(dead_code)]
+    id: String,
+    weight: f64,
     sets: Vec<PokemonSet>,
 }
 
@@ -153,16 +167,68 @@ pub(crate) fn names_another_ruleset(archetype: &str) -> bool {
 /// under the first caller's `dex`. That is not a hidden dependency: the
 /// format's dex is a build constant (`data/gen2stadium2.json`), the same
 /// file every `Dex` in the process is built from.
-fn community_rental_sets(dex: &Dex) -> &'static [PokemonSet] {
-    static SETS: OnceLock<Vec<PokemonSet>> = OnceLock::new();
-    SETS.get_or_init(|| {
+fn community_rental_teams(dex: &Dex) -> &'static [Vec<PokemonSet>] {
+    static TEAMS: OnceLock<Vec<Vec<PokemonSet>>> = OnceLock::new();
+    TEAMS.get_or_init(|| {
         serde_json::from_str::<CommunityRentalDb>(COMMUNITY_RENTALS_JSON)
             .expect("embedded community rentals must parse")
             .teams
             .into_iter()
             .filter(|t| !names_another_ruleset(&t.archetype))
             .filter(|t| team_is_format_legal(dex, &t.sets))
-            .flat_map(|t| t.sets)
+            .map(|t| t.sets)
+            .collect()
+    })
+}
+
+fn community_rental_sets(dex: &Dex) -> &'static [PokemonSet] {
+    static SETS: OnceLock<Vec<PokemonSet>> = OnceLock::new();
+    SETS.get_or_init(|| {
+        community_rental_teams(dex)
+            .iter()
+            .flat_map(|sets| sets.iter().cloned())
+            .collect()
+    })
+}
+
+fn supplemental_prior_teams(dex: &Dex) -> &'static [SupplementalPriorTeam] {
+    static TEAMS: OnceLock<Vec<SupplementalPriorTeam>> = OnceLock::new();
+    TEAMS.get_or_init(|| {
+        let default_evs: std::collections::BTreeMap<String, u16> =
+            ["hp", "atk", "def", "spa", "spd", "spe"]
+                .into_iter()
+                .map(|k| (k.to_string(), 255u16))
+                .collect();
+        let default_ivs: std::collections::BTreeMap<String, u8> =
+            ["hp", "atk", "def", "spa", "spd", "spe"]
+                .into_iter()
+                .map(|k| (k.to_string(), 30u8))
+                .collect();
+        serde_json::from_str::<SupplementalPriorDb>(SUPPLEMENTAL_PRIOR_JSON)
+            .expect("embedded supplemental prior must parse")
+            .teams
+            .into_iter()
+            .map(|mut t| {
+                for s in &mut t.sets {
+                    if s.name.is_empty() {
+                        s.name = s.species.clone();
+                    }
+                    if s.ability.is_empty() {
+                        s.ability = "No Ability".to_string();
+                    }
+                    if s.evs.is_none() {
+                        s.evs = Some(default_evs.clone());
+                    }
+                    if s.ivs.is_none() {
+                        s.ivs = Some(default_ivs.clone());
+                    }
+                    if s.happiness.is_none() {
+                        s.happiness = Some(255);
+                    }
+                }
+                t
+            })
+            .filter(|t| t.weight.is_finite() && t.weight > 0.0 && team_is_format_legal(dex, &t.sets))
             .collect()
     })
 }
@@ -200,9 +266,10 @@ pub enum FallbackPolicy {
     RevealedLoadout,
     RevealedLoadoutDraw,
     RetainPerish,
-    #[default]
     EarlyPerish,
     EarlyRest,
+    #[default]
+    Bayesian,
 }
 
 impl FallbackPolicy {
@@ -215,6 +282,7 @@ impl FallbackPolicy {
             Self::RetainPerish => "retain-perish-v1",
             Self::EarlyPerish => "early-perish-v1",
             Self::EarlyRest => "early-rest-v1",
+            Self::Bayesian => "bayesian-soft-prior-v1",
         }
     }
 }
@@ -1260,7 +1328,14 @@ impl Belief {
     }
 
     fn build_loadout_draws(&self, dex: &Dex, obs: &Observer, roster: &[Pokemon]) -> Option<Vec<Option<LoadoutDraw>>> {
-        if !matches!(self.fallback_policy, FallbackPolicy::RevealedLoadoutDraw | FallbackPolicy::EarlyPerish | FallbackPolicy::EarlyRest) || self.pinned {
+        if !matches!(
+            self.fallback_policy,
+            FallbackPolicy::RevealedLoadoutDraw
+                | FallbackPolicy::EarlyPerish
+                | FallbackPolicy::EarlyRest
+                | FallbackPolicy::Bayesian
+        ) || self.pinned
+        {
             return None;
         }
         let draws: Vec<_> = obs
@@ -1271,6 +1346,7 @@ impl Belief {
                 FallbackPolicy::EarlyPerish => self.early_perish_draw(dex, mo, mon),
                 FallbackPolicy::EarlyRest => self.early_perish_draw(dex, mo, mon)
                     .or_else(|| self.early_rest_draw(dex, mo, mon)),
+                FallbackPolicy::Bayesian => self.bayesian_loadout_draw(dex, mo, obs.mons(), mon),
                 _ => self.loadout_draw(dex, mo),
             })
             .collect();
@@ -1289,8 +1365,14 @@ impl Belief {
         if pick.is_some() || self.pinned {
             return None;
         }
-        let active = |slot: usize| !matches!(self.fallback_policy, FallbackPolicy::EarlyPerish | FallbackPolicy::EarlyRest)
-            || !battle.sides[opp].roster[slot].fainted;
+        let active = |slot: usize| {
+            !matches!(
+                self.fallback_policy,
+                FallbackPolicy::EarlyPerish
+                    | FallbackPolicy::EarlyRest
+                    | FallbackPolicy::Bayesian
+            ) || !battle.sides[opp].roster[slot].fainted
+        };
         if self.draws.is_none() && self.loadout_draws.as_ref().is_none_or(|plans| {
             !plans.iter().enumerate().any(|(slot, plan)| plan.is_some() && active(slot))
         }) {
@@ -1301,7 +1383,17 @@ impl Belief {
             if !active(slot) {
                 continue;
             }
-            if let Some(draw) = self.loadout_draws.as_ref().and_then(|d| d[slot].as_ref()) {
+            if self.fallback_policy == FallbackPolicy::Bayesian {
+                if let Some(draw) = self.draws.as_ref().and_then(|d| d[slot].as_ref()) {
+                    let slots = draw.draw(rng);
+                    if !slots.is_empty() {
+                        mon.base_move_slots = slots;
+                        mon.move_slots = slots;
+                    }
+                } else if let Some(draw) = self.loadout_draws.as_ref().and_then(|d| d[slot].as_ref()) {
+                    *mon = draw.draw(rng).clone();
+                }
+            } else if let Some(draw) = self.loadout_draws.as_ref().and_then(|d| d[slot].as_ref()) {
                 *mon = draw.draw(rng).clone();
             } else if let Some(draw) = self.draws.as_ref().and_then(|d| d[slot].as_ref()) {
                 let slots = draw.draw(rng);
@@ -1317,8 +1409,14 @@ impl Belief {
 
     /// Per-mon synthesized imputation roster for a non-pool opponent.
     fn build_fallback(&self, dex: &Dex, obs: &Observer) -> Vec<Pokemon> {
-        let sets: Vec<PokemonSet> =
-            obs.mons().iter().map(|mo| self.fallback_set(dex, mo)).collect();
+        let sets: Vec<PokemonSet> = obs
+            .mons()
+            .iter()
+            .map(|mo| match self.fallback_policy {
+                FallbackPolicy::Bayesian => self.bayesian_fallback_set(dex, mo, obs.mons()),
+                _ => self.fallback_set(dex, mo),
+            })
+            .collect();
         self.build_fallback_from_sets(dex, obs, &sets)
     }
 
@@ -1338,7 +1436,13 @@ impl Belief {
                     .iter()
                     .map(|mo| match self.fallback_policy {
                         FallbackPolicy::LegacyMetaOnly => legacy_base_set(dex, mo),
-                        FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout | FallbackPolicy::RevealedLoadoutDraw | FallbackPolicy::RetainPerish | FallbackPolicy::EarlyPerish | FallbackPolicy::EarlyRest => base_set(dex, mo),
+                        FallbackPolicy::Layered
+                        | FallbackPolicy::RevealedLoadout
+                        | FallbackPolicy::RevealedLoadoutDraw
+                        | FallbackPolicy::RetainPerish
+                        | FallbackPolicy::EarlyPerish
+                        | FallbackPolicy::EarlyRest
+                        | FallbackPolicy::Bayesian => base_set(dex, mo),
                     })
                     .collect();
                 Battle::from_fixture(dex, "1,2,3,4", &minimal, &minimal)
@@ -1360,18 +1464,390 @@ impl Belief {
         }
         match self.fallback_policy {
             FallbackPolicy::LegacyMetaOnly => FallbackSource::LegacyEmpty,
-            FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout | FallbackPolicy::RevealedLoadoutDraw | FallbackPolicy::RetainPerish | FallbackPolicy::EarlyPerish | FallbackPolicy::EarlyRest
+            FallbackPolicy::Bayesian
+                if community_rental_sets(dex)
+                    .iter()
+                    .any(|s| dex.species.id(&toid(&s.species)) == Some(mo.species))
+                    || supplemental_prior_teams(dex).iter().any(|t| {
+                        t.sets
+                            .iter()
+                            .any(|s| dex.species.id(&toid(&s.species)) == Some(mo.species))
+                    }) =>
+            {
+                FallbackSource::CommunityRental
+            }
+            FallbackPolicy::Layered
+            | FallbackPolicy::RevealedLoadout
+            | FallbackPolicy::RevealedLoadoutDraw
+            | FallbackPolicy::RetainPerish
+            | FallbackPolicy::EarlyPerish
+            | FallbackPolicy::EarlyRest
                 if community_rental_sets(dex)
                     .iter()
                     .any(|s| dex.species.id(&toid(&s.species)) == Some(mo.species)) =>
             {
                 FallbackSource::CommunityRental
             }
-            FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout | FallbackPolicy::RevealedLoadoutDraw | FallbackPolicy::RetainPerish | FallbackPolicy::EarlyPerish | FallbackPolicy::EarlyRest => FallbackSource::Learnset,
+            FallbackPolicy::Layered
+            | FallbackPolicy::RevealedLoadout
+            | FallbackPolicy::RevealedLoadoutDraw
+            | FallbackPolicy::RetainPerish
+            | FallbackPolicy::EarlyPerish
+            | FallbackPolicy::EarlyRest
+            | FallbackPolicy::Bayesian => FallbackSource::Learnset,
         }
     }
 
+    /// Soft-likelihood weighted candidate sets `(set, team_weight)` for
+    /// `mo.species` across `self.cands` and the supplemental/rental priors.
+    ///
+    /// Each candidate team $T_m$ with prior weight $\pi_m$ receives soft-likelihood
+    /// weight $W_m(\mathcal{O}) = \pi_m \exp(\beta \cdot M_{\text{teammates}}(T_m, \mathcal{O}))$,
+    /// where $M_{\text{teammates}}$ scores how many of the opponent's other
+    /// observed roster slots match species, revealed moves, and items in $T_m$.
+    fn bayesian_prior_carriers<'a>(
+        &'a self,
+        dex: &Dex,
+        mo: &MonObs,
+        obs_mons: &[MonObs],
+    ) -> Vec<(&'a PokemonSet, f64)> {
+        let team_soft_weight = |sets: &[PokemonSet], base_w: f64| -> f64 {
+            let mut match_score = 0.0f64;
+            for other in obs_mons {
+                if other.species == mo.species {
+                    continue;
+                }
+                if let Some(s) = sets
+                    .iter()
+                    .find(|s| dex.species.id(&toid(&s.species)) == Some(other.species))
+                {
+                    match_score += 1.0;
+                    if !other.revealed_moves.is_empty() {
+                        let all_rev_match = other.revealed_moves.iter().all(|&rev| {
+                            s.moves
+                                .iter()
+                                .filter_map(|m| dex.moves.id(&toid(m)))
+                                .any(|m| move_matches(dex, m, rev))
+                        });
+                        match_score += if all_rev_match { 1.5 } else { -0.5 };
+                    }
+                    if let Some(orig) = other.item.original {
+                        if dex.items.id(&toid(&s.item)) == orig {
+                            match_score += 0.5;
+                        }
+                    }
+                }
+            }
+            base_w * (0.6 * match_score).exp()
+        };
+
+        let mut out: Vec<(&'a PokemonSet, f64)> = Vec::new();
+        for c in &self.cands {
+            if let Some(s) = c
+                .sets
+                .iter()
+                .find(|s| dex.species.id(&toid(&s.species)) == Some(mo.species))
+            {
+                let base_w = c.weight.unwrap_or(1.0);
+                out.push((s, team_soft_weight(&c.sets, base_w)));
+            }
+        }
+        let cands_has_species = !out.is_empty();
+        if self.is_weighted_prior() || self.cands.len() >= 20 || !cands_has_species {
+            for t in supplemental_prior_teams(dex) {
+                if let Some(s) = t
+                    .sets
+                    .iter()
+                    .find(|s| dex.species.id(&toid(&s.species)) == Some(mo.species))
+                {
+                    out.push((s, team_soft_weight(&t.sets, t.weight)));
+                }
+            }
+            for rental_sets in community_rental_teams(dex) {
+                if let Some(s) = rental_sets
+                    .iter()
+                    .find(|s| dex.species.id(&toid(&s.species)) == Some(mo.species))
+                {
+                    out.push((s, team_soft_weight(rental_sets, 0.10)));
+                }
+            }
+        }
+        out
+    }
+
+    fn bayesian_fallback_set(
+        &self,
+        dex: &Dex,
+        mo: &MonObs,
+        obs_mons: &[MonObs],
+    ) -> PokemonSet {
+        let carriers = self.bayesian_prior_carriers(dex, mo, obs_mons);
+        let species_key = dex.species.key(mo.species);
+        let matches_moves = |s: &PokemonSet| {
+            mo.revealed_moves.iter().all(|&revealed| {
+                s.moves
+                    .iter()
+                    .filter_map(|m| dex.moves.id(&toid(m)))
+                    .any(|m| move_matches(dex, m, revealed))
+            })
+        };
+        let matches_item = |s: &PokemonSet| match mo.item.original {
+            Some(item) => dex.items.id(&toid(&s.item)) == item,
+            None => true,
+        };
+
+        let mut moves: Vec<String> = mo
+            .revealed_moves
+            .iter()
+            .map(|&m| dex.moves.key(m).to_string())
+            .collect();
+
+        let chosen_prior: Option<&PokemonSet> = if carriers.is_empty() {
+            None
+        } else {
+            let has_move_match = carriers.iter().any(|(s, _)| matches_moves(s));
+            if has_move_match {
+                let has_both = carriers
+                    .iter()
+                    .any(|(s, _)| matches_moves(s) && matches_item(s));
+                let loadout_key = |s: &PokemonSet| {
+                    let mut mvs: Vec<String> = s
+                        .moves
+                        .iter()
+                        .map(|m| toid(m))
+                        .filter(|m| format_move_legal_at_level(species_key, m, mo.level))
+                        .collect();
+                    mvs.sort();
+                    (toid(&s.item), mvs)
+                };
+                let mut tally: Vec<((String, Vec<String>), f64, &PokemonSet)> = Vec::new();
+                for &(s, w) in &carriers {
+                    if !matches_moves(s) || (has_both && !matches_item(s)) {
+                        continue;
+                    }
+                    let key = loadout_key(s);
+                    match tally.iter_mut().find(|(k, _, _)| *k == key) {
+                        Some(entry) => entry.1 += w,
+                        None => tally.push((key, w, s)),
+                    }
+                }
+                tally
+                    .into_iter()
+                    .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+                    .map(|(_, _, s)| s)
+            } else {
+                // Novel move combination: score sets by exponential overlap with revealed moves
+                carriers
+                    .iter()
+                    .max_by(|(sa, wa), (sb, wb)| {
+                        let overlap_a = mo
+                            .revealed_moves
+                            .iter()
+                            .filter(|&&rev| {
+                                sa.moves
+                                    .iter()
+                                    .filter_map(|m| dex.moves.id(&toid(m)))
+                                    .any(|m| move_matches(dex, m, rev))
+                            })
+                            .count() as f64;
+                        let overlap_b = mo
+                            .revealed_moves
+                            .iter()
+                            .filter(|&&rev| {
+                                sb.moves
+                                    .iter()
+                                    .filter_map(|m| dex.moves.id(&toid(m)))
+                                    .any(|m| move_matches(dex, m, rev))
+                            })
+                            .count() as f64;
+                        let score_a = wa * (4.0 * overlap_a).exp() * if matches_item(sa) { 1.5 } else { 1.0 };
+                        let score_b = wb * (4.0 * overlap_b).exp() * if matches_item(sb) { 1.5 } else { 1.0 };
+                        score_a
+                            .partial_cmp(&score_b)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .map(|&(s, _)| s)
+            }
+        };
+
+        let mut set = chosen_prior.cloned().unwrap_or_else(|| base_set(dex, mo));
+        set.level = mo.level;
+        set.gender = Some(match mo.gender.as_str() {
+            "" => "N".to_string(),
+            g => g.to_string(),
+        });
+        set.name = String::new();
+
+        let has_exact_move_match = carriers.iter().any(|(s, _)| matches_moves(s));
+        if has_exact_move_match {
+            for name in chosen_prior.map(|s| s.moves.clone()).unwrap_or_default() {
+                if moves.len() >= 4 {
+                    break;
+                }
+                let Some(id) = dex.moves.id(&toid(&name)) else { continue };
+                if format_move_legal_at_level(species_key, dex.moves.key(id), mo.level)
+                    && !mo.revealed_moves.iter().any(|&m| move_matches(dex, id, m))
+                    && !moves.iter().any(|m| dex.moves.id(&toid(m)) == Some(id))
+                {
+                    moves.push(name);
+                }
+            }
+        }
+
+        // Conditional move co-occurrence backoff for any remaining open slots
+        // (fires when a novel move combination was revealed or when a template move
+        // was level-filtered).
+        if moves.len() < 4 && !carriers.is_empty() {
+            let mut move_scores: Vec<(MoveId, String, f64)> = Vec::new();
+            for &(s, w) in &carriers {
+                let overlap = mo
+                    .revealed_moves
+                    .iter()
+                    .filter(|&&rev| {
+                        s.moves
+                            .iter()
+                            .filter_map(|m| dex.moves.id(&toid(m)))
+                            .any(|m| move_matches(dex, m, rev))
+                    })
+                    .count() as f64;
+                let set_w = w * (4.0 * overlap).exp() * if matches_item(s) { 1.5 } else { 1.0 };
+                for name in &s.moves {
+                    let Some(id) = dex.moves.id(&toid(name)) else { continue };
+                    if !format_move_legal_at_level(species_key, dex.moves.key(id), mo.level)
+                        || mo.revealed_moves.iter().any(|&m| move_matches(dex, id, m))
+                        || moves.iter().any(|m| dex.moves.id(&toid(m)) == Some(id))
+                    {
+                        continue;
+                    }
+                    match move_scores.iter_mut().find(|(mid, _, _)| *mid == id) {
+                        Some(entry) => entry.2 += set_w,
+                        None => move_scores.push((id, name.clone(), set_w)),
+                    }
+                }
+            }
+            move_scores.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+            for (_, name, _) in move_scores {
+                if moves.len() >= 4 {
+                    break;
+                }
+                moves.push(name);
+            }
+        }
+
+        if moves.is_empty() {
+            moves.push(legal_fallback_move(dex, mo));
+        }
+        moves.truncate(4);
+        set.moves = moves;
+        let pool_item = std::mem::take(&mut set.item);
+        set.item = match mo.item.original {
+            Some(Some(x)) => dex.items.key(x).to_string(),
+            Some(None) => String::new(),
+            None if mo.preview_has_item => pool_item,
+            None => String::new(),
+        };
+        set
+    }
+
+    fn bayesian_loadout_draw(
+        &self,
+        dex: &Dex,
+        mo: &MonObs,
+        obs_mons: &[MonObs],
+        fallback_mon: &Pokemon,
+    ) -> Option<LoadoutDraw> {
+        if !mo.appeared && mo.revealed_moves.is_empty() && mo.item.original.is_none() {
+            return None;
+        }
+        let carriers = self.bayesian_prior_carriers(dex, mo, obs_mons);
+        if carriers.is_empty() {
+            return None;
+        }
+        let species_key = dex.species.key(mo.species);
+        let move_consistent: Vec<(&PokemonSet, f64)> = carriers
+            .into_iter()
+            .filter(|(source, _)| {
+                !source.moves.is_empty()
+                    && source.moves.len() <= 4
+                    && source
+                        .moves
+                        .iter()
+                        .all(|m| format_move_legal_at_level(species_key, &toid(m), mo.level))
+                    && mo.revealed_moves.iter().all(|&revealed| {
+                        source
+                            .moves
+                            .iter()
+                            .filter_map(|m| dex.moves.id(&toid(m)))
+                            .any(|m| move_matches(dex, m, revealed))
+                    })
+            })
+            .collect();
+        if move_consistent.is_empty() {
+            return None;
+        }
+        let strict_item = |source: &PokemonSet| {
+            let item = dex.items.id(&toid(&source.item));
+            item.is_some() == mo.preview_has_item
+                && mo.item.original.is_none_or(|known| known == item)
+        };
+        let use_strict_item = move_consistent.iter().any(|(s, _)| strict_item(s));
+
+        let mon_sig = |p: &Pokemon| {
+            let mut mvs: Vec<u16> = p.base_move_slots.iter().map(|s| s.id.0).collect();
+            mvs.sort_unstable();
+            (
+                p.item.map(|i| i.0),
+                mvs,
+                p.base_stored_stats,
+                p.set_ivs,
+                p.happiness,
+            )
+        };
+
+        let mut entries: Vec<(Pokemon, f64)> = Vec::new();
+        for (source, weight) in move_consistent {
+            if use_strict_item && !strict_item(source) {
+                continue;
+            }
+            let mut set = source.clone();
+            set.level = mo.level;
+            set.name.clear();
+            if !use_strict_item {
+                set.item = match mo.item.original {
+                    Some(Some(x)) => dex.items.key(x).to_string(),
+                    Some(None) => String::new(),
+                    None if mo.preview_has_item => set.item,
+                    None => String::new(),
+                };
+            }
+            let Ok(built) = Battle::from_fixture(dex, "1,2,3,4", &[set.clone()], &[set]) else {
+                continue;
+            };
+            let mon = &built.sides[0].roster[0];
+            if mon.gender != mo.gender || !crate::hp_evidence::consistent(dex, mon, mo.hp_type_mask) {
+                continue;
+            }
+            let sig = mon_sig(mon);
+            match entries.iter_mut().find(|(existing, _)| mon_sig(existing) == sig) {
+                Some((_, w)) => *w += weight,
+                None => entries.push((mon.clone(), weight)),
+            }
+        }
+
+        if entries.is_empty() {
+            return None;
+        }
+        if entries.len() == 1 && mon_sig(&entries[0].0) == mon_sig(fallback_mon) {
+            return None;
+        }
+        let total = entries.iter().map(|(_, w)| *w).sum();
+        Some(LoadoutDraw { entries, total })
+    }
+
     fn fallback_set(&self, dex: &Dex, mo: &MonObs) -> PokemonSet {
+        if self.fallback_policy == FallbackPolicy::Bayesian {
+            return self.bayesian_fallback_set(dex, mo, std::slice::from_ref(mo));
+        }
         let pool_set = self.pool_set_for(dex, mo);
         // A separate prior, not a pool candidate: it can fill hidden fields
         // without pretending an exact rental-team identity survived the
@@ -1388,7 +1864,13 @@ impl Belief {
             // Deliberately empty: the engine safely enumerates implicit
             // Struggle, matching the pre-M17d control without a fake move.
             FallbackPolicy::LegacyMetaOnly => legacy_base_set(dex, mo),
-            FallbackPolicy::Layered | FallbackPolicy::RevealedLoadout | FallbackPolicy::RevealedLoadoutDraw | FallbackPolicy::RetainPerish | FallbackPolicy::EarlyPerish | FallbackPolicy::EarlyRest => base_set(dex, mo),
+            FallbackPolicy::Layered
+            | FallbackPolicy::RevealedLoadout
+            | FallbackPolicy::RevealedLoadoutDraw
+            | FallbackPolicy::RetainPerish
+            | FallbackPolicy::EarlyPerish
+            | FallbackPolicy::EarlyRest
+            | FallbackPolicy::Bayesian => base_set(dex, mo),
         });
         set.level = mo.level;
         set.gender = Some(match mo.gender.as_str() {
@@ -1887,9 +2369,9 @@ mod fallback_tests {
     #[test]
     fn default_policy_anticipates_perish() {
         let (dex, pool, mut battle, mut obs) = loadout_fixture();
-        assert_eq!(FallbackPolicy::default(), FallbackPolicy::EarlyPerish);
+        assert_eq!(FallbackPolicy::default(), FallbackPolicy::Bayesian);
         let mut belief = Belief::new(&dex, &pool, &obs);
-        assert_eq!(belief.fallback_policy, FallbackPolicy::EarlyPerish);
+        assert_eq!(belief.fallback_policy, FallbackPolicy::Bayesian);
         battle.sides[1].roster[0].is_active = true;
         obs.observe(&battle, &dex);
         belief.sync(&dex, &obs);
@@ -3034,5 +3516,149 @@ mod fallback_tests {
         let team = vec![set; 6];
         let built = Battle::from_fixture(&dex, "1,2,3,4", &team, &team).unwrap();
         assert_eq!(built.sides[0].roster[0].base_move_slots, sampled);
+    }
+
+    #[test]
+    fn supplemental_prior_teams_are_all_format_legal_and_cover_baton_pass_learners() {
+        let dex = test_dex();
+        let raw: SupplementalPriorDb = serde_json::from_str(SUPPLEMENTAL_PRIOR_JSON).unwrap();
+        let legal = supplemental_prior_teams(&dex);
+        assert_eq!(
+            legal.len(),
+            raw.teams.len(),
+            "every embedded supplemental prior team must pass validate_team"
+        );
+        for bp_species in [
+            "jolteon",
+            "scizor",
+            "scyther",
+            "espeon",
+            "girafarig",
+            "smeargle",
+            "umbreon",
+            "vaporeon",
+            "flareon",
+            "mrmime",
+            "aipom",
+            "ariados",
+            "ledian",
+            "farfetchd",
+            "venomoth",
+            "eevee",
+            "venonat",
+            "ledyba",
+            "spinarak",
+        ] {
+            let has_bp_set = legal.iter().flat_map(|t| &t.sets).any(|s| {
+                toid(&s.species) == bp_species
+                    && s.moves.iter().any(|m| toid(m) == "batonpass")
+                    && s.moves.len() == 4
+            });
+            assert!(
+                has_bp_set,
+                "supplemental prior must provide a 4-move Baton Pass set for {bp_species}"
+            );
+        }
+    }
+
+    #[test]
+    fn bayesian_fallback_infers_baton_pass_from_setup_reveals_and_teammate_context() {
+        let dex = test_dex();
+        let pool: MetaPool = serde_json::from_str(include_str!(
+            "../../../data/belief-pool-v3/belief-pool.json"
+        ))
+        .unwrap();
+
+        // Custom high-speed Baton Pass team (off-pool because of custom composition)
+        let custom: Vec<PokemonSet> = [
+            ("Jolteon", "Leftovers", 50, &["Agility", "Baton Pass", "Substitute", "Thunderbolt"][..]),
+            ("Marowak", "Thick Club", 55, &["Earthquake", "Rock Slide", "Swords Dance", "Body Slam"][..]),
+            ("Scizor", "Miracle Berry", 50, &["Swords Dance", "Agility", "Baton Pass", "Steel Wing"][..]),
+            ("Espeon", "Gold Berry", 50, &["Growth", "Baton Pass", "Psychic", "Substitute"][..]),
+            ("Snorlax", "Mint Berry", 50, &["Double-Edge", "Earthquake", "Rest", "Curse"][..]),
+            ("Suicune", "Focus Band", 50, &["Surf", "Ice Beam", "Rest", "Roar"][..]),
+        ]
+        .into_iter()
+        .map(|(sp, item, lv, mvs)| PokemonSet {
+            name: sp.to_string(),
+            species: sp.to_string(),
+            item: item.to_string(),
+            ability: "No Ability".to_string(),
+            moves: mvs.iter().map(|m| m.to_string()).collect(),
+            level: lv,
+            evs: None,
+            ivs: None,
+            happiness: None,
+            gender: Some(if sp == "Suicune" { "N" } else { "M" }.to_string()),
+        })
+        .collect();
+
+        let mut battle =
+            Battle::from_fixture(&dex, "1,2,3,4", &pool.teams[0].sets, &custom).unwrap();
+        let mut obs = Observer::new(&battle, 0);
+        let mut belief = Belief::new(&dex, &pool, &obs);
+        assert!(belief.is_fallback());
+
+        // Scizor and Espeon (absent from belief-pool-v3) immediately get 4-move sets with Baton Pass
+        let scizor_ref = &belief.refs(None)[2];
+        assert_eq!(scizor_ref.base_move_slots.len(), 4);
+        assert!(scizor_ref
+            .base_move_slots
+            .iter()
+            .any(|m| dex.moves.key(m.id) == "batonpass"));
+        let espeon_ref = &belief.refs(None)[3];
+        assert_eq!(espeon_ref.base_move_slots.len(), 4);
+        assert!(espeon_ref
+            .base_move_slots
+            .iter()
+            .any(|m| dex.moves.key(m.id) == "batonpass"));
+
+        // Jolteon switches in and reveals Agility: posterior loadouts must carry Baton Pass
+        battle.sides[1].roster[0].is_active = true;
+        obs.observe(&battle, &dex);
+        obs.ingest_line("|move|p2a: Jolteon|Agility|p1a: Target", &dex);
+        belief.sync(&dex, &obs);
+
+        let jolteon_ref = &belief.refs(None)[0];
+        assert!(
+            jolteon_ref
+                .base_move_slots
+                .iter()
+                .any(|m| dex.moves.key(m.id) == "batonpass"),
+            "Jolteon fallback ref must retain Baton Pass after revealing Agility"
+        );
+        for seed in 0..64 {
+            let det = belief.determinize(&dex, &battle, &obs, &mut SplitMix64::new(seed));
+            let moves: Vec<&str> = det.sides[1].roster[0]
+                .base_move_slots
+                .iter()
+                .map(|m| dex.moves.key(m.id))
+                .collect();
+            assert!(
+                moves.contains(&"agility") && moves.contains(&"batonpass"),
+                "determinized Jolteon moves after Agility must contain batonpass: {moves:?}"
+            );
+        }
+
+        // Novel move combination backoff: Jolteon reveals Agility + Attract (no exact set match)
+        // Conditional co-occurrence with Agility still retains Baton Pass without move-name rules!
+        let novel_jolteon = mon(&dex, "jolteon", 50, &["agility", "attract"]);
+        let novel_set = belief.fallback_set(&dex, &novel_jolteon);
+        assert_eq!(novel_set.moves.len(), 4);
+        assert!(
+            novel_set.moves.iter().any(|m| toid(m) == "batonpass"),
+            "novel Agility + Attract Jolteon must retain Baton Pass via co-occurrence: {:?}",
+            novel_set.moves
+        );
+
+        // Novel move combination on Misdreavus: Mean Look + Attract retains Perish Song via co-occurrence
+        let novel_misdreavus = mon(&dex, "misdreavus", 50, &["meanlook", "attract"]);
+        let novel_mis_set = belief.fallback_set(&dex, &novel_misdreavus);
+        assert_eq!(novel_mis_set.moves.len(), 4);
+        assert!(
+            novel_mis_set.moves.iter().any(|m| toid(m) == "perishsong"),
+            "novel Mean Look + Attract Misdreavus must retain Perish Song via co-occurrence: {:?}",
+            novel_mis_set.moves
+        );
     }
 }
