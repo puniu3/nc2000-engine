@@ -186,6 +186,11 @@ pub struct Observer {
     /// has carried this rule offline since the corpus harness was built; this
     /// is the same rule on the live channel.
     called_charging: Vec<Option<MoveId>>,
+    /// Per-mon: a multi-turn locked move (`Outrage`, `Petal Dance`, `Thrash`,
+    /// `Rollout`, `Bide`) started by a CALLER (`Metronome` / `Mirror Move`).
+    /// Continuation turns emit plain `|move|` lines with no `[from]` until the
+    /// lock ends (mon switches/faints or executes a different move).
+    called_locked: Vec<Option<MoveId>>,
     /// The last line was a called move announcing its charge (`[from]` +
     /// `[still]`), awaiting the `-prepare` that confirms which move it is.
     pending_call: Option<(usize, MoveId)>,
@@ -312,6 +317,7 @@ impl Observer {
             log_suppress: vec![false; n],
             mimic_overlay: vec![None; n],
             called_charging: vec![None; n],
+            called_locked: vec![None; n],
             pending_call: None,
             hp_targets: [None, None],
             hp_pending: None,
@@ -365,6 +371,7 @@ impl Observer {
             log_suppress: vec![false; n],
             mimic_overlay: vec![None; n],
             called_charging: vec![None; n],
+            called_locked: vec![None; n],
             pending_call: None,
             hp_targets: [None, None],
             hp_pending: None,
@@ -489,8 +496,9 @@ impl Observer {
                     self.log_suppress.iter_mut().for_each(|s| *s = false);
                     // Mimic's overwritten slot goes back to Mimic on exit
                     self.mimic_overlay.iter_mut().for_each(|o| *o = None);
-                    // a charge dies with the mon that was holding it
+                    // a charge or multi-turn lock dies with the mon that was holding it
                     self.called_charging.iter_mut().for_each(|c| *c = None);
+                    self.called_locked.iter_mut().for_each(|c| *c = None);
                 }
                 false
             }
@@ -651,6 +659,12 @@ impl Observer {
                 if parts.iter().any(|p| *p == "[still]") {
                     self.pending_call = Some((m, id));
                 }
+                if matches!(
+                    dex.moves.key(id),
+                    "outrage" | "petaldance" | "thrash" | "rollout" | "bide"
+                ) {
+                    self.called_locked[m] = Some(id);
+                }
                 return false;
             }
         }
@@ -659,9 +673,16 @@ impl Observer {
             self.called_charging[m] = None;
             return false;
         }
+        if from.is_none() && self.called_locked[m] == Some(id) {
+            // continuation turn of a caller-initiated multi-turn lock
+            return false;
+        }
         // synthetic non-set moves
         if matches!(dex.moves.key(id), "struggle" | "recharge") {
             return false;
+        }
+        if from.is_none() {
+            self.called_locked[m] = None;
         }
         if dex.moves.key(id) == "hiddenpower" {
             if let Some(target) = parts.get(3) {
@@ -929,5 +950,24 @@ mod tests {
             obs.ingest_line(line, &dex);
         }
         assert_eq!(revealed(&obs, &dex), vec!["razorwind".to_string()]);
+    }
+
+    #[test]
+    fn a_called_multiturn_locked_move_does_not_reveal_slot() {
+        let dex = load_dex();
+        let mut obs = one_mon_observer(&dex, "Granbull", "Granbull");
+        for line in [
+            "|move|p2a: Granbull|Metronome|p2a: Granbull",
+            "|move|p2a: Granbull|Rollout|p1a: Electrode|[from] move: Metronome",
+            "|move|p2a: Granbull|Rollout|p1a: Electrode",
+            "|move|p2a: Granbull|Rollout|p1a: Electrode",
+            "|move|p2a: Granbull|Mud-Slap|p1a: Electrode",
+        ] {
+            obs.ingest_line(line, &dex);
+        }
+        assert_eq!(
+            revealed(&obs, &dex),
+            vec!["metronome".to_string(), "mudslap".to_string()]
+        );
     }
 }

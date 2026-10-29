@@ -164,6 +164,7 @@ fn collect_set_evidence(lines: &[String]) -> SetEvidence {
     // authoritative `|-prepare|` that follows the called announcement.
     let mut previous_called: Option<(usize, String, String)> = None;
     let mut called_charging: HashMap<(usize, String), String> = HashMap::new();
+    let mut called_locked: HashMap<(usize, String), String> = HashMap::new();
     for (cut, line) in lines.iter().enumerate() {
         let parts: Vec<&str> = line.split('|').collect();
         let command = parts.get(1).copied().unwrap_or("");
@@ -199,13 +200,15 @@ fn collect_set_evidence(lines: &[String]) -> SetEvidence {
             "switch" | "drag" | "replace" => {
                 if let Some(outgoing) = active_names[side].replace(name.to_string()) {
                     transformed.remove(&(side, outgoing.clone()));
-                    called_charging.remove(&(side, outgoing));
+                    called_charging.remove(&(side, outgoing.clone()));
+                    called_locked.remove(&(side, outgoing));
                 }
                 // A transformed mon returns to its base set on re-entry.
                 // `replace` is the protocol's identity-replacement analogue
                 // of a switch and likewise must not retain copied moves.
                 transformed.remove(&(side, name.to_string()));
                 called_charging.remove(&(side, name.to_string()));
+                called_locked.remove(&(side, name.to_string()));
                 let species = parts
                     .get(3)
                     .map(|details| toid(details.split(',').next().unwrap_or("")))
@@ -230,6 +233,7 @@ fn collect_set_evidence(lines: &[String]) -> SetEvidence {
             "faint" => {
                 transformed.remove(&(side, name.to_string()));
                 called_charging.remove(&(side, name.to_string()));
+                called_locked.remove(&(side, name.to_string()));
                 if active_names[side].as_deref() == Some(name) {
                     active_names[side] = None;
                 }
@@ -263,15 +267,29 @@ fn collect_set_evidence(lines: &[String]) -> SetEvidence {
                     if from != key && from != "sleeptalk" {
                         if line.contains("[still]") {
                             previous_called = Some((side, name.to_string(), key));
+                        } else if matches!(
+                            key.as_str(),
+                            "outrage" | "petaldance" | "thrash" | "rollout" | "bide"
+                        ) {
+                            called_locked.insert((side, name.to_string()), key);
                         }
                         continue;
                     }
-                } else if called_charging
-                    .get(&(side, name.to_string()))
-                    .is_some_and(|called| *called == key)
-                {
-                    called_charging.remove(&(side, name.to_string()));
-                    continue;
+                } else {
+                    if called_charging
+                        .get(&(side, name.to_string()))
+                        .is_some_and(|called| *called == key)
+                    {
+                        called_charging.remove(&(side, name.to_string()));
+                        continue;
+                    }
+                    if called_locked
+                        .get(&(side, name.to_string()))
+                        .is_some_and(|called| *called == key)
+                    {
+                        continue;
+                    }
+                    called_locked.remove(&(side, name.to_string()));
                 }
                 let moves = evidence.moves.entry((side, name.to_string())).or_default();
                 if !moves.contains(&key) {

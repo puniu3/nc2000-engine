@@ -84,6 +84,8 @@ STAGE_PATHS = [
     "data/team-selection-v2/panel.json",
     "data/team-inventory-v1/eval/teams.json",
     "data/eco-pool/master-pool.json",
+    "data/eco-pool/nash-solution.json",
+    "data/eco-r17/pool-artifact.json",
     "data/eco-r17/islands",
 ]
 
@@ -629,6 +631,206 @@ PY
     print(f"Submitted Ecosystem job: {job_id} ({task_count} islands, parallelism={parallelism})")
 
 
+def _rewrite_kodoku_id(val: str | None, island_name: str) -> str | None:
+    if val is None:
+        return None
+    if val == "kodoku":
+        return island_name
+    if val.startswith("kodoku-s"):
+        return f"{island_name}-s{val[len('kodoku-s'):]}"
+    return val
+
+
+def cmd_submit_kodoku(args: argparse.Namespace) -> None:
+    """Submit Multi-Island Core-Nash + Same-Signature Deme Kodoku (`meta_eco kodoku`)."""
+    existing = run_cmd(
+        [
+            "gcloud",
+            "batch",
+            "jobs",
+            "list",
+            "--location",
+            args.region,
+            "--format=value(name.basename(),status.state)",
+        ],
+        capture=True,
+    )
+    prefix = f"nc2000-kodoku-r{args.round}-"
+    for line in existing.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[0].startswith(prefix) and parts[1] in ("QUEUED", "SCHEDULED", "RUNNING"):
+            print(f"Idempotency guard: {parts[0]} is already {parts[1]} in {args.region}; skipping duplicate submit.")
+            return
+
+    src_hash = cmd_stage(args)
+    bucket = BUCKETS[args.region]
+    remote_dir = f"gs://{bucket}/{GCS_PREFIX}/kodoku-r{args.round}/islands"
+
+    if args.seed_ledger0:
+        seed_p = pathlib.Path(args.seed_ledger0)
+        if seed_p.exists():
+            isl0 = f"deme-r{args.round}-00"
+            remote_l0 = f"{remote_dir}/{isl0}-ledger.json"
+            check = subprocess.run(
+                ["gcloud", "storage", "ls", remote_l0],
+                capture_output=True,
+                text=True,
+            )
+            if check.returncode != 0:
+                led = json.loads(seed_p.read_text())
+                led["island"] = isl0
+                for key in ("active_strains", "archived_strains"):
+                    for s in led.get(key, []):
+                        s["id"] = _rewrite_kodoku_id(s.get("id"), isl0)
+                        s["parent_id"] = _rewrite_kodoku_id(s.get("parent_id"), isl0)
+                        if s.get("symbiont_of"):
+                            s["symbiont_of"] = _rewrite_kodoku_id(s.get("symbiont_of"), isl0)
+                for wh in led.get("wave_history", []):
+                    wh["top_strain_id"] = _rewrite_kodoku_id(wh.get("top_strain_id"), isl0)
+                with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as tf:
+                    json.dump(led, tf)
+                    tmp_l0 = tf.name
+                try:
+                    run_cmd(["gcloud", "storage", "cp", tmp_l0, remote_l0])
+                    print(f"Pre-staged local Wave-{led.get('wave', 0)} ledger -> {remote_l0}", file=sys.stderr)
+                finally:
+                    os.unlink(tmp_l0)
+
+    presets = [
+        {
+            "seeds": "data/community-rentals-v0/teams.json,data/team-pool-v2/team-pool.json",
+            "shuffle_seeds": False,
+            "random_founders": 0,
+        },
+        {
+            "seeds": "data/eco-pool/master-pool.json",
+            "shuffle_seeds": True,
+            "random_founders": 0,
+        },
+        {
+            "seeds": "data/eco-pool/master-pool.json,data/eco-r17/pool-artifact.json",
+            "shuffle_seeds": True,
+            "random_founders": 2,
+        },
+        {
+            "seeds": "data/community-rentals-v0/teams.json,data/eco-pool/master-pool.json",
+            "shuffle_seeds": True,
+            "random_founders": 2,
+        },
+        {
+            "seeds": "data/team-inventory-v1/eval/teams.json",
+            "shuffle_seeds": True,
+            "random_founders": 4,
+        },
+        {
+            "seeds": "data/eco-r17/pool-artifact.json,data/community-rentals-v0/teams.json,data/team-inventory-v1/eval/teams.json",
+            "shuffle_seeds": True,
+            "random_founders": 6,
+        },
+    ]
+
+    islands = []
+    for k in range(args.islands):
+        global_idx = args.island_offset + k
+        preset = presets[global_idx % len(presets)]
+        islands.append(
+            {
+                "name": f"deme-r{args.round}-{global_idx:02d}",
+                "seed": args.seed_base + args.round * 100003 + global_idx * 9973,
+                "gauntlet": args.gauntlet_file,
+                "seeds": preset["seeds"],
+                "shuffle_seeds": preset["shuffle_seeds"],
+                "random_founders": preset["random_founders"],
+            }
+        )
+
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+        json.dump(islands, f, indent=2)
+        manifest_local = f.name
+    try:
+        run_cmd(
+            [
+                "gcloud",
+                "storage",
+                "cp",
+                manifest_local,
+                f"gs://{bucket}/{GCS_PREFIX}/kodoku-r{args.round}/islands-manifest.json",
+            ]
+        )
+    finally:
+        os.unlink(manifest_local)
+
+    task_count = len(islands)
+    parallelism = min(task_count, args.parallelism)
+    job_id = f"nc2000-kodoku-r{args.round}-{int(time.time()) % 100000}"
+
+    script = f"""set -euo pipefail
+mkdir -p /tmp/work /mnt/disks/gcs/{GCS_PREFIX}/kodoku-r{args.round}/islands
+tar -xzf /mnt/disks/gcs/{GCS_PREFIX}/src-{src_hash}.tar.gz -C /tmp/work
+cd /tmp/work
+
+BIN=/mnt/disks/gcs/{GCS_PREFIX}/bin-{src_hash}/meta_eco
+mkdir -p /mnt/disks/gcs/{GCS_PREFIX}/bin-{src_hash}
+if [ -s "$BIN" ] && cp "$BIN" /tmp/meta_eco 2>/dev/null; then
+  chmod +x /tmp/meta_eco
+  BIN=/tmp/meta_eco
+else
+  echo "Building meta_eco locally on worker..."
+  CARGO_TARGET_DIR=/tmp/target cargo build --release -p nc2000-bot --example meta_eco
+  if [ "${{BATCH_TASK_INDEX:-0}}" = "0" ]; then
+    cp /tmp/target/release/examples/meta_eco "${{BIN}}.tmp" && mv "${{BIN}}.tmp" "$BIN" || true
+  fi
+  BIN=/tmp/target/release/examples/meta_eco
+fi
+
+export BIN_PATH="$BIN"
+
+python3 - << 'PY'
+import json, os, subprocess, sys
+
+idx = int(os.environ.get("BATCH_TASK_INDEX", "0"))
+manifest_path = "/mnt/disks/gcs/{GCS_PREFIX}/kodoku-r{args.round}/islands-manifest.json"
+islands = json.load(open(manifest_path))
+if idx >= len(islands):
+    sys.exit(0)
+cfg = islands[idx]
+cmd = [
+    os.environ["BIN_PATH"],
+    "kodoku",
+    "--island", cfg["name"],
+    "--out-dir", "/mnt/disks/gcs/{GCS_PREFIX}/kodoku-r{args.round}/islands",
+    "--gauntlet-file", cfg["gauntlet"],
+    "--seeds", cfg["seeds"],
+    "--agent", "{args.agent}",
+    "--waves", "{args.waves}",
+    "--max-seconds", "{args.max_seconds}",
+    "--carry", "{args.carry}",
+    "--buds", "{args.buds}",
+    "--eval-games", "{args.eval_games}",
+    "--random-founders", str(cfg.get("random_founders", 0)),
+    "--seed", str(cfg["seed"]),
+    "--threads", "{args.threads_per_task}",
+]
+if cfg.get("shuffle_seeds"):
+    cmd.append("--shuffle-seeds")
+print("Running:", " ".join(cmd), flush=True)
+subprocess.run(cmd, check=True)
+PY
+"""
+    submit_batch_job(
+        job_id=job_id,
+        region=args.region,
+        machine_type=args.machine_type,
+        task_count=task_count,
+        parallelism=parallelism,
+        cpu_milli=args.threads_per_task * 1000,
+        memory_mib=args.threads_per_task * 1800,
+        max_run_duration=f"{max(2400, args.max_seconds + 1200)}s",
+        script=script,
+    )
+    print(f"Submitted Kodoku-Deme job: {job_id} ({task_count} islands, parallelism={parallelism})")
+
+
 def cmd_collect(args: argparse.Namespace) -> None:
     bucket = BUCKETS[args.region]
     dest = pathlib.Path(args.out)
@@ -708,6 +910,24 @@ def main() -> None:
     sp_eco.add_argument("--threads-per-task", type=int, default=16)
     sp_eco.add_argument("--parallelism", type=int, default=6)
     sp_eco.set_defaults(func=cmd_submit_eco)
+
+    sp_kod = sub.add_parser("submit-kodoku", help="Submit Multi-Island Core-Nash + Deme Kodoku")
+    sp_kod.add_argument("--round", type=int, default=1)
+    sp_kod.add_argument("--islands", type=int, default=6)
+    sp_kod.add_argument("--island-offset", type=int, default=0)
+    sp_kod.add_argument("--seed-base", type=int, default=20261029)
+    sp_kod.add_argument("--gauntlet-file", default="data/eco-pool/master-pool.json")
+    sp_kod.add_argument("--seed-ledger0", default="")
+    sp_kod.add_argument("--agent", default="open:1000:0.4")
+    sp_kod.add_argument("--waves", type=int, default=99)
+    sp_kod.add_argument("--max-seconds", type=int, default=4200)
+    sp_kod.add_argument("--carry", type=int, default=10)
+    sp_kod.add_argument("--buds", type=int, default=10)
+    sp_kod.add_argument("--eval-games", type=int, default=2)
+    sp_kod.add_argument("--machine-type", default="c2d-highcpu-16")
+    sp_kod.add_argument("--threads-per-task", type=int, default=16)
+    sp_kod.add_argument("--parallelism", type=int, default=6)
+    sp_kod.set_defaults(func=cmd_submit_kodoku)
 
     sp_col = sub.add_parser("collect", help="Sync results from GCS to local directory")
     sp_col.add_argument("--remote-subpath", required=True)
