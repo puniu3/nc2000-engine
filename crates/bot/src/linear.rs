@@ -486,7 +486,7 @@ pub fn survival_curve_4(
     def_side: usize,
     start_hp: i16,
 ) -> [f64; 4] {
-    let (s, _) = survival_curve_6_with_mean_hp(cb, table, att_side, def_side, start_hp);
+    let (s, _) = survival_curve_k_with_mean_hp(cb, table, att_side, def_side, start_hp, 3, false);
     [s[0], s[1], s[2], s[3]]
 }
 
@@ -499,16 +499,52 @@ fn survival_curve_6_with_mean_hp(
     def_side: usize,
     start_hp: i16,
 ) -> ([f64; 7], f64) {
+    survival_curve_k_with_mean_hp(cb, table, att_side, def_side, start_hp, 6, true)
+}
+
+#[inline]
+fn survival_curve_k_with_mean_hp(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    att_side: usize,
+    def_side: usize,
+    start_hp: i16,
+    max_steps: usize,
+    need_mean_hp: bool,
+) -> ([f64; 7], f64) {
     if start_hp <= 0 {
         return ([0.0; 7], 0.0);
+    }
+    let max_steps = max_steps.min(6);
+    if max_steps == 0 && !need_mean_hp {
+        return ([1.0; 7], 0.0);
     }
     let att_slot = cb.sides[att_side].active_idx as usize;
     let def_slot = cb.sides[def_side].active_idx as usize;
     let att_idx = att_side * 3 + att_slot;
     let def_idx = def_side * 3 + def_slot;
     let maxhp = table.mons[def_idx].maxhp.max(1);
+
+    let def_mon = &cb.mons[def_idx];
+    let att_mon = &cb.mons[att_idx];
+    let def_spec = &table.mons[def_idx];
+    let att_spec = &table.mons[att_idx];
+
+    // Attacker sleep, freeze, paralysis, confusion, recharge
+    let att_berry = att_mon.item != 0 && (att_spec.is_mintberry || att_spec.is_miracleberry);
+    let att_miracle = att_mon.item != 0 && att_spec.is_miracleberry;
+    let mut att_slp = if att_mon.status_raw() == Status::Slp as u8 && !att_berry {
+        att_mon.status_counter().saturating_sub(1)
+    } else {
+        0
+    };
+
     let kern_awake = DmgKernel1D::best_attack(cb, table, att_side, att_slot, def_side, def_slot);
-    let kern_slp = DmgKernel1D::sleep_talk(cb, table, att_side, att_slot, def_side, def_slot);
+    let kern_slp = if att_slp > 0 {
+        DmgKernel1D::sleep_talk(cb, table, att_side, att_slot, def_side, def_slot)
+    } else {
+        DmgKernel1D::zero()
+    };
 
     let to_b = |hp: i16| -> usize {
         if hp <= 0 {
@@ -531,11 +567,8 @@ fn survival_curve_6_with_mean_hp(
 
     let mut dist = [0.0f32; B32 + 1];
     dist[b0] = 1.0;
-
-    let def_mon = &cb.mons[def_idx];
-    let att_mon = &cb.mons[att_idx];
-    let def_spec = &table.mons[def_idx];
-    let att_spec = &table.mons[att_idx];
+    let mut min_b = b0;
+    let mut max_b = b0;
 
     let lefties: i16 = if def_mon.item != 0 && def_spec.is_leftovers {
         (maxhp / 16).max(1)
@@ -563,26 +596,21 @@ fn survival_curve_6_with_mean_hp(
         0
     };
 
-    // Defender confusion self-hit & recharge
+    // Defender confusion self-hit
     let mut def_conf = if (def_mon.vol_flags & vol_bit::CONFUSION) != 0 {
         def_mon.timers[0].saturating_sub(1)
     } else {
         0
     };
-    let def_atk = cb.mon_stat(table, def_side, def_slot, 0, false, false) as i32;
-    let def_def = cb.mon_stat(table, def_side, def_slot, 1, false, false) as i32;
-    let def_conf_dmg =
+    let def_conf_dmg = if def_conf > 0 {
+        let def_atk = cb.mon_stat(table, def_side, def_slot, 0, false, false) as i32;
+        let def_def = cb.mon_stat(table, def_side, def_slot, 1, false, false) as i32;
         (((def_spec.level as i32 * 2 / 5 + 2) * 40 * def_atk / def_def.max(1)) / 50 + 2).max(1)
-            as i16;
-
-    // Attacker sleep, freeze, paralysis, confusion, recharge
-    let att_berry = att_mon.item != 0 && (att_spec.is_mintberry || att_spec.is_miracleberry);
-    let att_miracle = att_mon.item != 0 && att_spec.is_miracleberry;
-    let mut att_slp = if att_mon.status_raw() == Status::Slp as u8 && !att_berry {
-        att_mon.status_counter().saturating_sub(1)
+            as i16
     } else {
         0
     };
+
     let mut p_still_frz = if att_mon.status_raw() == Status::Frz as u8 && !att_miracle {
         1.0f32
     } else {
@@ -598,9 +626,17 @@ fn survival_curve_6_with_mean_hp(
     let mut sub_up = (def_mon.vol_flags & vol_bit::SUBSTITUTE) != 0 && def_mon.hp_pool[1] > 0;
 
     let mut out = [1.0f64; 7];
-    for step in 1..=6usize {
+    for step in 1..=max_steps {
+        if min_b > max_b {
+            for st in step..=max_steps {
+                out[st] = 0.0;
+            }
+            break;
+        }
         let mut next = [0.0f32; B32 + 1];
         next[0] = dist[0];
+        let mut next_min = B32 + 1;
+        let mut next_max = 0usize;
 
         let status_dot = if is_tox {
             tox_counter += 1;
@@ -646,14 +682,13 @@ fn survival_curve_6_with_mean_hp(
             sub_up = false;
         }
 
-        for b in 1..=B32 {
+        for b in min_b..=max_b {
             let p_state = dist[b];
             if p_state <= 1e-7 {
                 continue;
             }
             let raw_hp = b_to_hp(b, step);
 
-            // Defender confusion self-hit branch (50% when confused)
             let branches: [(i16, f32); 2] = if p_def_selfhit > 0.0 {
                 [
                     (raw_hp, 1.0 - p_def_selfhit),
@@ -675,7 +710,16 @@ fn survival_curve_6_with_mean_hp(
                 if p_att < 1.0 {
                     let p_no_act = pm * (1.0 - p_att);
                     let final_hp = (hp_after_self + res_this_turn).clamp(0, maxhp);
-                    next[to_b(final_hp)] += p_no_act;
+                    let tb = to_b(final_hp);
+                    next[tb] += p_no_act;
+                    if tb > 0 && p_no_act > 0.0 {
+                        if tb < next_min {
+                            next_min = tb;
+                        }
+                        if tb > next_max {
+                            next_max = tb;
+                        }
+                    }
                 }
                 if p_att > 0.0 {
                     let pa = pm * p_att;
@@ -688,22 +732,39 @@ fn survival_curve_6_with_mean_hp(
                         } else {
                             (post_hit + res_this_turn).clamp(0, maxhp)
                         };
-                        next[to_b(final_hp)] += pa * prob;
+                        let tb = to_b(final_hp);
+                        let add = pa * prob;
+                        next[tb] += add;
+                        if tb > 0 && add > 0.0 {
+                            if tb < next_min {
+                                next_min = tb;
+                            }
+                            if tb > next_max {
+                                next_max = tb;
+                            }
+                        }
                     }
                 }
             }
         }
         dist = next;
+        min_b = next_min;
+        max_b = next_max;
         let mut surv = 0.0f32;
-        for b in 1..=B32 {
-            surv += dist[b];
+        if min_b <= max_b {
+            for b in min_b..=max_b {
+                surv += dist[b];
+            }
         }
         out[step] = (surv as f64).clamp(0.0, 1.0);
     }
 
+    if !need_mean_hp || min_b > max_b {
+        return (out, 0.0);
+    }
     let mut alive_mass = 0.0f32;
     let mut weighted_b = 0.0f32;
-    for b in 1..=B32 {
+    for b in min_b..=max_b {
         alive_mass += dist[b];
         weighted_b += dist[b] * (b as f32 / B32 as f32);
     }
@@ -796,15 +857,20 @@ impl Side1DOps {
         }
     }
 
-    fn build(
+    #[allow(clippy::too_many_arguments)]
+    fn build_one(
         cb: &CompactBattle,
         table: &MatchTable,
         side: usize,
         slot: usize,
         foe_side: usize,
         foe_slot: usize,
+        has_half_heal: bool,
+        has_rest: bool,
+        has_st: bool,
+        max_s_me: usize,
         foe_k_att: &DmgKernel1D,
-        foe_k_st: &DmgKernel1D,
+        foe_k_st: Option<&DmgKernel1D>,
     ) -> Self {
         let idx = side * 3 + slot;
         let foe_idx = foe_side * 3 + foe_slot;
@@ -814,24 +880,6 @@ impl Side1DOps {
         let foe_spec = &table.mons[foe_idx];
         let maxhp = spec.maxhp.max(1);
 
-        let dis = (mon.vol_flags & vol_bit::DISABLE) != 0;
-        let dis_slot = ((mon.slot_refs >> 4) & 0x03) as usize;
-        let mut has_half_heal = false;
-        let mut has_rest = false;
-        let mut has_st = false;
-        for m_i in 0..spec.num_moves as usize {
-            if mon.pp[m_i] > 0 && !(dis && m_i == dis_slot) {
-                let ms = &table.move_specs[idx][m_i];
-                if ms.is_half_heal {
-                    has_half_heal = true;
-                } else if ms.is_rest {
-                    has_rest = true;
-                }
-                if ms.special_kind == 10 {
-                    has_st = true;
-                }
-            }
-        }
         let perish_active = (mon.vol_flags & vol_bit::PERISH_SONG) != 0;
         let has_berry = mon.item != 0 && (spec.is_mintberry || spec.is_miracleberry);
         let is_frz =
@@ -840,10 +888,12 @@ impl Side1DOps {
         let heal_is_rest = !has_half_heal && has_rest;
 
         let mut half_heal_bin = [0u8; B16 + 1];
-        for b in 1..=B16 {
-            let hp = Self::b16_to_hp(b, maxhp);
-            let healed = (hp + maxhp / 2).min(maxhp);
-            half_heal_bin[b] = Self::to_b16(healed, maxhp);
+        if has_heal && !heal_is_rest {
+            for b in 1..=B16 {
+                let hp = Self::b16_to_hp(b, maxhp);
+                let healed = (hp + maxhp / 2).min(maxhp);
+                half_heal_bin[b] = Self::to_b16(healed, maxhp);
+            }
         }
 
         let lefties = if mon.item != 0 && spec.is_leftovers {
@@ -875,12 +925,15 @@ impl Side1DOps {
         };
         let net_uncured = lefties + leech_gain - leech_drain - status_dot;
         let net_cured = lefties + leech_gain - leech_drain;
+        let need_cured_eot = (max_s_me > 0 && has_rest) || (has_heal && heal_is_rest);
 
         let mut eot_bin = [[0u8; B16 + 1]; 2];
         for b in 1..=B16 {
             let hp = Self::b16_to_hp(b, maxhp);
             eot_bin[0][b] = Self::to_b16((hp + net_uncured).clamp(0, maxhp), maxhp);
-            eot_bin[1][b] = Self::to_b16((hp + net_cured).clamp(0, maxhp), maxhp);
+            if need_cured_eot {
+                eot_bin[1][b] = Self::to_b16((hp + net_cured).clamp(0, maxhp), maxhp);
+            }
         }
 
         let foe_miracle = foe_mon.item != 0 && foe_spec.is_miracleberry;
@@ -896,25 +949,44 @@ impl Side1DOps {
             incoming[0][b] = BinDist16::identity(b as u8);
             let hp = Self::b16_to_hp(b, maxhp);
 
-            for (kind, kern) in [(1usize, foe_k_att), (2usize, foe_k_st)] {
-                let mut d = BinDist16 {
+            let mut d1 = BinDist16 {
+                bins: [(0, 0.0); 8],
+                len: 0,
+                ko_prob: 0.0,
+            };
+            if foe_k_att.max_dmg <= 0 {
+                d1.push(b as u8, 1.0);
+            } else {
+                if p_foe_act < 1.0 {
+                    d1.push(b as u8, 1.0 - p_foe_act);
+                }
+                for i in 0..foe_k_att.len {
+                    let (dmg, prob) = foe_k_att.pts[i];
+                    let post_hp = (hp - dmg).max(0);
+                    d1.push(Self::to_b16(post_hp, maxhp), p_foe_act * prob);
+                }
+            }
+            incoming[1][b] = d1;
+
+            if let Some(kern_st) = foe_k_st {
+                let mut d2 = BinDist16 {
                     bins: [(0, 0.0); 8],
                     len: 0,
                     ko_prob: 0.0,
                 };
-                if kern.max_dmg <= 0 {
-                    d.push(b as u8, 1.0);
+                if kern_st.max_dmg <= 0 {
+                    d2.push(b as u8, 1.0);
                 } else {
                     if p_foe_act < 1.0 {
-                        d.push(b as u8, 1.0 - p_foe_act);
+                        d2.push(b as u8, 1.0 - p_foe_act);
                     }
-                    for i in 0..kern.len {
-                        let (dmg, prob) = kern.pts[i];
+                    for i in 0..kern_st.len {
+                        let (dmg, prob) = kern_st.pts[i];
                         let post_hp = (hp - dmg).max(0);
-                        d.push(Self::to_b16(post_hp, maxhp), p_foe_act * prob);
+                        d2.push(Self::to_b16(post_hp, maxhp), p_foe_act * prob);
                     }
                 }
-                incoming[kind][b] = d;
+                incoming[2][b] = d2;
             }
         }
 
@@ -929,6 +1001,560 @@ impl Side1DOps {
             incoming,
         }
     }
+
+    fn build_pair(
+        cb: &CompactBattle,
+        table: &MatchTable,
+        s0: usize,
+        slot0: usize,
+        s1: usize,
+        slot1: usize,
+    ) -> ([Self; 2], usize, usize, u8) {
+        let scan_moves = |side: usize, slot: usize| -> (bool, bool, bool) {
+            let idx = side * 3 + slot;
+            let mon = &cb.mons[idx];
+            let spec = &table.mons[idx];
+            let dis = (mon.vol_flags & vol_bit::DISABLE) != 0;
+            let dis_slot = ((mon.slot_refs >> 4) & 0x03) as usize;
+            let mut hh = false;
+            let mut hr = false;
+            let mut hst = false;
+            for m_i in 0..spec.num_moves as usize {
+                if mon.pp[m_i] > 0 && !(dis && m_i == dis_slot) {
+                    let ms = &table.move_specs[idx][m_i];
+                    if ms.is_half_heal {
+                        hh = true;
+                    } else if ms.is_rest {
+                        hr = true;
+                    }
+                    if ms.special_kind == 10 {
+                        hst = true;
+                    }
+                }
+            }
+            (hh, hr, hst)
+        };
+
+        let (hh0, hr0, hst0) = scan_moves(s0, slot0);
+        let (hh1, hr1, hst1) = scan_moves(s1, slot1);
+
+        let max_s0 = if hr0 || cb.mons[s0 * 3 + slot0].status_raw() == Status::Slp as u8 {
+            2usize
+        } else {
+            0usize
+        };
+        let max_s1 = if hr1 || cb.mons[s1 * 3 + slot1].status_raw() == Status::Slp as u8 {
+            2usize
+        } else {
+            0usize
+        };
+
+        let k01_att = DmgKernel1D::best_attack_grid(cb, table, s0, slot0, s1, slot1);
+        let k10_att = DmgKernel1D::best_attack_grid(cb, table, s1, slot1, s0, slot0);
+        let k01_st = if max_s0 > 0 && hst0 {
+            Some(DmgKernel1D::sleep_talk_grid(cb, table, s0, slot0, s1, slot1))
+        } else {
+            None
+        };
+        let k10_st = if max_s1 > 0 && hst1 {
+            Some(DmgKernel1D::sleep_talk_grid(cb, table, s1, slot1, s0, slot0))
+        } else {
+            None
+        };
+
+        let ops0 = Self::build_one(
+            cb,
+            table,
+            s0,
+            slot0,
+            s1,
+            slot1,
+            hh0,
+            hr0,
+            hst0,
+            max_s0,
+            &k10_att,
+            k10_st.as_ref(),
+        );
+        let ops1 = Self::build_one(
+            cb,
+            table,
+            s1,
+            slot1,
+            s0,
+            slot0,
+            hh1,
+            hr1,
+            hst1,
+            max_s1,
+            &k01_att,
+            k01_st.as_ref(),
+        );
+
+        let spd0 = cb.mon_action_speed(table, s0, slot0);
+        let spd1 = cb.mon_action_speed(table, s1, slot1);
+        let spd_ord = if spd0 < spd1 {
+            0u8
+        } else if spd0 == spd1 {
+            1u8
+        } else {
+            2u8
+        };
+
+        ([ops0, ops1], max_s0, max_s1, spd_ord)
+    }
+}
+
+#[inline]
+fn interp_v_table(
+    v_table: &[[[[f32; B16 + 1]; B16 + 1]; 3]; 3],
+    hp0: i16,
+    max0: i16,
+    s0: usize,
+    hp1: i16,
+    max1: i16,
+    s1: usize,
+) -> f64 {
+    if hp0 <= 0 && hp1 <= 0 {
+        return 0.5;
+    }
+    if hp0 <= 0 {
+        return 0.0;
+    }
+    if hp1 <= 0 {
+        return 1.0;
+    }
+    let s0 = s0.min(2);
+    let s1 = s1.min(2);
+    let x0 = ((hp0 as f32) * (B16 as f32) / (max0.max(1) as f32)).clamp(0.0, B16 as f32);
+    let x1 = ((hp1 as f32) * (B16 as f32) / (max1.max(1) as f32)).clamp(0.0, B16 as f32);
+
+    let b0_lo = (x0.floor() as usize).clamp(1, B16);
+    let b0_hi = (x0.ceil() as usize).clamp(1, B16);
+    let w0 = (x0 - (b0_lo as f32)).clamp(0.0, 1.0);
+
+    let b1_lo = (x1.floor() as usize).clamp(1, B16);
+    let b1_hi = (x1.ceil() as usize).clamp(1, B16);
+    let w1 = (x1 - (b1_lo as f32)).clamp(0.0, 1.0);
+
+    let tbl = &v_table[s0][s1];
+    let v00 = tbl[b0_lo][b1_lo];
+    let v01 = tbl[b0_lo][b1_hi];
+    let v10 = tbl[b0_hi][b1_lo];
+    let v11 = tbl[b0_hi][b1_hi];
+
+    let v0 = v00 + w1 * (v01 - v00);
+    let v1 = v10 + w1 * (v11 - v10);
+    (v0 + w0 * (v1 - v0)).clamp(0.0, 1.0) as f64
+}
+
+#[inline]
+fn eval_exact_root_table(
+    v_table: &[[[[f32; B16 + 1]; B16 + 1]; 3]; 3],
+    cb: &CompactBattle,
+    table: &MatchTable,
+    s0: usize,
+    slot0: usize,
+    s1: usize,
+    slot1: usize,
+) -> f64 {
+    let idx = [s0 * 3 + slot0, s1 * 3 + slot1];
+    let hp = [cb.mons[idx[0]].hp(), cb.mons[idx[1]].hp()];
+    if hp[0] <= 0 && hp[1] <= 0 {
+        return 0.5;
+    }
+    if hp[0] <= 0 {
+        return 0.0;
+    }
+    if hp[1] <= 0 {
+        return 1.0;
+    }
+    let maxhp = [
+        table.mons[idx[0]].maxhp.max(1),
+        table.mons[idx[1]].maxhp.max(1),
+    ];
+    let slp = [
+        side_sleep_rem(cb, table, s0, slot0),
+        side_sleep_rem(cb, table, s1, slot1),
+    ];
+
+    let mut has_heal = [false; 2];
+    let mut heal_is_rest = [false; 2];
+    let mut has_rest = [false; 2];
+    let mut has_st = [false; 2];
+    let mut has_berry = [false; 2];
+    let mut p_act = [1.0f32; 2];
+    let mut eot_net = [[0i16; 2]; 2];
+
+    for i in 0..2 {
+        let m = &cb.mons[idx[i]];
+        let fm = &cb.mons[idx[1 - i]];
+        let sp = &table.mons[idx[i]];
+        let fsp = &table.mons[idx[1 - i]];
+        let dis = (m.vol_flags & vol_bit::DISABLE) != 0;
+        let dis_slot = ((m.slot_refs >> 4) & 0x03) as usize;
+        let mut hh = false;
+        let mut hr = false;
+        let mut hst = false;
+        for m_i in 0..sp.num_moves as usize {
+            if m.pp[m_i] > 0 && !(dis && m_i == dis_slot) {
+                let ms = &table.move_specs[idx[i]][m_i];
+                if ms.is_half_heal {
+                    hh = true;
+                } else if ms.is_rest {
+                    hr = true;
+                }
+                if ms.special_kind == 10 {
+                    hst = true;
+                }
+            }
+        }
+        let perish = (m.vol_flags & vol_bit::PERISH_SONG) != 0;
+        let miracle = m.item != 0 && sp.is_miracleberry;
+        let berry = m.item != 0 && (sp.is_mintberry || sp.is_miracleberry);
+        let st_raw = m.status_raw();
+        let is_frz = st_raw == Status::Frz as u8 && !miracle;
+        let is_par = st_raw == Status::Par as u8 && !miracle;
+        let is_conf = (m.vol_flags & vol_bit::CONFUSION) != 0 && m.timers[0] > 1 && !miracle;
+        let is_rech = (m.slot_refs & 0x80) != 0;
+
+        has_heal[i] = !perish && !is_frz && !is_rech && (hh || hr);
+        heal_is_rest[i] = !hh && hr;
+        has_rest[i] = hr;
+        has_st[i] = hst;
+        has_berry[i] = berry;
+        p_act[i] = if is_rech {
+            0.0
+        } else {
+            (if is_frz { 25.0 / 256.0 } else { 1.0f32 })
+                * (if is_par { 0.75f32 } else { 1.0f32 })
+                * (if is_conf { 0.50f32 } else { 1.0f32 })
+        };
+
+        let lefties = if m.item != 0 && sp.is_leftovers {
+            (maxhp[i] / 16).max(1)
+        } else {
+            0
+        };
+        let leech_drain = if (m.vol_flags & vol_bit::LEECH_SEED) != 0 {
+            (maxhp[i] / 8).max(1)
+        } else {
+            0
+        };
+        let leech_gain = if (fm.vol_flags & vol_bit::LEECH_SEED) != 0 {
+            (fsp.maxhp.max(1) / 8).max(1)
+        } else {
+            0
+        };
+        let cnt_packed = m.status_counter();
+        let is_tox = st_raw == Status::Tox as u8
+            || ((cnt_packed & 0x10) != 0
+                && (st_raw == Status::Psn as u8 || st_raw == Status::Brn as u8));
+        let tox_c = ((cnt_packed & 0x0F) as i16 + 1).max(2);
+        let status_dot = if is_tox {
+            (maxhp[i] / 16).max(1) * tox_c
+        } else if st_raw == Status::Brn as u8 || st_raw == Status::Psn as u8 {
+            (maxhp[i] / 8).max(1)
+        } else {
+            0
+        };
+        eot_net[i][0] = lefties + leech_gain - leech_drain - status_dot;
+        eot_net[i][1] = lefties + leech_gain - leech_drain;
+    }
+
+    let k_att = [
+        DmgKernel1D::best_attack(cb, table, s0, slot0, s1, slot1),
+        DmgKernel1D::best_attack(cb, table, s1, slot1, s0, slot0),
+    ];
+    let k_st = [
+        if slp[0] > 0 && has_st[0] {
+            DmgKernel1D::sleep_talk(cb, table, s0, slot0, s1, slot1)
+        } else {
+            DmgKernel1D::zero()
+        },
+        if slp[1] > 0 && has_st[1] {
+            DmgKernel1D::sleep_talk(cb, table, s1, slot1, s0, slot0)
+        } else {
+            DmgKernel1D::zero()
+        },
+    ];
+
+    let interp_coords = |h: i16, mx: i16| -> (usize, usize, f32) {
+        let x = ((h as f32) * (B16 as f32) / (mx.max(1) as f32)).clamp(0.0, B16 as f32);
+        let lo = (x.floor() as usize).clamp(1, B16);
+        let hi = (x.ceil() as usize).clamp(1, B16);
+        let w = (x - (lo as f32)).clamp(0.0, 1.0);
+        (lo, hi, w)
+    };
+
+    let eval_order = |first: usize, a0: u8, a1: u8| -> f32 {
+        let second = 1 - first;
+        let act = [a0, a1];
+        let win_first = if first == 0 { 1.0f32 } else { 0.0f32 };
+        let win_second = 1.0f32 - win_first;
+
+        let (hp_fir_mid, ns_fir, cured_fir, k_fir_opt) = if slp[first] > 0 {
+            (
+                hp[first],
+                slp[first] - 1,
+                has_rest[first],
+                if has_st[first] {
+                    Some(&k_st[first])
+                } else {
+                    None
+                },
+            )
+        } else if act[first] == 1 {
+            if heal_is_rest[first] {
+                (
+                    maxhp[first],
+                    if has_berry[first] { 0 } else { 2 },
+                    true,
+                    None,
+                )
+            } else {
+                (
+                    (hp[first] + maxhp[first] / 2).min(maxhp[first]),
+                    0,
+                    false,
+                    None,
+                )
+            }
+        } else if act[first] == 2 {
+            (hp[first], 0, false, None)
+        } else {
+            (hp[first], 0, false, Some(&k_att[first]))
+        };
+
+        let mut sec_pts = [(0i16, 0.0f32); 17];
+        let mut sec_len = 0usize;
+        let mut ko_sec_prob = 0.0f32;
+        let push_pt =
+            |pts: &mut [(i16, f32); 17], len: &mut usize, ko: &mut f32, h: i16, p: f32| {
+                if p <= 0.0 {
+                    return;
+                }
+                if h <= 0 {
+                    *ko += p;
+                    return;
+                }
+                for idx_p in 0..*len {
+                    if pts[idx_p].0 == h {
+                        pts[idx_p].1 += p;
+                        return;
+                    }
+                }
+                if *len < 17 {
+                    pts[*len] = (h, p);
+                    *len += 1;
+                } else {
+                    pts[*len - 1].1 += p;
+                }
+            };
+
+        let pa_fir = p_act[first];
+        if let Some(kern) = k_fir_opt {
+            if kern.max_dmg <= 0 || pa_fir <= 0.0 {
+                push_pt(&mut sec_pts, &mut sec_len, &mut ko_sec_prob, hp[second], 1.0);
+            } else {
+                if pa_fir < 1.0 {
+                    push_pt(
+                        &mut sec_pts,
+                        &mut sec_len,
+                        &mut ko_sec_prob,
+                        hp[second],
+                        1.0 - pa_fir,
+                    );
+                }
+                for i in 0..kern.len {
+                    let (dmg, prob) = kern.pts[i];
+                    push_pt(
+                        &mut sec_pts,
+                        &mut sec_len,
+                        &mut ko_sec_prob,
+                        (hp[second] - dmg).max(0),
+                        pa_fir * prob,
+                    );
+                }
+            }
+        } else {
+            push_pt(&mut sec_pts, &mut sec_len, &mut ko_sec_prob, hp[second], 1.0);
+        }
+
+        let mut total_val = ko_sec_prob * win_first;
+        if sec_len == 0 {
+            return total_val.clamp(0.0, 1.0);
+        }
+
+        let (sec_mode, ns_sec, cured_sec, k_sec_opt) = if slp[second] > 0 {
+            (
+                0u8,
+                slp[second] - 1,
+                has_rest[second],
+                if has_st[second] {
+                    Some(&k_st[second])
+                } else {
+                    None
+                },
+            )
+        } else if act[second] == 1 {
+            if heal_is_rest[second] {
+                (1u8, if has_berry[second] { 0 } else { 2 }, true, None)
+            } else {
+                (2u8, 0, false, None)
+            }
+        } else if act[second] == 2 {
+            (0u8, 0, false, None)
+        } else {
+            (0u8, 0, false, Some(&k_att[second]))
+        };
+
+        let mut fir_pts = [(0i16, 0.0f32); 17];
+        let mut fir_len = 0usize;
+        let mut ko_fir_prob = 0.0f32;
+        let pa_sec = p_act[second];
+        if let Some(kern) = k_sec_opt {
+            if kern.max_dmg <= 0 || pa_sec <= 0.0 {
+                push_pt(&mut fir_pts, &mut fir_len, &mut ko_fir_prob, hp_fir_mid, 1.0);
+            } else {
+                if pa_sec < 1.0 {
+                    push_pt(
+                        &mut fir_pts,
+                        &mut fir_len,
+                        &mut ko_fir_prob,
+                        hp_fir_mid,
+                        1.0 - pa_sec,
+                    );
+                }
+                for i in 0..kern.len {
+                    let (dmg, prob) = kern.pts[i];
+                    push_pt(
+                        &mut fir_pts,
+                        &mut fir_len,
+                        &mut ko_fir_prob,
+                        (hp_fir_mid - dmg).max(0),
+                        pa_sec * prob,
+                    );
+                }
+            }
+        } else {
+            push_pt(&mut fir_pts, &mut fir_len, &mut ko_fir_prob, hp_fir_mid, 1.0);
+        }
+
+        let mut fir_end = [(0i16, 0usize, 0usize, 0.0f32, 0.0f32); 17];
+        let eot_fir_val = eot_net[first][cured_fir as usize];
+        for (idx_f, &(hp_fir_post, p_fir)) in fir_pts[..fir_len].iter().enumerate() {
+            let h_end = (hp_fir_post + eot_fir_val).clamp(0, maxhp[first]);
+            let (lo, hi, w) = if h_end > 0 {
+                interp_coords(h_end, maxhp[first])
+            } else {
+                (1, 1, 0.0)
+            };
+            fir_end[idx_f] = (h_end, lo, hi, w, p_fir);
+        }
+
+        let (ns0, ns1) = if first == 0 {
+            (ns_fir.min(2), ns_sec.min(2))
+        } else {
+            (ns_sec.min(2), ns_fir.min(2))
+        };
+        let tbl = &v_table[ns0][ns1];
+
+        let eval_branch = |hp_sec_end: i16| -> f32 {
+            let mut branch_val = ko_fir_prob * win_second;
+            if hp_sec_end <= 0 {
+                for &(hp_fir_end, _, _, _, p_fir) in &fir_end[..fir_len] {
+                    let cont = if hp_fir_end <= 0 { 0.5f32 } else { win_first };
+                    branch_val += p_fir * cont;
+                }
+            } else {
+                let (s_lo, s_hi, s_w) = interp_coords(hp_sec_end, maxhp[second]);
+                for &(hp_fir_end, f_lo, f_hi, f_w, p_fir) in &fir_end[..fir_len] {
+                    let cont = if hp_fir_end <= 0 {
+                        win_second
+                    } else {
+                        let (b0_lo, b0_hi, w0, b1_lo, b1_hi, w1) = if first == 0 {
+                            (f_lo, f_hi, f_w, s_lo, s_hi, s_w)
+                        } else {
+                            (s_lo, s_hi, s_w, f_lo, f_hi, f_w)
+                        };
+                        let v00 = tbl[b0_lo][b1_lo];
+                        let v01 = tbl[b0_lo][b1_hi];
+                        let v10 = tbl[b0_hi][b1_lo];
+                        let v11 = tbl[b0_hi][b1_hi];
+                        let v0 = v00 + w1 * (v01 - v00);
+                        let v1 = v10 + w1 * (v11 - v10);
+                        let v_cont = (v0 + w0 * (v1 - v0)).clamp(0.0, 1.0);
+                        GAMMA * v_cont + (1.0 - GAMMA) * 0.5
+                    };
+                    branch_val += p_fir * cont;
+                }
+            }
+            branch_val
+        };
+
+        let eot_sec_val = eot_net[second][cured_sec as usize];
+        if sec_mode == 1 {
+            let hp_sec_end = (maxhp[second] + eot_sec_val).clamp(0, maxhp[second]);
+            let bv = eval_branch(hp_sec_end);
+            for &(_, p_sec) in &sec_pts[..sec_len] {
+                total_val += p_sec * bv;
+            }
+        } else {
+            for &(hp_sec_mid, p_sec) in &sec_pts[..sec_len] {
+                let hp_sec_post = if sec_mode == 2 {
+                    (hp_sec_mid + maxhp[second] / 2).min(maxhp[second])
+                } else {
+                    hp_sec_mid
+                };
+                let hp_sec_end = (hp_sec_post + eot_sec_val).clamp(0, maxhp[second]);
+                total_val += p_sec * eval_branch(hp_sec_end);
+            }
+        }
+        total_val.clamp(0.0, 1.0)
+    };
+
+    let spd0 = cb.mon_action_speed(table, s0, slot0);
+    let spd1 = cb.mon_action_speed(table, s1, slot1);
+    let n0 = if slp[0] == 0 && has_heal[0] && hp[0] < maxhp[0] {
+        2
+    } else {
+        1
+    };
+    let n1 = if slp[1] == 0 && has_heal[1] && hp[1] < maxhp[1] {
+        2
+    } else {
+        1
+    };
+    let eval_pair = |a0: u8, a1: u8| -> f32 {
+        if spd0 > spd1 {
+            eval_order(0, a0, a1)
+        } else if spd1 > spd0 {
+            eval_order(1, a0, a1)
+        } else {
+            0.5 * (eval_order(0, a0, a1) + eval_order(1, a0, a1))
+        }
+    };
+    let mut q = [[0.5f32; 2]; 2];
+    for a0 in 0..n0 {
+        let p0_ok = if a0 == 1 { p_act[0] } else { 1.0 };
+        for a1 in 0..n1 {
+            let p1_ok = if a1 == 1 { p_act[1] } else { 1.0 };
+            let mut cell = p0_ok * p1_ok * eval_pair(a0 as u8, a1 as u8);
+            if p0_ok < 1.0 {
+                cell += (1.0 - p0_ok) * p1_ok * eval_pair(2, a1 as u8);
+            }
+            if p1_ok < 1.0 {
+                cell += p0_ok * (1.0 - p1_ok) * eval_pair(a0 as u8, 2);
+            }
+            if p0_ok < 1.0 && p1_ok < 1.0 {
+                cell += (1.0 - p0_ok) * (1.0 - p1_ok) * eval_pair(2, 2);
+            }
+            q[a0][a1] = cell;
+        }
+    }
+    let (val, _, _) = solve_stage_game_2x2(&q, n0, n1);
+    val.clamp(0.0, 1.0) as f64
 }
 
 /// Rank-3 SVD and Schur-Bellman solution of a 1v1 active pair over `(b0, b1, s0, s1)`.
@@ -952,19 +1578,6 @@ pub struct SolvedBellmanSvd {
 }
 
 impl SolvedBellmanSvd {
-    const fn empty() -> Self {
-        Self {
-            key: 0,
-            sigmas: [0.0; 3],
-            u_vecs: [[0.0; B16]; 3],
-            v_vecs: [[0.0; B16]; 3],
-            rank3_energy: 1.0,
-            v_table: [[[[0.5; B16 + 1]; B16 + 1]; 3]; 3],
-            heal_mask0: [0; B16 + 1],
-            heal_mask1: [0; B16 + 1],
-        }
-    }
-
     /// Evaluate the Rank-3 SVD approximation of $V(b_0, b_1, 0, 0) \in [0, 1]$ at grid bins $b_0, b_1 \in 1..=16$.
     #[inline]
     pub fn eval_svd_awake(&self, b0: usize, b1: usize) -> f32 {
@@ -989,37 +1602,7 @@ impl SolvedBellmanSvd {
     /// Bilinear interpolation of $V^*(s_0, s_1, h_0, h_1) \in [0, 1]$ at exact HP values `(hp0, hp1)`.
     #[inline]
     pub fn eval_interp(&self, hp0: i16, max0: i16, s0: usize, hp1: i16, max1: i16, s1: usize) -> f64 {
-        if hp0 <= 0 && hp1 <= 0 {
-            return 0.5;
-        }
-        if hp0 <= 0 {
-            return 0.0;
-        }
-        if hp1 <= 0 {
-            return 1.0;
-        }
-        let s0 = s0.min(2);
-        let s1 = s1.min(2);
-        let x0 = ((hp0 as f32) * (B16 as f32) / (max0.max(1) as f32)).clamp(0.0, B16 as f32);
-        let x1 = ((hp1 as f32) * (B16 as f32) / (max1.max(1) as f32)).clamp(0.0, B16 as f32);
-
-        let b0_lo = (x0.floor() as usize).clamp(1, B16);
-        let b0_hi = (x0.ceil() as usize).clamp(1, B16);
-        let w0 = (x0 - (b0_lo as f32)).clamp(0.0, 1.0);
-
-        let b1_lo = (x1.floor() as usize).clamp(1, B16);
-        let b1_hi = (x1.ceil() as usize).clamp(1, B16);
-        let w1 = (x1 - (b1_lo as f32)).clamp(0.0, 1.0);
-
-        let tbl = &self.v_table[s0][s1];
-        let v00 = tbl[b0_lo][b1_lo];
-        let v01 = tbl[b0_lo][b1_hi];
-        let v10 = tbl[b0_hi][b1_lo];
-        let v11 = tbl[b0_hi][b1_hi];
-
-        let v0 = v00 + w1 * (v01 - v00);
-        let v1 = v10 + w1 * (v11 - v10);
-        (v0 + w0 * (v1 - v0)).clamp(0.0, 1.0) as f64
+        interp_v_table(&self.v_table, hp0, max0, s0, hp1, max1, s1)
     }
 
     /// Evaluate a single exact-HP Bellman stage-game backup from `(hp0, hp1, s0, s1)` into `v_table`.
@@ -1035,387 +1618,118 @@ impl SolvedBellmanSvd {
         s1: usize,
         slot1: usize,
     ) -> f64 {
-        let idx = [s0 * 3 + slot0, s1 * 3 + slot1];
-        let hp = [cb.mons[idx[0]].hp(), cb.mons[idx[1]].hp()];
-        if hp[0] <= 0 && hp[1] <= 0 {
-            return 0.5;
-        }
-        if hp[0] <= 0 {
-            return 0.0;
-        }
-        if hp[1] <= 0 {
-            return 1.0;
-        }
-        let maxhp = [
-            table.mons[idx[0]].maxhp.max(1),
-            table.mons[idx[1]].maxhp.max(1),
-        ];
-        let slp = [
-            side_sleep_rem(cb, table, s0, slot0),
-            side_sleep_rem(cb, table, s1, slot1),
-        ];
-
-        let k_att = [
-            DmgKernel1D::best_attack(cb, table, s0, slot0, s1, slot1),
-            DmgKernel1D::best_attack(cb, table, s1, slot1, s0, slot0),
-        ];
-        let k_st = [
-            DmgKernel1D::sleep_talk(cb, table, s0, slot0, s1, slot1),
-            DmgKernel1D::sleep_talk(cb, table, s1, slot1, s0, slot0),
-        ];
-
-        let mut has_heal = [false; 2];
-        let mut heal_is_rest = [false; 2];
-        let mut has_rest = [false; 2];
-        let mut has_st = [false; 2];
-        let mut has_berry = [false; 2];
-        let mut p_act = [1.0f32; 2];
-        let mut eot_net = [[0i16; 2]; 2];
-
-        for i in 0..2 {
-            let m = &cb.mons[idx[i]];
-            let fm = &cb.mons[idx[1 - i]];
-            let sp = &table.mons[idx[i]];
-            let fsp = &table.mons[idx[1 - i]];
-            let dis = (m.vol_flags & vol_bit::DISABLE) != 0;
-            let dis_slot = ((m.slot_refs >> 4) & 0x03) as usize;
-            let mut hh = false;
-            let mut hr = false;
-            let mut hst = false;
-            for m_i in 0..sp.num_moves as usize {
-                if m.pp[m_i] > 0 && !(dis && m_i == dis_slot) {
-                    let ms = &table.move_specs[idx[i]][m_i];
-                    if ms.is_half_heal {
-                        hh = true;
-                    } else if ms.is_rest {
-                        hr = true;
-                    }
-                    if ms.special_kind == 10 {
-                        hst = true;
-                    }
-                }
-            }
-            let perish = (m.vol_flags & vol_bit::PERISH_SONG) != 0;
-            let miracle = m.item != 0 && sp.is_miracleberry;
-            let berry = m.item != 0 && (sp.is_mintberry || sp.is_miracleberry);
-            let st_raw = m.status_raw();
-            let is_frz = st_raw == Status::Frz as u8 && !miracle;
-            let is_par = st_raw == Status::Par as u8 && !miracle;
-            let is_conf =
-                (m.vol_flags & vol_bit::CONFUSION) != 0 && m.timers[0] > 1 && !miracle;
-            let is_rech = (m.slot_refs & 0x80) != 0;
-
-            has_heal[i] = !perish && !is_frz && !is_rech && (hh || hr);
-            heal_is_rest[i] = !hh && hr;
-            has_rest[i] = hr;
-            has_st[i] = hst;
-            has_berry[i] = berry;
-            p_act[i] = if is_rech {
-                0.0
-            } else {
-                (if is_frz { 25.0 / 256.0 } else { 1.0f32 })
-                    * (if is_par { 0.75f32 } else { 1.0f32 })
-                    * (if is_conf { 0.50f32 } else { 1.0f32 })
-            };
-
-            let lefties = if m.item != 0 && sp.is_leftovers {
-                (maxhp[i] / 16).max(1)
-            } else {
-                0
-            };
-            let leech_drain = if (m.vol_flags & vol_bit::LEECH_SEED) != 0 {
-                (maxhp[i] / 8).max(1)
-            } else {
-                0
-            };
-            let leech_gain = if (fm.vol_flags & vol_bit::LEECH_SEED) != 0 {
-                (fsp.maxhp.max(1) / 8).max(1)
-            } else {
-                0
-            };
-            let cnt_packed = m.status_counter();
-            let is_tox = st_raw == Status::Tox as u8
-                || ((cnt_packed & 0x10) != 0
-                    && (st_raw == Status::Psn as u8 || st_raw == Status::Brn as u8));
-            let tox_c = ((cnt_packed & 0x0F) as i16 + 1).max(2);
-            let status_dot = if is_tox {
-                (maxhp[i] / 16).max(1) * tox_c
-            } else if st_raw == Status::Brn as u8 || st_raw == Status::Psn as u8 {
-                (maxhp[i] / 8).max(1)
-            } else {
-                0
-            };
-            eot_net[i][0] = lefties + leech_gain - leech_drain - status_dot;
-            eot_net[i][1] = lefties + leech_gain - leech_drain;
-        }
-
-        let eval_order = |first: usize, a0: u8, a1: u8| -> f32 {
-            let second = 1 - first;
-            let act = [a0, a1];
-            let win_first = if first == 0 { 1.0f32 } else { 0.0f32 };
-            let win_second = 1.0f32 - win_first;
-
-            let (hp_fir_mid, ns_fir, cured_fir, k_fir_opt) = if slp[first] > 0 {
-                (
-                    hp[first],
-                    slp[first] - 1,
-                    has_rest[first],
-                    if has_st[first] {
-                        Some(&k_st[first])
-                    } else {
-                        None
-                    },
-                )
-            } else if act[first] == 1 {
-                if heal_is_rest[first] {
-                    (
-                        maxhp[first],
-                        if has_berry[first] { 0 } else { 2 },
-                        true,
-                        None,
-                    )
-                } else {
-                    (
-                        (hp[first] + maxhp[first] / 2).min(maxhp[first]),
-                        0,
-                        false,
-                        None,
-                    )
-                }
-            } else if act[first] == 2 {
-                (hp[first], 0, false, None)
-            } else {
-                (hp[first], 0, false, Some(&k_att[first]))
-            };
-
-            let mut sec_pts = [(0i16, 0.0f32); 17];
-            let mut sec_len = 0usize;
-            let mut ko_sec_prob = 0.0f32;
-            let push_pt =
-                |pts: &mut [(i16, f32); 17], len: &mut usize, ko: &mut f32, h: i16, p: f32| {
-                    if p <= 0.0 {
-                        return;
-                    }
-                    if h <= 0 {
-                        *ko += p;
-                        return;
-                    }
-                    for idx_p in 0..*len {
-                        if pts[idx_p].0 == h {
-                            pts[idx_p].1 += p;
-                            return;
-                        }
-                    }
-                    if *len < 17 {
-                        pts[*len] = (h, p);
-                        *len += 1;
-                    } else {
-                        pts[*len - 1].1 += p;
-                    }
-                };
-
-            let pa_fir = p_act[first];
-            if let Some(kern) = k_fir_opt {
-                if kern.max_dmg <= 0 || pa_fir <= 0.0 {
-                    push_pt(&mut sec_pts, &mut sec_len, &mut ko_sec_prob, hp[second], 1.0);
-                } else {
-                    if pa_fir < 1.0 {
-                        push_pt(
-                            &mut sec_pts,
-                            &mut sec_len,
-                            &mut ko_sec_prob,
-                            hp[second],
-                            1.0 - pa_fir,
-                        );
-                    }
-                    for i in 0..kern.len {
-                        let (dmg, prob) = kern.pts[i];
-                        push_pt(
-                            &mut sec_pts,
-                            &mut sec_len,
-                            &mut ko_sec_prob,
-                            (hp[second] - dmg).max(0),
-                            pa_fir * prob,
-                        );
-                    }
-                }
-            } else {
-                push_pt(&mut sec_pts, &mut sec_len, &mut ko_sec_prob, hp[second], 1.0);
-            }
-
-            let mut total_val = ko_sec_prob * win_first;
-
-            for &(hp_sec_mid, p_sec) in &sec_pts[..sec_len] {
-                let (hp_sec_post, ns_sec, cured_sec, k_sec_opt) = if slp[second] > 0 {
-                    (
-                        hp_sec_mid,
-                        slp[second] - 1,
-                        has_rest[second],
-                        if has_st[second] {
-                            Some(&k_st[second])
-                        } else {
-                            None
-                        },
-                    )
-                } else if act[second] == 1 {
-                    if heal_is_rest[second] {
-                        (
-                            maxhp[second],
-                            if has_berry[second] { 0 } else { 2 },
-                            true,
-                            None,
-                        )
-                    } else {
-                        (
-                            (hp_sec_mid + maxhp[second] / 2).min(maxhp[second]),
-                            0,
-                            false,
-                            None,
-                        )
-                    }
-                } else if act[second] == 2 {
-                    (hp_sec_mid, 0, false, None)
-                } else {
-                    (hp_sec_mid, 0, false, Some(&k_att[second]))
-                };
-
-                let hp_sec_end =
-                    (hp_sec_post + eot_net[second][cured_sec as usize]).clamp(0, maxhp[second]);
-
-                let mut fir_pts = [(0i16, 0.0f32); 17];
-                let mut fir_len = 0usize;
-                let mut ko_fir_prob = 0.0f32;
-                let pa_sec = p_act[second];
-                if let Some(kern) = k_sec_opt {
-                    if kern.max_dmg <= 0 || pa_sec <= 0.0 {
-                        push_pt(
-                            &mut fir_pts,
-                            &mut fir_len,
-                            &mut ko_fir_prob,
-                            hp_fir_mid,
-                            1.0,
-                        );
-                    } else {
-                        if pa_sec < 1.0 {
-                            push_pt(
-                                &mut fir_pts,
-                                &mut fir_len,
-                                &mut ko_fir_prob,
-                                hp_fir_mid,
-                                1.0 - pa_sec,
-                            );
-                        }
-                        for i in 0..kern.len {
-                            let (dmg, prob) = kern.pts[i];
-                            push_pt(
-                                &mut fir_pts,
-                                &mut fir_len,
-                                &mut ko_fir_prob,
-                                (hp_fir_mid - dmg).max(0),
-                                pa_sec * prob,
-                            );
-                        }
-                    }
-                } else {
-                    push_pt(
-                        &mut fir_pts,
-                        &mut fir_len,
-                        &mut ko_fir_prob,
-                        hp_fir_mid,
-                        1.0,
-                    );
-                }
-
-                let mut branch_val = ko_fir_prob * win_second;
-                for &(hp_fir_post, p_fir) in &fir_pts[..fir_len] {
-                    let hp_fir_end =
-                        (hp_fir_post + eot_net[first][cured_fir as usize]).clamp(0, maxhp[first]);
-                    let cont = if hp_fir_end <= 0 && hp_sec_end <= 0 {
-                        0.5f32
-                    } else if hp_sec_end <= 0 {
-                        win_first
-                    } else if hp_fir_end <= 0 {
-                        win_second
-                    } else {
-                        let (nh0, nh1, ns0, ns1) = if first == 0 {
-                            (hp_fir_end, hp_sec_end, ns_fir, ns_sec)
-                        } else {
-                            (hp_sec_end, hp_fir_end, ns_sec, ns_fir)
-                        };
-                        let v_cont =
-                            self.eval_interp(nh0, maxhp[0], ns0, nh1, maxhp[1], ns1) as f32;
-                        GAMMA * v_cont + (1.0 - GAMMA) * 0.5
-                    };
-                    branch_val += p_fir * cont;
-                }
-                total_val += p_sec * branch_val;
-            }
-            total_val.clamp(0.0, 1.0)
-        };
-
-        let spd0 = cb.mon_action_speed(table, s0, slot0);
-        let spd1 = cb.mon_action_speed(table, s1, slot1);
-        let n0 = if slp[0] == 0 && has_heal[0] && hp[0] < maxhp[0] {
-            2
-        } else {
-            1
-        };
-        let n1 = if slp[1] == 0 && has_heal[1] && hp[1] < maxhp[1] {
-            2
-        } else {
-            1
-        };
-        let eval_pair = |a0: u8, a1: u8| -> f32 {
-            if spd0 > spd1 {
-                eval_order(0, a0, a1)
-            } else if spd1 > spd0 {
-                eval_order(1, a0, a1)
-            } else {
-                0.5 * (eval_order(0, a0, a1) + eval_order(1, a0, a1))
-            }
-        };
-        let mut q = [[0.5f32; 2]; 2];
-        for a0 in 0..n0 {
-            let p0_ok = if a0 == 1 { p_act[0] } else { 1.0 };
-            for a1 in 0..n1 {
-                let p1_ok = if a1 == 1 { p_act[1] } else { 1.0 };
-                let mut cell = p0_ok * p1_ok * eval_pair(a0 as u8, a1 as u8);
-                if p0_ok < 1.0 {
-                    cell += (1.0 - p0_ok) * p1_ok * eval_pair(2, a1 as u8);
-                }
-                if p1_ok < 1.0 {
-                    cell += p0_ok * (1.0 - p1_ok) * eval_pair(a0 as u8, 2);
-                }
-                if p0_ok < 1.0 && p1_ok < 1.0 {
-                    cell += (1.0 - p0_ok) * (1.0 - p1_ok) * eval_pair(2, 2);
-                }
-                q[a0][a1] = cell;
-            }
-        }
-        let (val, _, _) = solve_stage_game_2x2(&q, n0, n1);
-        val.clamp(0.0, 1.0) as f64
+        eval_exact_root_table(&self.v_table, cb, table, s0, slot0, s1, slot1)
     }
 }
 
-const CACHE_SETS: usize = 256;
-const CACHE_WAYS: usize = 4;
+#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
+struct Key128(u64, u64);
 
-#[derive(Clone, Copy, Debug)]
-#[repr(C, align(64))]
-struct CacheKeySet([u128; CACHE_WAYS]);
+struct Hasher128 {
+    h0: u64,
+    h1: u64,
+}
+
+impl Hasher128 {
+    #[inline(always)]
+    fn new() -> Self {
+        Self {
+            h0: 0x9e3779b97f4a7c15,
+            h1: 0xbf58476d1ce4e5b9,
+        }
+    }
+
+    #[inline(always)]
+    fn write_u64(&mut self, v: u64) {
+        let mut a = self.h0 ^ v;
+        a = (a ^ (a >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
+        let mut b = self.h1 ^ v.rotate_left(29) ^ a;
+        b = (b ^ (b >> 27)).wrapping_mul(0x94d049bb133111eb);
+        self.h0 = a ^ (b >> 31);
+        self.h1 = b ^ (a >> 29);
+    }
+
+    #[inline(always)]
+    fn finish(self) -> Key128 {
+        let mut a = self.h0 ^ (self.h1 >> 32);
+        a = (a ^ (a >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
+        a ^= a >> 31;
+        let mut b = self.h1 ^ (self.h0 >> 32);
+        b = (b ^ (b >> 27)).wrapping_mul(0x94d049bb133111eb);
+        b ^= b >> 31;
+        Key128(a | 1, b | 1)
+    }
+}
+
+#[derive(Clone, Copy)]
+struct CachedBellman {
+    op_key: Key128,
+    v_table: [[[[f32; B16 + 1]; B16 + 1]; 3]; 3],
+    heal_mask0: [u32; B16 + 1],
+    heal_mask1: [u32; B16 + 1],
+}
+
+impl CachedBellman {
+    const fn empty() -> Self {
+        Self {
+            op_key: Key128(0, 0),
+            v_table: [[[[0.5; B16 + 1]; B16 + 1]; 3]; 3],
+            heal_mask0: [0; B16 + 1],
+            heal_mask1: [0; B16 + 1],
+        }
+    }
+}
+
+const L1_SETS: usize = 2048;
+const L1_WAYS: usize = 2;
+const L2_SETS: usize = 512;
+const L2_WAYS: usize = 4;
+const MAX_CACHE_SLOTS: usize = L2_SETS * L2_WAYS;
+
+#[derive(Clone, Copy, Default)]
+struct L1Way {
+    key: Key128,
+    gen: u32,
+    slot: u16,
+}
+
+#[derive(Clone, Copy, Default)]
+struct L2Set {
+    keys: [Key128; L2_WAYS],
+    slots: [u16; L2_WAYS],
+}
 
 struct BellmanCache {
-    keys: Vec<CacheKeySet>,
-    sets: Vec<[SolvedBellmanSvd; CACHE_WAYS]>,
-    hand: [u8; CACHE_SETS],
+    l1: Vec<[L1Way; L1_WAYS]>,
+    l2: Vec<L2Set>,
+    slot_gen: Vec<u32>,
+    pool: Vec<CachedBellman>,
 }
 
 impl BellmanCache {
     fn new() -> Self {
         Self {
-            keys: vec![CacheKeySet([0u128; CACHE_WAYS]); CACHE_SETS],
-            sets: vec![[SolvedBellmanSvd::empty(); CACHE_WAYS]; CACHE_SETS],
-            hand: [0u8; CACHE_SETS],
+            l1: vec![[L1Way::default(); L1_WAYS]; L1_SETS],
+            l2: vec![L2Set::default(); L2_SETS],
+            slot_gen: vec![0u32; MAX_CACHE_SLOTS],
+            pool: Vec::with_capacity(64),
+        }
+    }
+
+    #[inline]
+    fn record_l1(&mut self, l1_key: Key128, slot: u16, gen: u32) {
+        let l1_idx = (l1_key.0 as usize) & (L1_SETS - 1);
+        let set = &mut self.l1[l1_idx];
+        if set[0].key == l1_key {
+            set[0].slot = slot;
+            set[0].gen = gen;
+        } else {
+            set[1] = set[0];
+            set[0] = L1Way {
+                key: l1_key,
+                gen,
+                slot,
+            };
         }
     }
 }
@@ -1425,14 +1739,14 @@ thread_local! {
 }
 
 #[inline]
-fn pair_bellman_key(
+fn l1_state_key(
     cb: &CompactBattle,
     table: &MatchTable,
     s0: usize,
     slot0: usize,
     s1: usize,
     slot1: usize,
-) -> u128 {
+) -> Key128 {
     let idx0 = s0 * 3 + slot0;
     let idx1 = s1 * 3 + slot1;
     let m0 = &cb.mons[idx0];
@@ -1440,17 +1754,10 @@ fn pair_bellman_key(
     let sp0 = &table.mons[idx0];
     let sp1 = &table.mons[idx1];
 
-    let mut h: u128 = 0x6c62272e07bb014262b821756295c58d;
-    let mut mix = |v: u64| {
-        h ^= v as u128;
-        h = h.wrapping_mul(0x0000000001000000000000000000013b);
-    };
+    let mut h = Hasher128::new();
+    h.write_u64(sp0.static_fp);
+    h.write_u64(sp1.static_fp);
 
-    // Word 0 & 1: precomputed static Pokemon fingerprints (species, level, maxhp, stored_stats, item, moves)
-    mix(sp0.static_fp);
-    mix(sp1.static_fp);
-
-    // Word 2 & 3: 7 stat stages + current held item packed into a single u64 per Pokemon
     let w_b0 = u64::from_le_bytes([
         m0.boosts[0] as u8,
         m0.boosts[1] as u8,
@@ -1471,10 +1778,9 @@ fn pair_bellman_key(
         m1.boosts[6] as u8,
         m1.item,
     ]);
-    mix(w_b0);
-    mix(w_b1);
+    h.write_u64(w_b0);
+    h.write_u64(w_b1);
 
-    // Word 4: status, status_counter, active volatiles, PP availability mask, and disable/recharge bits
     const VOL_MASK: u16 = vol_bit::LEECH_SEED
         | vol_bit::CONFUSION
         | vol_bit::DISABLE
@@ -1482,39 +1788,60 @@ fn pair_bellman_key(
         | vol_bit::PERISH_SONG
         | vol_bit::PAR_SPEED_DROP
         | vol_bit::BRN_ATK_DROP;
-    let st0_raw = m0.status_raw();
-    let st1_raw = m1.status_raw();
-    let st0_packed = if st0_raw == Status::Slp as u8 {
-        0x80u8
+    let vol0 = m0.vol_flags & VOL_MASK;
+    let vol1 = m1.vol_flags & VOL_MASK;
+
+    let st0_packed = if m0.status_raw() == Status::Slp as u8 {
+        Status::Slp as u8
     } else {
-        st0_raw | ((m0.status_counter() & 0x0F) << 3)
+        m0.status_packed
     };
-    let st1_packed = if st1_raw == Status::Slp as u8 {
-        0x80u8
+    let st1_packed = if m1.status_raw() == Status::Slp as u8 {
+        Status::Slp as u8
     } else {
-        st1_raw | ((m1.status_counter() & 0x0F) << 3)
+        m1.status_packed
     };
     let pp0 = ((m0.pp[0] > 0) as u8)
         | (((m0.pp[1] > 0) as u8) << 1)
         | (((m0.pp[2] > 0) as u8) << 2)
         | (((m0.pp[3] > 0) as u8) << 3)
-        | (m0.slot_refs & 0xB0);
+        | if (vol0 & vol_bit::DISABLE) != 0 {
+            m0.slot_refs & 0x30
+        } else {
+            0
+        };
     let pp1 = ((m1.pp[0] > 0) as u8)
         | (((m1.pp[1] > 0) as u8) << 1)
         | (((m1.pp[2] > 0) as u8) << 2)
         | (((m1.pp[3] > 0) as u8) << 3)
-        | (m1.slot_refs & 0xB0);
+        | if (vol1 & vol_bit::DISABLE) != 0 {
+            m1.slot_refs & 0x30
+        } else {
+            0
+        };
     let w_dyn = (st0_packed as u64)
         | ((st1_packed as u64) << 8)
-        | (((m0.vol_flags & VOL_MASK) as u64) << 16)
-        | (((m1.vol_flags & VOL_MASK) as u64) << 32)
+        | ((vol0 as u64) << 16)
+        | ((vol1 as u64) << 32)
         | ((pp0 as u64) << 48)
         | ((pp1 as u64) << 56);
-    mix(w_dyn);
+    h.write_u64(w_dyn);
 
-    // Word 5: Quick Claw roll activation, last-mon flags, active screens, and weather
+    let item_flags = |sp: &nc2000_engine::compact::StaticMonSpec| -> u64 {
+        (sp.is_quick_claw as u64)
+            | ((sp.is_leftovers as u64) << 1)
+            | ((sp.is_brightpowder as u64) << 2)
+            | ((sp.is_mintberry as u64) << 3)
+            | ((sp.is_miracleberry as u64) << 4)
+            | ((sp.is_scope_lens as u64) << 5)
+    };
     let qc0 = ((cb.quick_claw_roll != 0) & (m0.item != 0) & sp0.is_quick_claw) as u64;
     let qc1 = ((cb.quick_claw_roll != 0) & (m1.item != 0) & sp1.is_quick_claw) as u64;
+    let weather_active = if cb.weather_turns > 0 {
+        (cb.weather_kind as u64) + 1
+    } else {
+        0
+    };
     let w_field = qc0
         | (qc1 << 1)
         | (((cb.sides[s0].alive_mask.count_ones() <= 1) as u64) << 2)
@@ -1523,126 +1850,388 @@ fn pair_bellman_key(
         | (((cb.sides[s0].lightscreen_turns > 0) as u64) << 5)
         | (((cb.sides[s1].reflect_turns > 0) as u64) << 6)
         | (((cb.sides[s1].lightscreen_turns > 0) as u64) << 7)
-        | ((cb.weather_kind as u64) << 8)
-        | (((cb.weather_turns > 0) as u64) << 16);
-    mix(w_field);
+        | (weather_active << 8)
+        | (item_flags(sp0) << 16)
+        | (item_flags(sp1) << 24);
+    h.write_u64(w_field);
 
-    h | 1
+    h.finish()
 }
 
 #[inline]
+fn l2_operator_key(max_s0: usize, max_s1: usize, spd_ord: u8, ops: &[Side1DOps; 2]) -> Key128 {
+    let mut h = Hasher128::new();
+    let max_s = [max_s0, max_s1];
+    let side_hdr = |i: usize| -> u64 {
+        let op = &ops[i];
+        let ms = max_s[i];
+        (op.has_heal as u64)
+            | (((op.has_heal && op.heal_is_rest) as u64) << 1)
+            | (((ms > 0 && op.has_rest) as u64) << 2)
+            | (((ms > 0 && op.has_st) as u64) << 3)
+            | (((op.has_heal && op.heal_is_rest && op.has_berry) as u64) << 4)
+    };
+    let hdr = (max_s0 as u64)
+        | ((max_s1 as u64) << 2)
+        | ((spd_ord as u64) << 4)
+        | (side_hdr(0) << 8)
+        | (side_hdr(1) << 16);
+    h.write_u64(hdr);
+
+    let pack_16 = |arr: &[u8; B16 + 1]| -> (u64, u64) {
+        let lo = u64::from_le_bytes([
+            arr[1], arr[2], arr[3], arr[4], arr[5], arr[6], arr[7], arr[8],
+        ]);
+        let hi = u64::from_le_bytes([
+            arr[9], arr[10], arr[11], arr[12], arr[13], arr[14], arr[15], arr[16],
+        ]);
+        (lo, hi)
+    };
+
+    for i in 0..2 {
+        let op = &ops[i];
+        if op.has_heal && !op.heal_is_rest {
+            let (lo, hi) = pack_16(&op.half_heal_bin);
+            h.write_u64(lo);
+            h.write_u64(hi);
+        }
+        let (e0_lo, e0_hi) = pack_16(&op.eot_bin[0]);
+        h.write_u64(e0_lo);
+        h.write_u64(e0_hi);
+        if (max_s[i] > 0 && op.has_rest) || (op.has_heal && op.heal_is_rest) {
+            let (e1_lo, e1_hi) = pack_16(&op.eot_bin[1]);
+            h.write_u64(e1_lo);
+            h.write_u64(e1_hi);
+        }
+        for b in 1..=B16 {
+            let d = &op.incoming[1][b];
+            h.write_u64((d.ko_prob.to_bits() as u64) | ((d.len as u64) << 32));
+            for p_i in 0..d.len {
+                let (nb, pr) = d.bins[p_i];
+                h.write_u64((nb as u64) | ((pr.to_bits() as u64) << 8));
+            }
+        }
+        if max_s[1 - i] > 0 && ops[1 - i].has_st {
+            for b in 1..=B16 {
+                let d = &op.incoming[2][b];
+                h.write_u64((d.ko_prob.to_bits() as u64) | ((d.len as u64) << 32));
+                for p_i in 0..d.len {
+                    let (nb, pr) = d.bins[p_i];
+                    h.write_u64((nb as u64) | ((pr.to_bits() as u64) << 8));
+                }
+            }
+        }
+    }
+
+    h.finish()
+}
+
 #[allow(clippy::too_many_arguments)]
-fn eval_ordered_turn(
+fn fill_ordered_q_plane(
     first: usize,
-    b0: usize,
-    b1: usize,
-    s0: usize,
-    s1: usize,
-    act0: u8,
-    act1: u8,
+    slp0: usize,
+    slp1: usize,
     ops: &[Side1DOps; 2],
     v_table: &[[[[f32; B16 + 1]; B16 + 1]; 3]; 3],
-) -> f32 {
+    second_pass_avg: bool,
+    q_plane: &mut [[[[f32; 2]; 2]; B16 + 1]; B16 + 1],
+) {
     let second = 1 - first;
-    let b = [b0, b1];
-    let s = [s0, s1];
-    let act = [act0, act1];
-
+    let s = [slp0, slp1];
     let win_first = if first == 0 { 1.0f32 } else { 0.0f32 };
     let win_second = 1.0f32 - win_first;
 
-    // Phase 1: `first` acts
-    let (b_fir_mid, ns_fir, cured_fir, k_fir) = if s[first] > 0 {
-        (
-            b[first],
-            s[first] - 1,
-            ops[first].has_rest,
-            if ops[first].has_st { 2usize } else { 0usize },
-        )
-    } else if act[first] == 1 {
-        if ops[first].heal_is_rest {
-            (
-                B16,
-                if ops[first].has_berry { 0 } else { 2 },
-                true,
-                0usize,
-            )
-        } else {
-            (
-                ops[first].half_heal_bin[b[first]] as usize,
-                0,
-                false,
-                0usize,
-            )
-        }
+    let max_a_fir = if s[first] == 0 && ops[first].has_heal {
+        2usize
     } else {
-        (b[first], 0, false, 1usize)
+        1usize
+    };
+    let max_a_sec = if s[second] == 0 && ops[second].has_heal {
+        2usize
+    } else {
+        1usize
     };
 
-    let dist_sec = &ops[second].incoming[k_fir][b[second]];
-    let mut total_val = dist_sec.ko_prob * win_first;
-
-    for i_sec in 0..dist_sec.len {
-        let (b_sec_mid_u8, p_sec) = dist_sec.bins[i_sec];
-        let b_sec_mid = b_sec_mid_u8 as usize;
-
-        // Phase 2: `second` acts at `b_sec_mid`
-        let (b_sec_post, ns_sec, cured_sec, k_sec) = if s[second] > 0 {
+    for a_fir in 0..max_a_fir {
+        let (ns_fir, cured_fir, k_fir) = if s[first] > 0 {
             (
-                b_sec_mid,
-                s[second] - 1,
-                ops[second].has_rest,
-                if ops[second].has_st { 2usize } else { 0usize },
+                s[first] - 1,
+                ops[first].has_rest,
+                if ops[first].has_st { 2usize } else { 0usize },
             )
-        } else if act[second] == 1 {
-            if ops[second].heal_is_rest {
-                (
-                    B16,
-                    if ops[second].has_berry { 0 } else { 2 },
-                    true,
-                    0usize,
-                )
+        } else if a_fir == 1 {
+            if ops[first].heal_is_rest {
+                (if ops[first].has_berry { 0 } else { 2 }, true, 0usize)
             } else {
-                (
-                    ops[second].half_heal_bin[b_sec_mid] as usize,
-                    0,
-                    false,
-                    0usize,
-                )
+                (0, false, 0usize)
             }
         } else {
-            (b_sec_mid, 0, false, 1usize)
+            (0, false, 1usize)
         };
+        let b_fir_max = if a_fir == 1 { B16 - 1 } else { B16 };
+        let eot_fir = &ops[first].eot_bin[cured_fir as usize];
 
-        let b_sec_end = ops[second].eot_bin[cured_sec as usize][b_sec_post] as usize;
-        let dist_fir = &ops[first].incoming[k_sec][b_fir_mid];
-        let mut branch_val = dist_fir.ko_prob * win_second;
-
-        for i_fir in 0..dist_fir.len {
-            let (b_fir_post_u8, p_fir) = dist_fir.bins[i_fir];
-            let b_fir_end =
-                ops[first].eot_bin[cured_fir as usize][b_fir_post_u8 as usize] as usize;
-
-            let cont = if b_fir_end == 0 && b_sec_end == 0 {
-                0.5f32
-            } else if b_sec_end == 0 {
-                win_first
-            } else if b_fir_end == 0 {
-                win_second
-            } else {
-                let (nb0, nb1, ns0, ns1) = if first == 0 {
-                    (b_fir_end, b_sec_end, ns_fir, ns_sec)
+        for a_sec in 0..max_a_sec {
+            let (ns_sec, cured_sec, k_sec, sec_mode) = if s[second] > 0 {
+                (
+                    s[second] - 1,
+                    ops[second].has_rest,
+                    if ops[second].has_st { 2usize } else { 0usize },
+                    0u8,
+                )
+            } else if a_sec == 1 {
+                if ops[second].heal_is_rest {
+                    (if ops[second].has_berry { 0 } else { 2 }, true, 0usize, 1u8)
                 } else {
-                    (b_sec_end, b_fir_end, ns_sec, ns_fir)
-                };
-                GAMMA * v_table[ns0][ns1][nb0][nb1] + (1.0 - GAMMA) * 0.5
+                    (0, false, 0usize, 2u8)
+                }
+            } else {
+                (0, false, 1usize, 0u8)
             };
-            branch_val += p_fir * cont;
+            let b_sec_max = if a_sec == 1 { B16 - 1 } else { B16 };
+            let eot_sec = &ops[second].eot_bin[cured_sec as usize];
+            let (ns0, ns1) = if first == 0 {
+                (ns_fir, ns_sec)
+            } else {
+                (ns_sec, ns_fir)
+            };
+            let v_plane = &v_table[ns0][ns1];
+
+            let mut prev_b_fir_mid = usize::MAX;
+            let mut last_row = [0.0f32; B16 + 1];
+
+            for b_fir in 1..=b_fir_max {
+                let b_fir_mid = if s[first] == 0 && a_fir == 1 {
+                    if ops[first].heal_is_rest {
+                        B16
+                    } else {
+                        ops[first].half_heal_bin[b_fir] as usize
+                    }
+                } else {
+                    b_fir
+                };
+
+                if b_fir_mid != prev_b_fir_mid {
+                    prev_b_fir_mid = b_fir_mid;
+                    let dist_fir = &ops[first].incoming[k_sec][b_fir_mid];
+
+                    let eval_bv_at_end = |b_sec_end: usize| -> f32 {
+                        let mut branch_val = dist_fir.ko_prob * win_second;
+                        if b_sec_end == 0 {
+                            for i_fir in 0..dist_fir.len {
+                                let (b_fir_post_u8, p_fir) = dist_fir.bins[i_fir];
+                                let b_fir_end = eot_fir[b_fir_post_u8 as usize] as usize;
+                                let cont = if b_fir_end == 0 { 0.5f32 } else { win_first };
+                                branch_val += p_fir * cont;
+                            }
+                        } else if first == 0 {
+                            for i_fir in 0..dist_fir.len {
+                                let (b_fir_post_u8, p_fir) = dist_fir.bins[i_fir];
+                                let b_fir_end = eot_fir[b_fir_post_u8 as usize] as usize;
+                                let cont = if b_fir_end == 0 {
+                                    win_second
+                                } else {
+                                    GAMMA * v_plane[b_fir_end][b_sec_end] + (1.0 - GAMMA) * 0.5
+                                };
+                                branch_val += p_fir * cont;
+                            }
+                        } else {
+                            let v_col = &v_plane[b_sec_end];
+                            for i_fir in 0..dist_fir.len {
+                                let (b_fir_post_u8, p_fir) = dist_fir.bins[i_fir];
+                                let b_fir_end = eot_fir[b_fir_post_u8 as usize] as usize;
+                                let cont = if b_fir_end == 0 {
+                                    win_second
+                                } else {
+                                    GAMMA * v_col[b_fir_end] + (1.0 - GAMMA) * 0.5
+                                };
+                                branch_val += p_fir * cont;
+                            }
+                        }
+                        branch_val
+                    };
+
+                    if sec_mode == 1 {
+                        let bv = eval_bv_at_end(eot_sec[B16] as usize);
+                        if k_fir == 0 {
+                            let clamped = bv.clamp(0.0, 1.0);
+                            for cell in &mut last_row[1..=b_sec_max] {
+                                *cell = clamped;
+                            }
+                        } else {
+                            for b_sec in 1..=b_sec_max {
+                                let dist_sec = &ops[second].incoming[k_fir][b_sec];
+                                let mut total_val = dist_sec.ko_prob * win_first;
+                                for i_sec in 0..dist_sec.len {
+                                    total_val += dist_sec.bins[i_sec].1 * bv;
+                                }
+                                last_row[b_sec] = total_val.clamp(0.0, 1.0);
+                            }
+                        }
+                    } else {
+                        let mut bv_mid = [0.0f32; B16 + 1];
+                        let mut prev_sec_end = usize::MAX;
+                        let mut prev_bv = 0.0f32;
+                        for m in 1..=B16 {
+                            let post = if sec_mode == 2 {
+                                ops[second].half_heal_bin[m] as usize
+                            } else {
+                                m
+                            };
+                            let end = eot_sec[post] as usize;
+                            if end != prev_sec_end {
+                                prev_sec_end = end;
+                                prev_bv = eval_bv_at_end(end);
+                            }
+                            bv_mid[m] = prev_bv;
+                        }
+                        if k_fir == 0 {
+                            for b_sec in 1..=b_sec_max {
+                                last_row[b_sec] = bv_mid[b_sec].clamp(0.0, 1.0);
+                            }
+                        } else {
+                            for b_sec in 1..=b_sec_max {
+                                let dist_sec = &ops[second].incoming[k_fir][b_sec];
+                                let mut total_val = dist_sec.ko_prob * win_first;
+                                for i_sec in 0..dist_sec.len {
+                                    let (m, p_sec) = dist_sec.bins[i_sec];
+                                    total_val += p_sec * bv_mid[m as usize];
+                                }
+                                last_row[b_sec] = total_val.clamp(0.0, 1.0);
+                            }
+                        }
+                    }
+                }
+
+                if first == 0 {
+                    if second_pass_avg {
+                        for b_sec in 1..=b_sec_max {
+                            let cell = &mut q_plane[b_fir][b_sec][a_fir][a_sec];
+                            *cell = 0.5 * (*cell + last_row[b_sec]);
+                        }
+                    } else {
+                        for b_sec in 1..=b_sec_max {
+                            q_plane[b_fir][b_sec][a_fir][a_sec] = last_row[b_sec];
+                        }
+                    }
+                } else if second_pass_avg {
+                    for b_sec in 1..=b_sec_max {
+                        let cell = &mut q_plane[b_sec][b_fir][a_sec][a_fir];
+                        *cell = 0.5 * (*cell + last_row[b_sec]);
+                    }
+                } else {
+                    for b_sec in 1..=b_sec_max {
+                        q_plane[b_sec][b_fir][a_sec][a_fir] = last_row[b_sec];
+                    }
+                }
+            }
         }
-        total_val += p_sec * branch_val;
+    }
+}
+
+fn solve_bellman_into(
+    max_s0: usize,
+    max_s1: usize,
+    spd_ord: u8,
+    ops: &[Side1DOps; 2],
+    out: &mut CachedBellman,
+) {
+    let max_s_sum = max_s0 + max_s1;
+    out.v_table = [[[[0.5f32; B16 + 1]; B16 + 1]; 3]; 3];
+    for slp0 in 0..3 {
+        for slp1 in 0..3 {
+            for b in 1..=B16 {
+                out.v_table[slp0][slp1][0][b] = 0.0;
+                out.v_table[slp0][slp1][b][0] = 1.0;
+            }
+            out.v_table[slp0][slp1][0][0] = 0.5;
+        }
     }
 
-    total_val.clamp(0.0, 1.0)
+    let mut q_plane = [[[[0.5f32; 2]; 2]; B16 + 1]; B16 + 1];
+    let eval_plane_q = |slp0: usize,
+                        slp1: usize,
+                        vt: &[[[[f32; B16 + 1]; B16 + 1]; 3]; 3],
+                        qp: &mut [[[[f32; 2]; 2]; B16 + 1]; B16 + 1]| {
+        if spd_ord == 2 {
+            fill_ordered_q_plane(0, slp0, slp1, ops, vt, false, qp);
+        } else if spd_ord == 0 {
+            fill_ordered_q_plane(1, slp0, slp1, ops, vt, false, qp);
+        } else {
+            fill_ordered_q_plane(0, slp0, slp1, ops, vt, false, qp);
+            fill_ordered_q_plane(1, slp0, slp1, ops, vt, true, qp);
+        }
+    };
+
+    let mut heal_mask0 = [0u32; B16 + 1];
+    let mut heal_mask1 = [0u32; B16 + 1];
+
+    for _iter in 0..18 {
+        // 1. Bottom-up Schur-complement elimination over the sleeping DAG `s_sum = 1..=max_s_sum`.
+        // No plane at `slp0 + slp1 == s_sum` ever transitions into another state with `ns0 + ns1 == s_sum`,
+        // so updating `out.v_table[slp0][slp1]` in place is bit-exact without copying the 10.4KB table.
+        for s_sum in 1..=max_s_sum {
+            for slp0 in 0..=max_s0 {
+                for slp1 in 0..=max_s1 {
+                    if slp0 + slp1 != s_sum {
+                        continue;
+                    }
+                    eval_plane_q(slp0, slp1, &out.v_table, &mut q_plane);
+                    for b0 in 1..=B16 {
+                        let n0 = if slp0 == 0 && ops[0].has_heal && b0 < B16 {
+                            2
+                        } else {
+                            1
+                        };
+                        for b1 in 1..=B16 {
+                            let n1 = if slp1 == 0 && ops[1].has_heal && b1 < B16 {
+                                2
+                            } else {
+                                1
+                            };
+                            let (val, _, _) = solve_stage_game_2x2(&q_plane[b0][b1], n0, n1);
+                            out.v_table[slp0][slp1][b0][b1] = val;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Awake stage game `(slp0, slp1) = (0, 0)` using the Schur-eliminated sleeping values
+        eval_plane_q(0, 0, &out.v_table, &mut q_plane);
+        let mut next_awake = out.v_table[0][0];
+        let mut max_diff = 0.0f32;
+        let mut hm0 = [0u32; B16 + 1];
+        let mut hm1 = [0u32; B16 + 1];
+
+        for b0 in 1..=B16 {
+            let n0 = if ops[0].has_heal && b0 < B16 { 2 } else { 1 };
+            for b1 in 1..=B16 {
+                let n1 = if ops[1].has_heal && b1 < B16 { 2 } else { 1 };
+                let (val, h0, h1) = solve_stage_game_2x2(&q_plane[b0][b1], n0, n1);
+                if h0 {
+                    hm0[b0] |= 1u32 << b1;
+                }
+                if h1 {
+                    hm1[b1] |= 1u32 << b0;
+                }
+                let d = (val - out.v_table[0][0][b0][b1]).abs();
+                if d > max_diff {
+                    max_diff = d;
+                }
+                next_awake[b0][b1] = val;
+            }
+        }
+        out.v_table[0][0] = next_awake;
+        heal_mask0 = hm0;
+        heal_mask1 = hm1;
+        if _iter >= 4 && max_diff < 2e-4 {
+            break;
+        }
+    }
+
+    out.heal_mask0 = heal_mask0;
+    out.heal_mask1 = heal_mask1;
 }
 
 #[inline]
@@ -1776,7 +2365,19 @@ pub fn solve_schur_bellman_2d(
     s1: usize,
     slot1: usize,
 ) -> SolvedBellmanSvd {
-    with_solved_bellman(cb, table, s0, slot0, s1, slot1, |s| *s)
+    with_solved_bellman(cb, table, s0, slot0, s1, slot1, |cached| {
+        let (sigmas, u_vecs, v_vecs, rank3_energy) = compute_svd_rank3_16x16(&cached.v_table[0][0]);
+        SolvedBellmanSvd {
+            key: ((cached.op_key.1 as u128) << 64) | (cached.op_key.0 as u128),
+            sigmas,
+            u_vecs,
+            v_vecs,
+            rank3_energy,
+            v_table: cached.v_table,
+            heal_mask0: cached.heal_mask0,
+            heal_mask1: cached.heal_mask1,
+        }
+    })
 }
 
 #[inline]
@@ -1787,181 +2388,91 @@ fn with_solved_bellman<R>(
     slot0: usize,
     s1: usize,
     slot1: usize,
-    f: impl FnOnce(&SolvedBellmanSvd) -> R,
+    f: impl FnOnce(&CachedBellman) -> R,
 ) -> R {
-    let key = pair_bellman_key(cb, table, s0, slot0, s1, slot1);
-    let set_idx = ((key as usize) ^ ((key >> 32) as usize)) & (CACHE_SETS - 1);
+    let l1_key = l1_state_key(cb, table, s0, slot0, s1, slot1);
+    let l1_idx = (l1_key.0 as usize) & (L1_SETS - 1);
     let mut f_opt = Some(f);
+
     if let Some(res) = BELLMAN_CACHE.with(|c| {
-        let borrow = c.borrow();
-        let keys = &borrow.keys[set_idx].0;
-        for way in 0..CACHE_WAYS {
-            if keys[way] == key {
-                return Some((f_opt.take().unwrap())(&borrow.sets[set_idx][way]));
+        let mut cache = c.borrow_mut();
+        let w0 = cache.l1[l1_idx][0];
+        if w0.key == l1_key {
+            let slot = w0.slot as usize;
+            if slot < cache.pool.len() && cache.slot_gen[slot] == w0.gen {
+                return Some((f_opt.take().unwrap())(&cache.pool[slot]));
+            }
+        }
+        let w1 = cache.l1[l1_idx][1];
+        if w1.key == l1_key {
+            let slot = w1.slot as usize;
+            if slot < cache.pool.len() && cache.slot_gen[slot] == w1.gen {
+                cache.l1[l1_idx][1] = w0;
+                cache.l1[l1_idx][0] = w1;
+                return Some((f_opt.take().unwrap())(&cache.pool[slot]));
             }
         }
         None
     }) {
         return res;
     }
+
+    let (ops, max_s0, max_s1, spd_ord) = Side1DOps::build_pair(cb, table, s0, slot0, s1, slot1);
+    let op_key = l2_operator_key(max_s0, max_s1, spd_ord, &ops);
+    let l2_idx = (op_key.0 as usize) & (L2_SETS - 1);
+
+    if let Some(res) = BELLMAN_CACHE.with(|c| {
+        let mut cache = c.borrow_mut();
+        let set = &mut cache.l2[l2_idx];
+        for way in 0..L2_WAYS {
+            if set.keys[way] == op_key {
+                let slot = set.slots[way];
+                if way > 0 {
+                    for w in (1..=way).rev() {
+                        set.keys[w] = set.keys[w - 1];
+                        set.slots[w] = set.slots[w - 1];
+                    }
+                    set.keys[0] = op_key;
+                    set.slots[0] = slot;
+                }
+                let gen = cache.slot_gen[slot as usize];
+                cache.record_l1(l1_key, slot, gen);
+                return Some((f_opt.take().unwrap())(&cache.pool[slot as usize]));
+            }
+        }
+        None
+    }) {
+        return res;
+    }
+
     let f = f_opt.unwrap();
-
-    let k01_att = DmgKernel1D::best_attack_grid(cb, table, s0, slot0, s1, slot1);
-    let k10_att = DmgKernel1D::best_attack_grid(cb, table, s1, slot1, s0, slot0);
-    let k01_st = DmgKernel1D::sleep_talk_grid(cb, table, s0, slot0, s1, slot1);
-    let k10_st = DmgKernel1D::sleep_talk_grid(cb, table, s1, slot1, s0, slot0);
-
-    let ops0 = Side1DOps::build(cb, table, s0, slot0, s1, slot1, &k10_att, &k10_st);
-    let ops1 = Side1DOps::build(cb, table, s1, slot1, s0, slot0, &k01_att, &k01_st);
-    let ops = [ops0, ops1];
-
-    let max_s0 = if ops0.has_rest || cb.mons[s0 * 3 + slot0].status_raw() == Status::Slp as u8 {
-        2usize
-    } else {
-        0usize
-    };
-    let max_s1 = if ops1.has_rest || cb.mons[s1 * 3 + slot1].status_raw() == Status::Slp as u8 {
-        2usize
-    } else {
-        0usize
-    };
-    let max_s_sum = max_s0 + max_s1;
-
-    let spd0 = cb.mon_action_speed(table, s0, slot0);
-    let spd1 = cb.mon_action_speed(table, s1, slot1);
-
-    let mut v_work = [[[[0.5f32; B16 + 1]; B16 + 1]; 3]; 3];
-    for slp0 in 0..3 {
-        for slp1 in 0..3 {
-            for b in 1..=B16 {
-                v_work[slp0][slp1][0][b] = 0.0;
-                v_work[slp0][slp1][b][0] = 1.0;
-            }
-            v_work[slp0][slp1][0][0] = 0.5;
-        }
-    }
-
-    let mut heal_mask0 = [0u32; B16 + 1];
-    let mut heal_mask1 = [0u32; B16 + 1];
-
-    let eval_cell = |b0: usize,
-                     b1: usize,
-                     slp0: usize,
-                     slp1: usize,
-                     a0: u8,
-                     a1: u8,
-                     vt: &[[[[f32; B16 + 1]; B16 + 1]; 3]; 3]|
-     -> f32 {
-        if spd0 > spd1 {
-            eval_ordered_turn(0, b0, b1, slp0, slp1, a0, a1, &ops, vt)
-        } else if spd1 > spd0 {
-            eval_ordered_turn(1, b0, b1, slp0, slp1, a0, a1, &ops, vt)
-        } else {
-            0.5 * (eval_ordered_turn(0, b0, b1, slp0, slp1, a0, a1, &ops, vt)
-                + eval_ordered_turn(1, b0, b1, slp0, slp1, a0, a1, &ops, vt))
-        }
-    };
-
-    for _iter in 0..18 {
-        // 1. Bottom-up Schur-complement elimination over the sleeping DAG `s_sum = 1..=max_s_sum`
-        for s_sum in 1..=max_s_sum {
-            let mut next_level = v_work;
-            for slp0 in 0..=max_s0 {
-                for slp1 in 0..=max_s1 {
-                    if slp0 + slp1 != s_sum {
-                        continue;
-                    }
-                    for b0 in 1..=B16 {
-                        let n0 = if slp0 == 0 && ops[0].has_heal && b0 < B16 {
-                            2
-                        } else {
-                            1
-                        };
-                        for b1 in 1..=B16 {
-                            let n1 = if slp1 == 0 && ops[1].has_heal && b1 < B16 {
-                                2
-                            } else {
-                                1
-                            };
-                            let mut q = [[0.5f32; 2]; 2];
-                            for a0 in 0..n0 {
-                                for a1 in 0..n1 {
-                                    q[a0][a1] =
-                                        eval_cell(b0, b1, slp0, slp1, a0 as u8, a1 as u8, &v_work);
-                                }
-                            }
-                            let (val, _, _) = solve_stage_game_2x2(&q, n0, n1);
-                            next_level[slp0][slp1][b0][b1] = val;
-                        }
-                    }
-                }
-            }
-            for slp0 in 0..=max_s0 {
-                for slp1 in 0..=max_s1 {
-                    if slp0 + slp1 == s_sum {
-                        v_work[slp0][slp1] = next_level[slp0][slp1];
-                    }
-                }
-            }
-        }
-
-        // 2. Awake stage game `(slp0, slp1) = (0, 0)` using the Schur-eliminated sleeping values
-        let mut next_awake = v_work[0][0];
-        let mut max_diff = 0.0f32;
-        let mut hm0 = [0u32; B16 + 1];
-        let mut hm1 = [0u32; B16 + 1];
-
-        for b0 in 1..=B16 {
-            let n0 = if ops[0].has_heal && b0 < B16 { 2 } else { 1 };
-            for b1 in 1..=B16 {
-                let n1 = if ops[1].has_heal && b1 < B16 { 2 } else { 1 };
-                let mut q = [[0.5f32; 2]; 2];
-                for a0 in 0..n0 {
-                    for a1 in 0..n1 {
-                        q[a0][a1] = eval_cell(b0, b1, 0, 0, a0 as u8, a1 as u8, &v_work);
-                    }
-                }
-                let (val, h0, h1) = solve_stage_game_2x2(&q, n0, n1);
-                if h0 {
-                    hm0[b0] |= 1u32 << b1;
-                }
-                if h1 {
-                    hm1[b1] |= 1u32 << b0;
-                }
-                let d = (val - v_work[0][0][b0][b1]).abs();
-                if d > max_diff {
-                    max_diff = d;
-                }
-                next_awake[b0][b1] = val;
-            }
-        }
-        v_work[0][0] = next_awake;
-        heal_mask0 = hm0;
-        heal_mask1 = hm1;
-        if _iter >= 4 && max_diff < 2e-4 {
-            break;
-        }
-    }
-
-    let (sigmas, u_vecs, v_vecs, rank3_energy) = compute_svd_rank3_16x16(&v_work[0][0]);
-    let solved = SolvedBellmanSvd {
-        key,
-        sigmas,
-        u_vecs,
-        v_vecs,
-        rank3_energy,
-        v_table: v_work,
-        heal_mask0,
-        heal_mask1,
-    };
-
     BELLMAN_CACHE.with(|c| {
-        let mut borrow = c.borrow_mut();
-        let w = (borrow.hand[set_idx] as usize) & (CACHE_WAYS - 1);
-        borrow.keys[set_idx].0[w] = key;
-        borrow.sets[set_idx][w] = solved;
-        borrow.hand[set_idx] = (w as u8 + 1) & (CACHE_WAYS as u8 - 1);
-        f(&borrow.sets[set_idx][w])
+        let mut cache = c.borrow_mut();
+        let last_empty = cache.l2[l2_idx].keys[L2_WAYS - 1] == Key128::default();
+        let slot_idx = if last_empty && cache.pool.len() < MAX_CACHE_SLOTS {
+            let idx = cache.pool.len();
+            cache.pool.push(CachedBellman::empty());
+            idx
+        } else {
+            cache.l2[l2_idx].slots[L2_WAYS - 1] as usize
+        };
+        let gen = cache.slot_gen[slot_idx].wrapping_add(1).max(1);
+        cache.slot_gen[slot_idx] = gen;
+
+        {
+            let set = &mut cache.l2[l2_idx];
+            for w in (1..L2_WAYS).rev() {
+                set.keys[w] = set.keys[w - 1];
+                set.slots[w] = set.slots[w - 1];
+            }
+            set.keys[0] = op_key;
+            set.slots[0] = slot_idx as u16;
+        }
+
+        cache.pool[slot_idx].op_key = op_key;
+        solve_bellman_into(max_s0, max_s1, spd_ord, &ops, &mut cache.pool[slot_idx]);
+        cache.record_l1(l1_key, slot_idx as u16, gen);
+        f(&cache.pool[slot_idx])
     })
 }
 
@@ -2022,8 +2533,8 @@ pub fn toeplitz_coupled_race(
     }
 
     if side_has_usable_heal(cb, table, s0, slot0) || side_has_usable_heal(cb, table, s1, slot1) {
-        let v = with_solved_bellman(cb, table, s0, slot0, s1, slot1, |solved| {
-            solved.eval_exact_root(cb, table, s0, slot0, s1, slot1)
+        let v = with_solved_bellman(cb, table, s0, slot0, s1, slot1, |cached| {
+            eval_exact_root_table(&cached.v_table, cb, table, s0, slot0, s1, slot1)
         });
         return (2.0 * v - 1.0).clamp(-1.0, 1.0);
     }
@@ -2089,10 +2600,11 @@ pub fn compact_perish_margin(cb: &CompactBattle, table: &MatchTable) -> f64 {
         return 0.0;
     }
 
-    let s0 = survival_curve_4(cb, table, 1, 0, hp0);
-    let s1 = survival_curve_4(cb, table, 0, 1, hp1);
-    let mut margin = 0.0f64;
+    let mut need_s0 = 0usize;
+    let mut need_s1 = 0usize;
+    let mut any_term = false;
 
+    let mut b1_info: Option<(usize, bool)> = None;
     if p1_perish > 0 && p1_trapped && !p0_trapped {
         let hits = p1_perish.saturating_sub(1).min(3) as usize;
         let p0_prot = cb.mons[idx0].timers[2] == 0
@@ -2101,14 +2613,16 @@ pub fn compact_perish_margin(cb: &CompactBattle, table: &MatchTable) -> f64 {
         let p1_phaze = (0..table.mons[idx1].num_moves as usize)
             .any(|m| cb.mons[idx1].pp[m] > 0 && table.move_specs[idx1][m].special_kind == 7);
         let eff_hits = if p0_prot && hits > 0 { hits - 1 } else { hits };
-        let p_not_phazed = if p1_phaze && p1_perish >= 2 {
-            1.0 - s1[1]
-        } else {
-            1.0
-        };
-        margin += s0[eff_hits] * p_not_phazed;
+        let use_phaze = p1_phaze && p1_perish >= 2;
+        need_s0 = need_s0.max(eff_hits);
+        if use_phaze {
+            need_s1 = need_s1.max(1);
+        }
+        b1_info = Some((eff_hits, use_phaze));
+        any_term = true;
     }
 
+    let mut b2_info: Option<(usize, bool)> = None;
     if p0_perish > 0 && p0_trapped && !p1_trapped {
         let hits = p0_perish.saturating_sub(1).min(3) as usize;
         let p1_prot = cb.mons[idx1].timers[2] == 0
@@ -2117,15 +2631,16 @@ pub fn compact_perish_margin(cb: &CompactBattle, table: &MatchTable) -> f64 {
         let p0_phaze = (0..table.mons[idx0].num_moves as usize)
             .any(|m| cb.mons[idx0].pp[m] > 0 && table.move_specs[idx0][m].special_kind == 7);
         let eff_hits = if p1_prot && hits > 0 { hits - 1 } else { hits };
-        let p_not_phazed = if p0_phaze && p0_perish >= 2 {
-            1.0 - s0[1]
-        } else {
-            1.0
-        };
-        margin -= s1[eff_hits] * p_not_phazed;
+        let use_phaze = p0_phaze && p0_perish >= 2;
+        need_s1 = need_s1.max(eff_hits);
+        if use_phaze {
+            need_s0 = need_s0.max(1);
+        }
+        b2_info = Some((eff_hits, use_phaze));
+        any_term = true;
     }
 
-    // Trapped before Perish Song is sung: probability trapper survives 1 extra turn to sing + countdown
+    let mut b3_hits: Option<usize> = None;
     if p1_perish == 0 && p1_trapped && !p0_trapped {
         let p0_has_song = (0..table.mons[idx0].num_moves as usize)
             .any(|m| cb.mons[idx0].pp[m] > 0 && table.move_specs[idx0][m].special_kind == 19);
@@ -2133,9 +2648,13 @@ pub fn compact_perish_margin(cb: &CompactBattle, table: &MatchTable) -> f64 {
             let p0_prot = (0..table.mons[idx0].num_moves as usize)
                 .any(|m| cb.mons[idx0].pp[m] > 0 && table.move_specs[idx0][m].is_protect);
             let hits = if p0_prot { 2 } else { 3 };
-            margin += s0[hits];
+            need_s0 = need_s0.max(hits);
+            b3_hits = Some(hits);
+            any_term = true;
         }
     }
+
+    let mut b4_hits: Option<usize> = None;
     if p0_perish == 0 && p0_trapped && !p1_trapped {
         let p1_has_song = (0..table.mons[idx1].num_moves as usize)
             .any(|m| cb.mons[idx1].pp[m] > 0 && table.move_specs[idx1][m].special_kind == 19);
@@ -2143,8 +2662,34 @@ pub fn compact_perish_margin(cb: &CompactBattle, table: &MatchTable) -> f64 {
             let p1_prot = (0..table.mons[idx1].num_moves as usize)
                 .any(|m| cb.mons[idx1].pp[m] > 0 && table.move_specs[idx1][m].is_protect);
             let hits = if p1_prot { 2 } else { 3 };
-            margin -= s1[hits];
+            need_s1 = need_s1.max(hits);
+            b4_hits = Some(hits);
+            any_term = true;
         }
+    }
+
+    if !any_term {
+        return 0.0;
+    }
+
+    let (s0, _) = survival_curve_k_with_mean_hp(cb, table, 1, 0, hp0, need_s0, false);
+    let (s1, _) = survival_curve_k_with_mean_hp(cb, table, 0, 1, hp1, need_s1, false);
+    let mut margin = 0.0f64;
+
+    if let Some((eff_hits, use_phaze)) = b1_info {
+        let p_not_phazed = if use_phaze { 1.0 - s1[1] } else { 1.0 };
+        margin += s0[eff_hits] * p_not_phazed;
+    }
+    if let Some((eff_hits, use_phaze)) = b2_info {
+        let p_not_phazed = if use_phaze { 1.0 - s0[1] } else { 1.0 };
+        margin -= s1[eff_hits] * p_not_phazed;
+    }
+    // Trapped before Perish Song is sung: probability trapper survives 1 extra turn to sing + countdown
+    if let Some(hits) = b3_hits {
+        margin += s0[hits];
+    }
+    if let Some(hits) = b4_hits {
+        margin -= s1[hits];
     }
 
     margin.clamp(-1.0, 1.0)
@@ -2337,10 +2882,12 @@ pub fn compact_rollout_linear_pick(
     }
 
     // 3. Bellman stage-game policy lookup for Heal / Rest when awake and strictly below full HP
-    if me_perish == 0 && me.hp() < maxhp {
-        let foe_has_perish = (0..table.mons[def_idx].num_moves as usize)
-            .any(|m| foe.pp[m] > 0 && table.move_specs[def_idx][m].special_kind == 19);
-        if !foe_has_perish {
+    let me_hp = me.hp();
+    if me_perish == 0 && me_hp < maxhp {
+        let b_me = Side1DOps::to_b16(me_hp, maxhp) as usize;
+        let is_frz = me.status_raw() == Status::Frz as u8
+            && !(me.item != 0 && table.mons[att_idx].is_miracleberry);
+        if b_me < B16 && !is_frz {
             let mut heal_act: Option<u8> = None;
             for &c in cs {
                 if c < 4 {
@@ -2354,21 +2901,22 @@ pub fn compact_rollout_linear_pick(
                 }
             }
             if let Some(h_act) = heal_act {
-                let s0_slot = cb.sides[0].active_idx as usize;
-                let s1_slot = cb.sides[1].active_idx as usize;
-                let b0 = Side1DOps::to_b16(cb.mons[s0_slot].hp(), table.mons[s0_slot].maxhp.max(1))
-                    as usize;
-                let b1 = Side1DOps::to_b16(
-                    cb.mons[3 + s1_slot].hp(),
-                    table.mons[3 + s1_slot].maxhp.max(1),
-                ) as usize;
-                if (side == 0 && b0 < B16) || (side == 1 && b1 < B16) {
+                let foe_has_perish = (0..table.mons[def_idx].num_moves as usize)
+                    .any(|m| foe.pp[m] > 0 && table.move_specs[def_idx][m].special_kind == 19);
+                if !foe_has_perish {
+                    let b_foe =
+                        Side1DOps::to_b16(foe.hp(), table.mons[def_idx].maxhp.max(1)) as usize;
+                    let (s0_slot, s1_slot, b0, b1) = if side == 0 {
+                        (att_slot, def_slot, b_me, b_foe)
+                    } else {
+                        (def_slot, att_slot, b_foe, b_me)
+                    };
                     let bellman_wants_heal =
-                        with_solved_bellman(cb, table, 0, s0_slot, 1, s1_slot, |solved| {
+                        with_solved_bellman(cb, table, 0, s0_slot, 1, s1_slot, |cached| {
                             if side == 0 {
-                                ((solved.heal_mask0[b0] >> b1) & 1) != 0
+                                ((cached.heal_mask0[b0] >> b1) & 1) != 0
                             } else {
-                                ((solved.heal_mask1[b1] >> b0) & 1) != 0
+                                ((cached.heal_mask1[b1] >> b0) & 1) != 0
                             }
                         });
                     if bellman_wants_heal {
@@ -2497,5 +3045,83 @@ mod tests {
         // At status_counter == 1, Suicune wakes up this turn at 100% HP -> `None` (Attack)
         cb.mons[0].set_status(Status::Slp as u8, 1);
         assert_eq!(compact_rollout_linear_pick(&cb, &table, 0, &cs), None);
+    }
+
+    #[test]
+    fn canonical_operator_cache_and_toxic_stack_invariants() {
+        let dex = conformance::load_dex();
+        let suicune_a = make_set(
+            "Suicune",
+            55,
+            "Leftovers",
+            &["Surf", "Roar", "Rest", "Toxic"],
+        );
+        // Permuted move order + different unused status move -> different `static_fp` (L1 miss),
+        // but identical 1D Bellman operator (`Surf` + `Rest`, no Sleep Talk) -> L2 hit!
+        let suicune_b = make_set(
+            "Suicune",
+            55,
+            "Leftovers",
+            &["Rest", "Reflect", "Surf", "Growl"],
+        );
+        let snorlax = make_set(
+            "Snorlax",
+            55,
+            "Leftovers",
+            &["Body Slam", "Earthquake", "Curse", "Rest"],
+        );
+
+        let mut ba =
+            Battle::from_fixture(&dex, "1,2,3,4", &[suicune_a], &[snorlax.clone()]).unwrap();
+        ba.choose(&dex, 0, "team 1").unwrap();
+        ba.choose(&dex, 1, "team 1").unwrap();
+        let (ta, mut cba) = CompactBattle::from_battle(&ba, &dex);
+
+        let mut bb = Battle::from_fixture(&dex, "1,2,3,4", &[suicune_b], &[snorlax]).unwrap();
+        bb.choose(&dex, 0, "team 1").unwrap();
+        bb.choose(&dex, 1, "team 1").unwrap();
+        let (tb, cbb) = CompactBattle::from_battle(&bb, &dex);
+
+        assert_ne!(ta.mons[0].static_fp, tb.mons[0].static_fp);
+        assert_ne!(
+            l1_state_key(&cba, &ta, 0, 0, 1, 0),
+            l1_state_key(&cbb, &tb, 0, 0, 1, 0)
+        );
+
+        let svd_a = solve_schur_bellman_2d(&cba, &ta, 0, 0, 1, 0);
+        let svd_b = solve_schur_bellman_2d(&cbb, &tb, 0, 0, 1, 0);
+        assert_eq!(svd_a.key, svd_b.key);
+        assert_eq!(svd_a.heal_mask0, svd_b.heal_mask0);
+        assert_eq!(svd_a.heal_mask1, svd_b.heal_mask1);
+
+        // Verify bit-exact 0.0-ULP equivalence against a fresh uncached solve
+        let (ops, ms0, ms1, spd_ord) = Side1DOps::build_pair(&cba, &ta, 0, 0, 1, 0);
+        let mut fresh = CachedBellman::empty();
+        solve_bellman_into(ms0, ms1, spd_ord, &ops, &mut fresh);
+        for s0 in 0..3 {
+            for s1 in 0..3 {
+                for b0 in 0..=B16 {
+                    for b1 in 0..=B16 {
+                        assert_eq!(
+                            svd_a.v_table[s0][s1][b0][b1].to_bits(),
+                            fresh.v_table[s0][s1][b0][b1].to_bits()
+                        );
+                    }
+                }
+            }
+        }
+
+        // Gen 2 Toxic-stacking flag (`0x10` in status_counter on Burn/Poison) must produce
+        // distinct L1 keys and distinct L2 Bellman operators when counter >= 3.
+        cba.mons[0].set_status(Status::Brn as u8, 4);
+        let k_brn_plain = l1_state_key(&cba, &ta, 0, 0, 1, 0);
+        let svd_brn_plain = solve_schur_bellman_2d(&cba, &ta, 0, 0, 1, 0);
+
+        cba.mons[0].set_status(Status::Brn as u8, 0x10 | 4);
+        let k_brn_tox = l1_state_key(&cba, &ta, 0, 0, 1, 0);
+        let svd_brn_tox = solve_schur_bellman_2d(&cba, &ta, 0, 0, 1, 0);
+
+        assert_ne!(k_brn_plain, k_brn_tox);
+        assert_ne!(svd_brn_plain.key, svd_brn_tox.key);
     }
 }
