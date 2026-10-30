@@ -2766,7 +2766,13 @@ fn export_kodoku_elites(
     // Require evolved strains (`born_wave > 0`) to have survived at least 2 waves (`cum_games >= 400.0`
     // when multi-wave) and sort conservatively by `0.5 * bayes_fit + 0.5 * lcb95` to eliminate 1-wave
     // Winner's Curse spikes.
-    let min_evolved_games = if ledger.wave >= 2 { 400.0 } else { 24.0 };
+    let min_evolved_games = if ledger.wave >= 3 {
+        400.0
+    } else if ledger.wave >= 2 {
+        200.0
+    } else {
+        24.0
+    };
     let mut all_measured: Vec<Strain> = ledger
         .active_strains
         .iter()
@@ -3209,7 +3215,7 @@ fn cmd_kodoku(args: &[String]) {
         let red_team = args.iter().any(|a| a == "--red-team");
         let minimax_lambda: f64 = num(args, "--minimax-lambda", 0.0);
         let minimax_floor: f64 = num(args, "--minimax-floor", 0.48);
-        if red_team {
+        if red_team || minimax_lambda > 0.0 {
             eco_opps.clear();
             eco_weights.clear();
         }
@@ -6934,6 +6940,9 @@ fn cmd_dominance_audit(args: &[String]) {
     let num_shards: usize = num(args, "--num-shards", 1);
     let out_file = flag(args, "--out").map(PathBuf::from);
     let merge_dir = flag(args, "--merge-dir").map(PathBuf::from);
+    let cache_dir = flag(args, "--cache-dir").map(PathBuf::from);
+    let extra_blue_str = flag(args, "--extra-blue").unwrap_or_default();
+    let extra_red_str = flag(args, "--extra-red").unwrap_or_default();
     let threads: usize = flag(args, "--threads")
         .map(|v| v.parse().unwrap())
         .unwrap_or_else(|| {
@@ -6948,9 +6957,55 @@ fn cmd_dominance_audit(args: &[String]) {
     let mut p_sets: Vec<Vec<PokemonSet>> = Vec::new();
     let mut p_raw: Vec<Vec<Value>> = Vec::new();
     let mut p_seen_keys: BTreeSet<String> = BTreeSet::new();
+    let mut p_seen_ids: BTreeSet<String> = BTreeSet::new();
 
     let mut add_blue = |id: &str, origin: &str, raw: &[Value]| {
-        let Some(canon) = gen.canonize(&dex, raw) else {
+        if p_seen_ids.contains(id) {
+            return;
+        }
+        let mut upgraded = raw.to_vec();
+        for set in &mut upgraded {
+            let moves: Vec<String> = set["moves"]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(toid))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let has_hp = moves.iter().any(|m| m.starts_with("hiddenpower"));
+            let has_caller = moves.iter().any(|m| {
+                matches!(
+                    m.as_str(),
+                    "metronome" | "mimic" | "mirrormove" | "transform"
+                )
+            });
+            let has_physical = moves.iter().any(|m| {
+                dex.moves
+                    .id(m)
+                    .is_some_and(|mid| dex.moves.get(mid).category == "Physical")
+            });
+            let sp = toid(set["species"].as_str().unwrap_or(""));
+            if !has_hp && !has_caller && !has_physical && sp != "unown" {
+                set["evs"] =
+                    json!({"hp": 255, "atk": 0, "def": 255, "spa": 255, "spd": 255, "spe": 255});
+                set["ivs"] =
+                    json!({"hp": 31, "atk": 3, "def": 31, "spa": 31, "spd": 31, "spe": 31});
+                if let Some(obj) = set.as_object_mut() {
+                    obj.remove("gender");
+                    obj.remove("shiny");
+                }
+            } else {
+                set["evs"] =
+                    json!({"hp": 255, "atk": 255, "def": 255, "spa": 255, "spd": 255, "spe": 255});
+                if let Some(obj) = set.as_object_mut() {
+                    obj.remove("ivs");
+                    obj.remove("gender");
+                    obj.remove("shiny");
+                }
+            }
+        }
+        let Some(canon) = gen.canonize(&dex, &upgraded) else {
             return;
         };
         let k = team_key(&canon);
@@ -6960,6 +7015,7 @@ fn cmd_dominance_audit(args: &[String]) {
         let Ok(sets) = to_sets(&canon) else {
             return;
         };
+        p_seen_ids.insert(id.to_string());
         p_ids.push(id.to_string());
         p_origins.push(origin.to_string());
         p_sets.push(sets);
@@ -7019,6 +7075,23 @@ fn cmd_dominance_audit(args: &[String]) {
             add_blue(tid, orig, t["sets"].as_array().unwrap());
         }
     }
+    for eb_file in extra_blue_str.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+        if let Ok(txt) = std::fs::read_to_string(eb_file) {
+            if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+                if let Some(arr) = v["teams"].as_array() {
+                    for t in arr {
+                        if let (Some(id), Some(sets)) = (t["id"].as_str(), t["sets"].as_array()) {
+                            let orig = t["island"]
+                                .as_str()
+                                .or_else(|| t["role"].as_str())
+                                .unwrap_or("extra-blue");
+                            add_blue(id, orig, sets);
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     // 2. Assemble the Red-Team Omni-Challenger Universe `Q`
     // First `|P|` entries of `Q` are `P` itself (so `j < |P|` is the internal square submatrix).
@@ -7050,8 +7123,12 @@ fn cmd_dominance_audit(args: &[String]) {
     let mut q_sets: Vec<Vec<PokemonSet>> = Vec::new();
     let mut q_strata: Vec<Vec<String>> = Vec::new();
     let mut q_seen_keys: BTreeSet<String> = BTreeSet::new();
+    let mut q_seen_ids: BTreeSet<String> = BTreeSet::new();
 
     let mut add_red = |id: &str, group: &str, raw: &[Value]| {
+        if q_seen_ids.contains(id) {
+            return;
+        }
         let Some(canon) = gen.canonize(&dex, raw) else {
             return;
         };
@@ -7062,6 +7139,7 @@ fn cmd_dominance_audit(args: &[String]) {
         let Ok(sets) = to_sets(&canon) else {
             return;
         };
+        q_seen_ids.insert(id.to_string());
         let mut st = panel_strata
             .get(id)
             .cloned()
@@ -7126,12 +7204,60 @@ fn cmd_dominance_audit(args: &[String]) {
             }
         }
     }
+    for er_file in extra_red_str.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+        if let Ok(txt) = std::fs::read_to_string(er_file) {
+            if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+                if let Some(arr) = v["teams"].as_array() {
+                    for t in arr {
+                        if let (Some(id), Some(sets)) = (t["id"].as_str(), t["sets"].as_array()) {
+                            let grp = t["island"]
+                                .as_str()
+                                .or_else(|| t["role"].as_str())
+                                .unwrap_or("kodoku_r3_red");
+                            add_red(id, grp, sets);
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     let n_p = p_ids.len();
     let n_q = q_ids.len();
+    let p_raw_sigs: Vec<PreviewSig> = (0..n_p).map(|i| preview_sig_sets(&p_sets[i])).collect();
+    let p_sigs: Vec<String> = p_raw_sigs
+        .iter()
+        .map(|sig| {
+            sig.iter()
+                .map(|(sp, lv, g, it)| {
+                    format!("{}:{}{}{}", sp, lv, g, if *it { "@" } else { "" })
+                })
+                .collect::<Vec<_>>()
+                .join(",")
+        })
+        .collect();
+    let mut deme_groups: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+    for i in 0..n_p {
+        deme_groups.entry(p_sigs[i].clone()).or_default().push(i);
+    }
+    let p_deme_size: Vec<usize> = (0..n_p)
+        .map(|i| deme_groups.get(&p_sigs[i]).map(|v| v.len()).unwrap_or(1))
+        .collect();
+    let p_id_to_deme_size: BTreeMap<String, usize> = (0..n_p)
+        .map(|i| (p_ids[i].clone(), p_deme_size[i]))
+        .collect();
+    let multi_deme_shells = deme_groups.values().filter(|v| v.len() >= 2).count();
+    let multi_deme_teams = p_deme_size.iter().filter(|&&sz| sz >= 2).count();
     eprintln!(
         "=== Dominance & Exploitability Audit: |P|={} Conclusion Candidates x |Q|={} Omni-Challengers ===",
         n_p, n_q
+    );
+    eprintln!(
+        "  Same-Shell Deme structure in P: {} distinct outer shells ({} multi-variant Demes covering {}/{} candidates)",
+        deme_groups.len(),
+        multi_deme_shells,
+        multi_deme_teams,
+        n_p
     );
 
     if let Some(mdir) = merge_dir {
@@ -7151,36 +7277,57 @@ fn cmd_dominance_audit(args: &[String]) {
             .map(|(j, s)| (s.clone(), j))
             .collect();
 
-        for entry in std::fs::read_dir(&mdir).expect("read merge_dir").flatten() {
-            let p = entry.path();
-            if p.extension().and_then(|s| s.to_str()) != Some("json") {
-                continue;
-            }
-            let Ok(txt) = std::fs::read_to_string(&p) else {
-                continue;
-            };
-            let Ok(v) = serde_json::from_str::<Value>(&txt) else {
-                continue;
-            };
-            let Some(cells) = v["cells"].as_array() else {
+        let mut dirs_to_read = Vec::new();
+        if let Some(ref cdir) = cache_dir {
+            dirs_to_read.push(cdir.clone());
+        }
+        dirs_to_read.push(mdir.clone());
+
+        for dpath in dirs_to_read {
+            let Ok(rd) = std::fs::read_dir(&dpath) else {
                 continue;
             };
-            for c_val in cells {
-                let Some(pid) = c_val["p_id"].as_str() else {
+            for entry in rd.flatten() {
+                let p = entry.path();
+                if p.extension().and_then(|s| s.to_str()) != Some("json") {
+                    continue;
+                }
+                let Ok(txt) = std::fs::read_to_string(&p) else {
                     continue;
                 };
-                let Some(qid) = c_val["q_id"].as_str() else {
+                let Ok(v) = serde_json::from_str::<Value>(&txt) else {
                     continue;
                 };
-                let Some(sc) = c_val["score"].as_f64() else {
+                let is_deme_cache = v["deme_disclosure"].as_bool().unwrap_or(false);
+                let Some(cells) = v["cells"].as_array() else {
                     continue;
                 };
-                if let (Some(&i), Some(&j)) = (p_id_map.get(pid), q_id_map.get(qid)) {
-                    payoff[i][j] = sc;
-                    measured[i][j] = true;
-                    if j < n_p {
-                        payoff[j][i] = 1.0 - sc;
-                        measured[j][i] = true;
+                for c_val in cells {
+                    let Some(pid) = c_val["p_id"].as_str() else {
+                        continue;
+                    };
+                    let Some(qid) = c_val["q_id"].as_str() else {
+                        continue;
+                    };
+                    let Some(sc) = c_val["score"].as_f64() else {
+                        continue;
+                    };
+                    let pid_dsz = p_id_to_deme_size.get(pid).copied().unwrap_or(1);
+                    let qid_dsz = p_id_to_deme_size.get(qid).copied().unwrap_or(1);
+                    if !is_deme_cache && (pid_dsz > 1 || qid_dsz > 1) {
+                        continue;
+                    }
+                    if let (Some(&i), Some(&j)) = (p_id_map.get(pid), q_id_map.get(qid)) {
+                        payoff[i][j] = sc;
+                        measured[i][j] = true;
+                        if j < n_p {
+                            payoff[j][i] = 1.0 - sc;
+                            measured[j][i] = true;
+                        }
+                    }
+                    if let (Some(&i), Some(&j)) = (p_id_map.get(qid), q_id_map.get(pid)) {
+                        payoff[i][j] = 1.0 - sc;
+                        measured[i][j] = true;
                     }
                 }
             }
@@ -7417,18 +7564,103 @@ fn cmd_dominance_audit(args: &[String]) {
             );
         }
 
+        // Same-Shell Deme Summary across all shells in P
+        let mut deme_reports: Vec<Value> = Vec::new();
+        for (sig, members) in &deme_groups {
+            let m_len = members.len();
+            let tot_w: f64 = members.iter().map(|&i| minimax_w[i]).sum();
+            let mut unif_col = vec![0.0f64; n_q];
+            for j in 0..n_q {
+                unif_col[j] = members.iter().map(|&i| payoff[i][j]).sum::<f64>() / (m_len as f64);
+            }
+            let unif_omni = unif_col.iter().sum::<f64>() / (n_q as f64);
+            let unif_min = unif_col.iter().copied().fold(1.0f64, f64::min);
+            let mut best_single_min = 0.0f64;
+            let mut best_single_omni = 0.0f64;
+            let mut mem_vals = Vec::new();
+            for &i in members {
+                let i_omni = payoff[i].iter().sum::<f64>() / (n_q as f64);
+                let i_min = payoff[i].iter().copied().fold(1.0f64, f64::min);
+                if i_min > best_single_min {
+                    best_single_min = i_min;
+                }
+                if i_omni > best_single_omni {
+                    best_single_omni = i_omni;
+                }
+                mem_vals.push(json!({
+                    "id": p_ids[i],
+                    "origin": p_origins[i],
+                    "minimax_weight": minimax_w[i],
+                    "omni_mean_wr": i_omni,
+                    "min_payoff": i_min,
+                }));
+            }
+            deme_reports.push(json!({
+                "shell_sig": sig,
+                "deme_size": m_len,
+                "total_minimax_weight": tot_w,
+                "uniform_deme_omni_wr": unif_omni,
+                "uniform_deme_min_payoff": unif_min,
+                "best_single_omni_wr": best_single_omni,
+                "best_single_min_payoff": best_single_min,
+                "deme_min_synergy": unif_min - best_single_min,
+                "members": mem_vals,
+            }));
+        }
+        deme_reports.sort_by(|a, b| {
+            let sa = a["deme_size"].as_u64().unwrap();
+            let sb = b["deme_size"].as_u64().unwrap();
+            sb.cmp(&sa).then_with(|| {
+                b["total_minimax_weight"]
+                    .as_f64()
+                    .unwrap()
+                    .partial_cmp(&a["total_minimax_weight"].as_f64().unwrap())
+                    .unwrap()
+            })
+        });
+        println!("\n=== Same-Preview-Signature Deme Summary (Multi-Variant Shells) ===");
+        for d in deme_reports.iter().filter(|d| d["deme_size"].as_u64().unwrap() >= 2) {
+            let m_ids: Vec<String> = d["members"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|m| {
+                    format!(
+                        "{}(w={:.3},omni={:.3},min={:.3})",
+                        m["id"].as_str().unwrap(),
+                        m["minimax_weight"].as_f64().unwrap(),
+                        m["omni_mean_wr"].as_f64().unwrap(),
+                        m["min_payoff"].as_f64().unwrap()
+                    )
+                })
+                .collect();
+            println!(
+                "  [{}x Deme | sum_w={:.4} | unif_omni={:.3} | unif_min={:.3} (dMin={:+.3})] {}\n      -> {}",
+                d["deme_size"].as_u64().unwrap(),
+                d["total_minimax_weight"].as_f64().unwrap(),
+                d["uniform_deme_omni_wr"].as_f64().unwrap(),
+                d["uniform_deme_min_payoff"].as_f64().unwrap(),
+                d["deme_min_synergy"].as_f64().unwrap(),
+                d["shell_sig"].as_str().unwrap(),
+                m_ids.join(", ")
+            );
+        }
+
         if let Some(path) = out_file {
             write_json_atomic(
                 &path,
                 &json!({
                     "p_ids": p_ids,
                     "p_origins": p_origins,
+                    "p_sigs": p_sigs,
+                    "p_deme_size": p_deme_size,
                     "q_ids": q_ids,
                     "q_groups": q_groups,
                     "q_strata": q_strata,
                     "payoff": payoff,
                     "mixtures": mix_reports,
                     "individuals": indiv_reports,
+                    "deme_shells": deme_reports,
                     "adversarial_support": adv_support,
                     "minimax_value": minimax_val,
                 }),
@@ -7481,28 +7713,67 @@ fn cmd_dominance_audit(args: &[String]) {
     let cand_pool = Arc::new(base_mp.clone());
 
     // Precompute Full-Disclosure Opponent Prior for each `i in 0..n_p`:
-    // Any team in `base_mp` with the exact same `preview_sig` as `p_sets[i]` is augmented/dominated by `p_sets[i]` at weight 1.0
-    // so the Challenger NEVER suffers a stale-prior surprise against `p_sets[i]`.
+    // Under blind rules with a known strategy distribution, the opponent observes only the outer shell
+    // `sig_i = preview_sig_sets(&p_sets[i])` at Team Preview. Therefore, all candidates `p_k in P`
+    // sharing outer shell `sig_i` (a Same-Preview-Signature Deme) are disclosed together at equal prior
+    // weight 1.0, without leaking which specific hidden variant inside the Deme was drawn on Turn 0.
     let opp_pools: Vec<Arc<MetaPool>> = (0..n_p)
         .map(|i| {
             let mut mp_i = base_mp.clone();
-            let sig_i = preview_sig_sets(&p_sets[i]);
+            let raw_sig_i = &p_raw_sigs[i];
+            let sig_i = &p_sigs[i];
             for t in &mut mp_i.teams {
-                if preview_sig_sets(&t.sets) == sig_i {
+                if &preview_sig_sets(&t.sets) == raw_sig_i {
                     t.weight = Some(t.weight.unwrap_or(0.1) * 0.2);
                 }
             }
-            mp_i.teams.push(nc2000_bot::preview::MetaTeam {
-                id: format!("disclosed-{}", p_ids[i]),
-                sets: p_sets[i].clone(),
-                weight: Some(1.0),
-            });
+            if let Some(siblings) = deme_groups.get(sig_i) {
+                for &k in siblings {
+                    mp_i.teams.push(nc2000_bot::preview::MetaTeam {
+                        id: format!("disclosed-{}", p_ids[k]),
+                        sets: p_sets[k].clone(),
+                        weight: Some(1.0),
+                    });
+                }
+            }
             Arc::new(mp_i)
         })
         .collect();
 
-    // Load incremental checkpoint if `out_file` already exists
+    // Load incremental checkpoint if `out_file` or `cache_dir` exists
     let mut completed_map: BTreeMap<(String, String), f64> = BTreeMap::new();
+    if let Some(ref cdir) = cache_dir {
+        if let Ok(rd) = std::fs::read_dir(cdir) {
+            for entry in rd.flatten() {
+                let p = entry.path();
+                if p.extension().and_then(|s| s.to_str()) != Some("json") {
+                    continue;
+                }
+                if let Ok(txt) = std::fs::read_to_string(&p) {
+                    if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+                        let is_deme_cache = v["deme_disclosure"].as_bool().unwrap_or(false);
+                        if let Some(arr) = v["cells"].as_array() {
+                            for c_val in arr {
+                                if let (Some(pid), Some(qid), Some(sc)) = (
+                                    c_val["p_id"].as_str(),
+                                    c_val["q_id"].as_str(),
+                                    c_val["score"].as_f64(),
+                                ) {
+                                    let pid_dsz = p_id_to_deme_size.get(pid).copied().unwrap_or(1);
+                                    let qid_dsz = p_id_to_deme_size.get(qid).copied().unwrap_or(1);
+                                    if !is_deme_cache && (pid_dsz > 1 || qid_dsz > 1) {
+                                        continue;
+                                    }
+                                    completed_map.insert((pid.to_string(), qid.to_string()), sc);
+                                    completed_map.insert((qid.to_string(), pid.to_string()), 1.0 - sc);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     if let Some(ref path) = out_file {
         if let Ok(txt) = std::fs::read_to_string(path) {
             if let Ok(v) = serde_json::from_str::<Value>(&txt) {
@@ -7521,9 +7792,15 @@ fn cmd_dominance_audit(args: &[String]) {
         }
     }
 
-    let mut cell_records: Vec<Value> = completed_map
+    let mut cell_records: Vec<Value> = shard_cells
         .iter()
-        .map(|((pid, qid), &sc)| json!({"p_id": pid, "q_id": qid, "score": sc}))
+        .filter_map(|&(i, j)| {
+            let pid = &p_ids[i];
+            let qid = &q_ids[j];
+            completed_map
+                .get(&(pid.clone(), qid.clone()))
+                .map(|&sc| json!({"p_id": pid, "q_id": qid, "score": sc}))
+        })
         .collect();
 
     let pending_cells: Vec<(usize, usize)> = shard_cells
@@ -7531,6 +7808,14 @@ fn cmd_dominance_audit(args: &[String]) {
         .copied()
         .filter(|&(i, j)| !completed_map.contains_key(&(p_ids[i].clone(), q_ids[j].clone())))
         .collect();
+
+    eprintln!(
+        "  Shard {}/{}: {} cached cells reused, {} pending cells to evaluate under True Same-Shell Deme Disclosure",
+        shard,
+        num_shards,
+        cell_records.len(),
+        pending_cells.len()
+    );
 
     for chunk in pending_cells.chunks(32) {
         let cursor = std::sync::atomic::AtomicUsize::new(0);
@@ -7569,12 +7854,17 @@ fn cmd_dominance_audit(args: &[String]) {
                         let (i, j) = chunk[k];
                         let pair_seed =
                             seed ^ (((i * 1009 + j) as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15));
+                        let a_prior = if j < n_p {
+                            opp_pools[j].clone()
+                        } else {
+                            cand_pool.clone()
+                        };
                         let res = eval_blind_asymmetric_prior(
                             dex,
                             &p_sets[i],
                             std::slice::from_ref(&q_sets[j]),
                             &[1.0],
-                            cand_pool.clone(),
+                            a_prior,
                             opp_pools[i].clone(),
                             games_per_pair,
                             iters,
@@ -7622,6 +7912,7 @@ fn cmd_dominance_audit(args: &[String]) {
                     "games_per_pair": games_per_pair,
                     "iters": iters,
                     "c": c,
+                    "deme_disclosure": true,
                     "elapsed_secs": t_start.elapsed().as_secs_f64(),
                     "cells": cell_records,
                 }),
@@ -7638,6 +7929,7 @@ fn cmd_dominance_audit(args: &[String]) {
                 "games_per_pair": games_per_pair,
                 "iters": iters,
                 "c": c,
+                "deme_disclosure": true,
                 "elapsed_secs": t_start.elapsed().as_secs_f64(),
                 "cells": cell_records,
             }),
