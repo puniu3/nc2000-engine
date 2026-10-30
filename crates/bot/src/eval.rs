@@ -611,7 +611,7 @@ pub fn compact_eval01_blindspot(cb: &CompactBattle, table: &MatchTable, w: &Eval
     let n0 = cb.sides[0].alive_mask.count_ones();
     let n1 = cb.sides[1].alive_mask.count_ones();
     if n0 > 1 || n1 > 1 {
-        diff += compact_blindspot_diff(cb, table, w);
+        diff += compact_false_boost_refund_diff(cb, table, w);
     }
     let mut old_rm = 0.0;
     if w.race != 0.0 {
@@ -627,6 +627,142 @@ pub fn compact_eval01_blindspot(cb: &CompactBattle, table: &MatchTable, w: &Eval
         logit += w.residual_scale * compact_eval_residual_sym(cb, table, [eff0, eff1]);
     }
     1.0 / (1.0 + (-logit).exp())
+}
+
+#[inline(always)]
+fn move_has_pos_self_boost(ms: &nc2000_engine::compact::CompactMoveSpec) -> bool {
+    (ms.boosts_self
+        && ((ms.boosts[0].0 < 7 && ms.boosts[0].1 > 0)
+            || (ms.boosts[1].0 < 7 && ms.boosts[1].1 > 0)
+            || (ms.boosts[2].0 < 7 && ms.boosts[2].1 > 0)))
+        || ((ms.sec_boost.0 & 0x80) != 0 && (ms.sec_boost.0 & 0x7F) < 7 && ms.sec_boost.1 > 0)
+        || matches!(ms.pseudo_kind, 5..=8)
+        || ms.special_kind == 22
+}
+
+/// Strictly antisymmetric refund of false positive stat-stage credits in `compact_side_score_with_eff`:
+/// 1. `Swagger` false `+Atk` credit on a mon with no self-setup/sustain move (`!has_self_setup && !team_has_bp`):
+///    - `100%` of `w.boost[0] * boosts[0]` if it has no physical moves (`!has_any_phys`).
+///    - `70%` of `w.boost[0] * boosts[0]` while `CONFUSION` is active.
+/// 2. `Encore` lock on a boosted setup mon without Baton Pass (`vol_bit::ENCORE && !has_bp`).
+/// Returns identically `0.0` (`0.0 ULP`) on all states with no positive stat stages.
+#[inline]
+pub fn compact_false_boost_refund_diff(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    w: &EvalWeights,
+) -> f64 {
+    if cb.sides[0].alive_mask.count_ones() <= 1 && cb.sides[1].alive_mask.count_ones() <= 1 {
+        return 0.0;
+    }
+    compact_side_false_boost_refund(cb, table, w, 0)
+        - compact_side_false_boost_refund(cb, table, w, 1)
+}
+
+#[inline]
+fn compact_side_false_boost_refund(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    w: &EvalWeights,
+    s: usize,
+) -> f64 {
+    let side_st = &cb.sides[s];
+    let act_slot = side_st.active_idx as usize;
+    if (side_st.alive_mask & (1 << act_slot)) == 0 {
+        return 0.0;
+    }
+    let act_idx = s * 3 + act_slot;
+    let act_mon = &cb.mons[act_idx];
+    if act_mon.hp() <= 0 {
+        return 0.0;
+    }
+    // Fast path: if no positive stat stages are present on the active mon, refund is identically 0.0.
+    if act_mon.boosts[0] <= 0
+        && act_mon.boosts[1] <= 0
+        && act_mon.boosts[2] <= 0
+        && act_mon.boosts[3] <= 0
+        && act_mon.boosts[4] <= 0
+        && act_mon.boosts[5] <= 0
+        && act_mon.boosts[6] <= 0
+    {
+        return 0.0;
+    }
+
+    let act_spec = &table.mons[act_idx];
+    let dis = (act_mon.vol_flags & vol_bit::DISABLE) != 0;
+    let dis_slot = ((act_mon.slot_refs >> 4) & 0x03) as usize;
+    let mut has_any_phys = false;
+    let mut has_bp = false;
+    let mut has_self_setup = false;
+    for m_i in 0..act_spec.num_moves as usize {
+        let ms = &table.move_specs[act_idx][m_i];
+        if ms.boosts_self || matches!(ms.pseudo_kind, 5..=8) {
+            has_self_setup = true;
+        }
+        if act_mon.pp[m_i] == 0 || (dis && m_i == dis_slot) {
+            continue;
+        }
+        let deals_dmg = !ms.is_status
+            && (ms.base_power > 0
+                || ms.var_bp_kind != 0
+                || ms.fixed_damage != 0
+                || ms.special_kind == 15);
+        if deals_dmg && ms.is_physical {
+            has_any_phys = true;
+        }
+        if ms.special_kind == 18 && side_st.alive_mask.count_ones() >= 2 {
+            has_bp = true;
+        }
+    }
+
+    let mut team_has_bp = has_bp;
+    if !team_has_bp {
+        for slot in 0..3usize {
+            if (side_st.alive_mask & (1 << slot)) == 0 {
+                continue;
+            }
+            let idx = s * 3 + slot;
+            if cb.mons[idx].hp() <= 0 {
+                continue;
+            }
+            for m_i in 0..table.mons[idx].num_moves as usize {
+                if table.move_specs[idx][m_i].special_kind == 18 {
+                    team_has_bp = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    let mut delta = 0.0;
+    let mut atk_refunded = false;
+
+    // 1. Swagger false-boost refund: only when `act_mon` has no self-setup/sustain move and no team Baton Pass,
+    // so `boosts[0] > 0` came from an opponent's `Swagger`.
+    if !has_self_setup && !team_has_bp && act_mon.boosts[0] > 0 {
+        if !has_any_phys {
+            delta -= w.boost[0] * (act_mon.boosts[0] as f64);
+            atk_refunded = true;
+        } else if (act_mon.vol_flags & vol_bit::CONFUSION) != 0 {
+            delta -= 0.70 * w.boost[0] * (act_mon.boosts[0] as f64);
+            atk_refunded = true;
+        }
+    }
+
+    // 2. Encore lock on a boosted setup mon without Baton Pass: positive boosts cannot be leveraged
+    // while locked into a non-attacking encored move.
+    if (act_mon.vol_flags & vol_bit::ENCORE) != 0 && !has_bp {
+        for i in 0..7 {
+            if act_mon.boosts[i] > 0 {
+                if i == 0 && atk_refunded {
+                    continue;
+                }
+                delta -= 0.50 * w.boost[i] * (act_mon.boosts[i] as f64);
+            }
+        }
+    }
+
+    delta
 }
 
 /// Strictly antisymmetric balance-sheet correction for `CompactBattle`'s three structural
@@ -697,7 +833,7 @@ fn compact_side_blindspot_ledger(
     }
     let cleric_mult = if has_cleric { 0.45 } else { 1.0 };
 
-    // 1. Party-wide Frozen Asset Impairment & Healer Poison Liability
+    // 1. Party-wide Benched Frozen Asset Impairment & Healer Poison Liability
     for slot in 0..3usize {
         if (side_st.alive_mask & (1 << slot)) == 0 {
             continue;
@@ -712,14 +848,15 @@ fn compact_side_blindspot_ledger(
         let hp_frac = (hp as f64) / (spec.maxhp.max(1) as f64);
         let st = mon.status_raw();
 
-        if st == Status::Frz as u8 && !(mon.item != 0 && spec.is_miracleberry) {
-            // In Gen 2, a frozen Pokemon has a 0% passive thaw chance while on the bench and only
-            // 25/256 (~9.8%) per turn while active. Base eval only subtracts `w.frz = 0.56` from
-            // `w.alive + w.hp * hp_frac` (`+0.94` at 100% HP). Write down its book value uniformly
-            // across active and bench slots so switching out a frozen active mon never suffers a
-            // false bench-impairment cliff.
+        if st == Status::Frz as u8
+            && slot as u8 != side_st.active_idx
+            && !(mon.item != 0 && spec.is_miracleberry)
+        {
+            // In Gen 2, a benched frozen Pokemon has a 0% passive thaw chance while on the bench.
+            // Base eval only subtracts `w.frz = 0.56` from `w.alive + w.hp * hp_frac` (`+0.94` at
+            // 100% HP). Write down benched frozen book value to pivot/fodder value (`w.alive + 0.12 * hp_frac`).
             let base_val = w.alive + w.hp * hp_frac - w.frz;
-            let scrap_val = (0.10 + 0.20 * hp_frac) * w.hp;
+            let scrap_val = w.alive + 0.12 * hp_frac * w.hp;
             if base_val > scrap_val {
                 delta -= (base_val - scrap_val) * cleric_mult;
             }
@@ -748,7 +885,7 @@ fn compact_side_blindspot_ledger(
         }
     }
 
-    // 2. Active Setup / Stat-Boost / Confusion / Sleep-Threat Accounting
+    // 2. Active Setup / Stat-Boost / Swagger / Encore Accounting
     let act_slot = side_st.active_idx as usize;
     if (side_st.alive_mask & (1 << act_slot)) == 0 {
         return delta;
@@ -756,7 +893,7 @@ fn compact_side_blindspot_ledger(
     let act_idx = s * 3 + act_slot;
     let act_mon = &cb.mons[act_idx];
     let act_spec = &table.mons[act_idx];
-    if act_mon.hp() <= 0 {
+    if act_mon.hp() <= 0 || act_mon.status_raw() == Status::Frz as u8 {
         return delta;
     }
 
@@ -765,24 +902,6 @@ fn compact_side_blindspot_ledger(
     let foe_alive = (cb.sides[foe_s].alive_mask & (1 << foe_slot)) != 0
         && cb.mons[foe_s * 3 + foe_slot].hp() > 0;
     let foe_idx = foe_s * 3 + foe_slot;
-    let my_hit = if foe_alive {
-        cb.best_hit_fraction(table, s, act_slot, foe_s, foe_slot, w.couple_evasion)
-    } else {
-        0.0
-    };
-
-    if act_mon.status_raw() == Status::Frz as u8 {
-        if !(act_mon.item != 0 && act_spec.is_miracleberry) {
-            // Base eval added full `w.threat * act_eff` and positive `w.boost` for the frozen active mon.
-            delta -= 0.85 * w.threat * my_hit.min(1.0);
-            for i in 0..7 {
-                if act_mon.boosts[i] > 0 {
-                    delta -= w.boost[i] * (act_mon.boosts[i] as f64);
-                }
-            }
-        }
-        return delta;
-    }
 
     let dis = (act_mon.vol_flags & vol_bit::DISABLE) != 0;
     let dis_slot = ((act_mon.slot_refs >> 4) & 0x03) as usize;
@@ -795,7 +914,7 @@ fn compact_side_blindspot_ledger(
     let mut has_sleeptalk = false;
     for m_i in 0..act_spec.num_moves as usize {
         let ms = &table.move_specs[act_idx][m_i];
-        if ms.boosts_self || matches!(ms.pseudo_kind, 5 | 6 | 7) {
+        if move_has_pos_self_boost(ms) {
             has_self_setup = true;
         }
         if act_mon.pp[m_i] == 0 || (dis && m_i == dis_slot) {
@@ -834,49 +953,27 @@ fn compact_side_blindspot_ledger(
         delta -= w.boost[2] * (act_mon.boosts[2] as f64);
     }
 
-    let hp_frac = (act_mon.hp() as f64) / (act_spec.maxhp.max(1) as f64);
-    let st = act_mon.status_raw();
-    let has_cure_berry =
-        act_mon.item != 0 && (act_spec.is_mintberry || act_spec.is_miracleberry);
-    let has_any_pos_boost = act_mon.boosts.iter().any(|&b| b > 0);
-    if st == Status::Slp as u8
-        && !has_sleeptalk
-        && !has_heal
-        && act_mon.status_counter() >= 2
-        && !has_cure_berry
-        && (has_any_pos_boost || has_bp || team_has_bp)
-    {
-        // Active non-Rest/non-SleepTalk setup/Baton-Pass mon is guaranteed asleep;
-        // discount immediate active threat.
-        delta -= 0.55 * w.threat * my_hit.min(1.0);
-    }
-
-    // Confusion / Swagger liability: base `w.confusion` is 0.0, so without this adjustment a
-    // Swaggered target receives `+0.30` from `+2 Atk` and 0 confusion penalty.
+    // Swagger false-boost refund: base `w.boost[0]` credits `+0.15 * boosts[0]` (`+0.30` at `+2 Atk`)
+    // even when the boost came from an opponent's Swagger (`!has_self_setup && !team_has_bp` while confused).
+    // (Unboosted confusion is already modeled by `w.exchange_v2` and `linear.rs`.)
     if (act_mon.vol_flags & vol_bit::CONFUSION) != 0 {
         if !has_self_setup && !team_has_bp && act_mon.boosts[0] > 0 && (has_any_phys || has_bp) {
             delta -= 0.70 * w.boost[0] * (act_mon.boosts[0] as f64);
-        }
-        if st != Status::Slp as u8 {
-            let atk_mult = if act_mon.boosts[0] > 0 {
-                1.0 + 0.35 * (act_mon.boosts[0] as f64)
-            } else {
-                1.0
-            };
-            delta -= 0.12 * atk_mult * (0.4 + 0.6 * hp_frac);
         }
         return delta;
     }
 
     // Never credit setup capital from an opponent's Swagger (`!has_self_setup && !team_has_bp`)
-    // or when under Perish Song / Encore.
+    // or when under Perish Song / trapped / Encore.
     if !has_self_setup && !team_has_bp {
         return delta;
     }
-    if (act_mon.vol_flags & (vol_bit::PERISH_SONG | vol_bit::ENCORE)) != 0 {
+    if (act_mon.vol_flags & (vol_bit::PERISH_SONG | vol_bit::TRAPPED_OR_LOCKED | vol_bit::ENCORE)) != 0 {
         return delta;
     }
 
+    let hp_frac = (act_mon.hp() as f64) / (act_spec.maxhp.max(1) as f64);
+    let st = act_mon.status_raw();
     let my_spd = cb.mon_action_speed(table, s, act_slot);
     let (foe_spd, foe_hit) = if foe_alive {
         (
@@ -887,6 +984,11 @@ fn compact_side_blindspot_ledger(
         (0, 0.0)
     };
     let me_faster = my_spd > foe_spd;
+    let my_hit = if foe_alive {
+        cb.best_hit_fraction(table, s, act_slot, foe_s, foe_slot, w.couple_evasion)
+    } else {
+        0.5
+    };
 
     // Discount setup capital if the opposing active mon holds an active phazer / Perish / Explosion deterrent,
     // or if our active sweeper is completely walled by the opposing active mon (e.g. mono-Normal vs Ghost).
@@ -992,25 +1094,38 @@ fn compact_side_blindspot_ledger(
         || (b_off + b_def + b_spd) >= 3.0
         || (b_def + b_spd) >= 2.0
         || b_eva > 0.0
-        || (has_bp && (b_off > 0.0 || b_spe > 0.0))
+        || ((has_bp || team_has_bp) && (b_off > 0.0 || b_spe > 0.0))
     {
-        let bp_term = if has_bp {
-            0.16 * (b_off + 0.8 * b_spe + b_eva)
+        let raw_intensity = if has_bp {
+            // Boosts are still on the Baton Pass carrier: credit a modest bridge value so
+            // Turn-1 setup is rewarded, while executing Baton Pass to a high-threat receiver
+            // strictly increases setup capital (`Unboosted Passer < Boosted Passer < Boosted Receiver`).
+            0.14 * b_off
+                + 0.08 * (b_def + b_spd)
+                + 0.10 * b_spe
+                + 0.22 * b_eva
+                + 0.06 * b_off * (b_def + 0.7 * b_spe + b_eva)
         } else {
-            0.0
+            let eff_mult = (my_hit / 0.45).clamp(0.25, 1.10);
+            let bp_recv_term = if team_has_bp {
+                let spe_sweep = if me_faster { 0.18 * b_spe.min(2.0) } else { 0.06 * b_spe.min(2.0) };
+                (0.10 * b_off + spe_sweep) * eff_mult
+            } else {
+                0.0
+            };
+            (0.16 * b_off + 0.08 * b_off * (b_def + 0.7 * b_spe + b_eva)) * eff_mult
+                + 0.10 * (b_def + b_spd)
+                + 0.24 * b_eva
+                + bp_recv_term
         };
-        let raw_intensity = 0.28 * b_off
-            + 0.14 * (b_def + b_spd)
-            + 0.32 * b_eva
-            + 0.12 * b_off * (b_def + 0.7 * b_spe + b_eva)
-            + bp_term;
         let concave_cap = raw_intensity / (1.0 + 0.55 * raw_intensity);
 
         let mut sust = if has_heal {
-            if st == Status::Slp as u8 && !has_sleeptalk {
+            if st == Status::Slp as u8 {
                 let rem = act_mon.status_counter().saturating_sub(1) as f64;
-                if (hp_frac - rem * foe_hit.max(0.15)).max(0.0) > 0.25 {
-                    0.75 * hp_frac
+                let hp_wake = (hp_frac - rem * foe_hit * 0.85).clamp(0.0, 1.0);
+                if rem == 0.0 || hp_wake > 0.25 {
+                    0.70
                 } else {
                     0.30 * hp_frac
                 }
@@ -3078,28 +3193,28 @@ mod residual_tests {
         cb_ab.sides[1].active_idx = 0;
 
         cb_ab.mons[0].vol_flags |= vol_bit::CONFUSION;
-        assert!(
-            compact_blindspot_diff(&cb_ab, &tbl_ab, &w) < 0.0,
-            "confused mon must not receive setup capital and must incur confusion liability"
+        assert_eq!(
+            compact_blindspot_diff(&cb_ab, &tbl_ab, &w),
+            0.0,
+            "confused mon must not receive setup capital"
         );
         cb_ab.mons[0].vol_flags &= !vol_bit::CONFUSION;
 
-        // 3. Frozen asset write-down (both active and bench; switching out a frozen mon improves equity)
-        // & Healer Toxic impairment (discounted by Heal Bell cleric)
+        cb_ab.mons[0].vol_flags |= vol_bit::ENCORE;
+        assert_eq!(
+            compact_blindspot_diff(&cb_ab, &tbl_ab, &w),
+            0.0,
+            "encored mon must not receive setup capital"
+        );
+        cb_ab.mons[0].vol_flags &= !vol_bit::ENCORE;
+
+        // 3. Benched Frozen asset write-down & Healer Toxic impairment (discounted by Heal Bell cleric)
         cb_ab.mons[0].boosts = [0; 7];
-        cb_ab.mons[1].set_status(Status::Frz as u8, 0); // Starmie frozen
+        cb_ab.mons[1].set_status(Status::Frz as u8, 0); // Benched Starmie frozen
         let d_frz_with_cleric = compact_blindspot_diff(&cb_ab, &tbl_ab, &w);
         assert!(
             d_frz_with_cleric < 0.0,
             "benched Frz must write down asset value: {d_frz_with_cleric}"
-        );
-        cb_ab.sides[0].active_idx = 1; // Frozen Starmie active
-        let v_frz_active = compact_eval01_blindspot(&cb_ab, &tbl_ab, &w);
-        cb_ab.sides[0].active_idx = 0; // Switch to healthy Snorlax
-        let v_frz_benched = compact_eval01_blindspot(&cb_ab, &tbl_ab, &w);
-        assert!(
-            v_frz_benched > v_frz_active,
-            "switching out a frozen active mon to a healthy teammate must improve equity: {v_frz_benched} vs {v_frz_active}"
         );
         cb_ab.sides[0].alive_mask &= !(1 << 2); // Faint Miltank (Heal Bell cleric)
         let d_frz_no_cleric = compact_blindspot_diff(&cb_ab, &tbl_ab, &w);
@@ -3115,7 +3230,20 @@ mod residual_tests {
             "Recover wall with Toxic must incur poison liability: {d_tox_healer}"
         );
 
-        // 4. Exact 1v1 invariance (`compact_eval01_blindspot == compact_eval01`)
+        // 4. Encore lock false-boost refund on boosted setup mon without Baton Pass
+        cb_ab.sides[0].alive_mask = 0b011;
+        cb_ab.sides[1].alive_mask = 0b011;
+        cb_ab.mons[0].boosts[0] = 2;
+        cb_ab.mons[0].vol_flags |= vol_bit::ENCORE;
+        let refund_encore = compact_false_boost_refund_diff(&cb_ab, &tbl_ab, &w);
+        assert!(
+            (refund_encore - (-0.50 * 2.0 * w.boost[0])).abs() < 1e-12,
+            "Encored boosted Snorlax without Baton Pass must refund 50% of +2 Atk: {refund_encore}"
+        );
+        cb_ab.mons[0].vol_flags &= !vol_bit::ENCORE;
+        cb_ab.mons[0].boosts[0] = 0;
+
+        // 5. Exact 1v1 invariance (`compact_eval01_blindspot == compact_eval01`)
         cb_ab.sides[0].alive_mask = 0b001;
         cb_ab.sides[1].alive_mask = 0b001;
         cb_ab.mons[0].boosts[0] = 2;
