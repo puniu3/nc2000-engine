@@ -7957,8 +7957,1434 @@ fn main() {
         "audit-elites" => cmd_audit_elites(&args[1..]),
         "sibling-mix" => cmd_sibling_mix(&args[1..]),
         "dominance-audit" => cmd_dominance_audit(&args[1..]),
+        "falsify-conclusion" => cmd_falsify_conclusion(&args[1..]),
         other => panic!(
-            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring | update-pool | tomography | kodoku | core-nash | verify-1gen | audit-elites | sibling-mix | dominance-audit)"
+            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring | update-pool | tomography | kodoku | core-nash | verify-1gen | audit-elites | sibling-mix | dominance-audit | falsify-conclusion)"
         ),
+    }
+}
+
+fn normalize_team_dvs_evs(dex: &Dex, raw: &[Value]) -> Vec<Value> {
+    let mut upgraded = raw.to_vec();
+    for set in &mut upgraded {
+        let moves: Vec<String> = set["moves"]
+            .as_array()
+            .map(|a| a.iter().filter_map(|v| v.as_str().map(toid)).collect())
+            .unwrap_or_default();
+        let has_hp = moves.iter().any(|m| m.starts_with("hiddenpower"));
+        let has_caller = moves.iter().any(|m| {
+            matches!(
+                m.as_str(),
+                "metronome" | "mimic" | "mirrormove" | "transform"
+            )
+        });
+        let has_physical = moves.iter().any(|m| {
+            dex.moves
+                .id(m)
+                .is_some_and(|mid| dex.moves.get(mid).category == "Physical")
+        });
+        let sp = toid(set["species"].as_str().unwrap_or(""));
+        if !has_hp && !has_caller && !has_physical && sp != "unown" {
+            set["evs"] =
+                json!({"hp": 255, "atk": 0, "def": 255, "spa": 255, "spd": 255, "spe": 255});
+            set["ivs"] =
+                json!({"hp": 31, "atk": 3, "def": 31, "spa": 31, "spd": 31, "spe": 31});
+            if let Some(obj) = set.as_object_mut() {
+                obj.remove("gender");
+                obj.remove("shiny");
+            }
+        } else {
+            set["evs"] =
+                json!({"hp": 255, "atk": 255, "def": 255, "spa": 255, "spd": 255, "spe": 255});
+            if let Some(obj) = set.as_object_mut() {
+                obj.remove("ivs");
+                obj.remove("gender");
+                obj.remove("shiny");
+            }
+        }
+    }
+    upgraded
+}
+
+struct PiStarEvalOut {
+    blue_score: f64,
+    games_played: usize,
+    red_slot_picks: [f64; 6],
+    red_slot_wins: [f64; 6],
+}
+
+/// Evaluate a Red challenger `red_sets` against the fixed Conclusion Mixture `\pi^* = {(pi_sets[k], pi_weights[k])}`
+/// using a seamless Quasi-Monte Carlo (golden-ratio low-discrepancy) sequence of P1/P2 mirror pairs
+/// `m in pair_start .. (pair_start + num_pairs)` (`2 * num_pairs` games total).
+///
+/// - `blue_prior`: standard `MetaPool` used by Blue (`\pi^*`) when facing a potentially unknown Red team.
+/// - `red_prior`: exact smuggling-free `MetaPool` (`pi_star_mp`) used by Red, containing ONLY the active
+///   support members of `\pi^*` with their exact equilibrium weights `w*_k` (and zero legacy ghosts on `\pi^*` shells).
+fn eval_vs_pi_star_qmc(
+    dex: &Dex,
+    pi_sets: &[Vec<PokemonSet>],
+    pi_weights: &[f64],
+    red_sets: &[PokemonSet],
+    blue_prior: Arc<MetaPool>,
+    red_prior: Arc<MetaPool>,
+    pair_start: usize,
+    num_pairs: usize,
+    agent_iters: u32,
+    c: f64,
+    max_turns: u16,
+    threads: usize,
+    seed: u64,
+) -> PiStarEvalOut {
+    use nc2000_bot::runner::{play_game, GameResult};
+    use nc2000_bot::smmcts::{RmConfig, SelRule};
+    use nc2000_bot::{Agent, BlindAgent};
+    use nc2000_engine::battle::Outcome;
+    use nc2000_engine::state::Battle;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct QmcJob {
+        blue_idx: usize,
+        battle_seed: String,
+        blue_seed: u64,
+        red_seed: u64,
+        blue_is_p1: bool,
+    }
+
+    let mut cum_w = Vec::with_capacity(pi_weights.len());
+    let mut acc = 0.0f64;
+    for &w in pi_weights {
+        acc += w;
+        cum_w.push(acc);
+    }
+    let w_tot = acc.max(1e-12);
+    let phi = 0.618_033_988_749_894_9_f64;
+    let seed_offset = ((seed & 0xFFFF_FFFF) as f64) / (u32::MAX as f64);
+
+    let mut jobs = Vec::with_capacity(num_pairs * 2);
+    for m in pair_start..(pair_start + num_pairs) {
+        let u = (((m as f64) + 0.5) * phi + seed_offset).rem_euclid(1.0) * w_tot;
+        let blue_idx = cum_w
+            .iter()
+            .position(|&cw| cw >= u)
+            .unwrap_or_else(|| pi_sets.len().saturating_sub(1));
+        let mut rng = SplitMix64::new(
+            seed ^ ((m as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15))
+                ^ ((blue_idx as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9)),
+        );
+        let bseed = rng.battle_seed();
+        for g in 0..2 {
+            jobs.push(QmcJob {
+                blue_idx,
+                battle_seed: bseed.clone(),
+                blue_seed: rng.next(),
+                red_seed: rng.next(),
+                blue_is_p1: g == 0,
+            });
+        }
+    }
+
+    let cursor = AtomicUsize::new(0);
+    let mut results: Vec<(f64, u8)> = Vec::with_capacity(jobs.len());
+    std::thread::scope(|scope| {
+        let mut handles = Vec::new();
+        for _ in 0..threads.max(1) {
+            let (jobs, cursor, blue_prior, red_prior) = (&jobs, &cursor, &blue_prior, &red_prior);
+            handles.push(scope.spawn(move || {
+                let mut loc = Vec::new();
+                loop {
+                    let idx = cursor.fetch_add(1, Ordering::Relaxed);
+                    if idx >= jobs.len() {
+                        break;
+                    }
+                    let job = &jobs[idx];
+                    let rm_cfg = RmConfig {
+                        iterations: agent_iters,
+                        rule: SelRule::Ucb,
+                        c,
+                        ..Default::default()
+                    };
+                    let mut blue_agent: Box<dyn Agent> = Box::new(BlindAgent::new(
+                        rm_cfg.clone(),
+                        blue_prior.clone(),
+                        None,
+                        job.blue_seed,
+                    ));
+                    let mut red_agent: Box<dyn Agent> = Box::new(BlindAgent::new(
+                        rm_cfg,
+                        red_prior.clone(),
+                        None,
+                        job.red_seed,
+                    ));
+                    let b_sets = &pi_sets[job.blue_idx];
+                    let (t1, t2) = if job.blue_is_p1 {
+                        (b_sets.as_slice(), red_sets)
+                    } else {
+                        (red_sets, b_sets.as_slice())
+                    };
+                    let mut b = Battle::from_fixture(dex, &job.battle_seed, t1, t2).unwrap();
+                    b.set_log_enabled(true);
+                    let res = if job.blue_is_p1 {
+                        play_game(
+                            dex,
+                            &mut b,
+                            &mut [blue_agent.as_mut(), red_agent.as_mut()],
+                            max_turns,
+                        )
+                    } else {
+                        play_game(
+                            dex,
+                            &mut b,
+                            &mut [red_agent.as_mut(), blue_agent.as_mut()],
+                            max_turns,
+                        )
+                    }
+                    .unwrap();
+                    let p1_score = match res {
+                        GameResult::Outcome(Outcome::P1Win) => 1.0,
+                        GameResult::Outcome(Outcome::P2Win) => 0.0,
+                        GameResult::Outcome(Outcome::Tie) | GameResult::TurnCapped => 0.5,
+                    };
+                    let blue_pts = if job.blue_is_p1 {
+                        p1_score
+                    } else {
+                        1.0 - p1_score
+                    };
+                    let red_side = if job.blue_is_p1 { 1 } else { 0 };
+                    let mut red_mask = 0u8;
+                    for &slot in &b.sides[red_side].party {
+                        if (slot as usize) < 6 {
+                            red_mask |= 1u8 << slot;
+                        }
+                    }
+                    loc.push((idx, (blue_pts, red_mask)));
+                }
+                loc
+            }));
+        }
+        let mut indexed = Vec::with_capacity(jobs.len());
+        for h in handles {
+            indexed.extend(h.join().unwrap());
+        }
+        indexed.sort_by_key(|(idx, _)| *idx);
+        for (_, item) in indexed {
+            results.push(item);
+        }
+    });
+
+    let n_games = results.len();
+    let mut blue_sum = 0.0f64;
+    let mut red_slot_picks = [0.0f64; 6];
+    let mut red_slot_wins = [0.0f64; 6];
+    for &(blue_pts, red_mask) in &results {
+        blue_sum += blue_pts;
+        let red_pts = 1.0 - blue_pts;
+        for s in 0..6 {
+            if (red_mask & (1u8 << s)) != 0 {
+                red_slot_picks[s] += 1.0;
+                red_slot_wins[s] += red_pts;
+            }
+        }
+    }
+    let blue_score = if n_games > 0 {
+        blue_sum / (n_games as f64)
+    } else {
+        0.5
+    };
+    PiStarEvalOut {
+        blue_score,
+        games_played: n_games,
+        red_slot_picks,
+        red_slot_wins,
+    }
+}
+
+fn cmd_falsify_conclusion(args: &[String]) {
+    let t_start = std::time::Instant::now();
+    let dex = load_dex();
+    let root = repo_root();
+    let ls_text = std::fs::read_to_string(root.join("data/learnsets-gen2.json")).unwrap();
+    let pool_text = std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap();
+    let gen = TeamGen::new(&dex, &ls_text, &pool_text).unwrap();
+
+    let mode = flag(args, "--mode").unwrap_or_else(|| "both".to_string());
+    let report_path = flag(args, "--report")
+        .unwrap_or_else(|| "data/dominance-audit-v7-deme/report-step8-deme.json".to_string());
+    let extra_blue_str = flag(args, "--extra-blue").unwrap_or_else(|| {
+        "data/kodoku-r3/step2-promotes.json,data/kodoku-r3/step3-promotes.json,data/kodoku-r3/step4-promotes.json,data/kodoku-r3/step5-promotes.json,data/kodoku-r3/step6-deme-promotes.json,data/kodoku-r3/step7-deme-promotes.json,data/kodoku-r3/step8-deme-promotes.json".to_string()
+    });
+    let extra_red_str = flag(args, "--extra-red").unwrap_or_else(|| {
+        "data/kodoku-r3/red-gauntlet.json,data/kodoku-r3/step6-deme-promotes.json,data/kodoku-r3/step7-deme-promotes.json,data/kodoku-r3/step8-deme-promotes.json".to_string()
+    });
+    let iters: u32 = num(args, "--iters", 80);
+    let c: f64 = num(args, "--c", 0.4);
+    let max_turns: u16 = num(args, "--max-turns", 250);
+    let seed: u64 = num(args, "--seed", 20261101);
+    let waves: usize = num(args, "--waves", 8);
+    let carry: usize = num(args, "--carry", 14);
+    let buds: usize = num(args, "--buds", 16);
+    let island = flag(args, "--island").unwrap_or_else(|| "red-oracle".to_string());
+    let out_file = flag(args, "--out").map(PathBuf::from);
+    let audit_in = flag(args, "--audit-in").map(PathBuf::from);
+    let threads: usize = flag(args, "--threads")
+        .map(|v| v.parse().unwrap())
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(4)
+        });
+
+    // 1. Reconstruct P and Q inventories identically to `cmd_dominance_audit`
+    let mut p_map: BTreeMap<String, (Vec<PokemonSet>, Vec<Value>, String)> = BTreeMap::new();
+    let mut q_map: BTreeMap<String, (Vec<PokemonSet>, Vec<Value>, String)> = BTreeMap::new();
+    let mut seen_p_keys: BTreeSet<String> = BTreeSet::new();
+    let mut seen_q_keys: BTreeSet<String> = BTreeSet::new();
+
+    let mut reg_blue = |id: &str, origin: &str, raw: &[Value]| {
+        if p_map.contains_key(id) {
+            return;
+        }
+        let upgraded = normalize_team_dvs_evs(&dex, raw);
+        let Some(canon) = gen.canonize(&dex, &upgraded) else {
+            return;
+        };
+        if !seen_p_keys.insert(team_key(&canon)) {
+            return;
+        }
+        if let Ok(sets) = to_sets(&canon) {
+            p_map.insert(id.to_string(), (sets, canon, origin.to_string()));
+        }
+    };
+
+    let mn3_v: Value = serde_json::from_str(
+        &std::fs::read_to_string(root.join("data/meta-nash-v3/pool-artifact.json")).unwrap(),
+    )
+    .unwrap();
+    for t in mn3_v["teams"].as_array().unwrap() {
+        reg_blue(
+            t["id"].as_str().unwrap(),
+            "meta-nash-v3",
+            t["sets"].as_array().unwrap(),
+        );
+    }
+    let kr2_v: Value = serde_json::from_str(
+        &std::fs::read_to_string(root.join("data/eco-pool/nash-solution.json")).unwrap(),
+    )
+    .unwrap();
+    for t in kr2_v["teams"].as_array().unwrap() {
+        reg_blue(
+            t["id"].as_str().unwrap(),
+            "kodoku-r2-nash",
+            t["sets"].as_array().unwrap(),
+        );
+    }
+    if let Ok(txt) = std::fs::read_to_string(root.join("data/kodoku-r1/nash-solution-next.json")) {
+        if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+            if let Some(arr) = v["teams"].as_array() {
+                for t in arr {
+                    reg_blue(
+                        t["id"].as_str().unwrap(),
+                        "kodoku-r1-nash",
+                        t["sets"].as_array().unwrap(),
+                    );
+                }
+            }
+        }
+    }
+    let mp_v: Value = serde_json::from_str(
+        &std::fs::read_to_string(root.join("data/eco-pool/master-pool.json")).unwrap(),
+    )
+    .unwrap();
+    for t in mp_v["teams"].as_array().unwrap() {
+        let tid = t["id"].as_str().unwrap();
+        let orig = t["origin"].as_str().unwrap_or("master-pool");
+        if tid.starts_with("deme-")
+            || tid.starts_with("kodoku-")
+            || matches!(tid, "sample-12" | "rental-cban-8" | "rental-cban-13")
+        {
+            reg_blue(tid, orig, t["sets"].as_array().unwrap());
+        }
+    }
+    for eb_file in extra_blue_str.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+        if let Ok(txt) = std::fs::read_to_string(eb_file) {
+            if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+                if let Some(arr) = v["teams"].as_array() {
+                    for t in arr {
+                        if let (Some(id), Some(sets)) = (t["id"].as_str(), t["sets"].as_array()) {
+                            let orig = t["island"]
+                                .as_str()
+                                .or_else(|| t["role"].as_str())
+                                .unwrap_or("extra-blue");
+                            reg_blue(id, orig, sets);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let mut reg_red = |id: &str, grp: &str, raw: &[Value]| {
+        if q_map.contains_key(id) {
+            return;
+        }
+        let upgraded = normalize_team_dvs_evs(&dex, raw);
+        let Some(canon) = gen.canonize(&dex, &upgraded).or_else(|| gen.canonize(&dex, raw)) else {
+            return;
+        };
+        if !seen_q_keys.insert(team_key(&canon)) {
+            return;
+        }
+        if let Ok(sets) = to_sets(&canon) {
+            q_map.insert(id.to_string(), (sets, canon, grp.to_string()));
+        }
+    };
+    for (id, (_, raw, orig)) in &p_map {
+        reg_red(id, orig, raw);
+    }
+    let inv_v: Value = serde_json::from_str(
+        &std::fs::read_to_string(root.join("data/team-inventory-v1/eval/teams.json")).unwrap(),
+    )
+    .unwrap();
+    for t in inv_v["teams"].as_array().unwrap() {
+        let id = t["id"].as_str().unwrap();
+        if !id.starts_with("ctl-") {
+            reg_red(id, "inventory", t["sets"].as_array().unwrap());
+        }
+    }
+    for (extra_path, grp_tag, cap) in [
+        ("data/community-rentals-v0/teams.json", "community_rental", 30usize),
+        ("data/eco-r17/pool-artifact.json", "eco_r17", 12usize),
+        ("data/kodoku-r1/nash-candidates.json", "kodoku_r1_cand", 10usize),
+        ("data/kodoku-r2/nash-candidates.json", "kodoku_r2_cand", 12usize),
+    ] {
+        if let Ok(txt) = std::fs::read_to_string(root.join(extra_path)) {
+            if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+                if let Some(arr) = v["teams"].as_array() {
+                    for t in arr.iter().take(cap) {
+                        if let (Some(id), Some(sets)) = (t["id"].as_str(), t["sets"].as_array()) {
+                            reg_red(id, grp_tag, sets);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    for er_file in extra_red_str.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+        if let Ok(txt) = std::fs::read_to_string(er_file) {
+            if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+                if let Some(arr) = v["teams"].as_array() {
+                    for t in arr {
+                        if let (Some(id), Some(sets)) = (t["id"].as_str(), t["sets"].as_array()) {
+                            reg_red(id, "extra-red", sets);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Load the matrix report and solve exact full-precision minimax weights `w_p`
+    let rep_v: Value = serde_json::from_str(&std::fs::read_to_string(&report_path).unwrap()).unwrap();
+    let p_ids: Vec<String> = rep_v["p_ids"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap().to_string())
+        .collect();
+    let q_ids: Vec<String> = rep_v["q_ids"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap().to_string())
+        .collect();
+    let payoff: Vec<Vec<f64>> = rep_v["payoff"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| {
+            row.as_array()
+                .unwrap()
+                .iter()
+                .map(|v| v.as_f64().unwrap())
+                .collect()
+        })
+        .collect();
+
+    let (w_p_raw, _w_q_raw, _min_val) = solve_rectangular_minimax(&payoff, 50_000);
+    // Keep active support `w >= 0.002` and renormalize to sum to 1.000000000000
+    let mut active_pi: Vec<(usize, String, f64, Vec<PokemonSet>, Vec<Value>)> = Vec::new();
+    for (i, pid) in p_ids.iter().enumerate() {
+        if w_p_raw[i] >= 0.002 {
+            let (sets, raw, _) = p_map
+                .get(pid)
+                .unwrap_or_else(|| panic!("missing P team {}", pid));
+            active_pi.push((i, pid.clone(), w_p_raw[i], sets.clone(), raw.clone()));
+        }
+    }
+    active_pi.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap());
+    let w_sum: f64 = active_pi.iter().map(|x| x.2).sum();
+    for x in &mut active_pi {
+        x.2 /= w_sum;
+    }
+
+    let pi_ids: Vec<String> = active_pi.iter().map(|x| x.1.clone()).collect();
+    let pi_id_set: BTreeSet<String> = pi_ids.iter().cloned().collect();
+    let pi_weights: Vec<f64> = active_pi.iter().map(|x| x.2).collect();
+    let pi_sets: Vec<Vec<PokemonSet>> = active_pi.iter().map(|x| x.3.clone()).collect();
+    let pi_raw: Vec<Vec<Value>> = active_pi.iter().map(|x| x.4.clone()).collect();
+
+    // Save renormalized full-precision equilibrium to `data/kodoku-r3/conclusion-equilibrium-deme.json`
+    let eq_teams_json: Vec<Value> = active_pi
+        .iter()
+        .map(|(_, pid, w, _, raw)| {
+            json!({
+                "id": pid,
+                "weight": w,
+                "sets": raw,
+            })
+        })
+        .collect();
+    write_json_atomic(
+        &root.join("data/kodoku-r3/conclusion-equilibrium-deme.json"),
+        &json!({
+            "name": "conclusion-equilibrium-deme-step8-renormalized",
+            "support_size": active_pi.len(),
+            "teams": eq_teams_json,
+        }),
+    );
+
+    // 3. Build ZERO-PRIOR-SMUGGLING Disclosed Equilibrium Prior `pi_star_mp`
+    //    - Any legacy entry in `belief-pool.json` sharing an outer shell with any active member of `\pi^*`
+    //      is REMOVED so singletons in `supp(\pi^*)` have ZERO smuggled ghost variants.
+    //    - Only active members `(p_k, w*_k)` in `supp(\pi^*)` are pushed for those shells!
+    let bp_text = std::fs::read_to_string(root.join("data/belief-pool-v3/belief-pool.json")).unwrap();
+    let raw_mp: MetaPool = serde_json::from_str(&bp_text).expect("parse belief-pool");
+    let base_mp = normalize_belief_pool(&dex, &gen, &raw_mp);
+
+    let mut active_shell_counts: BTreeMap<PreviewSig, usize> = BTreeMap::new();
+    let mut active_shell_weights: BTreeMap<PreviewSig, f64> = BTreeMap::new();
+    let mut active_shell_members: BTreeMap<PreviewSig, Vec<(String, f64)>> = BTreeMap::new();
+    for (k, pid) in pi_ids.iter().enumerate() {
+        let sig = preview_sig_sets(&pi_sets[k]);
+        *active_shell_counts.entry(sig.clone()).or_insert(0) += 1;
+        *active_shell_weights.entry(sig.clone()).or_insert(0.0) += pi_weights[k];
+        active_shell_members
+            .entry(sig)
+            .or_default()
+            .push((pid.clone(), pi_weights[k]));
+    }
+
+    let mut red_mp = base_mp;
+    red_mp
+        .teams
+        .retain(|t| !active_shell_counts.contains_key(&preview_sig_sets(&t.sets)));
+    for (k, pid) in pi_ids.iter().enumerate() {
+        red_mp.teams.push(nc2000_bot::preview::MetaTeam {
+            id: format!("pi-star-{}", pid),
+            sets: pi_sets[k].clone(),
+            weight: Some(pi_weights[k]),
+        });
+    }
+    let pi_star_mp = Arc::new(red_mp);
+    let blue_prior = pi_star_mp.clone();
+
+    // Runtime verification that `Belief::new(&dex, &pi_star_mp, &obs)` has ZERO prior smuggling:
+    // Every singleton shell in `supp(\pi^*)` MUST have `candidate_count() == 1` at Team Preview!
+    let mut verified_singletons = 0usize;
+    let mut verified_multi_demes = 0usize;
+    for (k, pid) in pi_ids.iter().enumerate() {
+        let sig = preview_sig_sets(&pi_sets[k]);
+        let expected_cands = active_shell_counts[&sig];
+        let tb = nc2000_engine::state::Battle::from_fixture(&dex, "1,2,3,4", &pi_sets[k], &pi_sets[k])
+            .unwrap();
+        let obs = nc2000_bot::Observer::new(&tb, 1); // Red (side 1) observing Blue (side 0)
+        let bel = nc2000_bot::Belief::new(&dex, &pi_star_mp, &obs);
+        assert_eq!(
+            bel.candidate_count(),
+            expected_cands,
+            "Prior smuggling check failed for {}: expected {} alive candidates at Team Preview, got {}",
+            pid,
+            expected_cands,
+            bel.candidate_count()
+        );
+        if expected_cands == 1 {
+            verified_singletons += 1;
+        } else {
+            verified_multi_demes += 1;
+        }
+    }
+    eprintln!(
+        "=== Zero-Smuggling Prior Verification Passed ==="
+    );
+    eprintln!(
+        "  supp(pi*): {} active teams across {} shells ({} Pure/Unmasked Singletons with alive=1 at Turn 0; {} Multi-Variant Deme members with alive>=2)",
+        pi_ids.len(),
+        active_shell_counts.len(),
+        verified_singletons,
+        verified_multi_demes
+    );
+    for (sig, members) in &active_shell_members {
+        if members.len() >= 2 {
+            let m_str: Vec<String> = members
+                .iter()
+                .map(|(id, w)| format!("{}(w={:.4})", id, w))
+                .collect();
+            eprintln!(
+                "  [Active Multi-Variant Deme | sum_w={:.4}] -> {}",
+                active_shell_weights[sig],
+                m_str.join(", ")
+            );
+        }
+    }
+
+    // Compute initial 4-game matrix score `\hat{\mu}_0(q_j)` for every `q_j in Q`
+    let mut q_init_scores: Vec<(usize, String, f64, bool)> = Vec::with_capacity(q_ids.len());
+    for (j, qid) in q_ids.iter().enumerate() {
+        let mut s = 0.0f64;
+        for &(p_idx, _, w, _, _) in &active_pi {
+            s += w * payoff[p_idx][j];
+        }
+        q_init_scores.push((j, qid.clone(), s, pi_id_set.contains(qid)));
+    }
+    q_init_scores.sort_by(|a, b| a.2.partial_cmp(&b.2).unwrap());
+
+    // =========================================================================
+    // STEP 1: TILTED PRECISION AUDIT OF `\pi^*` OVER ALL 181 CHALLENGERS IN `Q`
+    // =========================================================================
+    let mut audit_results: Vec<Value> = Vec::new();
+    let mut closest_non_supp_ids: Vec<String> = Vec::new();
+
+    if mode == "tilted-audit" || mode == "both" {
+        eprintln!(
+            "\n=== Step 1: Tilted Precision Audit of pi* across {} Challengers (Zero Prior Smuggling) ===",
+            q_ids.len()
+        );
+        struct AuditRow {
+            q_idx: usize,
+            q_id: String,
+            in_supp: bool,
+            matrix_wr: f64,
+            stage1_games: usize,
+            stage1_blue_wins: f64,
+            fresh_games: usize,
+            fresh_blue_wins: f64,
+            pairs_done: usize,
+        }
+        let mut rows: Vec<AuditRow> = q_init_scores
+            .iter()
+            .map(|&(j, ref qid, m_wr, in_supp)| AuditRow {
+                q_idx: j,
+                q_id: qid.clone(),
+                in_supp,
+                matrix_wr: m_wr,
+                stage1_games: 0,
+                stage1_blue_wins: 0.0,
+                fresh_games: 0,
+                fresh_blue_wins: 0.0,
+                pairs_done: 0,
+            })
+            .collect();
+
+        // Define tilted stages: `(stage_num, add_pairs, max_running_wr_gate, max_rank_gate)`
+        // Prior pseudo-games from matrix = 16.0 (since smuggled singletons changed prior disclosure,
+        // we give fresh smuggling-free games primary weight as soon as Stage 1 completes!)
+        let stages: [(usize, usize, f64, usize); 4] = [
+            (1, 8, 0.565, 80),   // Stage 1: +16 games (16 total) for top 80 or matrix_wr < 0.565
+            (2, 16, 0.540, 32),  // Stage 2: +32 games (48 total) for top 32 or running_wr < 0.540
+            (3, 24, 0.520, 14),  // Stage 3: +48 games (96 total) for top 14 or running_wr < 0.520
+            (4, 32, 0.505, 8),   // Stage 4: +64 games (160 total) for top 8 or running_wr < 0.505
+        ];
+
+        for &(st_idx, add_pairs, wr_gate, rank_gate) in &stages {
+            // Sort rows by current best estimate of Blue winrate (lowest first = strongest Red challengers)
+            rows.sort_by(|a, b| {
+                let wa = if a.fresh_games > 0 {
+                    (8.0 * a.matrix_wr + a.fresh_blue_wins) / (8.0 + a.fresh_games as f64)
+                } else {
+                    a.matrix_wr
+                };
+                let wb = if b.fresh_games > 0 {
+                    (8.0 * b.matrix_wr + b.fresh_blue_wins) / (8.0 + b.fresh_games as f64)
+                } else {
+                    b.matrix_wr
+                };
+                wa.partial_cmp(&wb).unwrap()
+            });
+
+            let mut selected_indices: Vec<usize> = Vec::new();
+            for (rank, r) in rows.iter().enumerate() {
+                let est_wr = if r.fresh_games > 0 {
+                    (8.0 * r.matrix_wr + r.fresh_blue_wins) / (8.0 + r.fresh_games as f64)
+                } else {
+                    r.matrix_wr
+                };
+                let fresh_wr = if r.fresh_games > 0 {
+                    r.fresh_blue_wins / (r.fresh_games as f64)
+                } else {
+                    r.matrix_wr
+                };
+                if rank < rank_gate || est_wr < wr_gate || fresh_wr < wr_gate {
+                    selected_indices.push(rank);
+                }
+            }
+            eprintln!(
+                "  [Stage {}] Tilting +{} fresh games ({} mirror pairs) to {} close challengers (gate < {:.3} or rank < {})...",
+                st_idx,
+                add_pairs * 2,
+                add_pairs,
+                selected_indices.len(),
+                wr_gate,
+                rank_gate
+            );
+
+            for &r_pos in &selected_indices {
+                let r = &mut rows[r_pos];
+                let (q_sets, _, _) = &q_map[&r.q_id];
+                let q_seed = seed ^ ((r.q_idx as u64 + 1).wrapping_mul(0xD1B5_4A32_D192_ED03));
+                let out = eval_vs_pi_star_qmc(
+                    &dex,
+                    &pi_sets,
+                    &pi_weights,
+                    q_sets,
+                    blue_prior.clone(),
+                    pi_star_mp.clone(),
+                    r.pairs_done,
+                    add_pairs,
+                    iters,
+                    c,
+                    max_turns,
+                    threads,
+                    q_seed,
+                );
+                r.fresh_games += out.games_played;
+                r.fresh_blue_wins += out.blue_score * (out.games_played as f64);
+                if st_idx == 1 {
+                    r.stage1_games += out.games_played;
+                    r.stage1_blue_wins += out.blue_score * (out.games_played as f64);
+                }
+                r.pairs_done += add_pairs;
+            }
+        }
+
+        rows.sort_by(|a, b| {
+            let wa = if a.fresh_games >= 48 {
+                a.fresh_blue_wins / (a.fresh_games as f64)
+            } else {
+                (8.0 * a.matrix_wr + a.fresh_blue_wins) / (8.0 + a.fresh_games as f64)
+            };
+            let wb = if b.fresh_games >= 48 {
+                b.fresh_blue_wins / (b.fresh_games as f64)
+            } else {
+                (8.0 * b.matrix_wr + b.fresh_blue_wins) / (8.0 + b.fresh_games as f64)
+            };
+            wa.partial_cmp(&wb).unwrap()
+        });
+
+        println!("\n=== Tilted Precision Audit Results (Lowest Blue WR vs pi* under Symmetric Zero-Smuggling Prior) ===");
+        let mut outside_counters = 0usize;
+        for (rank, r) in rows.iter().take(35).enumerate() {
+            let fresh_wr = if r.fresh_games > 0 {
+                r.fresh_blue_wins / (r.fresh_games as f64)
+            } else {
+                r.matrix_wr
+            };
+            let post_s1_games = r.fresh_games.saturating_sub(r.stage1_games);
+            let post_s1_wr = if post_s1_games > 0 {
+                (r.fresh_blue_wins - r.stage1_blue_wins) / (post_s1_games as f64)
+            } else {
+                fresh_wr
+            };
+            if !r.in_supp {
+                closest_non_supp_ids.push(r.q_id.clone());
+                if post_s1_games >= 80 && post_s1_wr < 0.500 && fresh_wr < 0.500 {
+                    outside_counters += 1;
+                }
+            }
+            println!(
+                "  #{:02} {:26} [{}] | fresh_wr={:.4} ({:3}g) | confirm_wr={:.4} ({:3}g) | mat4g={:.4}",
+                rank + 1,
+                r.q_id,
+                if r.in_supp { "SUPP  " } else { "OUTSIDE" },
+                fresh_wr,
+                r.fresh_games,
+                post_s1_wr,
+                post_s1_games,
+                r.matrix_wr
+            );
+        }
+        println!(
+            "  Confirmed outside challengers beating pi* (both fresh_wr < 0.500 & unbiased confirm_wr < 0.500): {}",
+            outside_counters
+        );
+
+        for r in &rows {
+            let fresh_wr = if r.fresh_games > 0 {
+                r.fresh_blue_wins / (r.fresh_games as f64)
+            } else {
+                r.matrix_wr
+            };
+            let blended_wr = (8.0 * r.matrix_wr + r.fresh_blue_wins) / (8.0 + r.fresh_games as f64);
+            audit_results.push(json!({
+                "q_id": r.q_id,
+                "in_supp": r.in_supp,
+                "matrix_wr": r.matrix_wr,
+                "fresh_games": r.fresh_games,
+                "fresh_blue_wr": fresh_wr,
+                "blended_blue_wr": blended_wr,
+            }));
+        }
+        if let Some(ref path) = out_file {
+            if mode == "tilted-audit" {
+                write_json_atomic(
+                    path,
+                    &json!({
+                        "mode": "tilted-audit",
+                        "elapsed_secs": t_start.elapsed().as_secs_f64(),
+                        "pi_support_size": pi_ids.len(),
+                        "verified_singletons": verified_singletons,
+                        "verified_multi_demes": verified_multi_demes,
+                        "audit_rows": audit_results,
+                    }),
+                );
+                return;
+            }
+        }
+    }
+
+    if closest_non_supp_ids.is_empty() {
+        if let Some(ref apath) = audit_in {
+            if let Ok(txt) = std::fs::read_to_string(apath) {
+                if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+                    if let Some(arr) = v["audit_rows"].as_array() {
+                        for r in arr {
+                            if !r["in_supp"].as_bool().unwrap_or(false) {
+                                if let Some(qid) = r["q_id"].as_str() {
+                                    closest_non_supp_ids.push(qid.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if closest_non_supp_ids.is_empty() {
+            for &(_, ref qid, _, in_supp) in &q_init_scores {
+                if !in_supp {
+                    closest_non_supp_ids.push(qid.clone());
+                }
+            }
+        }
+    }
+
+    // =========================================================================
+    // STEP 3: OPEN-ENDED RED-TEAM NEMESIS EVOLUTION (`red-oracle`) AGAINST `\pi^*`
+    // =========================================================================
+    if mode == "red-oracle" || mode == "both" {
+        eprintln!(
+            "\n=== Step 3: Open-Ended Red-Team Nemesis Evolution ({} waves, carry={}, buds={}, island={}) ===",
+            waves, carry, buds, island
+        );
+        #[derive(Clone)]
+        struct RedStrain {
+            id: String,
+            parent_id: String,
+            origin: String,
+            born_wave: usize,
+            last_op: String,
+            sets: Vec<PokemonSet>,
+            raw: Vec<Value>,
+            pairs_done: usize,
+            games: usize,
+            blue_wins: f64,
+            red_wr: f64,
+            bayes_red_wr: f64,
+            slot_picks: [f64; 6],
+            slot_wins: [f64; 6],
+        }
+        impl RedStrain {
+            fn update_stats(&mut self) {
+                if self.games > 0 {
+                    let b_wr = self.blue_wins / (self.games as f64);
+                    self.red_wr = 1.0 - b_wr;
+                    // Empirical-Bayes Red winrate with conservative prior 16 games @ 0.43 Red WR
+                    self.bayes_red_wr =
+                        (16.0 * 0.43 + (self.games as f64) * self.red_wr) / (16.0 + self.games as f64);
+                } else {
+                    self.red_wr = 0.43;
+                    self.bayes_red_wr = 0.43;
+                }
+            }
+        }
+
+        let mut rng = SplitMix64::new(seed ^ 0xCAFE_BABE_1234_5678);
+        let free_constraint = NicheConstraint::default();
+        let mut seen_red_keys: BTreeSet<String> = BTreeSet::new();
+        for raw in &pi_raw {
+            seen_red_keys.insert(team_key(raw));
+        }
+        let mut population: Vec<RedStrain> = Vec::new();
+        let mut seq = 1usize;
+
+        let push_red_candidate =
+            |pop: &mut Vec<RedStrain>,
+             seen: &mut BTreeSet<String>,
+             seq_counter: &mut usize,
+             parent_id: &str,
+             origin: &str,
+             born_wave: usize,
+             op: &str,
+             raw_in: &[Value]|
+             -> bool {
+                let upgraded = normalize_team_dvs_evs(&dex, raw_in);
+                let Some(canon) = gen.canonize(&dex, &upgraded) else {
+                    return false;
+                };
+                let k = team_key(&canon);
+                if !seen.insert(k) {
+                    return false;
+                }
+                let Ok(sets) = to_sets(&canon) else {
+                    return false;
+                };
+                let id = format!("{}-s{:04}", island, *seq_counter);
+                *seq_counter += 1;
+                pop.push(RedStrain {
+                    id,
+                    parent_id: parent_id.to_string(),
+                    origin: origin.to_string(),
+                    born_wave,
+                    last_op: op.to_string(),
+                    sets,
+                    raw: canon,
+                    pairs_done: 0,
+                    games: 0,
+                    blue_wins: 0.0,
+                    red_wr: 0.43,
+                    bayes_red_wr: 0.43,
+                    slot_picks: [0.0; 6],
+                    slot_wins: [0.0; 6],
+                });
+                true
+            };
+
+        // Seed Group A: Top 10 closest outside challengers from Q
+        for qid in closest_non_supp_ids.iter().take(10) {
+            if let Some((_, raw, _)) = q_map.get(qid) {
+                push_red_candidate(
+                    &mut population,
+                    &mut seen_red_keys,
+                    &mut seq,
+                    qid,
+                    "closest-outside-Q",
+                    0,
+                    "founder-Q",
+                    raw,
+                );
+            }
+        }
+        // Seed Group B: Anti-Mirror Counter-Mutants of `\pi^*`'s top support teams
+        // (Same or 1-slot-modified shells with counter-moves/items designed to trap `\pi^*`!)
+        for (idx, pid) in pi_ids.iter().take(10).enumerate() {
+            let base_raw = &pi_raw[idx];
+            for _ in 0..8 {
+                if let Some(prop) = gen.propose_targeted(
+                    &dex,
+                    base_raw,
+                    &[1.0; 6],
+                    &[0.5; 6],
+                    &mut rng,
+                    &free_constraint,
+                    150,
+                ) {
+                    if push_red_candidate(
+                        &mut population,
+                        &mut seen_red_keys,
+                        &mut seq,
+                        pid,
+                        "anti-mirror-mutant",
+                        0,
+                        &format!("{}@{}", prop.op.name(), prop.slot),
+                        &prop.team,
+                    ) {
+                        break;
+                    }
+                }
+            }
+        }
+        // Seed Group C: Two-Parent Chimera Crossovers + Wild Archetypes up to `carry + buds`
+        let target_init = carry + buds;
+        let mut init_tries = 0usize;
+        while population.len() < target_init && init_tries < 300 {
+            init_tries += 1;
+            if init_tries % 2 == 0 && population.len() >= 2 {
+                let ia = rng.below(population.len());
+                let ib = rng.below(population.len());
+                if ia != ib {
+                    let mut child_raw = population[ia].raw.clone();
+                    let slot_a = rng.below(6);
+                    let slot_b = rng.below(6);
+                    let pid_a = population[ia].id.clone();
+                    child_raw[slot_a] = population[ib].raw[slot_b].clone();
+                    if push_red_candidate(
+                        &mut population,
+                        &mut seen_red_keys,
+                        &mut seq,
+                        &pid_a,
+                        "chimera-crossover",
+                        0,
+                        &format!("crossover@{slot_a}"),
+                        &child_raw,
+                    ) {
+                        continue;
+                    }
+                }
+            }
+            if let Some(team) = gen.random_team_constrained(&dex, &mut rng, &[], &free_constraint, 300) {
+                push_red_candidate(
+                    &mut population,
+                    &mut seen_red_keys,
+                    &mut seq,
+                    "wild",
+                    "wild-de-novo",
+                    0,
+                    "random-init",
+                    &team,
+                );
+            }
+        }
+
+        let mut hall_of_fame: Vec<RedStrain> = Vec::new();
+        let mut wave_logs: Vec<Value> = Vec::new();
+
+        for w in 1..=waves {
+            let t_wave = std::time::Instant::now();
+            // Tilted Multi-Fidelity Evaluation within Wave `w`:
+            // - Tier 1 (Screen): all strains with `games < 16` play up to 16 games (8 pairs)
+            // - Tier 2 (Refine 48g): strains with `red_wr >= 0.455` (Blue WR <= 0.545) play up to 48 games (24 pairs)
+            // - Tier 3 (Deep 96g): strains with `red_wr >= 0.485` (Blue WR <= 0.515) play up to 96 games (48 pairs)
+            // - Tier 4 (Confirm 160g): strains with `red_wr >= 0.500` (Blue WR <= 0.500) play up to 160 games (80 pairs)
+            // - Tier 5 (Ultra 256g): strains with `red_wr >= 0.505` at 160g play up to 256 games (128 pairs)
+            let tiers: [(usize, f64); 5] = [
+                (8, 0.0),    // 16 games for everyone
+                (24, 0.455), // 48 games if Red WR >= 45.5%
+                (48, 0.485), // 96 games if Red WR >= 48.5%
+                (80, 0.500), // 160 games if Red WR >= 50.0%
+                (128, 0.505), // 256 games if Red WR >= 50.5%
+            ];
+
+            let mut wave_games_played = 0usize;
+            for &(target_pairs, min_red_wr) in &tiers {
+                for s_idx in 0..population.len() {
+                    if population[s_idx].pairs_done >= target_pairs {
+                        continue;
+                    }
+                    if population[s_idx].games > 0 && population[s_idx].red_wr + 1e-9 < min_red_wr {
+                        continue;
+                    }
+                    let add_pairs = target_pairs - population[s_idx].pairs_done;
+                    let s_seed = seed
+                        ^ ((s_idx as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15))
+                        ^ (team_key(&population[s_idx].raw).len() as u64);
+                    let out = eval_vs_pi_star_qmc(
+                        &dex,
+                        &pi_sets,
+                        &pi_weights,
+                        &population[s_idx].sets,
+                        blue_prior.clone(),
+                        pi_star_mp.clone(),
+                        population[s_idx].pairs_done,
+                        add_pairs,
+                        iters,
+                        c,
+                        max_turns,
+                        threads,
+                        s_seed,
+                    );
+                    population[s_idx].pairs_done += add_pairs;
+                    population[s_idx].games += out.games_played;
+                    population[s_idx].blue_wins += out.blue_score * (out.games_played as f64);
+                    for k in 0..6 {
+                        population[s_idx].slot_picks[k] += out.red_slot_picks[k];
+                        population[s_idx].slot_wins[k] += out.red_slot_wins[k];
+                    }
+                    population[s_idx].update_stats();
+                    wave_games_played += out.games_played;
+                }
+            }
+
+            population.sort_by(|a, b| b.bayes_red_wr.partial_cmp(&a.bayes_red_wr).unwrap());
+
+            // Record any strain with `games >= 96` and `red_wr > 0.490` in `hall_of_fame`
+            for s in &population {
+                if s.games >= 96 && s.red_wr >= 0.490 {
+                    if let Some(existing) = hall_of_fame.iter_mut().find(|h| h.id == s.id) {
+                        *existing = s.clone();
+                    } else {
+                        hall_of_fame.push(s.clone());
+                    }
+                }
+            }
+            hall_of_fame.sort_by(|a, b| b.red_wr.partial_cmp(&a.red_wr).unwrap());
+
+            let best = &population[0];
+            eprintln!(
+                "  [{} wave {}/{} | {:.1}s | +{}g] best={} (from={}, op={}, Red_WR={:.4} / Blue_WR={:.4} over {}g, bayes={:.4}) | HoF(>49% @ >=96g)={}",
+                island,
+                w,
+                waves,
+                t_wave.elapsed().as_secs_f64(),
+                wave_games_played,
+                best.id,
+                best.parent_id,
+                best.last_op,
+                best.red_wr,
+                1.0 - best.red_wr,
+                best.games,
+                best.bayes_red_wr,
+                hall_of_fame.len()
+            );
+            for (rank, s) in population.iter().take(5).enumerate() {
+                let mons: Vec<String> = s
+                    .sets
+                    .iter()
+                    .map(|m| format!("{}L{}", m.species, m.level))
+                    .collect();
+                eprintln!(
+                    "    top#{}: {:14} Red_WR={:.4} (Blue={:.4}, {:3}g, op={:16}) [{}]",
+                    rank + 1,
+                    s.id,
+                    s.red_wr,
+                    1.0 - s.red_wr,
+                    s.games,
+                    s.last_op,
+                    mons.join("/")
+                );
+            }
+
+            wave_logs.push(json!({
+                "wave": w,
+                "wave_games": wave_games_played,
+                "best_id": best.id,
+                "best_red_wr": best.red_wr,
+                "best_blue_wr": 1.0 - best.red_wr,
+                "best_games": best.games,
+                "best_bayes_red_wr": best.bayes_red_wr,
+            }));
+
+            if w == waves {
+                break;
+            }
+
+            // Select top `carry` survivors with archetype diversity (at most 2 sharing >= 5 species)
+            let mut survivors: Vec<RedStrain> = Vec::with_capacity(carry);
+            for s in &population {
+                let sp_s: BTreeSet<String> = s.sets.iter().map(|m| toid(&m.species)).collect();
+                let same_arch = survivors
+                    .iter()
+                    .filter(|o| {
+                        let sp_o: BTreeSet<String> =
+                            o.sets.iter().map(|m| toid(&m.species)).collect();
+                        sp_s.intersection(&sp_o).count() >= 5
+                    })
+                    .count();
+                if survivors.len() < carry && same_arch < 2 {
+                    survivors.push(s.clone());
+                }
+            }
+            while survivors.len() < carry && survivors.len() < population.len() {
+                let next_s = &population[survivors.len()];
+                if !survivors.iter().any(|x| x.id == next_s.id) {
+                    survivors.push(next_s.clone());
+                } else {
+                    break;
+                }
+            }
+
+            // Spawn `buds` new Red challengers for Wave `w + 1`
+            let mut next_pop = survivors.clone();
+            let mut bud_tries = 0usize;
+            while next_pop.len() < survivors.len() + buds && bud_tries < buds * 25 {
+                bud_tries += 1;
+                let p_idx = (bud_tries - 1) % survivors.len().max(1);
+                let parent = &survivors[p_idx];
+                let roll = rng.below(100);
+                if roll < 65 {
+                    // Targeted single-step mutation (MoveSwap, ItemSwap, SpeciesSwap, LevelTweak)
+                    if let Some(prop) = gen.propose_targeted(
+                        &dex,
+                        &parent.raw,
+                        &parent.slot_picks,
+                        &parent.slot_wins,
+                        &mut rng,
+                        &free_constraint,
+                        150,
+                    ) {
+                        push_red_candidate(
+                            &mut next_pop,
+                            &mut seen_red_keys,
+                            &mut seq,
+                            &parent.id,
+                            &parent.origin,
+                            w,
+                            &format!("{}@{}", prop.op.name(), prop.slot),
+                            &prop.team,
+                        );
+                    }
+                } else if roll < 90 && survivors.len() >= 2 {
+                    // Two-parent elite chimera crossover: graft a high-winrate slot from donor `b` into `parent`
+                    let donor_idx = (p_idx + 1 + rng.below(survivors.len() - 1)) % survivors.len();
+                    let donor = &survivors[donor_idx];
+                    // Pick weakest slot in parent and strongest slot in donor
+                    let weak_slot = (0..6)
+                        .min_by(|&a, &b| {
+                            let wa = if parent.slot_picks[a] > 0.0 {
+                                parent.slot_wins[a] / parent.slot_picks[a]
+                            } else {
+                                0.35
+                            };
+                            let wb = if parent.slot_picks[b] > 0.0 {
+                                parent.slot_wins[b] / parent.slot_picks[b]
+                            } else {
+                                0.35
+                            };
+                            wa.partial_cmp(&wb).unwrap()
+                        })
+                        .unwrap_or(0);
+                    let strong_slot = (0..6)
+                        .max_by(|&a, &b| {
+                            let wa = if donor.slot_picks[a] > 0.0 {
+                                donor.slot_wins[a] / donor.slot_picks[a]
+                            } else {
+                                0.45
+                            };
+                            let wb = if donor.slot_picks[b] > 0.0 {
+                                donor.slot_wins[b] / donor.slot_picks[b]
+                            } else {
+                                0.45
+                            };
+                            wa.partial_cmp(&wb).unwrap()
+                        })
+                        .unwrap_or(0);
+                    let mut child_raw = parent.raw.clone();
+                    child_raw[weak_slot] = donor.raw[strong_slot].clone();
+                    // Ensure level sum <= 310 by clamping if needed before canonize
+                    let lsum: i64 = child_raw
+                        .iter()
+                        .map(|s| s["level"].as_i64().unwrap_or(50))
+                        .sum();
+                    if lsum > 310 {
+                        let mut excess = lsum - 310;
+                        for s in child_raw.iter_mut() {
+                            let lv = s["level"].as_i64().unwrap_or(50);
+                            if lv > 50 && excess > 0 {
+                                let cut = (lv - 50).min(excess);
+                                s["level"] = json!(lv - cut);
+                                excess -= cut;
+                            }
+                        }
+                    }
+                    push_red_candidate(
+                        &mut next_pop,
+                        &mut seen_red_keys,
+                        &mut seq,
+                        &parent.id,
+                        "chimera-crossover",
+                        w,
+                        &format!("graft({}->{})@{}", donor.id, parent.id, weak_slot),
+                        &child_raw,
+                    );
+                } else {
+                    // 2-step jump mutation
+                    let mut cur = parent.raw.clone();
+                    let mut op_desc = String::new();
+                    for _ in 0..2 {
+                        if let Some(prop) = gen.propose_targeted(
+                            &dex,
+                            &cur,
+                            &parent.slot_picks,
+                            &parent.slot_wins,
+                            &mut rng,
+                            &free_constraint,
+                            150,
+                        ) {
+                            cur = prop.team;
+                            op_desc = format!("2step:{}@{}", prop.op.name(), prop.slot);
+                        }
+                    }
+                    if !op_desc.is_empty() {
+                        push_red_candidate(
+                            &mut next_pop,
+                            &mut seen_red_keys,
+                            &mut seq,
+                            &parent.id,
+                            &parent.origin,
+                            w,
+                            &op_desc,
+                            &cur,
+                        );
+                    }
+                }
+            }
+            population = next_pop;
+        }
+
+        println!("\n=== Step 3: Open-Ended Red-Team Nemesis Evolution Summary ===");
+        // Run an independent 256-game Holdout Confirmation (pairs 128..256, fresh holdout seed)
+        // on the top 8 Hall-of-Fame Nemeses to eliminate any multi-wave evolutionary selection bias!
+        let holdout_n = hall_of_fame.len().min(8);
+        let mut holdout_records: Vec<Value> = Vec::new();
+        if holdout_n > 0 {
+            eprintln!(
+                "  Running independent 256-game Holdout Verification (pairs 128..256) on top {} Nemeses...",
+                holdout_n
+            );
+        }
+        let mut verified_holdout_nemeses = 0usize;
+        for idx in 0..holdout_n {
+            let h_seed = seed
+                ^ 0x7777_8888_9999_AAAA_u64
+                ^ ((idx as u64 + 1).wrapping_mul(0x94D0_49BB_1331_11EB));
+            let out = eval_vs_pi_star_qmc(
+                &dex,
+                &pi_sets,
+                &pi_weights,
+                &hall_of_fame[idx].sets,
+                blue_prior.clone(),
+                pi_star_mp.clone(),
+                128,
+                128,
+                iters,
+                c,
+                max_turns,
+                threads,
+                h_seed,
+            );
+            let ho_red_wr = 1.0 - out.blue_score;
+            let tot_games = hall_of_fame[idx].games + out.games_played;
+            let tot_blue_wins =
+                hall_of_fame[idx].blue_wins + out.blue_score * (out.games_played as f64);
+            let tot_red_wr = 1.0 - (tot_blue_wins / (tot_games as f64));
+            if ho_red_wr > 0.500 && tot_red_wr > 0.500 {
+                verified_holdout_nemeses += 1;
+            }
+            let s = &hall_of_fame[idx];
+            let mons: Vec<String> = s
+                .sets
+                .iter()
+                .map(|m| format!("{}L{}({})", m.species, m.level, m.item))
+                .collect();
+            println!(
+                "  [HOLDOUT #{:02}] {:18} | Holdout_Red_WR={:.4} (256g) | Search_Red_WR={:.4} ({}g) | Total_512g_Red_WR={:.4} (Blue_WR={:.4}) | op={:16} | {}",
+                idx + 1,
+                s.id,
+                ho_red_wr,
+                s.red_wr,
+                s.games,
+                tot_red_wr,
+                1.0 - tot_red_wr,
+                s.last_op,
+                mons.join(", ")
+            );
+            holdout_records.push(json!({
+                "id": s.id,
+                "parent_id": s.parent_id,
+                "origin": s.origin,
+                "born_wave": s.born_wave,
+                "last_op": s.last_op,
+                "search_games": s.games,
+                "search_red_wr": s.red_wr,
+                "holdout_games": out.games_played,
+                "holdout_red_wr": ho_red_wr,
+                "total_games": tot_games,
+                "total_red_wr": tot_red_wr,
+                "total_blue_wr": 1.0 - tot_red_wr,
+                "sets": s.raw,
+            }));
+        }
+
+        let nemesis_count = hall_of_fame
+            .iter()
+            .filter(|s| s.games >= 160 && s.red_wr > 0.500)
+            .count();
+        println!(
+            "  Total unique Red-Team strains evolved & tested: {} | Search Nemeses (>50% @ >=160g): {} | Holdout-Confirmed Nemeses (>50% on independent 256g + 512g total): {}",
+            seq - 1,
+            nemesis_count,
+            verified_holdout_nemeses
+        );
+        for (rank, s) in hall_of_fame.iter().take(15).enumerate() {
+            let mons: Vec<String> = s
+                .sets
+                .iter()
+                .map(|m| format!("{}L{}({})", m.species, m.level, m.item))
+                .collect();
+            println!(
+                "  #{:02} {:16} | Red_WR={:.4} (Blue_WR={:.4}, {:3}g) | parent={:18} | op={:18} | {}",
+                rank + 1,
+                s.id,
+                s.red_wr,
+                1.0 - s.red_wr,
+                s.games,
+                s.parent_id,
+                s.last_op,
+                mons.join(", ")
+            );
+        }
+
+        if let Some(ref path) = out_file {
+            let hof_json: Vec<Value> = hall_of_fame
+                .iter()
+                .map(|s| {
+                    json!({
+                        "id": s.id,
+                        "parent_id": s.parent_id,
+                        "origin": s.origin,
+                        "born_wave": s.born_wave,
+                        "last_op": s.last_op,
+                        "games": s.games,
+                        "red_wr": s.red_wr,
+                        "blue_wr": 1.0 - s.red_wr,
+                        "bayes_red_wr": s.bayes_red_wr,
+                        "sets": s.raw,
+                    })
+                })
+                .collect();
+            let top_pop_json: Vec<Value> = population
+                .iter()
+                .take(20)
+                .map(|s| {
+                    json!({
+                        "id": s.id,
+                        "parent_id": s.parent_id,
+                        "origin": s.origin,
+                        "born_wave": s.born_wave,
+                        "last_op": s.last_op,
+                        "games": s.games,
+                        "red_wr": s.red_wr,
+                        "blue_wr": 1.0 - s.red_wr,
+                        "bayes_red_wr": s.bayes_red_wr,
+                        "sets": s.raw,
+                    })
+                })
+                .collect();
+            write_json_atomic(
+                path,
+                &json!({
+                    "mode": mode,
+                    "island": island,
+                    "elapsed_secs": t_start.elapsed().as_secs_f64(),
+                    "pi_support_size": pi_ids.len(),
+                    "verified_singletons": verified_singletons,
+                    "verified_multi_demes": verified_multi_demes,
+                    "total_red_strains_tested": seq - 1,
+                    "confirmed_nemesis_count": nemesis_count,
+                    "holdout_confirmed_nemesis_count": verified_holdout_nemeses,
+                    "holdout_verified_nemeses": holdout_records,
+                    "audit_rows": audit_results,
+                    "wave_logs": wave_logs,
+                    "hall_of_fame": hof_json,
+                    "teams": top_pop_json,
+                }),
+            );
+        }
     }
 }
