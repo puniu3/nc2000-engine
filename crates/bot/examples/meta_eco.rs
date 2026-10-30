@@ -3206,6 +3206,26 @@ fn cmd_kodoku(args: &[String]) {
         let refine_games: u32 = num(args, "--refine-games", eval_games.max(2));
         let support_k: usize = num(args, "--support", 3);
         let use_core_nash = !args.iter().any(|a| a == "--legacy-eval");
+        let red_team = args.iter().any(|a| a == "--red-team");
+        let minimax_lambda: f64 = num(args, "--minimax-lambda", 0.0);
+        let minimax_floor: f64 = num(args, "--minimax-floor", 0.48);
+        if red_team {
+            eco_opps.clear();
+            eco_weights.clear();
+        }
+        let eco_blend: f64 = if eco_opps.is_empty() { 0.0 } else { 0.30 };
+        let bench_blend: f64 = 1.0 - eco_blend;
+        let apply_minimax = |res: &nc2000_bot::teamgen::EvalResult| -> f64 {
+            if minimax_lambda <= 0.0 || res.per_opponent.is_empty() {
+                return res.score;
+            }
+            let mut sorted_opps = res.per_opponent.clone();
+            sorted_opps.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let k_tail = sorted_opps.len().min(2);
+            let tail_mean = sorted_opps.iter().take(k_tail).sum::<f64>() / (k_tail as f64);
+            let pen = minimax_lambda * (minimax_floor - tail_mean).max(0.0);
+            (res.score - pen).clamp(0.0, 1.0)
+        };
 
         let bench_n_games = if use_core_nash {
             (refine_games as usize * support_k * support_k * slice_len) as f64
@@ -3304,7 +3324,8 @@ fn cmd_kodoku(args: &[String]) {
                 eco_sub,
             ) in p1_out
             {
-                let w_sc = 0.70 * bench_res.score + 0.30 * eco_res.score;
+                let b_adj = apply_minimax(&bench_res);
+                let w_sc = bench_blend * b_adj + eco_blend * eco_res.score;
                 parent_subgames.insert(sid.clone(), (bench_sub, eco_sub, w_sc));
                 eval_outputs.insert(
                     sid,
@@ -3373,7 +3394,8 @@ fn cmd_kodoku(args: &[String]) {
                 for h in handles {
                     let (sid, bench_res, eco_res) =
                         h.join().expect("kodoku pass1 eval thread panicked");
-                    let w_sc = 0.70 * bench_res.score + 0.30 * eco_res.score;
+                    let b_adj = apply_minimax(&bench_res);
+                    let w_sc = bench_blend * b_adj + eco_blend * eco_res.score;
                     parent_subgames.insert(sid.clone(), (Vec::new(), Vec::new(), w_sc));
                     eval_outputs.insert(
                         sid,
@@ -3437,9 +3459,9 @@ fn cmd_kodoku(args: &[String]) {
                 else {
                     continue;
                 };
-                let mut bench_score = bench_res.score;
+                let mut bench_score = apply_minimax(&bench_res);
                 let mut eco_score = eco_res.score;
-                let mut wave_score = 0.70 * bench_score + 0.30 * eco_score;
+                let mut wave_score = bench_blend * bench_score + eco_blend * eco_score;
                 let prev_g = s.cum_games;
                 let new_g = prev_g + total_w_games;
                 for slot in 0..6 {
@@ -6754,6 +6776,875 @@ fn cmd_sibling_mix(args: &[String]) {
     }
 }
 
+fn classify_team_strata(sets: &[PokemonSet]) -> Vec<String> {
+    let mut all_moves: BTreeSet<String> = BTreeSet::new();
+    let mut boom_count = 0usize;
+    let mut rec_count = 0usize;
+    let mut has_elec55 = false;
+    let mut has_lax55 = false;
+    for s in sets {
+        let mset: BTreeSet<String> = s.moves.iter().map(|m| toid(m)).collect();
+        if mset.contains("explosion") || mset.contains("selfdestruct") {
+            boom_count += 1;
+        }
+        if mset.iter().any(|m| {
+            matches!(
+                m.as_str(),
+                "rest" | "recover" | "milkdrink" | "softboiled" | "moonlight" | "synthesis" | "morningsun"
+            )
+        }) {
+            rec_count += 1;
+        }
+        let sp = toid(&s.species);
+        if s.level >= 55 && matches!(sp.as_str(), "zapdos" | "raikou" | "jolteon" | "electabuzz" | "electrode") {
+            has_elec55 = true;
+        }
+        if s.level >= 55 && sp == "snorlax" {
+            has_lax55 = true;
+        }
+        all_moves.extend(mset);
+    }
+    let mut out = Vec::new();
+    if (all_moves.contains("meanlook")
+        || all_moves.contains("spiderweb")
+        || all_moves.contains("whirlpool")
+        || all_moves.contains("firespin")
+        || all_moves.contains("clamp"))
+        && (all_moves.contains("perishsong") || all_moves.contains("batonpass") || all_moves.contains("destinybond"))
+    {
+        out.push("trap".to_string());
+    }
+    if boom_count >= 2 {
+        out.push("boom".to_string());
+    }
+    if all_moves.contains("spikes") && (all_moves.contains("roar") || all_moves.contains("whirlwind")) {
+        out.push("spikes".to_string());
+    }
+    if rec_count >= 3 {
+        out.push("recovery".to_string());
+    }
+    if has_elec55 {
+        out.push("electric55".to_string());
+    }
+    if has_lax55 {
+        out.push("snorlax55".to_string());
+    }
+    if all_moves.contains("batonpass") {
+        out.push("batonpass".to_string());
+    }
+    if all_moves.contains("bellydrum") {
+        out.push("bellydrum".to_string());
+    }
+    out
+}
+
+/// Solve zero-sum minimax equilibrium `\max_{p \in \Delta(P)} \min_{q \in \Delta(Q)} p^T M q`
+/// over rectangular payoff matrix `M[i][j]` (`P` rows x `Q` cols) using Regret Matching+.
+fn solve_rectangular_minimax(payoff: &[Vec<f64>], iters: usize) -> (Vec<f64>, Vec<f64>, f64) {
+    let n_p = payoff.len();
+    let n_q = payoff.first().map(Vec::len).unwrap_or(0);
+    if n_p == 0 || n_q == 0 {
+        return (Vec::new(), Vec::new(), 0.5);
+    }
+    let mut reg_p = vec![0.0f64; n_p];
+    let mut reg_q = vec![0.0f64; n_q];
+    let mut sum_p = vec![0.0f64; n_p];
+    let mut sum_q = vec![0.0f64; n_q];
+    let mut strat_p = vec![1.0 / (n_p as f64); n_p];
+    let mut strat_q = vec![1.0 / (n_q as f64); n_q];
+
+    for _ in 0..iters {
+        for i in 0..n_p {
+            sum_p[i] += strat_p[i];
+        }
+        for j in 0..n_q {
+            sum_q[j] += strat_q[j];
+        }
+        // Row player (maximizer) utilities against strat_q
+        let mut u_p = vec![0.0f64; n_p];
+        let mut val_p = 0.0;
+        for i in 0..n_p {
+            let mut s = 0.0;
+            for j in 0..n_q {
+                s += payoff[i][j] * strat_q[j];
+            }
+            u_p[i] = s;
+            val_p += strat_p[i] * s;
+        }
+        // Col player (minimizer of M, maximizer of 1 - M) utilities against strat_p
+        let mut u_q = vec![0.0f64; n_q];
+        for j in 0..n_q {
+            let mut s = 0.0;
+            for i in 0..n_p {
+                s += payoff[i][j] * strat_p[i];
+            }
+            u_q[j] = s;
+        }
+        for i in 0..n_p {
+            reg_p[i] = (reg_p[i] + (u_p[i] - val_p)).max(0.0);
+        }
+        for j in 0..n_q {
+            reg_q[j] = (reg_q[j] + (val_p - u_q[j])).max(0.0);
+        }
+        let zp: f64 = reg_p.iter().sum();
+        if zp > 1e-12 {
+            for i in 0..n_p {
+                strat_p[i] = reg_p[i] / zp;
+            }
+        } else {
+            strat_p.fill(1.0 / (n_p as f64));
+        }
+        let zq: f64 = reg_q.iter().sum();
+        if zq > 1e-12 {
+            for j in 0..n_q {
+                strat_q[j] = reg_q[j] / zq;
+            }
+        } else {
+            strat_q.fill(1.0 / (n_q as f64));
+        }
+    }
+    let sp_tot: f64 = sum_p.iter().sum::<f64>().max(1e-12);
+    let sq_tot: f64 = sum_q.iter().sum::<f64>().max(1e-12);
+    for x in &mut sum_p {
+        *x /= sp_tot;
+    }
+    for y in &mut sum_q {
+        *y /= sq_tot;
+    }
+    let min_col = (0..n_q)
+        .map(|j| (0..n_p).map(|i| sum_p[i] * payoff[i][j]).sum::<f64>())
+        .fold(1.0f64, f64::min);
+    (sum_p, sum_q, min_col)
+}
+
+fn cmd_dominance_audit(args: &[String]) {
+    let t_start = std::time::Instant::now();
+    let dex = load_dex();
+    let root = repo_root();
+    let ls_text = std::fs::read_to_string(root.join("data/learnsets-gen2.json")).unwrap();
+    let pool_text = std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap();
+    let gen = TeamGen::new(&dex, &ls_text, &pool_text).unwrap();
+
+    let games_per_pair: u32 = num(args, "--games", 4);
+    let iters: u32 = num(args, "--iters", 1000);
+    let c: f64 = num(args, "--c", 0.4);
+    let max_turns: u16 = num(args, "--max-turns", 250);
+    let seed: u64 = num(args, "--seed", 20261030);
+    let shard: usize = num(args, "--shard", 0);
+    let num_shards: usize = num(args, "--num-shards", 1);
+    let out_file = flag(args, "--out").map(PathBuf::from);
+    let merge_dir = flag(args, "--merge-dir").map(PathBuf::from);
+    let threads: usize = flag(args, "--threads")
+        .map(|v| v.parse().unwrap())
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(4)
+        });
+
+    // 1. Assemble the Blue-Team Conclusion Candidate Set `P`
+    let mut p_ids: Vec<String> = Vec::new();
+    let mut p_origins: Vec<String> = Vec::new();
+    let mut p_sets: Vec<Vec<PokemonSet>> = Vec::new();
+    let mut p_raw: Vec<Vec<Value>> = Vec::new();
+    let mut p_seen_keys: BTreeSet<String> = BTreeSet::new();
+
+    let mut add_blue = |id: &str, origin: &str, raw: &[Value]| {
+        let Some(canon) = gen.canonize(&dex, raw) else {
+            return;
+        };
+        let k = team_key(&canon);
+        if !p_seen_keys.insert(k) {
+            return;
+        }
+        let Ok(sets) = to_sets(&canon) else {
+            return;
+        };
+        p_ids.push(id.to_string());
+        p_origins.push(origin.to_string());
+        p_sets.push(sets);
+        p_raw.push(canon);
+    };
+
+    // Load baseline Meta-Nash-v3 (5 teams)
+    let mn3_v: Value = serde_json::from_str(
+        &std::fs::read_to_string(root.join("data/meta-nash-v3/pool-artifact.json")).unwrap(),
+    )
+    .unwrap();
+    for t in mn3_v["teams"].as_array().unwrap() {
+        add_blue(
+            t["id"].as_str().unwrap(),
+            "meta-nash-v3",
+            t["sets"].as_array().unwrap(),
+        );
+    }
+    // Load Kodoku-r2 Nash support (`data/eco-pool/nash-solution.json`)
+    let kr2_v: Value = serde_json::from_str(
+        &std::fs::read_to_string(root.join("data/eco-pool/nash-solution.json")).unwrap(),
+    )
+    .unwrap();
+    for t in kr2_v["teams"].as_array().unwrap() {
+        add_blue(
+            t["id"].as_str().unwrap(),
+            "kodoku-r2-nash",
+            t["sets"].as_array().unwrap(),
+        );
+    }
+    // Load Kodoku-r1 Nash support (`data/kodoku-r1/nash-solution-next.json`)
+    if let Ok(txt) = std::fs::read_to_string(root.join("data/kodoku-r1/nash-solution-next.json")) {
+        if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+            if let Some(arr) = v["teams"].as_array() {
+                for t in arr {
+                    add_blue(
+                        t["id"].as_str().unwrap(),
+                        "kodoku-r1-nash",
+                        t["sets"].as_array().unwrap(),
+                    );
+                }
+            }
+        }
+    }
+    // Load Master-Pool evolved teams + top diverse anchors (`sample-12`, `rental-cban-8`, `rental-cban-13`)
+    let mp_v: Value = serde_json::from_str(
+        &std::fs::read_to_string(root.join("data/eco-pool/master-pool.json")).unwrap(),
+    )
+    .unwrap();
+    for t in mp_v["teams"].as_array().unwrap() {
+        let tid = t["id"].as_str().unwrap();
+        let orig = t["origin"].as_str().unwrap_or("master-pool");
+        if tid.starts_with("deme-")
+            || tid.starts_with("kodoku-")
+            || matches!(tid, "sample-12" | "rental-cban-8" | "rental-cban-13")
+        {
+            add_blue(tid, orig, t["sets"].as_array().unwrap());
+        }
+    }
+
+    // 2. Assemble the Red-Team Omni-Challenger Universe `Q`
+    // First `|P|` entries of `Q` are `P` itself (so `j < |P|` is the internal square submatrix).
+    let panel_v: Value = serde_json::from_str(
+        &std::fs::read_to_string(root.join("data/team-selection-v2/panel.json")).unwrap(),
+    )
+    .unwrap();
+    let mut panel_weights: BTreeMap<String, f64> = BTreeMap::new();
+    let mut panel_strata: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for m in panel_v["members"].as_array().unwrap() {
+        let id = m["id"].as_str().unwrap().to_string();
+        let w = m["weight"].as_f64().unwrap_or(0.0);
+        let st: Vec<String> = m["strata"]
+            .as_array()
+            .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+            .unwrap_or_default();
+        panel_weights.insert(id.clone(), w);
+        panel_strata.insert(id, st);
+    }
+    let challenge_set: BTreeSet<String> = panel_v["challenge"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|x| x.as_str().map(String::from))
+        .collect();
+
+    let mut q_ids: Vec<String> = Vec::new();
+    let mut q_groups: Vec<String> = Vec::new();
+    let mut q_sets: Vec<Vec<PokemonSet>> = Vec::new();
+    let mut q_strata: Vec<Vec<String>> = Vec::new();
+    let mut q_seen_keys: BTreeSet<String> = BTreeSet::new();
+
+    let mut add_red = |id: &str, group: &str, raw: &[Value]| {
+        let Some(canon) = gen.canonize(&dex, raw) else {
+            return;
+        };
+        let k = team_key(&canon);
+        if !q_seen_keys.insert(k) {
+            return;
+        }
+        let Ok(sets) = to_sets(&canon) else {
+            return;
+        };
+        let mut st = panel_strata
+            .get(id)
+            .cloned()
+            .unwrap_or_else(|| classify_team_strata(&sets));
+        for extra_s in classify_team_strata(&sets) {
+            if !st.contains(&extra_s) {
+                st.push(extra_s);
+            }
+        }
+        if id.starts_with("offprior-") && !st.contains(&"offprior".to_string()) {
+            st.push("offprior".to_string());
+        }
+        q_ids.push(id.to_string());
+        q_groups.push(group.to_string());
+        q_sets.push(sets);
+        q_strata.push(st);
+    };
+
+    for i in 0..p_ids.len() {
+        let grp = if panel_weights.contains_key(&p_ids[i]) {
+            "panel78"
+        } else {
+            "conclusion_cand"
+        };
+        add_red(&p_ids[i], grp, &p_raw[i]);
+    }
+
+    let inv_v: Value = serde_json::from_str(
+        &std::fs::read_to_string(root.join("data/team-inventory-v1/eval/teams.json")).unwrap(),
+    )
+    .unwrap();
+    for t in inv_v["teams"].as_array().unwrap() {
+        let id = t["id"].as_str().unwrap();
+        if id.starts_with("ctl-") {
+            continue;
+        }
+        let grp = if panel_weights.contains_key(id) {
+            "panel78"
+        } else if challenge_set.contains(id) {
+            "challenge20"
+        } else {
+            "inventory_other"
+        };
+        add_red(id, grp, t["sets"].as_array().unwrap());
+    }
+
+    for (extra_path, grp_tag, cap) in [
+        ("data/community-rentals-v0/teams.json", "community_rental", 30usize),
+        ("data/eco-r17/pool-artifact.json", "eco_r17", 12usize),
+        ("data/kodoku-r1/nash-candidates.json", "kodoku_r1_cand", 10usize),
+        ("data/kodoku-r2/nash-candidates.json", "kodoku_r2_cand", 12usize),
+    ] {
+        if let Ok(txt) = std::fs::read_to_string(root.join(extra_path)) {
+            if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+                if let Some(arr) = v["teams"].as_array() {
+                    for t in arr.iter().take(cap) {
+                        if let (Some(id), Some(sets)) = (t["id"].as_str(), t["sets"].as_array()) {
+                            add_red(id, grp_tag, sets);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let n_p = p_ids.len();
+    let n_q = q_ids.len();
+    eprintln!(
+        "=== Dominance & Exploitability Audit: |P|={} Conclusion Candidates x |Q|={} Omni-Challengers ===",
+        n_p, n_q
+    );
+
+    if let Some(mdir) = merge_dir {
+        let mut payoff = vec![vec![0.5f64; n_q]; n_p];
+        let mut measured = vec![vec![false; n_q]; n_p];
+        for i in 0..n_p {
+            measured[i][i] = true;
+        }
+        let p_id_map: BTreeMap<String, usize> = p_ids
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (s.clone(), i))
+            .collect();
+        let q_id_map: BTreeMap<String, usize> = q_ids
+            .iter()
+            .enumerate()
+            .map(|(j, s)| (s.clone(), j))
+            .collect();
+
+        for entry in std::fs::read_dir(&mdir).expect("read merge_dir").flatten() {
+            let p = entry.path();
+            if p.extension().and_then(|s| s.to_str()) != Some("json") {
+                continue;
+            }
+            let Ok(txt) = std::fs::read_to_string(&p) else {
+                continue;
+            };
+            let Ok(v) = serde_json::from_str::<Value>(&txt) else {
+                continue;
+            };
+            let Some(cells) = v["cells"].as_array() else {
+                continue;
+            };
+            for c_val in cells {
+                let Some(pid) = c_val["p_id"].as_str() else {
+                    continue;
+                };
+                let Some(qid) = c_val["q_id"].as_str() else {
+                    continue;
+                };
+                let Some(sc) = c_val["score"].as_f64() else {
+                    continue;
+                };
+                if let (Some(&i), Some(&j)) = (p_id_map.get(pid), q_id_map.get(qid)) {
+                    payoff[i][j] = sc;
+                    measured[i][j] = true;
+                    if j < n_p {
+                        payoff[j][i] = 1.0 - sc;
+                        measured[j][i] = true;
+                    }
+                }
+            }
+        }
+        let total_cells = n_p * n_q;
+        let done_cells: usize = measured.iter().flatten().filter(|&&b| b).count();
+        eprintln!("Merged {done_cells}/{total_cells} matrix cells from {}", mdir.display());
+
+        // Solve Minimax Conclusion Mixture `\pi^*` over P against all Q
+        let (minimax_w, adv_q_w, minimax_val) = solve_rectangular_minimax(&payoff, 250_000);
+        // Also solve symmetric Nash on the 17x17 internal submatrix `P x P`
+        let sub_payoff: Vec<Vec<f64>> = (0..n_p)
+            .map(|i| payoff[i][0..n_p].to_vec())
+            .collect();
+        let sym_nash_w = solve_symmetric_nash(&sub_payoff, 250_000);
+
+        // Build named mixtures over `P`
+        let build_named_weights = |src_weights: &[(String, f64)]| -> Vec<f64> {
+            let mut w = vec![0.0f64; n_p];
+            for (id, val) in src_weights {
+                if let Some(&idx) = p_id_map.get(id) {
+                    w[idx] += *val;
+                }
+            }
+            let z: f64 = w.iter().sum::<f64>().max(1e-12);
+            for x in &mut w {
+                *x /= z;
+            }
+            w
+        };
+        let w_mn3 = build_named_weights(&[
+            ("sample-07".into(), 0.261004),
+            ("nb-sample-13-0".into(), 0.233512),
+            ("sample-08".into(), 0.186817),
+            ("rental-cban-3".into(), 0.159343),
+            ("sample-10".into(), 0.159324),
+        ]);
+        let w_kr1 = build_named_weights(&[
+            ("deme-r1-01-s0036".into(), 0.273330),
+            ("sample-08".into(), 0.001103),
+            ("rental-cban-3".into(), 0.362216),
+            ("sample-10".into(), 0.363299),
+        ]);
+        let w_kr2 = build_named_weights(&[
+            ("deme-r2-01-s0030".into(), 0.054218),
+            ("deme-r2-03-s0052".into(), 0.274261),
+            ("deme-r2-00-s0029".into(), 0.169093),
+            ("sample-07".into(), 0.141364),
+            ("sample-08".into(), 0.022505),
+            ("rental-cban-3".into(), 0.156756),
+            ("sample-10".into(), 0.181768),
+        ]);
+
+        let evaluate_dist = |name: &str, w: &[f64]| -> Value {
+            let mut col_scores = vec![0.0f64; n_q];
+            for j in 0..n_q {
+                col_scores[j] = (0..n_p).map(|i| w[i] * payoff[i][j]).sum();
+            }
+            // Panel-78 weighted score
+            let mut panel_num = 0.0;
+            let mut panel_den = 0.0;
+            let mut ch20_sum = 0.0;
+            let mut ch20_cnt = 0usize;
+            for j in 0..n_q {
+                if let Some(&pw) = panel_weights.get(&q_ids[j]) {
+                    panel_num += pw * col_scores[j];
+                    panel_den += pw;
+                }
+                if challenge_set.contains(&q_ids[j]) {
+                    ch20_sum += col_scores[j];
+                    ch20_cnt += 1;
+                }
+            }
+            let panel78_wr = panel_num / panel_den.max(1e-12);
+            let challenge20_wr = ch20_sum / (ch20_cnt.max(1) as f64);
+            let omni_mean = col_scores.iter().sum::<f64>() / (n_q as f64);
+
+            // Stratum scores
+            let strata_names = [
+                "trap",
+                "snorlax55",
+                "electric55",
+                "spikes",
+                "boom",
+                "recovery",
+                "batonpass",
+                "bellydrum",
+                "offprior",
+            ];
+            let mut strata_map = serde_json::Map::new();
+            let mut min_stratum = 1.0f64;
+            let mut min_stratum_name = String::new();
+            for &st in &strata_names {
+                let mut s_sum = 0.0;
+                let mut s_cnt = 0usize;
+                for j in 0..n_q {
+                    if q_strata[j].iter().any(|x| x == st) {
+                        s_sum += col_scores[j];
+                        s_cnt += 1;
+                    }
+                }
+                if s_cnt > 0 {
+                    let wr = s_sum / (s_cnt as f64);
+                    strata_map.insert(st.to_string(), json!({"wr": wr, "n": s_cnt}));
+                    if wr < min_stratum {
+                        min_stratum = wr;
+                        min_stratum_name = st.to_string();
+                    }
+                }
+            }
+
+            // Sort challengers ascending by `col_scores[j]` (lowest = strongest exploiter against `w`)
+            let mut order: Vec<usize> = (0..n_q).collect();
+            order.sort_by(|&a, &b| col_scores[a].partial_cmp(&col_scores[b]).unwrap());
+            let min_payoff = col_scores[order[0]];
+            let cvar8 = order
+                .iter()
+                .take(8)
+                .map(|&j| col_scores[j])
+                .sum::<f64>()
+                / (order.len().min(8) as f64);
+            // Count outside challengers (`w[j] < 0.01` if `j < n_p`) that beat or tie `w`
+            let losses_lt50 = (0..n_q)
+                .filter(|&j| (j >= n_p || w[j] < 0.01) && col_scores[j] < 0.50 - 1e-6)
+                .count();
+            let losses_lt45 = (0..n_q)
+                .filter(|&j| (j >= n_p || w[j] < 0.01) && col_scores[j] < 0.45)
+                .count();
+            let worst10: Vec<Value> = order
+                .iter()
+                .filter(|&&j| j >= n_p || w[j] < 0.01)
+                .take(10)
+                .map(|&j| {
+                    json!({
+                        "challenger": q_ids[j],
+                        "group": q_groups[j],
+                        "strata": q_strata[j],
+                        "our_wr": col_scores[j],
+                        "exploiter_wr": 1.0 - col_scores[j],
+                    })
+                })
+                .collect();
+            let support_vec: Vec<Value> = (0..n_p)
+                .filter(|&i| w[i] >= 0.005)
+                .map(|i| json!({"id": p_ids[i], "weight": w[i]}))
+                .collect();
+
+            println!(
+                "\n--- [{}] panel78={:.3} | challenge20={:.3} | omni_mean={:.3} | min_stratum={:.3} ({}) | min_vs_Q={:.3} | CVaR8={:.3} | losses(<50%)= {}/{} (<45%={}) ---",
+                name,
+                panel78_wr,
+                challenge20_wr,
+                omni_mean,
+                min_stratum,
+                min_stratum_name,
+                min_payoff,
+                cvar8,
+                losses_lt50,
+                n_q,
+                losses_lt45
+            );
+            for e in worst10.iter().take(5) {
+                println!(
+                    "    worst counter: {:24} ({:15}, strata={:?}) -> our_wr={:.3} (exploiter_wr={:.3})",
+                    e["challenger"].as_str().unwrap(),
+                    e["group"].as_str().unwrap(),
+                    e["strata"],
+                    e["our_wr"].as_f64().unwrap(),
+                    e["exploiter_wr"].as_f64().unwrap()
+                );
+            }
+
+            json!({
+                "name": name,
+                "support": support_vec,
+                "panel78_wr": panel78_wr,
+                "challenge20_wr": challenge20_wr,
+                "omni_mean_wr": omni_mean,
+                "min_stratum_wr": min_stratum,
+                "min_stratum_name": min_stratum_name,
+                "min_payoff": min_payoff,
+                "max_exploiter_wr": 1.0 - min_payoff,
+                "cvar8_wr": cvar8,
+                "losses_below_50": losses_lt50,
+                "losses_below_45": losses_lt45,
+                "strata": strata_map,
+                "worst10_counters": worst10,
+            })
+        };
+
+        println!("\n================ MIXTURE DOMINANCE COMPARISON ================");
+        let mut mix_reports = Vec::new();
+        mix_reports.push(evaluate_dist("1. meta-nash-v3 (Old Human Nash)", &w_mn3));
+        mix_reports.push(evaluate_dist("2. kodoku-r1-nash", &w_kr1));
+        mix_reports.push(evaluate_dist("3. kodoku-r2-nash (Current)", &w_kr2));
+        mix_reports.push(evaluate_dist("4. unified-17-sym-nash (Internal P x P Nash)", &sym_nash_w));
+        mix_reports.push(evaluate_dist("5. minimax-conclusion-nash (Max-Min vs All Q)", &minimax_w));
+
+        println!("\n================ INDIVIDUAL CANDIDATE AUDIT (17 Teams) ================");
+        let mut indiv_reports = Vec::new();
+        for i in 0..n_p {
+            let mut unit_w = vec![0.0f64; n_p];
+            unit_w[i] = 1.0;
+            indiv_reports.push(evaluate_dist(&format!("cand:{}:{}", p_ids[i], p_origins[i]), &unit_w));
+        }
+
+        // Top adversarial exploiters from saddle-point `adv_q_w`
+        let mut adv_support: Vec<Value> = (0..n_q)
+            .filter(|&j| adv_q_w[j] >= 0.005)
+            .map(|j| {
+                json!({
+                    "id": q_ids[j],
+                    "group": q_groups[j],
+                    "strata": q_strata[j],
+                    "weight": adv_q_w[j],
+                })
+            })
+            .collect();
+        adv_support.sort_by(|a, b| {
+            b["weight"]
+                .as_f64()
+                .unwrap()
+                .partial_cmp(&a["weight"].as_f64().unwrap())
+                .unwrap()
+        });
+        println!("\n=== Saddle-Point Adversarial Exploiter Support (Minimax Value = {:.4}) ===", minimax_val);
+        for a in &adv_support {
+            println!(
+                "  {:24} w_adv={:.4} group={:15} strata={:?}",
+                a["id"].as_str().unwrap(),
+                a["weight"].as_f64().unwrap(),
+                a["group"].as_str().unwrap(),
+                a["strata"]
+            );
+        }
+
+        if let Some(path) = out_file {
+            write_json_atomic(
+                &path,
+                &json!({
+                    "p_ids": p_ids,
+                    "p_origins": p_origins,
+                    "q_ids": q_ids,
+                    "q_groups": q_groups,
+                    "q_strata": q_strata,
+                    "payoff": payoff,
+                    "mixtures": mix_reports,
+                    "individuals": indiv_reports,
+                    "adversarial_support": adv_support,
+                    "minimax_value": minimax_val,
+                }),
+            );
+        }
+        return;
+    }
+
+    // 3. Build cell list `(i, j)` to evaluate on this shard (`shard < num_shards`)
+    // For `j < n_p`: only evaluate upper triangle `i < j` (since `i == j` is 0.5 and `i > j` is `1 - payoff[j][i]`)
+    let mut all_cells: Vec<(usize, usize)> = Vec::new();
+    for i in 0..n_p {
+        for j in 0..n_q {
+            if j < n_p && j <= i {
+                continue;
+            }
+            all_cells.push((i, j));
+        }
+    }
+    let shard_cells: Vec<(usize, usize)> = all_cells
+        .iter()
+        .copied()
+        .enumerate()
+        .filter(|(idx, _)| idx % num_shards.max(1) == shard)
+        .map(|(_, c)| c)
+        .collect();
+
+    eprintln!(
+        "Shard {}/{}: evaluating {} cells ({} games/cell = {} games total, blind:{}:{})",
+        shard,
+        num_shards,
+        shard_cells.len(),
+        games_per_pair,
+        shard_cells.len() * (games_per_pair as usize),
+        iters,
+        c
+    );
+
+    // Prepare base `MetaPool` (`belief-pool-v3` normalized + all `P` candidates registered!)
+    let bp_text = std::fs::read_to_string(root.join("data/belief-pool-v3/belief-pool.json")).unwrap();
+    let raw_mp: MetaPool = serde_json::from_str(&bp_text).expect("parse belief-pool");
+    let mut base_mp = normalize_belief_pool(&dex, &gen, &raw_mp);
+    for i in 0..n_p {
+        base_mp.teams.push(nc2000_bot::preview::MetaTeam {
+            id: format!("conc-{}", p_ids[i]),
+            sets: p_sets[i].clone(),
+            weight: Some(0.25),
+        });
+    }
+    let cand_pool = Arc::new(base_mp.clone());
+
+    // Precompute Full-Disclosure Opponent Prior for each `i in 0..n_p`:
+    // Any team in `base_mp` with the exact same `preview_sig` as `p_sets[i]` is augmented/dominated by `p_sets[i]` at weight 1.0
+    // so the Challenger NEVER suffers a stale-prior surprise against `p_sets[i]`.
+    let opp_pools: Vec<Arc<MetaPool>> = (0..n_p)
+        .map(|i| {
+            let mut mp_i = base_mp.clone();
+            let sig_i = preview_sig_sets(&p_sets[i]);
+            for t in &mut mp_i.teams {
+                if preview_sig_sets(&t.sets) == sig_i {
+                    t.weight = Some(t.weight.unwrap_or(0.1) * 0.2);
+                }
+            }
+            mp_i.teams.push(nc2000_bot::preview::MetaTeam {
+                id: format!("disclosed-{}", p_ids[i]),
+                sets: p_sets[i].clone(),
+                weight: Some(1.0),
+            });
+            Arc::new(mp_i)
+        })
+        .collect();
+
+    // Load incremental checkpoint if `out_file` already exists
+    let mut completed_map: BTreeMap<(String, String), f64> = BTreeMap::new();
+    if let Some(ref path) = out_file {
+        if let Ok(txt) = std::fs::read_to_string(path) {
+            if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+                if let Some(arr) = v["cells"].as_array() {
+                    for c_val in arr {
+                        if let (Some(pid), Some(qid), Some(sc)) = (
+                            c_val["p_id"].as_str(),
+                            c_val["q_id"].as_str(),
+                            c_val["score"].as_f64(),
+                        ) {
+                            completed_map.insert((pid.to_string(), qid.to_string()), sc);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let mut cell_records: Vec<Value> = completed_map
+        .iter()
+        .map(|((pid, qid), &sc)| json!({"p_id": pid, "q_id": qid, "score": sc}))
+        .collect();
+
+    let pending_cells: Vec<(usize, usize)> = shard_cells
+        .iter()
+        .copied()
+        .filter(|&(i, j)| !completed_map.contains_key(&(p_ids[i].clone(), q_ids[j].clone())))
+        .collect();
+
+    for chunk in pending_cells.chunks(32) {
+        let cursor = std::sync::atomic::AtomicUsize::new(0);
+        let mut chunk_out: Vec<(usize, String, String, f64)> = Vec::with_capacity(chunk.len());
+        std::thread::scope(|scope| {
+            let mut handles = Vec::new();
+            for _ in 0..threads.max(1) {
+                let (
+                    chunk,
+                    cursor,
+                    dex,
+                    p_ids,
+                    q_ids,
+                    p_sets,
+                    q_sets,
+                    cand_pool,
+                    opp_pools,
+                ) = (
+                    chunk,
+                    &cursor,
+                    &dex,
+                    &p_ids,
+                    &q_ids,
+                    &p_sets,
+                    &q_sets,
+                    &cand_pool,
+                    &opp_pools,
+                );
+                handles.push(scope.spawn(move || {
+                    let mut loc = Vec::new();
+                    loop {
+                        let k = cursor.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        if k >= chunk.len() {
+                            break;
+                        }
+                        let (i, j) = chunk[k];
+                        let pair_seed =
+                            seed ^ (((i * 1009 + j) as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15));
+                        let res = eval_blind_asymmetric_prior(
+                            dex,
+                            &p_sets[i],
+                            std::slice::from_ref(&q_sets[j]),
+                            &[1.0],
+                            cand_pool.clone(),
+                            opp_pools[i].clone(),
+                            games_per_pair,
+                            iters,
+                            c,
+                            max_turns,
+                            1,
+                            pair_seed,
+                        );
+                        loc.push((k, p_ids[i].clone(), q_ids[j].clone(), res.score));
+                    }
+                    loc
+                }));
+            }
+            for h in handles {
+                chunk_out.extend(h.join().unwrap());
+            }
+        });
+        chunk_out.sort_by_key(|x| x.0);
+        for (_, pid, qid, sc) in &chunk_out {
+            cell_records.push(json!({
+                "p_id": pid,
+                "q_id": qid,
+                "score": sc,
+            }));
+        }
+        if let Some((_, last_p, last_q, last_sc)) = chunk_out.last() {
+            eprintln!(
+                "  [shard {}/{}] {}/{} cells done ({:.0}s elapsed) | last: {} vs {} = {:.3}",
+                shard,
+                num_shards,
+                cell_records.len(),
+                shard_cells.len(),
+                t_start.elapsed().as_secs_f64(),
+                last_p,
+                last_q,
+                last_sc
+            );
+        }
+        if let Some(ref path) = out_file {
+            write_json_atomic(
+                path,
+                &json!({
+                    "shard": shard,
+                    "num_shards": num_shards,
+                    "games_per_pair": games_per_pair,
+                    "iters": iters,
+                    "c": c,
+                    "elapsed_secs": t_start.elapsed().as_secs_f64(),
+                    "cells": cell_records,
+                }),
+            );
+        }
+    }
+
+    if let Some(ref path) = out_file {
+        write_json_atomic(
+            path,
+            &json!({
+                "shard": shard,
+                "num_shards": num_shards,
+                "games_per_pair": games_per_pair,
+                "iters": iters,
+                "c": c,
+                "elapsed_secs": t_start.elapsed().as_secs_f64(),
+                "cells": cell_records,
+            }),
+        );
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let sub = args
@@ -6773,8 +7664,9 @@ fn main() {
         "verify-1gen" => cmd_verify_1gen(&args[1..]),
         "audit-elites" => cmd_audit_elites(&args[1..]),
         "sibling-mix" => cmd_sibling_mix(&args[1..]),
+        "dominance-audit" => cmd_dominance_audit(&args[1..]),
         other => panic!(
-            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring | update-pool | tomography | kodoku | core-nash | verify-1gen | audit-elites | sibling-mix)"
+            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring | update-pool | tomography | kodoku | core-nash | verify-1gen | audit-elites | sibling-mix | dominance-audit)"
         ),
     }
 }
