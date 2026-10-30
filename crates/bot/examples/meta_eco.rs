@@ -4056,6 +4056,7 @@ fn core_nash_eval_weighted(
                         );
                     }
                 }
+                let screen_rules = RmConfig::default().rollout_rules();
                 let screen_res = run_forced_preview_games(
                     dex,
                     cand,
@@ -4065,8 +4066,8 @@ fn core_nash_eval_weighted(
                     cfg.max_turns,
                     &|_, _, _, sa, sb| {
                         (
-                            Box::new(RolloutAgent::new(0.2, sa)),
-                            Box::new(RolloutAgent::new(0.2, sb)),
+                            Box::new(RolloutAgent::new(0.2, sa).with_rules(screen_rules)),
+                            Box::new(RolloutAgent::new(0.2, sb).with_rules(screen_rules)),
                         )
                     },
                     false,
@@ -4232,6 +4233,7 @@ fn core_nash_eval_weighted(
                     );
                 }
             }
+            let screen_rules = RmConfig::default().rollout_rules();
             let screen_res = run_forced_preview_games(
                 dex,
                 cand,
@@ -4241,8 +4243,8 @@ fn core_nash_eval_weighted(
                 cfg.max_turns,
                 &|_, _, _, sa, sb| {
                     (
-                        Box::new(RolloutAgent::new(0.2, sa)),
-                        Box::new(RolloutAgent::new(0.2, sb)),
+                        Box::new(RolloutAgent::new(0.2, sa).with_rules(screen_rules)),
+                        Box::new(RolloutAgent::new(0.2, sb).with_rules(screen_rules)),
                     )
                 },
                 false,
@@ -4813,6 +4815,7 @@ fn cmd_core_nash(args: &[String]) {
             );
         }
     }
+    let screen_rules = RmConfig::default().rollout_rules();
     let screen_res = run_forced_preview_games(
         &dex,
         &sets_a,
@@ -4822,8 +4825,8 @@ fn cmd_core_nash(args: &[String]) {
         max_turns,
         &|_, _, _, sa, sb| {
             (
-                Box::new(RolloutAgent::new(0.2, sa)),
-                Box::new(RolloutAgent::new(0.2, sb)),
+                Box::new(RolloutAgent::new(0.2, sa).with_rules(screen_rules)),
+                Box::new(RolloutAgent::new(0.2, sb).with_rules(screen_rules)),
             )
         },
         false,

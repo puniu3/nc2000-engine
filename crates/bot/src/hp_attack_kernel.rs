@@ -356,6 +356,7 @@ mod tests {
         let mut excluded = base.clone();
         let id = excluded.active_id(0).unwrap();
         excluded.poke_mut(id).item = dex.items.id("leftovers");
+        excluded.refresh_poke_mask(&dex, id);
         equal(
             cache.enumerate(&dex, &excluded, choices, 100_000).unwrap(),
             enumerate_step(&dex, &excluded, choices, 100_000).unwrap(),

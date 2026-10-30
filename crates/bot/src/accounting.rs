@@ -2167,7 +2167,8 @@ where
     for r in 0..r_lim {
         for c in 0..c_lim {
             let mut next = *cb;
-            next.prng_seed = seed.wrapping_add(((r * 4 + c) as u64) * 0x517C_C1B7_2722_0A95) | 1;
+            next.prng_seed =
+                seed.wrapping_add(((r * 4 + c) as u64).wrapping_mul(0x517C_C1B7_2722_0A95)) | 1;
             next.quick_claw_roll = 0;
             next.apply_actions(table, [cs0[r], cs1[c]]);
             mat[r][c] = match next.outcome {
