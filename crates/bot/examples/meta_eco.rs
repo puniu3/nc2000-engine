@@ -378,6 +378,11 @@ fn load_gauntlet_file(dex: &Dex, gen: &TeamGen, gfile: &str) -> (Vec<Vec<Pokemon
 }
 
 fn write_json_atomic<T: Serialize>(path: &Path, val: &T) {
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+    }
     let tmp = path.with_extension("json.tmp");
     std::fs::write(&tmp, serde_json::to_string_pretty(val).unwrap()).unwrap();
     std::fs::rename(&tmp, path).unwrap();
@@ -6845,7 +6850,8 @@ fn classify_team_strata(sets: &[PokemonSet]) -> Vec<String> {
 }
 
 /// Solve zero-sum minimax equilibrium `\max_{p \in \Delta(P)} \min_{q \in \Delta(Q)} p^T M q`
-/// over rectangular payoff matrix `M[i][j]` (`P` rows x `Q` cols) using Regret Matching+.
+/// over rectangular payoff matrix `M[i][j]` (`P` rows x `Q` cols) using Alternating Regret Matching+
+/// with linear averaging (`w_t = t`).
 fn solve_rectangular_minimax(payoff: &[Vec<f64>], iters: usize) -> (Vec<f64>, Vec<f64>, f64) {
     let n_p = payoff.len();
     let n_q = payoff.first().map(Vec::len).unwrap_or(0);
@@ -6859,14 +6865,9 @@ fn solve_rectangular_minimax(payoff: &[Vec<f64>], iters: usize) -> (Vec<f64>, Ve
     let mut strat_p = vec![1.0 / (n_p as f64); n_p];
     let mut strat_q = vec![1.0 / (n_q as f64); n_q];
 
-    for _ in 0..iters {
-        for i in 0..n_p {
-            sum_p[i] += strat_p[i];
-        }
-        for j in 0..n_q {
-            sum_q[j] += strat_q[j];
-        }
-        // Row player (maximizer) utilities against strat_q
+    for t in 1..=iters {
+        let tw = t as f64;
+        // 1. Row player (maximizer) updates against current strat_q
         let mut u_p = vec![0.0f64; n_p];
         let mut val_p = 0.0;
         for i in 0..n_p {
@@ -6877,22 +6878,11 @@ fn solve_rectangular_minimax(payoff: &[Vec<f64>], iters: usize) -> (Vec<f64>, Ve
             u_p[i] = s;
             val_p += strat_p[i] * s;
         }
-        // Col player (minimizer of M, maximizer of 1 - M) utilities against strat_p
-        let mut u_q = vec![0.0f64; n_q];
-        for j in 0..n_q {
-            let mut s = 0.0;
-            for i in 0..n_p {
-                s += payoff[i][j] * strat_p[i];
-            }
-            u_q[j] = s;
-        }
+        let mut zp = 0.0;
         for i in 0..n_p {
             reg_p[i] = (reg_p[i] + (u_p[i] - val_p)).max(0.0);
+            zp += reg_p[i];
         }
-        for j in 0..n_q {
-            reg_q[j] = (reg_q[j] + (val_p - u_q[j])).max(0.0);
-        }
-        let zp: f64 = reg_p.iter().sum();
         if zp > 1e-12 {
             for i in 0..n_p {
                 strat_p[i] = reg_p[i] / zp;
@@ -6900,13 +6890,35 @@ fn solve_rectangular_minimax(payoff: &[Vec<f64>], iters: usize) -> (Vec<f64>, Ve
         } else {
             strat_p.fill(1.0 / (n_p as f64));
         }
-        let zq: f64 = reg_q.iter().sum();
+        for i in 0..n_p {
+            sum_p[i] += tw * strat_p[i];
+        }
+
+        // 2. Col player (minimizer of M) updates against NEW strat_p (Alternating RM+)
+        let mut u_q = vec![0.0f64; n_q];
+        let mut val_q = 0.0;
+        for j in 0..n_q {
+            let mut s = 0.0;
+            for i in 0..n_p {
+                s += payoff[i][j] * strat_p[i];
+            }
+            u_q[j] = s;
+            val_q += strat_q[j] * s;
+        }
+        let mut zq = 0.0;
+        for j in 0..n_q {
+            reg_q[j] = (reg_q[j] + (val_q - u_q[j])).max(0.0);
+            zq += reg_q[j];
+        }
         if zq > 1e-12 {
             for j in 0..n_q {
                 strat_q[j] = reg_q[j] / zq;
             }
         } else {
             strat_q.fill(1.0 / (n_q as f64));
+        }
+        for j in 0..n_q {
+            sum_q[j] += tw * strat_q[j];
         }
     }
     let sp_tot: f64 = sum_p.iter().sum::<f64>().max(1e-12);
@@ -7958,8 +7970,9 @@ fn main() {
         "sibling-mix" => cmd_sibling_mix(&args[1..]),
         "dominance-audit" => cmd_dominance_audit(&args[1..]),
         "falsify-conclusion" => cmd_falsify_conclusion(&args[1..]),
+        "converge-conclusion" => cmd_converge_conclusion(&args[1..]),
         other => panic!(
-            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring | update-pool | tomography | kodoku | core-nash | verify-1gen | audit-elites | sibling-mix | dominance-audit | falsify-conclusion)"
+            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring | update-pool | tomography | kodoku | core-nash | verify-1gen | audit-elites | sibling-mix | dominance-audit | falsify-conclusion | converge-conclusion)"
         ),
     }
 }
@@ -9386,5 +9399,1499 @@ fn cmd_falsify_conclusion(args: &[String]) {
                 }),
             );
         }
+    }
+}
+
+fn cmd_converge_conclusion(args: &[String]) {
+    let t_start = std::time::Instant::now();
+    let dex = load_dex();
+    let root = repo_root();
+    let ls_text = std::fs::read_to_string(root.join("data/learnsets-gen2.json")).unwrap();
+    let pool_text = std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap();
+    let gen = TeamGen::new(&dex, &ls_text, &pool_text).unwrap();
+
+    let iters: u32 = num(args, "--iters", 80);
+    let c: f64 = num(args, "--c", 0.4);
+    let max_turns: u16 = num(args, "--max-turns", 250);
+    let seed: u64 = num(args, "--seed", 20261105);
+    let outer_rounds: usize = num(args, "--outer-rounds", 2);
+    let cp_rounds: usize = num(args, "--cp-rounds", 2);
+    let cp_cols: usize = num(args, "--cp-cols", 10);
+    let cp_add_games: u32 = num(args, "--cp-add-games", 8);
+    let red_waves: usize = num(args, "--waves", 6);
+    let carry: usize = num(args, "--carry", 14);
+    let buds: usize = num(args, "--buds", 16);
+    let cache_file = PathBuf::from(
+        flag(args, "--cache-file")
+            .unwrap_or_else(|| "data/dominance-audit-v8-clean/cache-cells.json".to_string()),
+    );
+    let out_file = PathBuf::from(
+        flag(args, "--out")
+            .unwrap_or_else(|| "data/dominance-audit-v8-clean/converged-report.json".to_string()),
+    );
+    let threads: usize = flag(args, "--threads")
+        .map(|v| v.parse().unwrap())
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(4)
+        });
+
+    // 1. Load all team inventories + Step 8 promotes + Red-Oracle-i0 Nemeses
+    let mut team_db: BTreeMap<String, (Vec<PokemonSet>, Vec<Value>, String)> = BTreeMap::new();
+    let mut seen_db_keys: BTreeSet<String> = BTreeSet::new();
+    let mut key_to_id: BTreeMap<String, String> = BTreeMap::new();
+
+    let register_team =
+        |db: &mut BTreeMap<String, (Vec<PokemonSet>, Vec<Value>, String)>,
+         seen_keys: &mut BTreeSet<String>,
+         k2id: &mut BTreeMap<String, String>,
+         id: &str,
+         grp: &str,
+         raw: &[Value]|
+         -> Option<String> {
+            let upgraded = normalize_team_dvs_evs(&dex, raw);
+            let canon = gen.canonize(&dex, &upgraded).or_else(|| gen.canonize(&dex, raw))?;
+            let k = team_key(&canon);
+            if let Some(existing_id) = k2id.get(&k) {
+                return Some(existing_id.clone());
+            }
+            let sets = to_sets(&canon).ok()?;
+            let final_id = if db.contains_key(id) {
+                format!("{}-{}", grp, id)
+            } else {
+                id.to_string()
+            };
+            k2id.insert(k.clone(), final_id.clone());
+            seen_keys.insert(k);
+            db.insert(final_id.clone(), (sets, canon, grp.to_string()));
+            Some(final_id)
+        };
+
+    for (path, grp, cap) in [
+        ("data/meta-nash-v3/pool-artifact.json", "meta-nash-v3", 100usize),
+        ("data/eco-pool/nash-solution.json", "kodoku-r2-nash", 100usize),
+        ("data/kodoku-r1/nash-solution-next.json", "kodoku-r1-nash", 100usize),
+        ("data/eco-pool/master-pool.json", "master-pool", 200usize),
+        ("data/kodoku-r3/step2-promotes.json", "step2", 100usize),
+        ("data/kodoku-r3/step3-promotes.json", "step3", 100usize),
+        ("data/kodoku-r3/step4-promotes.json", "step4", 100usize),
+        ("data/kodoku-r3/step5-promotes.json", "step5", 100usize),
+        ("data/kodoku-r3/step6-deme-promotes.json", "step6", 100usize),
+        ("data/kodoku-r3/step7-deme-promotes.json", "step7", 100usize),
+        ("data/kodoku-r3/step8-deme-promotes.json", "step8", 100usize),
+        ("data/team-inventory-v1/eval/teams.json", "inventory", 200usize),
+        ("data/community-rentals-v0/teams.json", "community_rental", 30usize),
+        ("data/eco-r17/pool-artifact.json", "eco_r17", 12usize),
+        ("data/kodoku-r1/nash-candidates.json", "kodoku_r1_cand", 10usize),
+        ("data/kodoku-r2/nash-candidates.json", "kodoku_r2_cand", 12usize),
+        ("data/kodoku-r3/red-gauntlet.json", "red_gauntlet", 100usize),
+    ] {
+        if let Ok(txt) = std::fs::read_to_string(root.join(path)) {
+            if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+                if let Some(arr) = v["teams"].as_array() {
+                    for t in arr.iter().take(cap) {
+                        if let (Some(id), Some(sets)) = (t["id"].as_str(), t["sets"].as_array()) {
+                            if path.contains("team-inventory-v1") && id.starts_with("ctl-") {
+                                continue;
+                            }
+                            register_team(
+                                &mut team_db,
+                                &mut seen_db_keys,
+                                &mut key_to_id,
+                                id,
+                                grp,
+                                sets,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Also load all Hall-of-Fame Nemeses from `data/dominance-audit-v7-deme/red-oracle-i0-holdout.json`
+    if let Ok(txt) = std::fs::read_to_string(root.join("data/dominance-audit-v7-deme/red-oracle-i0-holdout.json")) {
+        if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+            if let Some(arr) = v["hall_of_fame"].as_array() {
+                for t in arr {
+                    if let (Some(id), Some(sets)) = (t["id"].as_str(), t["sets"].as_array()) {
+                        register_team(
+                            &mut team_db,
+                            &mut seen_db_keys,
+                            &mut key_to_id,
+                            id,
+                            "red-oracle-i0",
+                            sets,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    // Also load any previously discovered Holdout Nemeses from previous convergence reports
+    // (Load v5, v4, v3, and v2 first so their IDs are never shadowed by v1!)
+    for prev_path in [
+        root.join("data/dominance-audit-v8-clean/converged-report-v5.json"),
+        root.join("data/dominance-audit-v8-clean/converged-report-v4.json"),
+        root.join("data/dominance-audit-v8-clean/converged-report-v3.json"),
+        root.join("data/dominance-audit-v8-clean/converged-report-v2.json"),
+        root.join("data/dominance-audit-v8-clean/converged-report.json"),
+        out_file.clone(),
+    ] {
+        if let Ok(txt) = std::fs::read_to_string(&prev_path) {
+            if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+                if let Some(rounds_arr) = v["rounds"].as_array() {
+                    for r_val in rounds_arr {
+                        if let Some(nems) = r_val["holdout_nemeses"].as_array() {
+                            for n_val in nems {
+                                if let (Some(id), Some(sets)) =
+                                    (n_val["id"].as_str(), n_val["sets"].as_array())
+                                {
+                                    register_team(
+                                        &mut team_db,
+                                        &mut seen_db_keys,
+                                        &mut key_to_id,
+                                        id,
+                                        "red-prev",
+                                        sets,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[derive(Clone)]
+    struct ShellUnit {
+        unit_id: String,
+        sig: PreviewSig,
+        member_ids: Vec<String>,
+        member_sets: Vec<Vec<PokemonSet>>,
+        member_raw: Vec<Vec<Value>>,
+    }
+
+    let mut units: Vec<ShellUnit> = Vec::new();
+    let mut seen_unit_sigs: BTreeSet<PreviewSig> = BTreeSet::new();
+
+    let add_shell_unit = |units_vec: &mut Vec<ShellUnit>,
+                              seen_sigs: &mut BTreeSet<PreviewSig>,
+                              db: &BTreeMap<String, (Vec<PokemonSet>, Vec<Value>, String)>,
+                              m_ids: &[&str]|
+     -> bool {
+        let mut resolved_ids = Vec::new();
+        let mut resolved_sets = Vec::new();
+        let mut resolved_raw = Vec::new();
+        for &mid in m_ids {
+            if let Some((sets, raw, _)) = db.get(mid) {
+                if !resolved_ids.iter().any(|x| x == mid) {
+                    resolved_ids.push(mid.to_string());
+                    resolved_sets.push(sets.clone());
+                    resolved_raw.push(raw.clone());
+                }
+            } else {
+                // Maybe deduplicated under another ID with identical team_key
+                return false;
+            }
+        }
+        if resolved_ids.is_empty() {
+            return false;
+        }
+        let sig = preview_sig_sets(&resolved_sets[0]);
+        for s in &resolved_sets[1..] {
+            if preview_sig_sets(s) != sig {
+                return false;
+            }
+        }
+        if !seen_sigs.insert(sig.clone()) {
+            return false;
+        }
+        let unit_id = if resolved_ids.len() == 1 {
+            format!("SINGLE:{}", resolved_ids[0])
+        } else {
+            format!("DEME2:{}+{}", resolved_ids[0], resolved_ids[1])
+        };
+        units_vec.push(ShellUnit {
+            unit_id,
+            sig,
+            member_ids: resolved_ids,
+            member_sets: resolved_sets,
+            member_raw: resolved_raw,
+        });
+        true
+    };
+
+    let promote_or_upgrade_shell_unit =
+        |units_vec: &mut Vec<ShellUnit>,
+         seen_sigs: &mut BTreeSet<PreviewSig>,
+         db: &BTreeMap<String, (Vec<PokemonSet>, Vec<Value>, String)>,
+         qid: &str|
+         -> bool {
+            let Some((sets, raw, _)) = db.get(qid) else {
+                return false;
+            };
+            let sig = preview_sig_sets(sets);
+            if !seen_sigs.contains(&sig) {
+                return add_shell_unit(units_vec, seen_sigs, db, &[qid]);
+            }
+            // If `sig` is already in `units_vec` as a `SINGLE` unit, upgrade it to a 2-variant `DEME2` unit!
+            for u in units_vec.iter_mut() {
+                if u.sig == sig {
+                    if u.member_ids.len() == 1 && u.member_ids[0] != qid {
+                        let m0 = u.member_ids[0].clone();
+                        u.unit_id = format!("DEME2:{}+{}", m0, qid);
+                        u.member_ids.push(qid.to_string());
+                        u.member_sets.push(sets.clone());
+                        u.member_raw.push(raw.clone());
+                        return true;
+                    }
+                    return false;
+                }
+            }
+            false
+        };
+
+    // A. Register the Committed 2-Variant Deme Pairs (both existing elite Demes & newly invented Nemesis Demes!)
+    let initial_deme_pairs: &[(&str, &str)] = &[
+        // Existing Elite 2-Variant Deme Pairs
+        ("sample-07", "deme-r2-03-s0052"),
+        ("deme-r2-05-s0043", "deme-r2-04-s0020"),
+        ("sample-12", "nb-sample-12-0"),
+        ("deme-r1-04-s0022", "deme-r1-04-s0053"),
+        ("sample-10", "rental-cban-8"),
+        ("nb-sample-13-0", "rental-cban-9"),
+        ("deme-r1-00-s0020", "deme-r3-r0-s0013"),
+        ("deme-r2-05-s0029", "deme-r3-b0-s0013"),
+        ("sample-14-orig", "deme-r3-b2-s0017"),
+        ("mjj-2020-rraikou", "deme-r1-03-s0054"),
+        // Newly invented Holdout-Confirmed Nemesis 2-Variant Deme Pairs from `red-oracle-i0`, `v2`, and `v3`
+        ("red-oracle-i0-s0110", "red-oracle-i0-s0122"),
+        ("deme-r3-b2-s0013", "deme-r3-r0-s0018"),
+        ("red-oracle-i0-s0058", "red-oracle-i0-s0026"),
+        ("red-oracle-i0-s0083", "red-oracle-i0-s0016"),
+        ("red-oracle-i0-s0020", "red-oracle-i0-s0081"),
+        ("red-r2-s0106", "red-r2-s0060"),
+        ("red-v3-r1-s0082", "red-v3-r1-s0076"),
+        ("red-v3-r1-s0028", "red-v3-r1-s0080"),
+        ("deme-r2-01-s0030", "red-v3-r1-s0001"),
+        ("red-oracle-i0-s0116", "red-r2-s0110"),
+        ("deme-r2-00-s0052", "deme-r2-02-s0029"),
+        ("deme-r2-03-s0027", "deme-r2-02-s0029"),
+        ("red-v4-r1-s0099", "red-v4-r1-s0034"),
+        ("red-r1-s0078", "red-oracle-i0-s0086"),
+        ("red-r1-s0043", "red-r1-s0075"),
+        ("red-r2-s0108", "red-oracle-i0-s0018"),
+    ];
+    for &(a, b) in initial_deme_pairs {
+        add_shell_unit(&mut units, &mut seen_unit_sigs, &team_db, &[a, b]);
+    }
+
+    // B. Register the Pure Singletons (`alive = 1`)
+    let initial_singletons: &[&str] = &[
+        "deme-r2-01-s0030",
+        "rental-cban-7",
+        "hc75-top8-tezan",
+        "deme-r2-01-s0023",
+        "deme-r3-b0-s0018",
+        "deme-r3-b1-s0013",
+        "sample-11-orig",
+        "island-r16-06-s0775",
+        "mjj-2010-garap-a",
+        "mjj-2014-thdrcomb",
+        "offprior-04",
+        "ev-r1-pool-hc75-top8-tezan-0",
+        "sample-25-orig",
+        "rental-cban-14",
+        "lineage-gb-uni-s13",
+        "hc75-2nd-toriyama",
+        "deme-r2-04-s0048",
+        "offprior-12",
+        "offprior-13",
+        "sample-16",
+        "hc75-3rd-bean",
+        "sample-13",
+        "deme-r2-03-s0027",
+        "ev-r1-pool-hc75-3rd-bean-0",
+        "red-oracle-i0-s0116",
+        "red-oracle-i0-s0137",
+        "red-oracle-i0-s0127",
+        "red-oracle-i0-s0111",
+        "red-oracle-i0-s0068",
+        "red-oracle-i0-s0095",
+        "red-r1-s0064",
+        "red-r1-s0043",
+        "red-r1-s0102",
+        "red-r1-s0095",
+        "red-r1-s0078",
+        "red-r1-s0060",
+        "red-r2-s0047",
+        "red-r2-s0103",
+        "red-r2-s0095",
+        "red-r2-s0012",
+        "red-r2-s0108",
+        "hc75-1st-show",
+        "sample-15",
+        "mjj-2020-kb-2022",
+        "sample-17-orig",
+        "mjj-2011-frozenhell-2008",
+        "sample-11",
+        "mjj-2025-hapim",
+        "deme-r2-03-s0024",
+        "sample-03",
+        "sample-21",
+        "rental-cban-5",
+        "sample-16-orig",
+        "deme-r1-02-s0036",
+        "deme-r2-03-s0041",
+        "red-v5-r1-s0101",
+        "red-v5-r1-s0097",
+    ];
+    for &s_id in initial_singletons {
+        add_shell_unit(&mut units, &mut seen_unit_sigs, &team_db, &[s_id]);
+    }
+    // Also ensure every remaining outer shell from `report-step8-deme.json`'s `p_ids` is in `units`
+    if let Ok(txt) = std::fs::read_to_string(root.join("data/dominance-audit-v7-deme/report-step8-deme.json")) {
+        if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+            if let Some(arr) = v["p_ids"].as_array() {
+                for pv in arr {
+                    if let Some(pid) = pv.as_str() {
+                        add_shell_unit(&mut units, &mut seen_unit_sigs, &team_db, &[pid]);
+                    }
+                }
+            }
+        }
+    }
+
+    // Build Red Challenger List `q_ids`: all members of `units` first, then all remaining teams in `team_db`
+    let mut q_ids: Vec<String> = Vec::new();
+    let mut q_seen: BTreeSet<String> = BTreeSet::new();
+    for u in &units {
+        for mid in &u.member_ids {
+            if q_seen.insert(mid.clone()) {
+                q_ids.push(mid.clone());
+            }
+        }
+    }
+    // Load the 181 Q order from `report-step8-deme.json` + all `red-oracle-i0` & `red-r*` Hall of Fame strains
+    if let Ok(txt) = std::fs::read_to_string(root.join("data/dominance-audit-v7-deme/report-step8-deme.json")) {
+        if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+            if let Some(arr) = v["q_ids"].as_array() {
+                for qv in arr {
+                    if let Some(qid) = qv.as_str() {
+                        if team_db.contains_key(qid) && q_seen.insert(qid.to_string()) {
+                            q_ids.push(qid.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    for tid in team_db.keys() {
+        if (tid.starts_with("red-oracle-") || tid.starts_with("red-r")) && q_seen.insert(tid.clone()) {
+            q_ids.push(tid.clone());
+        }
+    }
+
+    // Load historical caches:
+    // - `single_cache[(p_id, q_id)]`: cells evaluated with `alive = 1` (from `v6/shards` and `v7-deme` where `p_deme_size == 1`)
+    // - `deme2_cache[(p_id, q_id)]`: cells evaluated with `alive = 2` for the exact same 2-member shell in `v7-deme`
+    // - `unit_cache[(unit_id, q_id)]`: `(score, games)` from `cache_file`
+    let mut single_cache: BTreeMap<(String, String), f64> = BTreeMap::new();
+    let mut deme2_cache: BTreeMap<(String, String), f64> = BTreeMap::new();
+    let mut v7_shell_members: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut v7_id_to_sig: BTreeMap<String, String> = BTreeMap::new();
+    if let Ok(txt) = std::fs::read_to_string(root.join("data/dominance-audit-v7-deme/report-step8-deme.json")) {
+        if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+            if let (Some(pids), Some(psigs)) = (v["p_ids"].as_array(), v["p_sigs"].as_array()) {
+                for (pv, sv) in pids.iter().zip(psigs.iter()) {
+                    if let (Some(pid), Some(sig)) = (pv.as_str(), sv.as_str()) {
+                        v7_shell_members
+                            .entry(sig.to_string())
+                            .or_default()
+                            .push(pid.to_string());
+                        v7_id_to_sig.insert(pid.to_string(), sig.to_string());
+                    }
+                }
+            }
+        }
+    }
+    for dir_rel in ["data/dominance-audit-v6/shards", "data/dominance-audit-v7-deme/shards"] {
+        if let Ok(rd) = std::fs::read_dir(root.join(dir_rel)) {
+            for entry in rd.flatten() {
+                let p = entry.path();
+                if p.extension().and_then(|s| s.to_str()) != Some("json") {
+                    continue;
+                }
+                if let Ok(txt) = std::fs::read_to_string(&p) {
+                    if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+                        let is_deme = v["deme_disclosure"].as_bool().unwrap_or(false);
+                        if let Some(arr) = v["cells"].as_array() {
+                            for c_val in arr {
+                                if let (Some(pid), Some(qid), Some(sc)) = (
+                                    c_val["p_id"].as_str(),
+                                    c_val["q_id"].as_str(),
+                                    c_val["score"].as_f64(),
+                                ) {
+                                    if !is_deme {
+                                        single_cache.insert((pid.to_string(), qid.to_string()), sc);
+                                        single_cache
+                                            .insert((qid.to_string(), pid.to_string()), 1.0 - sc);
+                                    } else {
+                                        let p_sz = v7_id_to_sig
+                                            .get(pid)
+                                            .and_then(|s| v7_shell_members.get(s))
+                                            .map(Vec::len)
+                                            .unwrap_or(1);
+                                        let q_sz = v7_id_to_sig
+                                            .get(qid)
+                                            .and_then(|s| v7_shell_members.get(s))
+                                            .map(Vec::len)
+                                            .unwrap_or(1);
+                                        if p_sz == 1 && q_sz <= 1 {
+                                            single_cache
+                                                .insert((pid.to_string(), qid.to_string()), sc);
+                                        }
+                                        if p_sz == 2 {
+                                            deme2_cache
+                                                .insert((pid.to_string(), qid.to_string()), sc);
+                                        }
+                                        if q_sz == 2 {
+                                            deme2_cache.insert(
+                                                (qid.to_string(), pid.to_string()),
+                                                1.0 - sc,
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let mut unit_cache: BTreeMap<(String, String), (f64, f64)> = BTreeMap::new();
+    if let Ok(txt) = std::fs::read_to_string(&cache_file) {
+        if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+            if let Some(arr) = v["unit_cells"].as_array() {
+                for c_val in arr {
+                    if let (Some(uid), Some(qid), Some(sc), Some(gms)) = (
+                        c_val["unit_id"].as_str(),
+                        c_val["q_id"].as_str(),
+                        c_val["score"].as_f64(),
+                        c_val["games"].as_f64(),
+                    ) {
+                        unit_cache.insert((uid.to_string(), qid.to_string()), (sc, gms));
+                    }
+                }
+            }
+        }
+    }
+
+    let bp_text = std::fs::read_to_string(root.join("data/belief-pool-v3/belief-pool.json")).unwrap();
+    let raw_mp: MetaPool = serde_json::from_str(&bp_text).expect("parse belief-pool");
+    let base_mp = normalize_belief_pool(&dex, &gen, &raw_mp);
+
+    let mut round_summaries: Vec<Value> = Vec::new();
+
+    for o_round in 1..=outer_rounds {
+        eprintln!(
+            "\n================================================================================="
+        );
+        eprintln!(
+            "=== OUTER CONVERGENCE ROUND {}/{} | {} Zero-Smuggling Shell Units x {} Challengers ===",
+            o_round,
+            outer_rounds,
+            units.len(),
+            q_ids.len()
+        );
+        eprintln!(
+            "================================================================================="
+        );
+
+        let n_u = units.len();
+        let n_q = q_ids.len();
+
+        // Build exact unit prior `unit_priors[u]` for each `u in 0..n_u`
+        // Also build `all_units_mp` (where every shell in `units` has ONLY its exact 1 or 2 members at equal weight!)
+        let mut all_units_mp = base_mp.clone();
+        for u in &units {
+            all_units_mp
+                .teams
+                .retain(|t| preview_sig_sets(&t.sets) != u.sig);
+            let w_m = 1.0 / (u.member_sets.len() as f64);
+            for (k, m_sets) in u.member_sets.iter().enumerate() {
+                all_units_mp.teams.push(nc2000_bot::preview::MetaTeam {
+                    id: format!("unit-{}", u.member_ids[k]),
+                    sets: m_sets.clone(),
+                    weight: Some(w_m),
+                });
+            }
+        }
+        let shared_clean_mp = Arc::new(all_units_mp);
+
+        // Initialize `payoff[u][j]` and `cell_games[u][j]`, reusing cached cells where available
+        let mut payoff = vec![vec![0.5f64; n_q]; n_u];
+        let mut cell_games = vec![vec![0.0f64; n_q]; n_u];
+        let mut missing_jobs: Vec<(usize, usize)> = Vec::new();
+
+        for u_idx in 0..n_u {
+            let u = &units[u_idx];
+            for j in 0..n_q {
+                let qid = &q_ids[j];
+                if u.member_ids.len() == 1 && &u.member_ids[0] == qid {
+                    payoff[u_idx][j] = 0.5;
+                    cell_games[u_idx][j] = 64.0;
+                    continue;
+                }
+                if let Some(&(sc, gms)) = unit_cache.get(&(u.unit_id.clone(), qid.clone())) {
+                    payoff[u_idx][j] = sc;
+                    cell_games[u_idx][j] = gms;
+                    continue;
+                }
+                if u.member_ids.len() == 1 {
+                    if let Some(&sc) = single_cache.get(&(u.member_ids[0].clone(), qid.clone())) {
+                        payoff[u_idx][j] = sc;
+                        cell_games[u_idx][j] = 4.0;
+                        unit_cache.insert((u.unit_id.clone(), qid.clone()), (sc, 4.0));
+                        continue;
+                    }
+                } else if u.member_ids.len() == 2 {
+                    let m0 = &u.member_ids[0];
+                    let m1 = &u.member_ids[1];
+                    // Check if `(m0, m1)` was an exact size-2 shell in v7-deme
+                    let exact_v7_pair = v7_id_to_sig
+                        .get(m0)
+                        .and_then(|s| v7_shell_members.get(s))
+                        .is_some_and(|v| v.len() == 2 && v.contains(m0) && v.contains(m1));
+                    if exact_v7_pair {
+                        if let (Some(&s0), Some(&s1)) = (
+                            deme2_cache.get(&(m0.clone(), qid.clone())),
+                            deme2_cache.get(&(m1.clone(), qid.clone())),
+                        ) {
+                            let sc = 0.5 * (s0 + s1);
+                            payoff[u_idx][j] = sc;
+                            cell_games[u_idx][j] = 8.0;
+                            unit_cache.insert((u.unit_id.clone(), qid.clone()), (sc, 8.0));
+                            continue;
+                        }
+                    }
+                }
+                missing_jobs.push((u_idx, j));
+            }
+        }
+
+        eprintln!(
+            "  [Round {} Phase 1] {} cached cells reused, {} new baseline cells to evaluate (4 games/cell)...",
+            o_round,
+            (n_u * n_q).saturating_sub(missing_jobs.len()),
+            missing_jobs.len()
+        );
+
+        let eval_unit_vs_q = |u: &ShellUnit,
+                              q_sets: &[PokemonSet],
+                              n_games_per_member: u32,
+                              pair_seed: u64|
+         -> (f64, f64) {
+            let mut sum_sc = 0.0f64;
+            let mut tot_g = 0.0f64;
+            for (m_idx, m_sets) in u.member_sets.iter().enumerate() {
+                let m_seed = pair_seed ^ ((m_idx as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15));
+                let res = eval_blind_asymmetric_prior(
+                    &dex,
+                    m_sets,
+                    std::slice::from_ref(&q_sets.to_vec()),
+                    &[1.0],
+                    shared_clean_mp.clone(),
+                    shared_clean_mp.clone(),
+                    n_games_per_member,
+                    iters,
+                    c,
+                    max_turns,
+                    1,
+                    m_seed,
+                );
+                let g = (n_games_per_member + n_games_per_member % 2) as f64;
+                sum_sc += res.score * g;
+                tot_g += g;
+            }
+            (sum_sc / tot_g.max(1.0), tot_g)
+        };
+
+        for chunk in missing_jobs.chunks(48) {
+            let cursor = std::sync::atomic::AtomicUsize::new(0);
+            let mut chunk_out: Vec<(usize, usize, f64, f64)> = Vec::with_capacity(chunk.len());
+            std::thread::scope(|scope| {
+                let mut handles = Vec::new();
+                for _ in 0..threads.max(1) {
+                    let (chunk, cursor, units_ref, q_ids_ref, team_db_ref) =
+                        (chunk, &cursor, &units, &q_ids, &team_db);
+                    handles.push(scope.spawn(move || {
+                        let mut loc = Vec::new();
+                        loop {
+                            let k = cursor.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            if k >= chunk.len() {
+                                break;
+                            }
+                            let (u_idx, j) = chunk[k];
+                            let u = &units_ref[u_idx];
+                            let qid = &q_ids_ref[j];
+                            let (q_sets, _, _) = &team_db_ref[qid];
+                            let g_per_mem = if u.member_sets.len() == 1 { 4 } else { 2 };
+                            let p_seed = seed
+                                ^ (((u_idx * 1319 + j) as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15));
+                            let (sc, gms) = eval_unit_vs_q(u, q_sets, g_per_mem, p_seed);
+                            loc.push((u_idx, j, sc, gms));
+                        }
+                        loc
+                    }));
+                }
+                for h in handles {
+                    chunk_out.extend(h.join().unwrap());
+                }
+            });
+            for (u_idx, j, sc, gms) in chunk_out {
+                payoff[u_idx][j] = sc;
+                cell_games[u_idx][j] = gms;
+                unit_cache.insert(
+                    (units[u_idx].unit_id.clone(), q_ids[j].clone()),
+                    (sc, gms),
+                );
+            }
+        }
+
+        let save_unit_cache = |uc: &BTreeMap<(String, String), (f64, f64)>| {
+            let recs: Vec<Value> = uc
+                .iter()
+                .map(|((uid, qid), &(sc, gms))| {
+                    json!({
+                        "unit_id": uid,
+                        "q_id": qid,
+                        "score": sc,
+                        "games": gms,
+                    })
+                })
+                .collect();
+            write_json_atomic(&cache_file, &json!({ "unit_cells": recs }));
+        };
+        if !missing_jobs.is_empty() {
+            save_unit_cache(&unit_cache);
+        }
+
+        // Build a helper to construct the Skew-Symmetric Coupled-Shell Minimax Matrix `m_solve` (`n_u x (n_u + n_out)`):
+        // - First `n_u` columns: internal Shell Units `U_0 .. U_{n_u - 1}`, where `m_solve[u][u] = 0.5` and
+        //   for `u < v`, `(u, v)` and `1 - (v, u)` are pooled by game count so `m_solve[u][v] + m_solve[v][u] = 1.0`.
+        // - Remaining `n_out` columns: outside challengers `q_ids[j]` that are not members of any `ShellUnit`.
+        let mut id_to_qidx: BTreeMap<String, usize> = BTreeMap::new();
+        for (j, qid) in q_ids.iter().enumerate() {
+            id_to_qidx.insert(qid.clone(), j);
+        }
+        let mut unit_member_set: BTreeSet<String> = BTreeSet::new();
+        let mut unit_q_indices: Vec<Vec<usize>> = Vec::with_capacity(n_u);
+        for u in &units {
+            let mut idxs = Vec::with_capacity(u.member_ids.len());
+            for mid in &u.member_ids {
+                unit_member_set.insert(mid.clone());
+                if let Some(&j) = id_to_qidx.get(mid) {
+                    idxs.push(j);
+                }
+            }
+            unit_q_indices.push(idxs);
+        }
+        let outside_q_indices: Vec<usize> = (0..n_q)
+            .filter(|&j| {
+                !unit_member_set.contains(&q_ids[j])
+                    && !seen_unit_sigs.contains(&preview_sig_sets(&team_db[&q_ids[j]].0))
+            })
+            .collect();
+        let n_cols = n_u + outside_q_indices.len();
+
+        let build_m_solve = |payoff_mat: &[Vec<f64>], games_mat: &[Vec<f64>]| -> Vec<Vec<f64>> {
+            let mut m_solve = vec![vec![0.5f64; n_cols]; n_u];
+            for u in 0..n_u {
+                m_solve[u][u] = 0.5;
+                for v in (u + 1)..n_u {
+                    let mut sum_uv = 0.0f64;
+                    let mut gms_uv = 0.0f64;
+                    for &jv in &unit_q_indices[v] {
+                        let g = games_mat[u][jv].max(1.0);
+                        sum_uv += payoff_mat[u][jv] * g;
+                        gms_uv += g;
+                    }
+                    let mut sum_vu = 0.0f64;
+                    let mut gms_vu = 0.0f64;
+                    for &ju in &unit_q_indices[u] {
+                        let g = games_mat[v][ju].max(1.0);
+                        sum_vu += payoff_mat[v][ju] * g;
+                        gms_vu += g;
+                    }
+                    let sc_uv = if gms_uv > 0.0 { sum_uv / gms_uv } else { 0.5 };
+                    let sc_vu = if gms_vu > 0.0 { sum_vu / gms_vu } else { 0.5 };
+                    let p_uv = if gms_uv + gms_vu > 0.0 {
+                        (gms_uv * sc_uv + gms_vu * (1.0 - sc_vu)) / (gms_uv + gms_vu)
+                    } else {
+                        0.5
+                    };
+                    m_solve[u][v] = p_uv;
+                    m_solve[v][u] = 1.0 - p_uv;
+                }
+                for (k, &j_out) in outside_q_indices.iter().enumerate() {
+                    let g = games_mat[u][j_out].max(1.0);
+                    let raw_sc = payoff_mat[u][j_out];
+                    m_solve[u][n_u + k] = (g * raw_sc + 8.0 * 0.50) / (g + 8.0);
+                }
+            }
+            m_solve
+        };
+
+        // Phase 2: Iterative Tilted Cutting-Plane Column Refinement (`cp_rounds`)
+        for cp in 1..=cp_rounds {
+            let m_solve = build_m_solve(&payoff, &cell_games);
+            let m_in: Vec<Vec<f64>> = (0..n_u).map(|u| m_solve[u][0..n_u].to_vec()).collect();
+            let (w_in, _, min_in) = solve_rectangular_minimax(&m_in, 60_000);
+            let (w_rect, _, min_rect) = solve_rectangular_minimax(&m_solve, 50_000);
+            // Rank columns `c` by unshrunk expected score against `0.5 * (w_in + w_rect)` (lowest = binding threats)
+            let mut col_scores: Vec<(usize, f64)> = (0..n_cols)
+                .map(|c| {
+                    if c < n_u {
+                        let s_in: f64 = (0..n_u).map(|u| w_in[u] * m_solve[u][c]).sum();
+                        let s_rc: f64 = (0..n_u).map(|u| w_rect[u] * m_solve[u][c]).sum();
+                        (c, s_in.min(s_rc))
+                    } else {
+                        let j_out = outside_q_indices[c - n_u];
+                        let s_in: f64 = (0..n_u).map(|u| w_in[u] * payoff[u][j_out]).sum();
+                        let s_rc: f64 = (0..n_u).map(|u| w_rect[u] * payoff[u][j_out]).sum();
+                        (c, s_in.min(s_rc))
+                    }
+                })
+                .collect();
+            col_scores.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+
+            let mut refine_set: BTreeSet<(usize, usize)> = BTreeSet::new();
+            for &(c_idx, col_sc) in col_scores.iter().take(cp_cols) {
+                if col_sc > 0.505 && cp > 1 {
+                    continue;
+                }
+                if c_idx < n_u {
+                    let v = c_idx;
+                    for u_idx in 0..n_u {
+                        if u_idx == v {
+                            continue;
+                        }
+                        for &jv in &unit_q_indices[v] {
+                            if cell_games[u_idx][jv] < 32.0 {
+                                refine_set.insert((u_idx, jv));
+                            }
+                        }
+                        for &ju in &unit_q_indices[u_idx] {
+                            if cell_games[v][ju] < 32.0 {
+                                refine_set.insert((v, ju));
+                            }
+                        }
+                    }
+                } else {
+                    let j_out = outside_q_indices[c_idx - n_u];
+                    for u_idx in 0..n_u {
+                        if cell_games[u_idx][j_out] < 32.0 {
+                            refine_set.insert((u_idx, j_out));
+                        }
+                    }
+                }
+            }
+            let refine_jobs: Vec<(usize, usize)> = refine_set.into_iter().collect();
+            let lowest_col_label = if col_scores[0].0 < n_u {
+                units[col_scores[0].0].unit_id.clone()
+            } else {
+                format!("OUT:{}", q_ids[outside_q_indices[col_scores[0].0 - n_u]])
+            };
+            eprintln!(
+                "  [Round {} Cutting-Plane {}/{}] min_in={:.4} min_rect={:.4} | Tilting +{} games/cell onto {} binding cells (lowest col={} @ {:.4})...",
+                o_round,
+                cp,
+                cp_rounds,
+                min_in,
+                min_rect,
+                cp_add_games,
+                refine_jobs.len(),
+                lowest_col_label,
+                col_scores[0].1
+            );
+            if refine_jobs.is_empty() {
+                break;
+            }
+            let cursor = std::sync::atomic::AtomicUsize::new(0);
+            let mut ref_out: Vec<(usize, usize, f64, f64)> = Vec::with_capacity(refine_jobs.len());
+            std::thread::scope(|scope| {
+                let mut handles = Vec::new();
+                for _ in 0..threads.max(1) {
+                    let (refine_jobs, cursor, units_ref, q_ids_ref, team_db_ref, cell_games_ref) = (
+                        &refine_jobs,
+                        &cursor,
+                        &units,
+                        &q_ids,
+                        &team_db,
+                        &cell_games,
+                    );
+                    handles.push(scope.spawn(move || {
+                        let mut loc = Vec::new();
+                        loop {
+                            let k = cursor.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            if k >= refine_jobs.len() {
+                                break;
+                            }
+                            let (u_idx, j) = refine_jobs[k];
+                            let u = &units_ref[u_idx];
+                            let qid = &q_ids_ref[j];
+                            let (q_sets, _, _) = &team_db_ref[qid];
+                            let g_per_mem = if u.member_sets.len() == 1 {
+                                cp_add_games
+                            } else {
+                                (cp_add_games / 2).max(2)
+                            };
+                            let prev_g = cell_games_ref[u_idx][j] as u64;
+                            let p_seed = seed
+                                ^ 0xA5A5_5A5A_1111_2222_u64
+                                ^ (((u_idx * 2029 + j) as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15))
+                                ^ (prev_g.wrapping_mul(0xBF58_476D_1CE4_E5B9));
+                            let (sc, gms) = eval_unit_vs_q(u, q_sets, g_per_mem, p_seed);
+                            loc.push((u_idx, j, sc, gms));
+                        }
+                        loc
+                    }));
+                }
+                for h in handles {
+                    ref_out.extend(h.join().unwrap());
+                }
+            });
+            for (u_idx, j, add_sc, add_gms) in ref_out {
+                let old_g = cell_games[u_idx][j];
+                let old_sc = payoff[u_idx][j];
+                let new_g = old_g + add_gms;
+                let new_sc = (old_g * old_sc + add_gms * add_sc) / new_g;
+                payoff[u_idx][j] = new_sc;
+                cell_games[u_idx][j] = new_g;
+                unit_cache.insert(
+                    (units[u_idx].unit_id.clone(), q_ids[j].clone()),
+                    (new_sc, new_g),
+                );
+            }
+            save_unit_cache(&unit_cache);
+        }
+
+        // Solve the Coupled-Shell Minimax Equilibrium on `m_solve` (`n_u x n_cols`) and `m_in` (`n_u x n_u`)
+        let m_solve = build_m_solve(&payoff, &cell_games);
+        let m_in: Vec<Vec<f64>> = (0..n_u).map(|u| m_solve[u][0..n_u].to_vec()).collect();
+        let (w_u_in, _, min_in_val) = solve_rectangular_minimax(&m_in, 100_000);
+        let (w_u_rect, _, min_rect_val) = solve_rectangular_minimax(&m_solve, 100_000);
+
+        let mut active_indices: Vec<usize> = (0..n_u)
+            .filter(|&u| w_u_in[u] >= 0.002 || w_u_rect[u] >= 0.002)
+            .collect();
+        if active_indices.is_empty() {
+            active_indices = (0..n_u).collect();
+        }
+        // Polish weights on the `active_indices x n_cols` submatrix so all internal & outside columns are defended!
+        let m_polish: Vec<Vec<f64>> = active_indices
+            .iter()
+            .map(|&u| m_solve[u].clone())
+            .collect();
+        let (w_pol, _, min_pol_rect) = solve_rectangular_minimax(&m_polish, 80_000);
+        let min_val = min_in_val.min(min_pol_rect.max(min_rect_val));
+        let mut active_units: Vec<(usize, f64)> = active_indices
+            .into_iter()
+            .zip(w_pol.into_iter())
+            .filter(|&(_, w)| w >= 0.002)
+            .collect();
+        active_units.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        let wu_sum: f64 = active_units.iter().map(|x| x.1).sum();
+        for x in &mut active_units {
+            x.1 /= wu_sum;
+        }
+
+        // Check if any outside column `c >= n_u` scores `< 0.5000` against `active_units` so it can be auto-promoted
+        let mut outside_challenger_promotions: Vec<String> = Vec::new();
+        for (k, &j_out) in outside_q_indices.iter().enumerate() {
+            let c_sc: f64 = active_units
+                .iter()
+                .map(|&(u, w)| w * m_solve[u][n_u + k])
+                .sum();
+            if c_sc < 0.4995 {
+                outside_challenger_promotions.push(q_ids[j_out].clone());
+            }
+        }
+
+        // Expand `active_units` into individual deployed teams `(pi_ids, pi_weights, pi_sets, pi_raw)`:
+        // Every `Deme2` unit splits its weight 50/50 (`0.5 * w_u`) between its 2 members!
+        let mut pi_ids: Vec<String> = Vec::new();
+        let mut pi_weights: Vec<f64> = Vec::new();
+        let mut pi_sets: Vec<Vec<PokemonSet>> = Vec::new();
+        let mut pi_raw: Vec<Vec<Value>> = Vec::new();
+        let mut pi_shell_counts: BTreeMap<PreviewSig, usize> = BTreeMap::new();
+
+        println!(
+            "\n=== [Round {}] Zero-Smuggling Coupled-Shell Equilibrium pi* (min_in={:.4}, min_mat={:.4}, {} active shells) ===",
+            o_round,
+            min_in_val,
+            min_val,
+            active_units.len()
+        );
+        for &(u_idx, w_shell) in &active_units {
+            let u = &units[u_idx];
+            let m_len = u.member_ids.len();
+            let w_mem = w_shell / (m_len as f64);
+            let omni: f64 = payoff[u_idx].iter().sum::<f64>() / (n_q as f64);
+            println!(
+                "  W_shell={:.4} ({}x @ w={:.4} each | omni={:.4}) | {}",
+                w_shell, m_len, w_mem, omni, u.unit_id
+            );
+            *pi_shell_counts.entry(u.sig.clone()).or_insert(0) += m_len;
+            for k in 0..m_len {
+                pi_ids.push(u.member_ids[k].clone());
+                pi_weights.push(w_mem);
+                pi_sets.push(u.member_sets[k].clone());
+                pi_raw.push(u.member_raw[k].clone());
+            }
+        }
+        let pi_id_set: BTreeSet<String> = pi_ids.iter().cloned().collect();
+
+        // Build exact symmetric `pi_star_mp` starting from `base_mp` (so non-pi* shells are never false-pinned
+        // to inactive units, and with small background weight 1e-4 on non-pi* shells so they never dominate
+        // species fallback marginals) and assert ZERO prior smuggling!
+        let mut pi_mp = base_mp.clone();
+        pi_mp
+            .teams
+            .retain(|t| !pi_shell_counts.contains_key(&preview_sig_sets(&t.sets)));
+        for t in &mut pi_mp.teams {
+            t.weight = Some(1e-4);
+        }
+        for k in 0..pi_ids.len() {
+            pi_mp.teams.push(nc2000_bot::preview::MetaTeam {
+                id: format!("pi-star-{}", pi_ids[k]),
+                sets: pi_sets[k].clone(),
+                weight: Some(pi_weights[k]),
+            });
+        }
+        let pi_star_mp = Arc::new(pi_mp);
+
+        for &(u_idx, _) in &active_units {
+            let u = &units[u_idx];
+            for k in 0..u.member_ids.len() {
+                let tb = nc2000_engine::state::Battle::from_fixture(
+                    &dex,
+                    "1,2,3,4",
+                    &u.member_sets[k],
+                    &u.member_sets[k],
+                )
+                .unwrap();
+                let obs = nc2000_bot::Observer::new(&tb, 1);
+                let bel = nc2000_bot::Belief::new(&dex, &pi_star_mp, &obs);
+                assert_eq!(
+                    bel.candidate_count(),
+                    u.member_ids.len(),
+                    "Zero-smuggling invariant violated on {}",
+                    u.unit_id
+                );
+            }
+        }
+
+        // Save updated `data/kodoku-r3/conclusion-equilibrium-deme.json`
+        let eq_teams_json: Vec<Value> = (0..pi_ids.len())
+            .map(|k| {
+                json!({
+                    "id": pi_ids[k],
+                    "weight": pi_weights[k],
+                    "sets": pi_raw[k],
+                })
+            })
+            .collect();
+        write_json_atomic(
+            &root.join("data/kodoku-r3/conclusion-equilibrium-deme.json"),
+            &json!({
+                "name": format!("conclusion-equilibrium-zero-smuggling-r{}", o_round),
+                "active_shells": active_units.len(),
+                "support_size": pi_ids.len(),
+                "min_matrix_payoff": min_val,
+                "teams": eq_teams_json,
+            }),
+        );
+
+        // Phase 3: Open-Ended Red-Oracle Falsification + 256-Game Holdout Verification against the converged `\pi^*`
+        eprintln!(
+            "\n  [Round {} Phase 3] Running Open-Ended Red-Oracle ({} waves) + 256-Game Holdout Verification vs converged pi*...",
+            o_round, red_waves
+        );
+        #[derive(Clone)]
+        struct RedStrain {
+            id: String,
+            parent_id: String,
+            origin: String,
+            _born_wave: usize,
+            last_op: String,
+            sets: Vec<PokemonSet>,
+            raw: Vec<Value>,
+            pairs_done: usize,
+            games: usize,
+            blue_wins: f64,
+            red_wr: f64,
+            bayes_red_wr: f64,
+            slot_picks: [f64; 6],
+            slot_wins: [f64; 6],
+        }
+        impl RedStrain {
+            fn update_stats(&mut self) {
+                if self.games > 0 {
+                    let b_wr = self.blue_wins / (self.games as f64);
+                    self.red_wr = 1.0 - b_wr;
+                    self.bayes_red_wr = (16.0 * 0.43 + (self.games as f64) * self.red_wr)
+                        / (16.0 + self.games as f64);
+                } else {
+                    self.red_wr = 0.43;
+                    self.bayes_red_wr = 0.43;
+                }
+            }
+        }
+
+        let mut rng = SplitMix64::new(seed ^ ((o_round as u64).wrapping_mul(0xCAFE_BABE_1234_5678)));
+        let free_constraint = NicheConstraint::default();
+        let mut seen_red_keys: BTreeSet<String> = BTreeSet::new();
+        for raw in &pi_raw {
+            seen_red_keys.insert(team_key(raw));
+        }
+        let mut population: Vec<RedStrain> = Vec::new();
+        let mut seq = 1usize;
+        let island_tag = format!("red-v6-r{}", o_round);
+
+        let push_red = |pop: &mut Vec<RedStrain>,
+                        seen: &mut BTreeSet<String>,
+                        seq_counter: &mut usize,
+                        parent_id: &str,
+                        origin: &str,
+                        born_wave: usize,
+                        op: &str,
+                        raw_in: &[Value]|
+         -> bool {
+            let upgraded = normalize_team_dvs_evs(&dex, raw_in);
+            let Some(canon) = gen.canonize(&dex, &upgraded) else {
+                return false;
+            };
+            let k = team_key(&canon);
+            if !seen.insert(k) {
+                return false;
+            };
+            let Ok(sets) = to_sets(&canon) else {
+                return false;
+            };
+            let id = format!("{}-s{:04}", island_tag, *seq_counter);
+            *seq_counter += 1;
+            pop.push(RedStrain {
+                id,
+                parent_id: parent_id.to_string(),
+                origin: origin.to_string(),
+                _born_wave: born_wave,
+                last_op: op.to_string(),
+                sets,
+                raw: canon,
+                pairs_done: 0,
+                games: 0,
+                blue_wins: 0.0,
+                red_wr: 0.43,
+                bayes_red_wr: 0.43,
+                slot_picks: [0.0; 6],
+                slot_wins: [0.0; 6],
+            });
+            true
+        };
+
+        // Rank Q challengers outside `supp(\pi^*)` by lowest matrix payoff vs `\pi^*`
+        let mut outside_q: Vec<(usize, f64)> = (0..n_q)
+            .filter(|&j| {
+                !pi_id_set.contains(&q_ids[j])
+                    && !seen_unit_sigs.contains(&preview_sig_sets(&team_db[&q_ids[j]].0))
+            })
+            .map(|j| {
+                let s: f64 = active_units
+                    .iter()
+                    .map(|&(u, w)| w * payoff[u][j])
+                    .sum();
+                (j, s)
+            })
+            .collect();
+        outside_q.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+
+        for &(j, _) in outside_q.iter().take(10) {
+            let qid = &q_ids[j];
+            if let Some((_, raw, _)) = team_db.get(qid) {
+                push_red(
+                    &mut population,
+                    &mut seen_red_keys,
+                    &mut seq,
+                    qid,
+                    "closest-outside-Q",
+                    0,
+                    "founder-Q",
+                    raw,
+                );
+            }
+        }
+        // Anti-mirror counter-mutants of `\pi^*`'s top shells
+        for (idx, pid) in pi_ids.iter().take(10).enumerate() {
+            let base_raw = &pi_raw[idx];
+            for _ in 0..8 {
+                if let Some(prop) = gen.propose_targeted(
+                    &dex,
+                    base_raw,
+                    &[1.0; 6],
+                    &[0.5; 6],
+                    &mut rng,
+                    &free_constraint,
+                    150,
+                ) {
+                    if push_red(
+                        &mut population,
+                        &mut seen_red_keys,
+                        &mut seq,
+                        pid,
+                        "anti-mirror-mutant",
+                        0,
+                        &format!("{}@{}", prop.op.name(), prop.slot),
+                        &prop.team,
+                    ) {
+                        break;
+                    }
+                }
+            }
+        }
+        let target_init = carry + buds;
+        let mut tries = 0usize;
+        while population.len() < target_init && tries < 300 {
+            tries += 1;
+            if tries % 2 == 0 && population.len() >= 2 {
+                let ia = rng.below(population.len());
+                let ib = rng.below(population.len());
+                if ia != ib {
+                    let mut child_raw = population[ia].raw.clone();
+                    let sa = rng.below(6);
+                    let sb = rng.below(6);
+                    let pid_a = population[ia].id.clone();
+                    child_raw[sa] = population[ib].raw[sb].clone();
+                    if push_red(
+                        &mut population,
+                        &mut seen_red_keys,
+                        &mut seq,
+                        &pid_a,
+                        "chimera-crossover",
+                        0,
+                        &format!("crossover@{sa}"),
+                        &child_raw,
+                    ) {
+                        continue;
+                    }
+                }
+            }
+            if let Some(team) =
+                gen.random_team_constrained(&dex, &mut rng, &[], &free_constraint, 300)
+            {
+                push_red(
+                    &mut population,
+                    &mut seen_red_keys,
+                    &mut seq,
+                    "wild",
+                    "wild-de-novo",
+                    0,
+                    "random-init",
+                    &team,
+                );
+            }
+        }
+
+        let mut hall_of_fame: Vec<RedStrain> = Vec::new();
+        for w in 1..=red_waves {
+            let tiers: [(usize, f64); 5] = [
+                (8, 0.0),     // 16 games
+                (24, 0.455),  // 48 games
+                (48, 0.485),  // 96 games
+                (80, 0.500),  // 160 games
+                (128, 0.505), // 256 games
+            ];
+            for &(target_pairs, min_red_wr) in &tiers {
+                for s_idx in 0..population.len() {
+                    if population[s_idx].pairs_done >= target_pairs {
+                        continue;
+                    }
+                    if population[s_idx].games > 0 && population[s_idx].red_wr + 1e-9 < min_red_wr {
+                        continue;
+                    }
+                    let add_pairs = target_pairs - population[s_idx].pairs_done;
+                    let s_seed = seed
+                        ^ ((o_round as u64).wrapping_mul(0x5555_6666_7777_8888))
+                        ^ ((s_idx as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15))
+                        ^ (team_key(&population[s_idx].raw).len() as u64);
+                    let out = eval_vs_pi_star_qmc(
+                        &dex,
+                        &pi_sets,
+                        &pi_weights,
+                        &population[s_idx].sets,
+                        pi_star_mp.clone(),
+                        pi_star_mp.clone(),
+                        population[s_idx].pairs_done,
+                        add_pairs,
+                        iters,
+                        c,
+                        max_turns,
+                        threads,
+                        s_seed,
+                    );
+                    population[s_idx].pairs_done += add_pairs;
+                    population[s_idx].games += out.games_played;
+                    population[s_idx].blue_wins += out.blue_score * (out.games_played as f64);
+                    for k in 0..6 {
+                        population[s_idx].slot_picks[k] += out.red_slot_picks[k];
+                        population[s_idx].slot_wins[k] += out.red_slot_wins[k];
+                    }
+                    population[s_idx].update_stats();
+                }
+            }
+            population.sort_by(|a, b| b.bayes_red_wr.partial_cmp(&a.bayes_red_wr).unwrap());
+            for s in &population {
+                if s.games >= 96 && s.red_wr >= 0.490 {
+                    if let Some(existing) = hall_of_fame.iter_mut().find(|h| h.id == s.id) {
+                        *existing = s.clone();
+                    } else {
+                        hall_of_fame.push(s.clone());
+                    }
+                }
+            }
+            hall_of_fame.sort_by(|a, b| b.red_wr.partial_cmp(&a.red_wr).unwrap());
+            let best = &population[0];
+            eprintln!(
+                "  [{} wave {}/{}] best={} (from={}, op={}, Red_WR={:.4} / Blue_WR={:.4} over {}g) | HoF={}",
+                island_tag,
+                w,
+                red_waves,
+                best.id,
+                best.parent_id,
+                best.last_op,
+                best.red_wr,
+                1.0 - best.red_wr,
+                best.games,
+                hall_of_fame.len()
+            );
+            if w == red_waves {
+                break;
+            }
+            let mut survivors: Vec<RedStrain> = Vec::with_capacity(carry);
+            for s in &population {
+                let sp_s: BTreeSet<String> = s.sets.iter().map(|m| toid(&m.species)).collect();
+                let same_arch = survivors
+                    .iter()
+                    .filter(|o| {
+                        let sp_o: BTreeSet<String> =
+                            o.sets.iter().map(|m| toid(&m.species)).collect();
+                        sp_s.intersection(&sp_o).count() >= 5
+                    })
+                    .count();
+                if survivors.len() < carry && same_arch < 2 {
+                    survivors.push(s.clone());
+                }
+            }
+            while survivors.len() < carry && survivors.len() < population.len() {
+                let next_s = &population[survivors.len()];
+                if !survivors.iter().any(|x| x.id == next_s.id) {
+                    survivors.push(next_s.clone());
+                } else {
+                    break;
+                }
+            }
+            let mut next_pop = survivors.clone();
+            let mut b_tries = 0usize;
+            while next_pop.len() < survivors.len() + buds && b_tries < buds * 25 {
+                b_tries += 1;
+                let p_idx = (b_tries - 1) % survivors.len().max(1);
+                let parent = &survivors[p_idx];
+                let roll = rng.below(100);
+                if roll < 70 {
+                    if let Some(prop) = gen.propose_targeted(
+                        &dex,
+                        &parent.raw,
+                        &parent.slot_picks,
+                        &parent.slot_wins,
+                        &mut rng,
+                        &free_constraint,
+                        150,
+                    ) {
+                        push_red(
+                            &mut next_pop,
+                            &mut seen_red_keys,
+                            &mut seq,
+                            &parent.id,
+                            &parent.origin,
+                            w,
+                            &format!("{}@{}", prop.op.name(), prop.slot),
+                            &prop.team,
+                        );
+                    }
+                } else if survivors.len() >= 2 {
+                    let donor_idx = (p_idx + 1 + rng.below(survivors.len() - 1)) % survivors.len();
+                    let donor = &survivors[donor_idx];
+                    let weak_slot = rng.below(6);
+                    let strong_slot = rng.below(6);
+                    let mut child_raw = parent.raw.clone();
+                    child_raw[weak_slot] = donor.raw[strong_slot].clone();
+                    let lsum: i64 = child_raw
+                        .iter()
+                        .map(|s| s["level"].as_i64().unwrap_or(50))
+                        .sum();
+                    if lsum > 310 {
+                        let mut excess = lsum - 310;
+                        for s in child_raw.iter_mut() {
+                            let lv = s["level"].as_i64().unwrap_or(50);
+                            if lv > 50 && excess > 0 {
+                                let cut = (lv - 50).min(excess);
+                                s["level"] = json!(lv - cut);
+                                excess -= cut;
+                            }
+                        }
+                    }
+                    push_red(
+                        &mut next_pop,
+                        &mut seen_red_keys,
+                        &mut seq,
+                        &parent.id,
+                        "chimera-crossover",
+                        w,
+                        &format!("graft@{weak_slot}"),
+                        &child_raw,
+                    );
+                }
+            }
+            population = next_pop;
+        }
+
+        // Holdout verification (256 fresh games, pairs 128..256) on top 6 Hall of Fame strains
+        let holdout_n = hall_of_fame.len().min(6);
+        let mut holdout_recs: Vec<Value> = Vec::new();
+        let mut newly_promoted = 0usize;
+        println!(
+            "\n=== [Round {}] Independent 256-Game Holdout Verification of Top Red-Oracle Challengers ===",
+            o_round
+        );
+        for idx in 0..holdout_n {
+            let h_seed = seed
+                ^ 0x3333_4444_5555_6666_u64
+                ^ ((o_round as u64 * 97 + idx as u64 + 1).wrapping_mul(0x94D0_49BB_1331_11EB));
+            let out = eval_vs_pi_star_qmc(
+                &dex,
+                &pi_sets,
+                &pi_weights,
+                &hall_of_fame[idx].sets,
+                pi_star_mp.clone(),
+                pi_star_mp.clone(),
+                128,
+                128,
+                iters,
+                c,
+                max_turns,
+                threads,
+                h_seed,
+            );
+            let ho_red_wr = 1.0 - out.blue_score;
+            let tot_games = hall_of_fame[idx].games + out.games_played;
+            let tot_blue_wins =
+                hall_of_fame[idx].blue_wins + out.blue_score * (out.games_played as f64);
+            let tot_red_wr = 1.0 - (tot_blue_wins / (tot_games as f64));
+            let s = &hall_of_fame[idx];
+            let mons: Vec<String> = s
+                .sets
+                .iter()
+                .map(|m| format!("{}L{}({})", m.species, m.level, m.item))
+                .collect();
+            let shares_pi_shell = pi_shell_counts.contains_key(&preview_sig_sets(&s.sets));
+            println!(
+                "  [R{} HOLDOUT #{:02}] {:16} [{}] | Holdout_Red_WR={:.4} (256g) | Search={:.4} ({}g) | Total_512g_Red_WR={:.4} (Blue_WR={:.4}) | {}",
+                o_round,
+                idx + 1,
+                s.id,
+                if shares_pi_shell {
+                    "SAME-SHELL-AS-PI*"
+                } else {
+                    "OUTSIDE-SHELL    "
+                },
+                ho_red_wr,
+                s.red_wr,
+                s.games,
+                tot_red_wr,
+                1.0 - tot_red_wr,
+                mons.join(", ")
+            );
+            holdout_recs.push(json!({
+                "id": s.id,
+                "parent_id": s.parent_id,
+                "last_op": s.last_op,
+                "shares_pi_shell": shares_pi_shell,
+                "search_red_wr": s.red_wr,
+                "holdout_red_wr": ho_red_wr,
+                "total_512g_red_wr": tot_red_wr,
+                "total_512g_blue_wr": 1.0 - tot_red_wr,
+                "sets": s.raw,
+            }));
+
+            // If this strain is a genuine Nemesis (`ho_red_wr > 0.510` and `tot_red_wr > 0.515`),
+            // register it into `team_db`, `q_ids`, and `units` for the next outer round!
+            if ho_red_wr > 0.510 && tot_red_wr > 0.515 {
+                if let Some(reg_id) = register_team(
+                    &mut team_db,
+                    &mut seen_db_keys,
+                    &mut key_to_id,
+                    &s.id,
+                    &island_tag,
+                    &s.raw,
+                ) {
+                    if q_seen.insert(reg_id.clone()) {
+                        q_ids.push(reg_id.clone());
+                    }
+                    if promote_or_upgrade_shell_unit(&mut units, &mut seen_unit_sigs, &team_db, &reg_id) {
+                        newly_promoted += 1;
+                    }
+                }
+            }
+        }
+        for prom_qid in &outside_challenger_promotions {
+            if promote_or_upgrade_shell_unit(&mut units, &mut seen_unit_sigs, &team_db, prom_qid) {
+                newly_promoted += 1;
+            }
+        }
+
+        let active_summary: Vec<Value> = active_units
+            .iter()
+            .map(|&(u_idx, w_shell)| {
+                json!({
+                    "unit_id": units[u_idx].unit_id,
+                    "weight": w_shell,
+                    "member_ids": units[u_idx].member_ids,
+                })
+            })
+            .collect();
+        round_summaries.push(json!({
+            "outer_round": o_round,
+            "min_matrix_payoff": min_val,
+            "active_shell_count": active_units.len(),
+            "support_team_count": pi_ids.len(),
+            "active_shells": active_summary,
+            "holdout_nemeses": holdout_recs,
+            "newly_promoted_shells": newly_promoted,
+        }));
+
+        write_json_atomic(
+            &out_file,
+            &json!({
+                "elapsed_secs": t_start.elapsed().as_secs_f64(),
+                "rounds": round_summaries,
+            }),
+        );
     }
 }
