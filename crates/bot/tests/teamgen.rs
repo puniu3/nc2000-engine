@@ -230,4 +230,50 @@ fn provable_dominance_and_preadaptation_rules_hold() {
             assert_eq!(evs["spe"].as_i64(), Some(255));
         }
     }
+
+    // 4. Utility/combo damaging moves (Whirlpool, Mud-Slap, Icy Wind, etc.)
+    // do not block same-type main STABs (Surf, Earthquake, Ice Beam) in move swaps,
+    // while existing >=60 BP main STABs still block redundant weak attacks (Bide, Present).
+    let mut base_team = gen.canonize(&dex, &gen.team_json(0)).unwrap();
+    base_team[0]["species"] = serde_json::json!("Blastoise");
+    base_team[0]["name"] = serde_json::json!("Blastoise");
+    base_team[0]["moves"] = serde_json::json!(["Whirlpool", "Mud-Slap", "Rest", "Roar"]);
+    let base_team = gen.canonize(&dex, &base_team).unwrap();
+    let mut saw_surf_or_hydro = false;
+    let mut saw_earthquake = false;
+    for seed in 1..=2500u64 {
+        let mut r = SplitMix64::new(seed);
+        if let Some(p) = gen.propose_valid(&dex, &base_team, &mut r, 20) {
+            if p.op == MutOp::MoveSwap && p.slot == 0 {
+                let mvs: Vec<String> = p.team[0]["moves"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_lowercase()))
+                    .collect();
+                if mvs.contains(&"whirlpool".to_string())
+                    && (mvs.contains(&"surf".to_string()) || mvs.contains(&"hydro pump".to_string()))
+                {
+                    saw_surf_or_hydro = true;
+                }
+                if mvs.contains(&"mud-slap".to_string()) && mvs.contains(&"earthquake".to_string()) {
+                    saw_earthquake = true;
+                }
+                if mvs.contains(&"body slam".to_string()) || mvs.contains(&"return".to_string()) {
+                    assert!(
+                        !mvs.contains(&"bide".to_string()) && !mvs.contains(&"present".to_string()),
+                        "main Normal STAB must block redundant Bide/Present: {mvs:?}"
+                    );
+                }
+            }
+        }
+    }
+    assert!(
+        saw_surf_or_hydro,
+        "Whirlpool on Blastoise must not block adding Surf/Hydro Pump in another slot"
+    );
+    assert!(
+        saw_earthquake,
+        "Mud-Slap (<60 BP) on Blastoise must not block adding Earthquake in another slot"
+    );
 }

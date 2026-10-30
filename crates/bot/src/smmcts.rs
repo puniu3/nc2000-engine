@@ -924,8 +924,24 @@ pub(crate) fn dominated_reason(
             && faster_than_foe(b, dex, side)
             && b.has_sleeping_pokemon(1 - side)
         {
-            return Some("inflicting sleep would forfeit under Sleep Clause");
+            let opp = &b.sides[1 - side];
+            let bench_asleep = opp.party.iter().skip(1).any(|&slot| {
+                let p = &opp.roster[slot as usize];
+                !p.fainted && p.status == nc2000_engine::state::Status::Slp
+            });
+            if bench_asleep || foe_can_switch(b, side) {
+                return Some("inflicting sleep would forfeit under Sleep Clause");
+            }
         }
+    }
+    if b.active_id(side).is_some_and(|id| {
+        let me = b.poke(id);
+        dex.conds_id("encore").is_some_and(|cond| me.has_volatile(cond))
+            && (dex.conds_id("substitute").is_some_and(|cond| me.has_volatile(cond))
+                || me.boosts.iter().take(5).any(|&x| x > 0)
+                || b.active_id(1 - side).is_some_and(|f| b.poke(f).trapped))
+    }) {
+        return None;
     }
     if rules.destiny_bond_wait
         && b.active_id(1 - side).is_some_and(|id| {
@@ -1357,6 +1373,16 @@ fn noop_reason(
     }
 
     if let Some(v) = ms.volatile_status.as_deref() {
+        // Non-Ghost Curse boosts the user (+1 Atk, +1 Def, -1 Spe) and clears
+        // `volatile_status` (`moveexec.rs:576`), so it only fails when both
+        // Attack and Defense are already at +6.
+        if key == "curse" && !b.poke(att).has_type(dex.known_types.ghost) {
+            let boosts = b.poke(att).boosts;
+            if boosts[0] >= 6 && boosts[1] >= 6 && faster_than_foe(b, dex, side) {
+                yes!("every stat this move moves is already capped");
+            }
+            return None;
+        }
         // Safeguard again: side-wide, so it stops confusion whoever is in.
         if v == "confusion" && key != "swagger" && foe_targeted && safeguard {
             yes!("Safeguard blocks confusion");
@@ -1374,8 +1400,17 @@ fn noop_reason(
             // since none of these conditions carries an `onRestart`
             // A volatile can also run out on its owner's own move (a
             // confusion clock is decremented before the move it hinders), so
-            // the foe-directed half needs us to move first.
-            let stable = tgt == Some(att) || faster_than_foe(b, dex, side);
+            // the foe-directed half needs us to move first. `destinybond` on
+            // `att` is also cleared by `onFoeAfterMoveSelf` and `onFoeSwitchOut`
+            // (`conditions.rs:808-818`), so a slower user or switchable foe
+            // clears it before our move resolves and re-arms Destiny Bond.
+            let stable = if v == "destinybond" {
+                !foe_can_switch(b, side)
+                    && faster_than_foe(b, dex, side)
+                    && !foe_may_preempt_with_damage(b, dex, side, ms.priority)
+            } else {
+                tgt == Some(att) || faster_than_foe(b, dex, side)
+            };
             if stable && b.poke(t).has_volatile(vid) {
                 yes!("the target already has that volatile");
             }
@@ -3079,5 +3114,85 @@ mod dominated_action_tests {
             assert_ne!(best, "move reflect", "masked no-op won argmax (seed {seed})");
             assert_ne!(best, "move rest", "rest at full HP won argmax (seed {seed})");
         }
+    }
+
+    #[test]
+    fn non_ghost_curse_and_slower_destiny_bond_and_encored_stayin_and_stranded_sleep_edges() {
+        let (dex, mut b) = ghost_setup("Haunter");
+        strand(&mut b, 1);
+        let snorlax = b.active_id(0).unwrap();
+        let misdreavus = b.active_id(1).unwrap();
+
+        // 1. Non-Ghost Curse vs a stranded foe that already carries `curse` volatile:
+        // Snorlax's Curse boosts (+1 Atk, +1 Def, -1 Spe) instead of applying `curse`.
+        b.add_volatile(&dex, misdreavus, "curse", Some(misdreavus), EffectHandle::None);
+        b.poke_mut(snorlax).boosts[4] = 6; // make Snorlax faster
+        assert!(
+            !certain_noop(&b, &dex, 0, mv(&dex, "curse")),
+            "non-Ghost Curse boosts user even when foe has curse volatile"
+        );
+        b.poke_mut(snorlax).boosts[0] = 6;
+        b.poke_mut(snorlax).boosts[1] = 6;
+        assert!(
+            certain_noop(&b, &dex, 0, mv(&dex, "curse")),
+            "non-Ghost Curse at +6 Atk/+6 Def when faster is capped"
+        );
+
+        // 2. Slower Destiny Bond re-arm: when slower Misdreavus still carries
+        // `destinybond` from moving second last turn, the faster foe's move
+        // clears `destinybond` via `onFoeAfterMoveSelf` before Misdreavus acts.
+        let (_, mut db) = st_setup();
+        strand(&mut db, 1);
+        let def1 = db.active_id(1).unwrap();
+        db.add_volatile(&dex, def1, "destinybond", Some(def1), EffectHandle::None);
+        assert!(
+            !certain_noop(&db, &dex, 1, mv(&dex, "destinybond")),
+            "slower holder re-arms Destiny Bond after faster foe acts"
+        );
+        db.poke_mut(def1).boosts[4] = 6; // now side 1 is faster and side 0 is stranded
+        strand(&mut db, 0);
+        assert!(
+            certain_noop(&db, &dex, 1, mv(&dex, "destinybond")),
+            "faster holder vs stranded non-priority foe cannot re-apply Destiny Bond"
+        );
+
+        // 3. Encore lock on a no-op move:
+        //    - Without switch-lost state (Substitute / positive boosts / trapped foe),
+        //      it remains masked so flat-root argmax cannot stay in on a dead move.
+        //    - With switch-lost state (e.g. Substitute or +1 boost), it is unmasked so
+        //      the holder is not forced to switch out and forfeit its state.
+        let (_, mut enc) = setup();
+        let e_att = enc.active_id(0).unwrap();
+        enc.add_side_condition(&dex, 0, "reflect", Some(e_att), EffectHandle::None);
+        assert!(
+            dominated_reason(&enc, &dex, 0, mv(&dex, "reflect"), MaskRules::default()).is_some()
+        );
+        enc.poke_mut(e_att).last_move_encore = dex.moves.id("reflect");
+        enc.add_volatile(&dex, e_att, "encore", None, EffectHandle::None);
+        assert!(
+            dominated_reason(&enc, &dex, 0, mv(&dex, "reflect"), MaskRules::default()).is_some(),
+            "Encored active mon without Substitute/boosts/trap still masks dead move"
+        );
+        enc.poke_mut(e_att).boosts[0] = 1;
+        assert!(
+            dominated_reason(&enc, &dex, 0, mv(&dex, "reflect"), MaskRules::default()).is_none(),
+            "Encored active mon with positive boosts or Substitute must not be forced to Switch"
+        );
+
+        // 4. Stranded active-only sleeping foe: sleep move cannot trigger Sleep Clause forfeit.
+        let (_, mut slp_b) = setup();
+        strand(&mut slp_b, 1);
+        let s_def = slp_b.active_id(1).unwrap();
+        slp_b.set_status(&dex, s_def, "slp", Some(e_att), EffectHandle::None, true);
+        assert_eq!(
+            dominated_reason(&slp_b, &dex, 0, mv(&dex, "sleeppowder"), MaskRules::default()),
+            Some("the target already carries a major status")
+        );
+        slp_b.add_volatile(&dex, s_def, "leechseed", Some(e_att), EffectHandle::None);
+        assert_eq!(
+            dominated_reason(&slp_b, &dex, 0, mv(&dex, "sleeppowder"), MaskRules::default()),
+            None,
+            "harmless sleep move into stranded sleeping foe is unmasked during residual wait"
+        );
     }
 }

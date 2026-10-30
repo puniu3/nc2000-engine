@@ -1726,14 +1726,22 @@ impl TeamGen {
                     | "selfdestruct"
                     | "rapidspin"
                     | "pursuit"
+                    | "thief"
+                    | "beatup"
                     | "counter"
                     | "mirrorcoat"
                     | "seismictoss"
                     | "nightshade"
                     | "superfang"
+                    | "whirlpool"
+                    | "firespin"
+                    | "clamp"
                     | "extremespeed"
                     | "quickattack"
                     | "machpunch"
+                    | "flail"
+                    | "reversal"
+                    | "icywind"
             )
         };
         let mut covered_dmg_types: BTreeSet<String> = BTreeSet::new();
@@ -1750,7 +1758,7 @@ impl TeamGen {
             }
             if let Some(mid) = dex.moves.id(m) {
                 let md = dex.moves.get(mid);
-                if md.category != "Status" && (md.base_power > 0 || m == "return") {
+                if md.category != "Status" && (md.base_power >= 60 || m == "return") {
                     covered_dmg_types.insert(md.move_type.clone());
                 }
             }
@@ -1777,7 +1785,7 @@ impl TeamGen {
                     if let Some(mid) = dex.moves.id(m) {
                         let md = dex.moves.get(mid);
                         if md.category != "Status"
-                            && (md.base_power > 0 || m == "return")
+                            && !matches!(m.as_str(), "fissure" | "guillotine" | "horndrill")
                             && covered_dmg_types.contains(&md.move_type)
                         {
                             continue;
