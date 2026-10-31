@@ -128,7 +128,10 @@ from .search import (
     RootEquilibriumResult,
     clone_packed_battle_batch,
     compact_base_logit_and_eff,
+    compact_dominated_mask7,
+    compact_false_boost_refund_diff,
     compact_race_margin,
+    compact_side_false_boost_refund,
     default_eval_weights,
     eval_compact_01,
     eval_compact_leaf,
@@ -147,11 +150,13 @@ from .kodoku import (
     PREVIEW_CORE_MASKS_60_NP,
     SPACE_VERSION,
     CoreNashPairResult,
+    CoupledShellEquilibriumResult,
     KodokuGauntletSummary,
     RectEquilibriumResult,
     RosterTable6,
     SharedDexTable,
     assemble_3v3_from_rosters_jax,
+    build_coupled_shell_units,
     build_shared_dex_table,
     compile_roster6,
     core_nash_6v6_pair_tpu,
@@ -163,10 +168,12 @@ from .kodoku import (
     legal_action_indices,
     legal_preview_mask_60,
     preview_actions_1based,
+    preview_signature_sets,
     recompute_population_wars_np,
     replicator_dynamics_jax,
     select_top_k_orthogonal,
     simulate_multi_table_heavy_games,
+    solve_coupled_shell_equilibrium_tpu,
     solve_rect_rm_plus_jax,
 )
 
@@ -490,13 +497,21 @@ def main(argv: list[str] | None = None) -> None:
             refine_turns=ns.refine_turns,
             seed=ns.seed,
         )
+        coupled_eq = solve_coupled_shell_equilibrium_tpu(
+            summary,
+            teams_p=teams_p,
+            teams_q=teams_q,
+            games_per_member_cell=float(max(1, ns.refine_games)),
+        )
         export_dominance_audit_cells_json(
             ns.out,
             summary,
             games_per_cell=float(max(1, ns.refine_games)),
+            coupled_equilibrium=coupled_eq,
         )
         print(
-            f"Wrote {len(summary.p_ids)}x{len(summary.q_ids)} Kodoku cells to {ns.out}"
+            f"Wrote {len(summary.p_ids)}x{len(summary.q_ids)} Kodoku cells "
+            f"({len(coupled_eq.active_shells)} active coupled shells, min_mat={coupled_eq.min_matrix_payoff:.4f}) to {ns.out}"
         )
     elif ns.cmd == "bundle-colab":
         pkg_root = Path(__file__).resolve().parents[2]

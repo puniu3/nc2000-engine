@@ -944,5 +944,203 @@ def test_kodoku_two_stage_core_nash_leave_one_out_and_pair_table_export(tmp_path
     assert len(cells_data["cells"]) == 4
 
 
+def test_blindspot_leaf_false_boost_refund_and_1v1_invariance():
+    """Verify `compact_false_boost_refund_diff` refunds Swagger false `+Atk` boosts on pure
+    special attackers and discounts Encore-locked boosts by 50%, while returning `0.0` in 1v1.
+    """
+    from gen2_tpu.search import (
+        compact_false_boost_refund_diff,
+        default_eval_weights,
+        eval_compact_01,
+    )
+    from gen2_tpu.state import VolBit
+
+    def mk(species: str, level: int, item: str, moves: list[str]) -> dict:
+        return {
+            "name": species,
+            "species": species,
+            "item": item,
+            "ability": "No Ability",
+            "moves": moves,
+            "level": level,
+            "evs": {"hp": 255, "atk": 255, "def": 255, "spa": 255, "spd": 255, "spe": 255},
+            "ivs": {"hp": 30, "atk": 30, "def": 30, "spa": 30, "spd": 30, "spe": 30},
+            "happiness": 255,
+        }
+
+    # P1 active is pure special Zapdos (no physical moves, no self-setup, no Baton Pass on team)
+    p1 = [
+        mk("Zapdos", 55, "Leftovers", ["Thunderbolt", "Hidden Power", "Rest", "Sleep Talk"]),
+        mk("Suicune", 50, "Leftovers", ["Surf", "Ice Beam", "Rest", "Roar"]),
+        mk("Blissey", 50, "Leftovers", ["Ice Beam", "Thunderbolt", "Soft-Boiled", "Heal Bell"]),
+    ]
+    # P2 active is physical Marowak (has Earthquake, Swords Dance)
+    p2 = [
+        mk("Marowak", 55, "Thick Club", ["Earthquake", "Rock Slide", "Swords Dance", "Rest"]),
+        mk("Skarmory", 50, "Leftovers", ["Drill Peck", "Whirlwind", "Curse", "Rest"]),
+        mk("Raikou", 50, "Miracle Berry", ["Thunderbolt", "Crunch", "Reflect", "Rest"]),
+    ]
+    table, base_st = build_compact_battle("1,2,3,4", p1, p2)
+    w = default_eval_weights()
+
+    # Give P1 Zapdos +2 Atk (e.g. from opponent's Swagger):
+    # Without BlindSpotLeaf refund, +2 Atk would inflate Zapdos's score by +0.30.
+    # With BlindSpotLeaf refund, the false +2 Atk is refunded (-0.30) so eval is unchanged!
+    st_swagged = base_st._replace(boosts=base_st.boosts.at[0, 0].set(2))
+    ref_diff = float(compact_false_boost_refund_diff(st_swagged, table, w))
+    assert np.isclose(ref_diff, -2.0 * float(w.boost[0]), atol=1e-6)
+    assert np.isclose(
+        float(eval_compact_01(st_swagged, table, w)),
+        float(eval_compact_01(base_st, table, w)),
+        atol=1e-6,
+    )
+
+    # Give P2 Marowak +2 Atk + Encore lock (and no Baton Pass):
+    # 50% of positive boost score is refunded on Side 1 -> positive diff for Side 0.
+    st_encored = base_st._replace(
+        boosts=base_st.boosts.at[3, 0].set(2),
+        vol_flags=base_st.vol_flags.at[3].set(VolBit.ENCORE),
+    )
+    ref_enc = float(compact_false_boost_refund_diff(st_encored, table, w))
+    assert np.isclose(ref_enc, 0.5 * 2.0 * float(w.boost[0]), atol=1e-6)
+
+    # In 1v1 (alive_mask = [1, 1]), refund_diff must be strictly 0.0 (1v1 invariance)
+    st_1v1 = st_swagged._replace(alive_mask=jnp.array([1, 1], dtype=jnp.int32))
+    assert float(compact_false_boost_refund_diff(st_1v1, table, w)) == 0.0
+
+
+def test_dominated_mask7_perish_trap_combo_and_tpu_hlo():
+    """Verify `compact_dominated_mask7`, Perish-trap combo/escape rollout overrides in
+    `sample_heavy_playout_action`, and zero gather/scatter ops in lowered TPU XLA HLO.
+    """
+    from gen2_tpu.search import compact_dominated_mask7, sample_heavy_playout_action
+    from gen2_tpu.state import Status, VolBit
+
+    def mk(species: str, level: int, item: str, moves: list[str]) -> dict:
+        return {
+            "name": species,
+            "species": species,
+            "item": item,
+            "ability": "No Ability",
+            "moves": moves,
+            "level": level,
+            "evs": {"hp": 255, "atk": 255, "def": 255, "spa": 255, "spd": 255, "spe": 255},
+            "ivs": {"hp": 30, "atk": 30, "def": 30, "spa": 30, "spd": 30, "spe": 30},
+            "happiness": 255,
+        }
+
+    # P1 Lead Misdreavus with Mean Look (slot 0), Perish Song (slot 1), Protect (slot 2), Rest (slot 3)
+    p1 = [
+        mk("Misdreavus", 55, "Leftovers", ["Mean Look", "Perish Song", "Protect", "Rest"]),
+        mk("Snorlax", 50, "Leftovers", ["Double-Edge", "Earthquake", "Rest", "Sleep Talk"]),
+        mk("Cloyster", 50, "Leftovers", ["Surf", "Spikes", "Explosion", "Rest"]),
+    ]
+    p2 = [
+        mk("Skarmory", 50, "Leftovers", ["Drill Peck", "Whirlwind", "Curse", "Rest"]),
+        mk("Blissey", 55, "Leftovers", ["Ice Beam", "Soft-Boiled", "Heal Bell", "Sing"]),
+        mk("Raikou", 50, "Leftovers", ["Thunderbolt", "Reflect", "Roar", "Rest"]),
+    ]
+    table, st0 = build_compact_battle("1,2,3,4", p1, p2)
+    seed = seed_from_str("5,6,7,8")
+
+    # 1. At full HP on Turn 1, Misdreavus is faster than Skarmory -> Rest (move 3) is a provable no-op
+    dom0 = np.asarray(compact_dominated_mask7(st0, table, 0))
+    assert bool(dom0[3]) is True  # Full-HP Rest when faster
+
+    # 2. Perish-trap Step 1: Foe Skarmory is not trapped and not perished -> picks Mean Look (move 0)
+    _, act_step1 = sample_heavy_playout_action(st0, table, 0, seed, eps=0.0)
+    assert int(act_step1) == 0
+
+    # 3. Perish-trap Step 2: Once Foe Skarmory has VolBit.TRAPPED_OR_LOCKED -> picks Perish Song (move 1)
+    st_trapped = st0._replace(vol_flags=st0.vol_flags.at[3].set(VolBit.TRAPPED_OR_LOCKED))
+    _, act_step2 = sample_heavy_playout_action(st_trapped, table, 0, seed, eps=0.0)
+    assert int(act_step2) == 1
+
+    # 4. Counter-phaze escape: Foe Skarmory is trapped & perished at timer 2 -> picks Whirlwind (move 1)
+    st_both_perish = st_trapped._replace(
+        vol_flags=st_trapped.vol_flags.at[0]
+        .set(VolBit.PERISH_SONG)
+        .at[3]
+        .set(VolBit.TRAPPED_OR_LOCKED | VolBit.PERISH_SONG),
+        timers=st_trapped.timers.at[0, 3].set(2).at[3, 3].set(2),
+    )
+    _, act_skarm_phaze = sample_heavy_playout_action(st_both_perish, table, 1, seed, eps=0.0)
+    assert int(act_skarm_phaze) == 1  # Skarmory's Whirlwind
+
+    # 5. Perish escape at timer == 1: Misdreavus switches out to bench (action 4 or 5)
+    st_cnt1 = st_both_perish._replace(timers=st_both_perish.timers.at[0, 3].set(1))
+    _, act_escape = sample_heavy_playout_action(st_cnt1, table, 0, seed, eps=0.0)
+    assert int(act_escape) in (4, 5)
+
+    # 6. Leftovers `own_recovery_wait` exemption: when Misdreavus is chipped and Skarmory is asleep
+    # with sleep counter 3 (and no Sleep Talk), no-ops are exempted so Misdreavus can stall for Leftovers!
+    st_lefties_wait = st0._replace(
+        hp_pool=st0.hp_pool.at[0, 0].set(100),
+        status_packed=st0.status_packed.at[3].set(Status.SLP | (3 << 3)),
+    )
+    dom_wait = np.asarray(compact_dominated_mask7(st_lefties_wait, table, 0))
+    assert not np.any(dom_wait[:4])
+
+    # 7. Verify TPU HLO compatibility (zero gather/scatter, zero 64-bit dtypes)
+    report = verify_tpu_compatibility(
+        lambda s, tb, sd: sample_heavy_playout_action(s, tb, 0, sd, eps=0.2),
+        st0,
+        table,
+        seed,
+        spec=TPU_V5E,
+    )
+    assert report.passed, f"TPU compatibility failed: {report}"
+    assert len(report.forbidden_dtypes) == 0
+    assert not report.has_host_callbacks
+    assert not report.has_dynamic_shapes
+
+
+def test_coupled_shell_equilibrium_tpu(tmp_path: Path):
+    """Verify `build_coupled_shell_units` and `solve_coupled_shell_equilibrium_tpu` group
+    same-shell variants into `DEME2` units and solve the skew-symmetric coupled-shell equilibrium.
+    """
+    from gen2_tpu.kodoku import (
+        build_coupled_shell_units,
+        evaluate_kodoku_gauntlet_tpu,
+        export_dominance_audit_cells_json,
+        solve_coupled_shell_equilibrium_tpu,
+    )
+
+    t_a, t_b = _sample_6v6_teams()
+    # Create a second variant of t_a with the exact same 6-(species, level) preview shell
+    t_a_var2 = [dict(m) for m in t_a]
+    t_a_var2[0] = dict(t_a[0], moves=["Body Slam", "Curse", "Rest", "Sleep Talk"])
+
+    teams_p = [
+        {"id": "a_v1", "sets": t_a},
+        {"id": "a_v2", "sets": t_a_var2},
+        {"id": "b_single", "sets": t_b},
+    ]
+    units = build_coupled_shell_units(teams_p)
+    assert len(units) == 2
+    assert units[0]["unit_id"] == "DEME2:a_v1+a_v2"
+    assert units[1]["unit_id"] == "SINGLE:b_single"
+
+    summary = evaluate_kodoku_gauntlet_tpu(
+        teams_p,
+        screen_games=2,
+        support_k=2,
+        refine_games=2,
+        screen_turns=6,
+        refine_turns=6,
+    )
+    coupled = solve_coupled_shell_equilibrium_tpu(summary, teams_p=teams_p)
+    assert coupled.m_solve.shape == (2, 2)
+    assert np.isclose(coupled.m_solve[0, 1] + coupled.m_solve[1, 0], 1.0, atol=1e-5)
+    assert np.isclose(float(np.sum(coupled.unit_weights)), 1.0, atol=1e-5)
+
+    out_json = tmp_path / "coupled_cells.json"
+    export_dominance_audit_cells_json(out_json, summary, coupled_equilibrium=coupled)
+    payload = json.loads(out_json.read_text(encoding="utf-8"))
+    assert "coupled_equilibrium" in payload
+    assert len(payload["unit_cells"]) == 2 * 3
+
+
+
 
 

@@ -2142,10 +2142,263 @@ def evaluate_kodoku_gauntlet_tpu(
     )
 
 
+def preview_signature_sets(sets: list[dict[str, Any]]) -> tuple[tuple[str, int], ...]:
+    """Canonical 6-mon preview shell signature `tuple(sorted((toid(species), level)))`.
+
+    Matches `nc2000_bot::preview::preview_sig_sets` so two variants that share the exact same
+    6-Pokemon `(species, level)` multiset map to the same Team Preview outer shell.
+    """
+    pairs = [(toid(str(m.get("species", ""))), int(m.get("level", 50))) for m in sets]
+    pairs.sort()
+    return tuple(pairs)
+
+
+def build_coupled_shell_units(
+    teams_p: list[dict[str, Any]],
+    explicit_units: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Group `teams_p` into Zero-Smuggling Coupled-Shell Units (`SINGLE:<id>` or `DEME2:<id0>+<id1>`).
+
+    - If `explicit_units` is provided, validates and normalizes each unit `{"unit_id", "member_ids"}`.
+    - Otherwise, groups `teams_p` by canonical 6-mon `preview_signature_sets(sets)` (up to 2 members
+      per shell, matching `meta_eco.rs::add_shell_unit`).
+    """
+    id_to_idx = {str(t.get("id", f"p_{i}")): i for i, t in enumerate(teams_p)}
+    if explicit_units is not None:
+        out: list[dict[str, Any]] = []
+        for u in explicit_units:
+            mids = [str(m) for m in u.get("member_ids", []) if str(m) in id_to_idx]
+            if not mids:
+                continue
+            mids = mids[:2]
+            uid = str(
+                u.get("unit_id")
+                or (f"SINGLE:{mids[0]}" if len(mids) == 1 else f"DEME2:{mids[0]}+{mids[1]}")
+            )
+            sig = preview_signature_sets(teams_p[id_to_idx[mids[0]]]["sets"])
+            out.append(
+                {
+                    "unit_id": uid,
+                    "member_ids": mids,
+                    "member_indices": [id_to_idx[m] for m in mids],
+                    "sig": sig,
+                }
+            )
+        return out
+
+    sig_groups: dict[tuple[tuple[str, int], ...], list[str]] = {}
+    sig_order: list[tuple[tuple[str, int], ...]] = []
+    for i, t in enumerate(teams_p):
+        tid = str(t.get("id", f"p_{i}"))
+        sig = preview_signature_sets(t["sets"])
+        if sig not in sig_groups:
+            sig_groups[sig] = []
+            sig_order.append(sig)
+        if tid not in sig_groups[sig] and len(sig_groups[sig]) < 2:
+            sig_groups[sig].append(tid)
+
+    units_out: list[dict[str, Any]] = []
+    for sig in sig_order:
+        mids = sig_groups[sig]
+        uid = f"SINGLE:{mids[0]}" if len(mids) == 1 else f"DEME2:{mids[0]}+{mids[1]}"
+        units_out.append(
+            {
+                "unit_id": uid,
+                "member_ids": mids,
+                "member_indices": [id_to_idx[m] for m in mids],
+                "sig": sig,
+            }
+        )
+    return units_out
+
+
+class CoupledShellEquilibriumResult(NamedTuple):
+    """Skew-Symmetric Coupled-Shell Minimax Equilibrium solved on TPU (`converge-conclusion`)."""
+
+    unit_ids: list[str]
+    member_ids_per_unit: list[list[str]]
+    q_ids: list[str]
+    unit_payoff_matrix: np.ndarray  # float32[N_U, N_Q]
+    unit_games_matrix: np.ndarray  # float32[N_U, N_Q]
+    m_solve: np.ndarray  # float32[N_U, N_U + N_OUT]
+    unit_weights: np.ndarray  # float32[N_U]
+    active_shells: list[dict[str, Any]]
+    deployed_team_ids: list[str]
+    deployed_team_weights: list[float]
+    min_in_payoff: float
+    min_matrix_payoff: float
+
+
+def solve_coupled_shell_equilibrium_tpu(
+    summary: KodokuGauntletSummary,
+    teams_p: list[dict[str, Any]],
+    teams_q: list[dict[str, Any]] | None = None,
+    explicit_units: list[dict[str, Any]] | None = None,
+    games_per_member_cell: float = 8.0,
+    rm_sweeps: int = 8000,
+    support_threshold: float = 0.002,
+) -> CoupledShellEquilibriumResult:
+    """Solve the Zero-Smuggling Coupled-Shell Minimax Equilibrium from a `KodokuGauntletSummary`.
+
+    Exact port of `meta_eco.rs::cmd_converge_conclusion` (lines 10086-10360):
+    1. Groups `teams_p` into Coupled-Shell Units `U_0 .. U_{N_U - 1}` (`SINGLE:<id>` or
+       `DEME2:<id0>+<id1>`, where `DEME2` averages its 2 members' payoffs 50/50).
+    2. Constructs the Skew-Symmetric Coupled-Shell Minimax Matrix `m_solve` (`N_U x (N_U + N_OUT)`):
+       - First `N_U` columns: internal Shell Units with `m_solve[u, u] = 0.5` and game-pooled
+         skew-symmetry `m_solve[u, v] + m_solve[v, u] = 1.0`.
+       - Remaining `N_OUT` columns: outside challengers in `q_ids` not belonging to any shell unit,
+         shrunk with `(g * raw_sc + 8.0 * 0.50) / (g + 8.0)`.
+    3. Solves both the internal `(N_U x N_U)` and rectangular `(N_U x N_COLS)` minimax games via
+       `solve_rect_rm_plus_jax`, polishes on active shells (`w >= support_threshold`), and splits
+       `DEME2` shell weights 50/50 across their 2 member teams.
+    """
+    if teams_q is None:
+        teams_q = teams_p
+
+    units = build_coupled_shell_units(teams_p, explicit_units=explicit_units)
+    n_u = len(units)
+    q_ids = list(summary.q_ids)
+    n_q = len(q_ids)
+    id_to_qidx = {qid: j for j, qid in enumerate(q_ids)}
+    q_sigs = [preview_signature_sets(t["sets"]) for t in teams_q]
+    seen_unit_sigs = {u["sig"] for u in units}
+
+    unit_payoff = np.full((n_u, n_q), 0.5, dtype=np.float32)
+    unit_games = np.zeros((n_u, n_q), dtype=np.float32)
+    unit_member_set: set[str] = set()
+    unit_q_indices: list[list[int]] = []
+
+    for u_idx, u in enumerate(units):
+        m_idxs: list[int] = u["member_indices"]
+        m_ids: list[str] = u["member_ids"]
+        q_idxs_u: list[int] = []
+        for mid in m_ids:
+            unit_member_set.add(mid)
+            if mid in id_to_qidx:
+                q_idxs_u.append(id_to_qidx[mid])
+        unit_q_indices.append(q_idxs_u)
+
+        rows = summary.payoff_matrix[m_idxs, :]  # [len(m_idxs), n_q]
+        unit_payoff[u_idx, :] = np.mean(rows, axis=0)
+        unit_games[u_idx, :] = float(games_per_member_cell) * float(len(m_idxs))
+        if len(m_ids) == 1 and m_ids[0] in id_to_qidx:
+            j_self = id_to_qidx[m_ids[0]]
+            unit_payoff[u_idx, j_self] = 0.5
+            unit_games[u_idx, j_self] = 64.0
+
+    outside_q_indices = [
+        j
+        for j in range(n_q)
+        if (q_ids[j] not in unit_member_set) and (q_sigs[j] not in seen_unit_sigs)
+    ]
+    n_cols = n_u + len(outside_q_indices)
+    m_solve = np.full((n_u, n_cols), 0.5, dtype=np.float32)
+
+    for u in range(n_u):
+        m_solve[u, u] = 0.5
+        for v in range(u + 1, n_u):
+            sum_uv = 0.0
+            gms_uv = 0.0
+            for jv in unit_q_indices[v]:
+                g = max(float(unit_games[u, jv]), 1.0)
+                sum_uv += float(unit_payoff[u, jv]) * g
+                gms_uv += g
+            sum_vu = 0.0
+            gms_vu = 0.0
+            for ju in unit_q_indices[u]:
+                g = max(float(unit_games[v, ju]), 1.0)
+                sum_vu += float(unit_payoff[v, ju]) * g
+                gms_vu += g
+            sc_uv = (sum_uv / gms_uv) if gms_uv > 0.0 else 0.5
+            sc_vu = (sum_vu / gms_vu) if gms_vu > 0.0 else 0.5
+            p_uv = (
+                (gms_uv * sc_uv + gms_vu * (1.0 - sc_vu)) / (gms_uv + gms_vu)
+                if (gms_uv + gms_vu) > 0.0
+                else 0.5
+            )
+            m_solve[u, v] = float(p_uv)
+            m_solve[v, u] = float(1.0 - p_uv)
+
+        for k, j_out in enumerate(outside_q_indices):
+            g = max(float(unit_games[u, j_out]), 1.0)
+            raw_sc = float(unit_payoff[u, j_out])
+            m_solve[u, n_u + k] = float((g * raw_sc + 8.0 * 0.50) / (g + 8.0))
+
+    sol_in = solve_rect_rm_plus_jax(
+        jnp.asarray(m_solve[:, :n_u], dtype=jnp.float32), sweeps=rm_sweeps
+    )
+    sol_rect = solve_rect_rm_plus_jax(
+        jnp.asarray(m_solve, dtype=jnp.float32), sweeps=rm_sweeps
+    )
+    w_in = np.asarray(sol_in.p_a, dtype=np.float32)
+    w_rect = np.asarray(sol_rect.p_a, dtype=np.float32)
+    min_in_val = float(sol_in.guarantee_mixed_a)
+    min_rect_val = float(sol_rect.guarantee_mixed_a)
+
+    active_mask = (w_in >= support_threshold) | (w_rect >= support_threshold)
+    if not np.any(active_mask):
+        active_mask = np.ones((n_u,), dtype=bool)
+
+    sol_pol = solve_rect_rm_plus_jax(
+        jnp.asarray(m_solve, dtype=jnp.float32),
+        mask_rows=jnp.asarray(active_mask, dtype=jnp.bool_),
+        sweeps=rm_sweeps,
+    )
+    w_pol = np.asarray(sol_pol.p_a, dtype=np.float32)
+    min_pol_val = float(sol_pol.guarantee_mixed_a)
+    min_val = min(min_in_val, max(min_pol_val, min_rect_val))
+
+    keep = w_pol >= support_threshold
+    if not np.any(keep):
+        keep = active_mask
+    w_final = np.where(keep, w_pol, 0.0).astype(np.float32)
+    w_sum = float(np.sum(w_final))
+    w_final = (w_final / w_sum) if w_sum > 1e-9 else w_pol
+
+    order = sorted(
+        [u_idx for u_idx in range(n_u) if w_final[u_idx] > 0.0],
+        key=lambda u_idx: float(w_final[u_idx]),
+        reverse=True,
+    )
+    active_shells: list[dict[str, Any]] = []
+    deployed_ids: list[str] = []
+    deployed_weights: list[float] = []
+    for u_idx in order:
+        w_sh = float(w_final[u_idx])
+        m_ids = list(units[u_idx]["member_ids"])
+        active_shells.append(
+            {
+                "unit_id": units[u_idx]["unit_id"],
+                "weight": round(w_sh, 6),
+                "member_ids": m_ids,
+            }
+        )
+        w_mem = w_sh / float(len(m_ids))
+        for mid in m_ids:
+            deployed_ids.append(mid)
+            deployed_weights.append(round(w_mem, 6))
+
+    return CoupledShellEquilibriumResult(
+        unit_ids=[u["unit_id"] for u in units],
+        member_ids_per_unit=[list(u["member_ids"]) for u in units],
+        q_ids=q_ids,
+        unit_payoff_matrix=unit_payoff,
+        unit_games_matrix=unit_games,
+        m_solve=m_solve,
+        unit_weights=w_final,
+        active_shells=active_shells,
+        deployed_team_ids=deployed_ids,
+        deployed_team_weights=deployed_weights,
+        min_in_payoff=min_in_val,
+        min_matrix_payoff=min_val,
+    )
+
+
 def export_dominance_audit_cells_json(
     path: str | Path,
     summary: KodokuGauntletSummary,
     games_per_cell: float = 8.0,
+    coupled_equilibrium: CoupledShellEquilibriumResult | None = None,
 ) -> None:
     """Export `{"cells": [...], "unit_cells": [...]}` matching `meta_eco dominance-audit` and `converge-conclusion`."""
     cells = []
@@ -2160,15 +2413,42 @@ def export_dominance_audit_cells_json(
                     "score": sc,
                 }
             )
-            unit_cells.append(
-                {
-                    "unit_id": p_id,
-                    "q_id": q_id,
-                    "score": sc,
-                    "games": float(games_per_cell),
-                }
-            )
+            if coupled_equilibrium is None:
+                uname = p_id if p_id.startswith(("SINGLE:", "DEME2:")) else f"SINGLE:{p_id}"
+                unit_cells.append(
+                    {
+                        "unit_id": uname,
+                        "q_id": q_id,
+                        "score": sc,
+                        "games": float(games_per_cell),
+                    }
+                )
+
+    if coupled_equilibrium is not None:
+        for u_idx, uid in enumerate(coupled_equilibrium.unit_ids):
+            for j, q_id in enumerate(coupled_equilibrium.q_ids):
+                unit_cells.append(
+                    {
+                        "unit_id": uid,
+                        "q_id": q_id,
+                        "score": round(float(coupled_equilibrium.unit_payoff_matrix[u_idx, j]), 6),
+                        "games": float(coupled_equilibrium.unit_games_matrix[u_idx, j]),
+                    }
+                )
+
+    payload: dict[str, Any] = {"cells": cells, "unit_cells": unit_cells}
+    if coupled_equilibrium is not None:
+        payload["coupled_equilibrium"] = {
+            "min_in_payoff": round(float(coupled_equilibrium.min_in_payoff), 6),
+            "min_matrix_payoff": round(float(coupled_equilibrium.min_matrix_payoff), 6),
+            "active_shell_count": len(coupled_equilibrium.active_shells),
+            "support_team_count": len(coupled_equilibrium.deployed_team_ids),
+            "active_shells": coupled_equilibrium.active_shells,
+            "deployed_team_ids": coupled_equilibrium.deployed_team_ids,
+            "deployed_team_weights": coupled_equilibrium.deployed_team_weights,
+        }
+
     out_path = Path(path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8") as f:
-        json.dump({"cells": cells, "unit_cells": unit_cells}, f, indent=2)
+        json.dump(payload, f, indent=2)

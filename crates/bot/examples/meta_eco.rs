@@ -9423,12 +9423,13 @@ fn cmd_converge_conclusion(args: &[String]) {
     let buds: usize = num(args, "--buds", 16);
     let cache_file = PathBuf::from(
         flag(args, "--cache-file")
-            .unwrap_or_else(|| "data/dominance-audit-v8-clean/cache-cells.json".to_string()),
+            .unwrap_or_else(|| "data/dominance-audit-v9-clean/cache-cells.json".to_string()),
     );
     let out_file = PathBuf::from(
         flag(args, "--out")
-            .unwrap_or_else(|| "data/dominance-audit-v8-clean/converged-report.json".to_string()),
+            .unwrap_or_else(|| "data/dominance-audit-v9-clean/converged-report.json".to_string()),
     );
+    let reuse_legacy_shards: bool = args.iter().any(|a| a == "--reuse-legacy-shards");
     let threads: usize = flag(args, "--threads")
         .map(|v| v.parse().unwrap())
         .unwrap_or_else(|| {
@@ -9819,51 +9820,53 @@ fn cmd_converge_conclusion(args: &[String]) {
             }
         }
     }
-    for dir_rel in ["data/dominance-audit-v6/shards", "data/dominance-audit-v7-deme/shards"] {
-        if let Ok(rd) = std::fs::read_dir(root.join(dir_rel)) {
-            for entry in rd.flatten() {
-                let p = entry.path();
-                if p.extension().and_then(|s| s.to_str()) != Some("json") {
-                    continue;
-                }
-                if let Ok(txt) = std::fs::read_to_string(&p) {
-                    if let Ok(v) = serde_json::from_str::<Value>(&txt) {
-                        let is_deme = v["deme_disclosure"].as_bool().unwrap_or(false);
-                        if let Some(arr) = v["cells"].as_array() {
-                            for c_val in arr {
-                                if let (Some(pid), Some(qid), Some(sc)) = (
-                                    c_val["p_id"].as_str(),
-                                    c_val["q_id"].as_str(),
-                                    c_val["score"].as_f64(),
-                                ) {
-                                    if !is_deme {
-                                        single_cache.insert((pid.to_string(), qid.to_string()), sc);
-                                        single_cache
-                                            .insert((qid.to_string(), pid.to_string()), 1.0 - sc);
-                                    } else {
-                                        let p_sz = v7_id_to_sig
-                                            .get(pid)
-                                            .and_then(|s| v7_shell_members.get(s))
-                                            .map(Vec::len)
-                                            .unwrap_or(1);
-                                        let q_sz = v7_id_to_sig
-                                            .get(qid)
-                                            .and_then(|s| v7_shell_members.get(s))
-                                            .map(Vec::len)
-                                            .unwrap_or(1);
-                                        if p_sz == 1 && q_sz <= 1 {
+    if reuse_legacy_shards {
+        for dir_rel in ["data/dominance-audit-v6/shards", "data/dominance-audit-v7-deme/shards"] {
+            if let Ok(rd) = std::fs::read_dir(root.join(dir_rel)) {
+                for entry in rd.flatten() {
+                    let p = entry.path();
+                    if p.extension().and_then(|s| s.to_str()) != Some("json") {
+                        continue;
+                    }
+                    if let Ok(txt) = std::fs::read_to_string(&p) {
+                        if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+                            let is_deme = v["deme_disclosure"].as_bool().unwrap_or(false);
+                            if let Some(arr) = v["cells"].as_array() {
+                                for c_val in arr {
+                                    if let (Some(pid), Some(qid), Some(sc)) = (
+                                        c_val["p_id"].as_str(),
+                                        c_val["q_id"].as_str(),
+                                        c_val["score"].as_f64(),
+                                    ) {
+                                        if !is_deme {
+                                            single_cache.insert((pid.to_string(), qid.to_string()), sc);
                                             single_cache
-                                                .insert((pid.to_string(), qid.to_string()), sc);
-                                        }
-                                        if p_sz == 2 {
-                                            deme2_cache
-                                                .insert((pid.to_string(), qid.to_string()), sc);
-                                        }
-                                        if q_sz == 2 {
-                                            deme2_cache.insert(
-                                                (qid.to_string(), pid.to_string()),
-                                                1.0 - sc,
-                                            );
+                                                .insert((qid.to_string(), pid.to_string()), 1.0 - sc);
+                                        } else {
+                                            let p_sz = v7_id_to_sig
+                                                .get(pid)
+                                                .and_then(|s| v7_shell_members.get(s))
+                                                .map(Vec::len)
+                                                .unwrap_or(1);
+                                            let q_sz = v7_id_to_sig
+                                                .get(qid)
+                                                .and_then(|s| v7_shell_members.get(s))
+                                                .map(Vec::len)
+                                                .unwrap_or(1);
+                                            if p_sz == 1 && q_sz <= 1 {
+                                                single_cache
+                                                    .insert((pid.to_string(), qid.to_string()), sc);
+                                            }
+                                            if p_sz == 2 {
+                                                deme2_cache
+                                                    .insert((pid.to_string(), qid.to_string()), sc);
+                                            }
+                                            if q_sz == 2 {
+                                                deme2_cache.insert(
+                                                    (qid.to_string(), pid.to_string()),
+                                                    1.0 - sc,
+                                                );
+                                            }
                                         }
                                     }
                                 }
@@ -9878,6 +9881,17 @@ fn cmd_converge_conclusion(args: &[String]) {
     let mut unit_cache: BTreeMap<(String, String), (f64, f64)> = BTreeMap::new();
     if let Ok(txt) = std::fs::read_to_string(&cache_file) {
         if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+            if let Some(arr) = v["cells"].as_array() {
+                for c_val in arr {
+                    if let (Some(pid), Some(qid), Some(sc)) = (
+                        c_val["p_id"].as_str(),
+                        c_val["q_id"].as_str(),
+                        c_val["score"].as_f64(),
+                    ) {
+                        single_cache.insert((pid.to_string(), qid.to_string()), sc);
+                    }
+                }
+            }
             if let Some(arr) = v["unit_cells"].as_array() {
                 for c_val in arr {
                     if let (Some(uid), Some(qid), Some(sc), Some(gms)) = (

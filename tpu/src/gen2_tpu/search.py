@@ -43,6 +43,8 @@ from .residual import (
 )
 from .state import (
     CompactBattle,
+    CompactWeather,
+    ItemFlag,
     MatchTable,
     MoveFlag,
     PackedBattle,
@@ -351,6 +353,118 @@ def compact_race_margin(
     return jnp.where(both_pos & short_race, clamped, jnp.float32(0.0))
 
 
+def compact_side_false_boost_refund(
+    state: CompactBattle,
+    table: MatchTable,
+    w: EvalWeights,
+    side: int,
+) -> jax.Array:
+    """Branchless port of `nc2000_bot::eval::compact_side_false_boost_refund` (`BlindSpotLeaf`).
+
+    Refunds two blind spots where raw stat stages overstate value:
+    1. Swagger false `+Atk` boost on a mon with no physical damaging move (`pp > 0`),
+       no self-setup move (`BOOSTS_SELF`, Curse `sk==5`, Belly Drum `sk==6`), and no
+       `Baton Pass` (`sk==17`) on the alive team.
+    2. `Encore` lock (`VolBit.ENCORE`) on a mon without `Baton Pass`: discounts positive
+       stat boosts by 50%.
+    """
+    alive_m = _get1(state.alive_mask, side)
+    active_slot = _get1(state.active_idx, side)
+    act_idx = side * 3 + active_slot
+    act_hp = _get2(state.hp_pool, act_idx, 0)
+    act_alive = ((alive_m & (jnp.int32(1) << active_slot)) != 0) & (act_hp > 0)
+
+    act_nm = _get1(table.num_moves, act_idx)
+    act_vol = _get1(state.vol_flags, act_idx)
+    dis = (act_vol & VolBit.DISABLE) != 0
+    dis_slot = (_get1(state.slot_refs, act_idx) >> 4) & 0x03
+    own_alive = popcount_3bit(alive_m)
+    b_stats_act = _get1(table.move_boost_stats, act_idx)  # int32[4, 3]
+
+    has_bp = jnp.bool_(False)
+    has_self_setup = jnp.bool_(False)
+    has_phys_move = jnp.bool_(False)
+    for m_i in range(4):
+        m_valid = jnp.int32(m_i) < act_nm
+        m_sk = _get2(table.move_special_kind, act_idx, m_i)
+        m_fl = _get2(table.move_flags, act_idx, m_i)
+        m_pp = _get2(state.pp, act_idx, m_i)
+        m_bp = _get2(table.move_base_power, act_idx, m_i)
+        m_fd = _get2(table.move_fixed_damage, act_idx, m_i)
+        m_vbp = _get2(table.move_var_bp_kind, act_idx, m_i)
+
+        is_setup = (
+            (((m_fl & MoveFlag.BOOSTS_SELF) != 0) & (b_stats_act[m_i, 0] != 0xFF))
+            | (m_sk == 5)
+            | (m_sk == 6)
+        )
+        has_self_setup = has_self_setup | (m_valid & is_setup)
+
+        usable = m_valid & (m_pp > 0) & (~(dis & (jnp.int32(m_i) == dis_slot)))
+        deals_dmg = (
+            ((m_fl & MoveFlag.IS_STATUS) == 0)
+            & ((m_bp > 0) | (m_vbp != 0) | (m_fd != 0) | (m_sk == 15))
+        )
+        has_phys_move = has_phys_move | (usable & deals_dmg & ((m_fl & MoveFlag.IS_PHYSICAL) != 0))
+        has_bp = has_bp | (usable & (m_sk == 18) & (own_alive >= 2))
+
+    team_has_bp = has_bp
+    for p_slot in range(3):
+        p_idx = side * 3 + p_slot
+        p_alive = ((alive_m & (1 << p_slot)) != 0) & (_get2(state.hp_pool, p_idx, 0) > 0)
+        p_nm = _get1(table.num_moves, p_idx)
+        for m_i in range(4):
+            p_m_valid = p_alive & (jnp.int32(m_i) < p_nm)
+            p_sk = _get2(table.move_special_kind, p_idx, m_i)
+            team_has_bp = team_has_bp | (p_m_valid & (p_sk == 18))
+
+    act_boosts = _get1(state.boosts, act_idx)
+    atk_b = act_boosts[0]
+    atk_b_f = atk_b.astype(jnp.float32)
+    base_swag_cond = (atk_b > 0) & (~has_self_setup) & (~team_has_bp)
+    no_phys_refund = base_swag_cond & (~has_phys_move)
+    conf_phys_refund = base_swag_cond & has_phys_move & ((act_vol & VolBit.CONFUSION) != 0)
+    atk_refunded = no_phys_refund | conf_phys_refund
+    refund_atk = jnp.where(
+        no_phys_refund,
+        -w.boost[0] * atk_b_f,
+        jnp.where(conf_phys_refund, jnp.float32(-0.70) * w.boost[0] * atk_b_f, jnp.float32(0.0)),
+    )
+
+    encore_cond = ((act_vol & VolBit.ENCORE) != 0) & (~has_bp)
+    pos_boosts = jnp.maximum(jnp.int32(0), act_boosts).astype(jnp.float32)
+    pos_boosts_masked = pos_boosts.at[0].set(
+        jnp.where(atk_refunded, jnp.float32(0.0), pos_boosts[0])
+    )
+    pos_boost_sum = jnp.sum(w.boost * pos_boosts_masked)
+    refund_encore = jnp.where(
+        encore_cond,
+        jnp.float32(-0.5) * pos_boost_sum,
+        jnp.float32(0.0),
+    )
+    return jnp.where(act_alive, refund_atk + refund_encore, jnp.float32(0.0))
+
+
+def compact_false_boost_refund_diff(
+    state: CompactBattle,
+    table: MatchTable,
+    w: EvalWeights | None = None,
+) -> jax.Array:
+    """Branchless port of `nc2000_bot::eval::compact_false_boost_refund_diff`.
+
+    Returns `0.0` in 1v1 last-mon endgames (preserving 1v1 calibration invariance) and
+    `compact_side_false_boost_refund(0) - compact_side_false_boost_refund(1)` otherwise.
+    """
+    if w is None:
+        w = default_eval_weights()
+    alive0 = popcount_3bit(_get1(state.alive_mask, 0))
+    alive1 = popcount_3bit(_get1(state.alive_mask, 1))
+    is_1v1 = (alive0 == 1) & (alive1 == 1)
+    r0 = compact_side_false_boost_refund(state, table, w, 0)
+    r1 = compact_side_false_boost_refund(state, table, w, 1)
+    return jnp.where(is_1v1, jnp.float32(0.0), r0 - r1)
+
+
 def compact_base_logit_and_eff(
     state: CompactBattle,
     table: MatchTable,
@@ -359,7 +473,7 @@ def compact_base_logit_and_eff(
 ) -> tuple[jax.Array, tuple[jax.Array, jax.Array]]:
     """Branchless port of `nc2000_bot::eval::compact_base_logit_and_eff`.
 
-    Returns `(logit, (eff0, eff1))` where `logit = w.scale * (s0 - s1 + w.race * rm)`
+    Returns `(logit, (eff0, eff1))` where `logit = w.scale * (s0 - s1 + refund_diff + w.race * rm)`
     plus `w.residual_scale * compact_eval_residual_sym(...)` when `residual_bundle` is
     provided or `w.residual_scale != 0.0`.
     """
@@ -367,7 +481,7 @@ def compact_base_logit_and_eff(
         w = default_eval_weights()
     s0, eff0 = _side_score_with_eff(state, table, w, 0)
     s1, eff1 = _side_score_with_eff(state, table, w, 1)
-    diff = s0 - s1
+    diff = (s0 - s1) + compact_false_boost_refund_diff(state, table, w)
     rm = compact_race_margin(state, table, w)
     diff = diff + w.race * rm
     logit = w.scale * diff
@@ -418,6 +532,473 @@ def eval_compact_leaf(
 # =========================================================================
 
 
+def compact_dominated_mask7(
+    state: CompactBattle,
+    table: MatchTable,
+    side: int,
+) -> jax.Array:
+    """Branchless port of `nc2000_bot::smmcts::{dominated_reason, noop_reason}` (`bool[7]`).
+
+    Returns a boolean mask of length 7 (`True` = provably dominated / no-op / self-forfeit)
+    for `side` in `{0, 1}`:
+    - Forfeit guards (never exempted):
+      1. `last_mon & IS_SELFDESTRUCT` (Self-Destruct / Explosion on last alive Pokemon).
+      2. Sleep Clause forfeit guard: using a pure sleep-inducing move (`primary_status == SLP`)
+         when Sleep Clause is active, an opponent mon already has non-Rest sleep (`(st & 0x80) == 0`),
+         and the user moves before the opponent or the active opponent is already asleep.
+    - Provable no-op guards (exempted when `own_recovery_wait`, `destiny_bond_wait`, or
+      `residual_damage_wait` holds):
+      - Pure heal (`sk in {1, 2, 3}`) at full HP when opponent cannot act before us.
+      - Reflect (`sk == 15`), Light Screen (`sk == 16`), Safeguard (`sk == 24`), or Spikes (`sk == 23`)
+        when already active on the target side.
+      - Roar / Whirlwind (`sk == 7`) when opponent has `<= 1` alive Pokemon.
+      - Perish Song (`sk == 19`) on last alive Pokemon or when both active Pokemon already have Perish.
+      - Destiny Bond (`sk == 20`) or Baton Pass (`sk == 17`) on last alive Pokemon.
+      - Belly Drum (`sk == 6`) when `hp * 2 <= maxhp` or `+6 Atk`.
+      - Heal Bell (`sk == 14`) when no alive party member has a status condition.
+      - Sleep Talk / Snore (`sk in {10, 11}`) when awake or guaranteed to wake this turn (`slp_cnt <= 1`).
+      - Pure status move into Safeguard, stuck Substitute, already-statused foe, or poison-immune foe.
+      - Substitute (`sk == 4`) when already behind a Substitute or `hp * 4 <= maxhp`.
+      - Curse (`sk == 5`): non-Ghost at `+6 Atk/+6 Def`, or Ghost into already-cursed/stuck-Sub foe
+        or fatal self-cut on last alive Pokemon.
+      - Pure primary volatile move (`primary_vol != 0`) when volatile is already present on foe,
+        foe is behind a stuck Substitute, or Confusion into Safeguard.
+      - Pure self-boost move (`BOOSTS_SELF`) when all boosted stats are already at `+6`.
+    """
+    req = _get1(state.request, side)
+    is_move_stage = (req == 1) & (state.outcome == 0)
+
+    alive_m = _get1(state.alive_mask, side)
+    foe_side = 1 - side
+    foe_alive_m = _get1(state.alive_mask, foe_side)
+    own_alive = popcount_3bit(alive_m)
+    foe_alive = popcount_3bit(foe_alive_m)
+
+    att_slot = _get1(state.active_idx, side)
+    def_slot = _get1(state.active_idx, foe_side)
+    att_idx = side * 3 + att_slot
+    def_idx = foe_side * 3 + def_slot
+
+    att_hp = _get2(state.hp_pool, att_idx, 0)
+    att_maxhp = jnp.maximum(jnp.int32(1), _get1(table.maxhp, att_idx))
+    att_st_pk = _get1(state.status_packed, att_idx)
+    att_st_raw = att_st_pk & 0x07
+    att_st_cnt = (att_st_pk >> 3) & 0x1F
+
+    def_st_pk = _get1(state.status_packed, def_idx)
+    def_st_raw = def_st_pk & 0x07
+    def_st_cnt = (def_st_pk >> 3) & 0x1F
+
+    att_vol = _get1(state.vol_flags, att_idx)
+    def_vol = _get1(state.vol_flags, def_idx)
+    att_has_sub = (att_vol & VolBit.SUBSTITUTE) != 0
+    foe_has_sub = (def_vol & VolBit.SUBSTITUTE) != 0
+
+    foe_safeguard = _get1(state.safeguard_turns, foe_side) > 0
+    own_safeguard = _get1(state.safeguard_turns, side) > 0
+    own_reflect = _get1(state.reflect_turns, side) > 0
+    own_lightscreen = _get1(state.lightscreen_turns, side) > 0
+    foe_spikes = (_get1(state.side_flags, foe_side) & 0x03) >= 1
+
+    att_spd = mon_action_speed(state, table, side, att_slot)
+    def_spd = mon_action_speed(state, table, foe_side, def_slot)
+    att_faster = att_spd > def_spd
+    foe_can_act_before = (~att_faster) & (def_st_raw != Status.SLP) & (def_st_raw != Status.FRZ)
+
+    foe_best = best_hit_fraction(state, table, foe_side, def_slot, side, att_slot, jnp.bool_(True))
+    foe_sub_stuck = foe_has_sub & (
+        (foe_best <= jnp.float32(0.0)) | (def_st_raw == Status.SLP) | (def_st_raw == Status.FRZ)
+    )
+
+    # Check if foe has Sleep Talk / Snore (`IS_SLEEP_USABLE`)
+    def_nm = _get1(table.num_moves, def_idx)
+    foe_has_sleep_move = jnp.bool_(False)
+    for fm_i in range(4):
+        f_fl = _get2(table.move_flags, def_idx, fm_i)
+        foe_has_sleep_move = foe_has_sleep_move | (
+            (jnp.int32(fm_i) < def_nm)
+            & (_get2(state.pp, def_idx, fm_i) > 0)
+            & ((f_fl & MoveFlag.IS_SLEEP_USABLE) != 0)
+        )
+    foe_incap_next = (def_st_raw == Status.FRZ) | (
+        (def_st_raw == Status.SLP) & (def_st_cnt > 1) & (~foe_has_sleep_move)
+    )
+    has_lefties = (_get1(state.item, att_idx) != 0) & (
+        (_get1(table.item_flags, att_idx) & ItemFlag.LEFTOVERS) != 0
+    )
+    own_recovery_wait = has_lefties & (att_hp < att_maxhp) & foe_incap_next
+    destiny_bond_wait = (def_vol & VolBit.DESTINY_BOND) != 0
+
+    def_tmask = _get1(table.type_mask, def_idx)
+    sand_hurt = (state.weather_kind == CompactWeather.SANDSTORM) & (
+        (def_tmask & table.sandstorm_immune_mask) == jnp.uint32(0)
+    )
+    foe_takes_residual = (
+        (def_st_raw == Status.PSN)
+        | (def_st_raw == Status.TOX)
+        | (def_st_raw == Status.BRN)
+        | ((def_vol & (VolBit.LEECH_SEED | VolBit.NIGHTMARE | VolBit.CURSE | VolBit.PERISH_SONG)) != 0)
+        | sand_hurt
+    )
+
+    # Party status check (for Heal Bell) and foe Sleep Clause check
+    party_has_status = jnp.bool_(False)
+    foe_has_clause_slp = jnp.bool_(False)
+    for p_slot in range(3):
+        p_idx = side * 3 + p_slot
+        p_alive = ((alive_m & (1 << p_slot)) != 0) & (_get2(state.hp_pool, p_idx, 0) > 0)
+        p_st = _get1(state.status_packed, p_idx) & 0x07
+        party_has_status = party_has_status | (p_alive & (p_st != Status.NONE))
+
+        fp_idx = foe_side * 3 + p_slot
+        fp_alive = ((foe_alive_m & (1 << p_slot)) != 0) & (_get2(state.hp_pool, fp_idx, 0) > 0)
+        fp_st_pk = _get1(state.status_packed, fp_idx)
+        fp_is_slp = (fp_st_pk & 0x07) == Status.SLP
+        fp_self_slp = (fp_st_pk & 0x80) != 0
+        foe_has_clause_slp = foe_has_clause_slp | (fp_alive & fp_is_slp & (~fp_self_slp))
+
+    ghost_mask = jnp.uint32(1) << (table.ghost_type.astype(jnp.uint32) & jnp.uint32(31))
+    att_is_ghost = (_get1(table.type_mask, att_idx) & ghost_mask) != jnp.uint32(0)
+    att_boosts = _get1(state.boosts, att_idx)
+    b_stats_all = _get1(table.move_boost_stats, att_idx)  # int32[4, 3]
+    b_deltas_all = _get1(table.move_boost_deltas, att_idx)  # int32[4, 3]
+
+    leg_mask = legal_actions_mask(state, table, side)
+    # Check if any legal non-damaging move exists that is NOT a raw no-op
+    raw_forfeit = []
+    raw_noop = []
+    move_is_damaging = []
+
+    for m_i in range(4):
+        m_flags = _get2(table.move_flags, att_idx, m_i)
+        m_sk = _get2(table.move_special_kind, att_idx, m_i)
+        m_bp = _get2(table.move_base_power, att_idx, m_i)
+        m_fd = _get2(table.move_fixed_damage, att_idx, m_i)
+        m_vbp = _get2(table.move_var_bp_kind, att_idx, m_i)
+        m_pstat = _get2(table.move_primary_status, att_idx, m_i)
+        m_pvol = _get2(table.move_primary_vol, att_idx, m_i)
+
+        is_dmg = (
+            (m_bp > 0)
+            | (m_fd != 0)
+            | (m_vbp != 0)
+            | (m_sk == 11)
+            | (m_sk == 12)
+            | (m_sk == 15)
+        )
+        move_is_damaging.append(is_dmg)
+
+        # Forfeit guards
+        forf_sd = (own_alive == 1) & ((m_flags & MoveFlag.IS_SELFDESTRUCT) != 0)
+        slp_clause_on = (state.clause_flags & 1) != 0
+        forf_slp = (
+            slp_clause_on
+            & (m_pstat == Status.SLP)
+            & (~is_dmg)
+            & foe_has_clause_slp
+            & (att_faster | (def_st_raw == Status.SLP))
+        )
+        raw_forfeit.append(forf_sd | forf_slp)
+
+        # No-op guards
+        is_pure_heal = (m_flags & (MoveFlag.IS_REST | MoveFlag.IS_HALF_HEAL)) != 0
+        noop_heal = is_pure_heal & (att_hp >= att_maxhp) & (~foe_can_act_before)
+        noop_screen = (
+            ((m_sk == 1) & own_reflect)
+            | ((m_sk == 2) & own_lightscreen)
+            | ((m_sk == 3) & own_safeguard)
+            | ((m_sk == 4) & foe_spikes)
+        )
+        noop_phaze = (m_sk == 7) & (foe_alive <= 1)
+        both_perish = ((att_vol & VolBit.PERISH_SONG) != 0) & ((def_vol & VolBit.PERISH_SONG) != 0)
+        noop_perish = (m_sk == 19) & ((own_alive <= 1) | both_perish)
+        noop_dbond = (m_sk == 20) & (own_alive <= 1)
+        noop_bp = (m_sk == 18) & (own_alive <= 1)
+        noop_bdrum = (m_sk == 6) & ((att_hp * 2 <= att_maxhp) | (att_boosts[0] >= 6))
+        noop_hbell = (m_sk == 21) & (~party_has_status)
+        awake_or_waking = (att_st_raw != Status.SLP) | (att_st_cnt <= 1)
+        noop_slptalk = ((m_flags & MoveFlag.IS_SLEEP_USABLE) != 0) & awake_or_waking
+
+        foe_psn_imm = ((m_pstat == Status.PSN) | (m_pstat == Status.TOX)) & (
+            (def_tmask & table.poison_immune_mask) != jnp.uint32(0)
+        )
+        foe_stays_stat = (def_st_raw != Status.NONE) & (
+            ~((def_st_raw == Status.SLP) & (def_st_cnt <= 1))
+        )
+        noop_status = (
+            (m_pstat != 0)
+            & (~is_dmg)
+            & (foe_safeguard | foe_sub_stuck | foe_stays_stat | foe_psn_imm)
+        )
+        noop_sub = ((m_flags & MoveFlag.IS_SUBSTITUTE) != 0) & (
+            att_has_sub | (att_hp * 4 <= att_maxhp)
+        )
+        noop_curse = (m_sk == 5) & jnp.where(
+            att_is_ghost,
+            ((def_vol & VolBit.CURSE) != 0)
+            | foe_sub_stuck
+            | ((own_alive <= 1) & (att_hp * 2 <= att_maxhp)),
+            (att_boosts[0] >= 6) & (att_boosts[1] >= 6),
+        )
+        noop_pvol = (
+            (m_pvol != 0)
+            & (~is_dmg)
+            & (m_sk == 0)
+            & (
+                ((def_vol & m_pvol) != 0)
+                | foe_sub_stuck
+                | ((m_pvol == VolBit.CONFUSION) & foe_safeguard)
+            )
+        )
+
+        has_pos_b = jnp.bool_(False)
+        can_gain_b = jnp.bool_(False)
+        for b_k in range(3):
+            b_st = b_stats_all[m_i, b_k]
+            b_dl = b_deltas_all[m_i, b_k]
+            valid_pos = (b_st >= 0) & (b_st < 7) & (b_dl > 0)
+            cur_b = _get1(att_boosts, jnp.clip(b_st, 0, 6))
+            has_pos_b = has_pos_b | valid_pos
+            can_gain_b = can_gain_b | (valid_pos & (cur_b < 6))
+        noop_sboost = (
+            ((m_flags & MoveFlag.BOOSTS_SELF) != 0)
+            & (~is_dmg)
+            & (m_sk == 0)
+            & has_pos_b
+            & (~can_gain_b)
+        )
+
+        is_noop = (
+            noop_heal
+            | noop_screen
+            | noop_phaze
+            | noop_perish
+            | noop_dbond
+            | noop_bp
+            | noop_bdrum
+            | noop_hbell
+            | noop_slptalk
+            | noop_status
+            | noop_sub
+            | noop_curse
+            | noop_pvol
+            | noop_sboost
+        )
+        raw_noop.append(is_noop)
+
+    # `residual_damage_wait`: if foe takes residual damage and every legal move is either
+    # damaging or a raw no-op, allow the no-op as a passive stall wait
+    has_other_passive = jnp.bool_(False)
+    for m_i in range(4):
+        has_other_passive = has_other_passive | (
+            leg_mask[m_i] & (~move_is_damaging[m_i]) & (~raw_noop[m_i]) & (~raw_forfeit[m_i])
+        )
+    residual_damage_wait = foe_takes_residual & (~has_other_passive)
+    exempt_noop = own_recovery_wait | destiny_bond_wait | residual_damage_wait
+
+    dom_moves = []
+    for m_i in range(4):
+        dom_m = is_move_stage & (raw_forfeit[m_i] | (raw_noop[m_i] & (~exempt_noop)))
+        dom_moves.append(dom_m)
+
+    return jnp.concatenate(
+        [jnp.stack(dom_moves, axis=0), jnp.zeros((3,), dtype=jnp.bool_)], axis=0
+    )
+
+
+def _perish_escape_override(
+    state: CompactBattle,
+    table: MatchTable,
+    side: int,
+    legal7: jax.Array,
+    current_act: jax.Array,
+) -> jax.Array:
+    """Branchless port of `nc2000_bot::mcts::compact_perish_escape`.
+
+    1. When `perish_count == 1`: switches out to the healthiest legal bench mon (or uses
+       `Baton Pass` `sk == 17` if faster than the opponent).
+    2. When `perish_count >= 2` and trapped (`VolBit.TRAPPED`): uses `Baton Pass` (`sk == 17`)
+       if faster, or counter-phazes with `Roar`/`Whirlwind` (`sk == 7`) if opponent has bench
+       and no Substitute.
+    """
+    req = _get1(state.request, side)
+    active = (req == 1) & (state.outcome == 0)
+    alive_m = _get1(state.alive_mask, side)
+    foe_side = 1 - side
+    foe_alive_m = _get1(state.alive_mask, foe_side)
+    own_alive = popcount_3bit(alive_m)
+    foe_alive = popcount_3bit(foe_alive_m)
+
+    att_slot = _get1(state.active_idx, side)
+    def_slot = _get1(state.active_idx, foe_side)
+    att_idx = side * 3 + att_slot
+    def_idx = foe_side * 3 + def_slot
+
+    att_vol = _get1(state.vol_flags, att_idx)
+    def_vol = _get1(state.vol_flags, def_idx)
+    has_perish = active & ((att_vol & VolBit.PERISH_SONG) != 0) & (own_alive > 1)
+    perish_cnt = _get2(state.timers, att_idx, 3)
+
+    att_faster = mon_action_speed(state, table, side, att_slot) > mon_action_speed(
+        state, table, foe_side, def_slot
+    )
+
+    has_bp = jnp.bool_(False)
+    bp_act = current_act
+    has_phaze = jnp.bool_(False)
+    phaze_act = current_act
+    for m_i in range(4):
+        m_ok = legal7[m_i]
+        m_sk = _get2(table.move_special_kind, att_idx, m_i)
+        is_bp = m_ok & (m_sk == 18)
+        bp_act = jnp.where(is_bp & (~has_bp), jnp.int32(m_i), bp_act)
+        has_bp = has_bp | is_bp
+
+        is_phz = m_ok & (m_sk == 7)
+        phaze_act = jnp.where(is_phz & (~has_phaze), jnp.int32(m_i), phaze_act)
+        has_phaze = has_phaze | is_phz
+
+    best_sw = current_act
+    best_sw_hp = jnp.float32(-1.0)
+    has_sw = jnp.bool_(False)
+    for slot in range(3):
+        sw_ok = legal7[4 + slot]
+        s_idx = side * 3 + slot
+        hp_f = _get2(state.hp_pool, s_idx, 0).astype(jnp.float32) / jnp.maximum(
+            jnp.int32(1), _get1(table.maxhp, s_idx)
+        ).astype(jnp.float32)
+        better = sw_ok & (hp_f > best_sw_hp)
+        best_sw = jnp.where(better, jnp.int32(4 + slot), best_sw)
+        best_sw_hp = jnp.where(better, hp_f, best_sw_hp)
+        has_sw = has_sw | sw_ok
+
+    cnt1_act = jnp.where(
+        att_faster & has_bp,
+        bp_act,
+        jnp.where(has_sw, best_sw, current_act),
+    )
+
+    trapped = (att_vol & VolBit.TRAPPED_OR_LOCKED) != 0
+    can_phaze_foe = has_phaze & (foe_alive > 1) & ((def_vol & VolBit.SUBSTITUTE) == 0)
+    cnt2_act = jnp.where(
+        trapped,
+        jnp.where(
+            att_faster & has_bp,
+            bp_act,
+            jnp.where(can_phaze_foe, phaze_act, current_act),
+        ),
+        current_act,
+    )
+
+    return jnp.where(
+        has_perish & (perish_cnt == 1),
+        cnt1_act,
+        jnp.where(has_perish & (perish_cnt >= 2), cnt2_act, current_act),
+    )
+
+
+def _perish_combo_override(
+    state: CompactBattle,
+    table: MatchTable,
+    side: int,
+    legal7: jax.Array,
+    current_act: jax.Array,
+) -> jax.Array:
+    """Branchless port of `nc2000_bot::mcts::compact_perish_combo`.
+
+    Executes the multi-step Perish-trap sequence when `own_alive >= 2` and `hp > maxhp / 2`:
+    1. If user has both Mean Look/Spider Web (`sk == 26`) and Perish Song (`sk == 19`), and
+       foe is neither trapped, perished, nor behind a Substitute (and `foe_alive >= 2`),
+       prioritizes trapping (`sk == 26`).
+    2. Once foe is trapped (`VolBit.TRAPPED`) and neither side has Perish Song active,
+       prioritizes singing Perish Song (`sk == 19`).
+    3. While foe is trapped and Perish-ticking (`timers[def_idx, 3] >= 2`), prioritizes
+       Protect/Detect (`sk == 18` when `timers[att_idx, 1] == 0`) or recovery (`sk in {1, 2, 3}`
+       when `hp * 4 <= maxhp * 3`) to burn the Perish clock safely.
+    """
+    req = _get1(state.request, side)
+    alive_m = _get1(state.alive_mask, side)
+    foe_side = 1 - side
+    foe_alive_m = _get1(state.alive_mask, foe_side)
+    own_alive = popcount_3bit(alive_m)
+    foe_alive = popcount_3bit(foe_alive_m)
+
+    att_slot = _get1(state.active_idx, side)
+    def_slot = _get1(state.active_idx, foe_side)
+    att_idx = side * 3 + att_slot
+    def_idx = foe_side * 3 + def_slot
+
+    att_hp = _get2(state.hp_pool, att_idx, 0)
+    att_maxhp = jnp.maximum(jnp.int32(1), _get1(table.maxhp, att_idx))
+    att_vol = _get1(state.vol_flags, att_idx)
+    def_vol = _get1(state.vol_flags, def_idx)
+
+    active = (req == 1) & (state.outcome == 0) & (own_alive >= 2)
+    healthy = (att_hp * 2) > att_maxhp
+
+    has_trap = jnp.bool_(False)
+    trap_act = current_act
+    has_perish = jnp.bool_(False)
+    perish_act = current_act
+    has_stall = jnp.bool_(False)
+    stall_act = current_act
+    prot_streak = _get2(state.timers, att_idx, 1)
+
+    for m_i in range(4):
+        m_ok = legal7[m_i]
+        m_sk = _get2(table.move_special_kind, att_idx, m_i)
+        m_fl = _get2(table.move_flags, att_idx, m_i)
+        is_tr = m_ok & (m_sk == 26)
+        trap_act = jnp.where(is_tr & (~has_trap), jnp.int32(m_i), trap_act)
+        has_trap = has_trap | is_tr
+
+        is_ps = m_ok & (m_sk == 19)
+        perish_act = jnp.where(is_ps & (~has_perish), jnp.int32(m_i), perish_act)
+        has_perish = has_perish | is_ps
+
+        is_prot = m_ok & ((m_fl & MoveFlag.IS_PROTECT) != 0) & (prot_streak == 0)
+        is_heal = (
+            m_ok
+            & ((m_fl & (MoveFlag.IS_REST | MoveFlag.IS_HALF_HEAL)) != 0)
+            & ((att_hp * 4) <= (att_maxhp * 3))
+        )
+        is_st = is_prot | is_heal
+        stall_act = jnp.where(is_st & (~has_stall), jnp.int32(m_i), stall_act)
+        has_stall = has_stall | is_st
+
+    foe_trapped = (def_vol & VolBit.TRAPPED_OR_LOCKED) != 0
+    foe_perished = (def_vol & VolBit.PERISH_SONG) != 0
+    own_perished = (att_vol & VolBit.PERISH_SONG) != 0
+    foe_sub = (def_vol & VolBit.SUBSTITUTE) != 0
+    foe_perish_cnt = _get2(state.timers, def_idx, 3)
+
+    step1_trap = (
+        active
+        & healthy
+        & has_trap
+        & has_perish
+        & (~foe_trapped)
+        & (~foe_perished)
+        & (~foe_sub)
+        & (foe_alive >= 2)
+    )
+    step2_sing = active & healthy & has_perish & foe_trapped & (~foe_perished) & (~own_perished)
+    step3_stall = (
+        active
+        & foe_trapped
+        & foe_perished
+        & (foe_perish_cnt >= 2)
+        & ((~own_perished) | (_get2(state.timers, att_idx, 3) >= 2))
+        & has_stall
+    )
+
+    return jnp.where(
+        step1_trap,
+        trap_act,
+        jnp.where(step2_sing, perish_act, jnp.where(step3_stall, stall_act, current_act)),
+    )
+
+
 def sample_heavy_playout_action(
     state: CompactBattle,
     table: MatchTable,
@@ -426,18 +1007,25 @@ def sample_heavy_playout_action(
     eps: float = 0.2,
     rollout_residual: RolloutResidualWeights | None = None,
 ) -> tuple[jax.Array, jax.Array]:
-    r"""Branchless port of `Playout::Heavy`'s `compact_ordinary_pick` / `compact_greedy_pick`.
+    r"""Branchless port of `Playout::Heavy`'s `compact_playout_pick` (`mcts.rs`).
 
-    - With probability `eps` (default `0.2`), picks uniformly among legal actions.
+    - Filters out provably dominated / no-op / self-KO actions via `compact_dominated_mask7`
+      whenever at least one non-dominated legal action exists.
+    - With probability `eps` (default `0.2`), picks uniformly among non-dominated legal actions.
     - With probability `1 - eps`, picks the legal move maximizing `expected_hit_fraction`
       (plus optional rank-4 bilinear `rollout_residual` $\Delta Q_\psi(s, c)$, avoiding
-      suicidal `Self-Destruct`/`Explosion` on the last alive Pokemon), or if all legal
-      actions have `<= 0` score, samples uniformly among non-suicidal legal actions.
+      dominated/suicidal actions), or if all legal actions have `<= 0` score, samples
+      uniformly among non-dominated legal actions.
+    - Applies `compact_perish_escape` and `compact_perish_combo` tactical overrides on
+      `request == 1` move stages (matching `nc2000_bot::mcts::compact_playout_pick`).
     - On forced/Baton-Pass switches (`request == 2`), scores candidate bench slots by
       passed-boost offense + HP fraction (or healthiest bench HP fraction when fainted).
     """
     mask = legal_actions_mask(state, table, side)  # bool[8]
-    legal7 = mask[:7]
+    raw_legal7 = mask[:7]
+    dom7 = compact_dominated_mask7(state, table, side)
+    nondom7 = raw_legal7 & (~dom7)
+    legal7 = jnp.where(jnp.any(nondom7), nondom7, raw_legal7)
     n_legal = jnp.sum(legal7.astype(jnp.int32))
 
     # Draw 1: epsilon check (out of 10000)
@@ -465,7 +1053,7 @@ def sample_heavy_playout_action(
 
     # Non-suicidal uniform fallback when all moves have 0 expected damage
     is_sd = (_get1(table.move_flags, att_idx) & MoveFlag.IS_SELFDESTRUCT) != 0  # bool[4]
-    suicidal7 = jnp.concatenate([last_mon & is_sd, jnp.zeros((3,), dtype=jnp.bool_)], axis=0)
+    suicidal7 = jnp.concatenate([last_mon & is_sd, jnp.zeros((3,), dtype=jnp.bool_)], axis=0) | dom7
     safe7 = legal7 & (~suicidal7)
     n_safe = jnp.sum(safe7.astype(jnp.int32))
     safe_mask = jnp.where(n_safe > 0, safe7, legal7)
@@ -544,7 +1132,11 @@ def sample_heavy_playout_action(
 
     eps_thresh = jnp.int32(round(eps * 10000.0))
     use_unif = (n_legal <= 1) | (r_eps < eps_thresh)
-    chosen = jnp.where(req == 0, jnp.int32(7), jnp.where(use_unif, unif_act, greedy_act))
+    ordinary_act = jnp.where(use_unif, unif_act, greedy_act)
+    tactical_act = _perish_combo_override(
+        state, table, side, legal7, _perish_escape_override(state, table, side, legal7, ordinary_act)
+    )
+    chosen = jnp.where(req == 0, jnp.int32(7), tactical_act)
     return seed, chosen
 
 
@@ -822,8 +1414,12 @@ def evaluate_root_payoff_matrix(
     if weights is None:
         weights = default_eval_weights()
 
-    mask0 = legal_actions_mask(root_state, table, 0)[:7]
-    mask1 = legal_actions_mask(root_state, table, 1)[:7]
+    raw_mask0 = legal_actions_mask(root_state, table, 0)[:7]
+    raw_mask1 = legal_actions_mask(root_state, table, 1)[:7]
+    nondom0 = raw_mask0 & (~compact_dominated_mask7(root_state, table, 0))
+    nondom1 = raw_mask1 & (~compact_dominated_mask7(root_state, table, 1))
+    mask0 = jnp.where(jnp.any(nondom0), nondom0, raw_mask0)
+    mask1 = jnp.where(jnp.any(nondom1), nondom1, raw_mask1)
     fb0 = jnp.argmax(mask0.astype(jnp.int32)).astype(jnp.int32)
     fb1 = jnp.argmax(mask1.astype(jnp.int32)).astype(jnp.int32)
 
@@ -1049,8 +1645,14 @@ def _prepare_ply2_batch(
     base_seed_int: int = 0xCAFEBABE12345678,
 ):
     num_cands = top_k * top_k
-    m2_0_cands = jax.vmap(lambda s: legal_actions_mask(s, table, 0)[:7])(settled_cands)
-    m2_1_cands = jax.vmap(lambda s: legal_actions_mask(s, table, 1)[:7])(settled_cands)
+
+    def _eff_mask(s: CompactBattle, side: int) -> jax.Array:
+        raw_m = legal_actions_mask(s, table, side)[:7]
+        nd_m = raw_m & (~compact_dominated_mask7(s, table, side))
+        return jnp.where(jnp.any(nd_m), nd_m, raw_m)
+
+    m2_0_cands = jax.vmap(lambda s: _eff_mask(s, 0))(settled_cands)
+    m2_1_cands = jax.vmap(lambda s: _eff_mask(s, 1))(settled_cands)
     fb2_0_cands = jnp.argmax(m2_0_cands.astype(jnp.int32), axis=-1).astype(jnp.int32)
     fb2_1_cands = jnp.argmax(m2_1_cands.astype(jnp.int32), axis=-1).astype(jnp.int32)
 
