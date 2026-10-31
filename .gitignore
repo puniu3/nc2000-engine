@@ -1,5 +1,7 @@
 /target
 __pycache__/
+/tpu/.venv
+/tpu/.pytest_cache
 node_modules
 /tmp
 /web/dist

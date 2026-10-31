@@ -1,0 +1,21 @@
+[project]
+name = "gen2-tpu"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Curiosity", email = "puniu3@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "jax>=0.12.0.1",
+    "numpy>=2.5.4",
+    "pytest>=9.2.0",
+]
+
+[project.scripts]
+gen2-tpu = "gen2_tpu:main"
+
+[build-system]
+requires = ["uv_build>=0.12.19,<0.13.0"]
+build-backend = "uv_build"
