@@ -6,8 +6,10 @@ import {
   fetchBeliefPool,
   fetchI18nJa,
   fetchNashArtifact,
+  fetchOldNashArtifact,
   fetchDexJson,
 } from "./data";
+import { readNashVariant } from "./info-mode";
 import {
   loadJaNames,
   locale,
@@ -198,7 +200,9 @@ export function Evaluate() {
       try {
         const [, nash, pool, , dex] = await Promise.all([
           loadEngine(),
-          fetchNashArtifact(),
+          readNashVariant() === "v3"
+            ? fetchOldNashArtifact()
+            : fetchNashArtifact(),
           fetchBeliefPool(),
           loadJaNames(fetchI18nJa),
           fetchDexJson(),

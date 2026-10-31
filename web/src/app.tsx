@@ -29,12 +29,13 @@ import {
   fetchDexJson,
   fetchI18nJa,
   fetchNashArtifact,
+  fetchOldNashArtifact,
 } from "./data";
 import { loadSetDex } from "./set-info";
 import { randomPoolTeam, type SelectedTeam } from "./pool-pick";
 import { drawNashTeam, parseNashArtifact, type NashMix } from "./nash-mix";
 import { drawCatalogTeam, parseCatalog, type Catalog } from "./own-pool";
-import { readDoor, type Door } from "./info-mode";
+import { readDoor, readNashVariant, type Door, type NashVariant } from "./info-mode";
 import {
   loadDrawSource,
   storeDrawSource,
@@ -61,6 +62,7 @@ export type { SelectedTeam } from "./pool-pick";
  * about it: the query string cannot change without a navigation. */
 const DOOR: Door = readDoor();
 const NASH = DOOR === "nash";
+const NASH_VARIANT: NashVariant = readNashVariant();
 /** The study board is not a way to play: it replaces the whole screen, so it
  * is checked before any of the game state below is consulted. */
 const SOLVER = DOOR === "solver";
@@ -106,6 +108,7 @@ export function App() {
   // Never null once boot succeeded — a mixture that cannot load or validate
   // fails the page.
   const [nashMix, setNashMix] = useState<NashMix | null>(null);
+  const [oldNashMix, setOldNashMix] = useState<NashMix | null>(null);
   const [drawSource, setDrawSource] = useState<DrawSource>(loadDrawSource);
   // The shipped opponent prior: the blind searcher's candidate set only.
   const [beliefJson, setBeliefJson] = useState<string | null>(null);
@@ -120,12 +123,13 @@ export function App() {
         // JP name tables and the set-sheet dex load alongside the engine;
         // both swallow failures (missing tables just mean English names /
         // sheets without move meta).
-        const [, catalogText, , , nashText, beliefPd] = await Promise.all([
+        const [, catalogText, , , nashText, oldNashText, beliefPd] = await Promise.all([
           loadEngine(),
           fetchCatalog(),
           loadJaNames(fetchI18nJa),
           loadSetDex(fetchDexJson),
           fetchNashArtifact(),
+          fetchOldNashArtifact(),
           fetchBeliefPool(),
         ]);
         // Parsed after the engine is up, because validating a team file is
@@ -137,6 +141,9 @@ export function App() {
         const mix = parseNashArtifact(nashText);
         if (!mix.ok) throw new Error(mix.errors.join("; "));
         setNashMix(mix.mix);
+        const oldMix = parseNashArtifact(oldNashText);
+        if (!oldMix.ok) throw new Error(oldMix.errors.join("; "));
+        setOldNashMix(oldMix.mix);
         setBeliefJson(beliefPd.poolJson);
         setLoadedPool(restoreStoredPool() ?? parsed.catalog.pool);
         setStatus("ready");
@@ -159,6 +166,7 @@ export function App() {
     !loadedPool ||
     !catalog ||
     !nashMix ||
+    !oldNashMix ||
     !beliefJson
   ) {
     return (
@@ -175,6 +183,7 @@ export function App() {
   // fixed configuration or it is not the conclusion.
   const activePool = NASH || SOLVER ? catalog.pool : loadedPool;
   const custom = activePool.name !== null;
+  const activeDoorNashMix = NASH_VARIANT === "v3" ? oldNashMix : nashMix;
 
   if (SOLVER) {
     return (
@@ -194,12 +203,14 @@ export function App() {
    * screen and every rematch must roll the same way. */
   const drawOpponent = (): SelectedTeam =>
     NASH
-      ? drawNashTeam(nashMix)
+      ? drawNashTeam(activeDoorNashMix)
       : custom
         ? randomPoolTeam(activePool.pool)
         : drawSource === "nash"
           ? drawNashTeam(nashMix)
-          : drawCatalogTeam(catalog);
+          : drawSource === "nash-v3"
+            ? drawNashTeam(oldNashMix)
+            : drawCatalogTeam(catalog);
   /** The human's "Random": the catalog's draw weights, or uniform over a
    * loaded file — the same rule as the bot's draw from the same lists. */
   const drawHuman = (): SelectedTeam =>
@@ -217,7 +228,9 @@ export function App() {
           setLoc(l);
         }}
         nash={NASH}
-        nashMix={nashMix}
+        nashVariant={NASH_VARIANT}
+        nashMix={NASH ? activeDoorNashMix : nashMix}
+        oldNashMix={oldNashMix}
         drawSource={drawSource}
         onDrawSource={(s) => {
           storeDrawSource(s);

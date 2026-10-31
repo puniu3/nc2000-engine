@@ -9,7 +9,7 @@ const route = `${process.env.NC2000_E2E_BASE ?? "/"}?evaluate`;
  * file the page fetches so the suite follows a re-solved mixture. */
 const nash = JSON.parse(
   readFileSync(
-    new URL("../../data/meta-nash-v3/pool-artifact.json", import.meta.url),
+    new URL("../../data/kodoku-r3/conclusion-equilibrium-deme.json", import.meta.url),
     "utf8",
   ),
 ) as { teams: { id: string; weight: number; sets: unknown[] }[] };

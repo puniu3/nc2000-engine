@@ -11860,6 +11860,7 @@ fn cmd_converge_conclusion(args: &[String]) {
             &root.join("data/kodoku-r3/conclusion-equilibrium-deme.json"),
             &json!({
                 "name": format!("conclusion-equilibrium-full-preview-nash-r{}", o_round),
+                "source_solution": "data/dominance-audit-v10-fullnash/converged-report.json",
                 "active_shells": active_units.len(),
                 "support_size": pi_ids.len(),
                 "min_matrix_payoff": min_val,

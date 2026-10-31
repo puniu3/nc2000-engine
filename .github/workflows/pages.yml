@@ -84,16 +84,18 @@ jobs:
           # files ONLY — the catalog (human lists + bot draw), the opponent
           # prior, and the Nash mixture. Measurements and the reference
           # inventory stay in the repo as audit trail, not payload.
-          mkdir -p web/dist/data/team-pool-v2 web/dist/data/belief-pool-v3 web/dist/data/meta-nash-v3
+          mkdir -p web/dist/data/team-pool-v2 web/dist/data/belief-pool-v3 web/dist/data/meta-nash-v3 web/dist/data/kodoku-r3
           cp data/team-pool-v2/team-pool.json web/dist/data/team-pool-v2/
           cp data/belief-pool-v3/belief-pool.json web/dist/data/belief-pool-v3/
           cp data/meta-nash-v3/pool-artifact.json web/dist/data/meta-nash-v3/
+          cp data/kodoku-r3/conclusion-equilibrium-deme.json web/dist/data/kodoku-r3/
           # `?fork=NAME` documents; each one carries a player's full team.
           cp -r data/forks web/dist/data/
           test -s web/dist/data/gen2stadium2.json
           test -s web/dist/data/team-pool-v2/team-pool.json
           test -s web/dist/data/belief-pool-v3/belief-pool.json
           test -s web/dist/data/meta-nash-v3/pool-artifact.json
+          test -s web/dist/data/kodoku-r3/conclusion-equilibrium-deme.json
 
       - name: Build and verify server cache bindings
         run: |

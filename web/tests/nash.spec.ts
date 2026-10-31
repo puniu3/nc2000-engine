@@ -61,6 +61,13 @@ interface CustomRecord {
 
 const artifact = JSON.parse(
   readFileSync(
+    new URL("../../data/kodoku-r3/conclusion-equilibrium-deme.json", import.meta.url),
+    "utf8",
+  ),
+) as { teams: NashTeamJson[] };
+
+const oldArtifact = JSON.parse(
+  readFileSync(
     new URL("../../data/meta-nash-v3/pool-artifact.json", import.meta.url),
     "utf8",
   ),
@@ -402,5 +409,41 @@ test("the start screen links to the party evaluator", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Evaluate your team's strength" })).toBeVisible();
   await expect(page.getByLabel("Number of games", { exact: true })).toHaveValue("32");
   await expect(page.getByLabel("Search iterations", { exact: true })).toHaveCount(0);
+});
+
+test("the old v3 Nash mixture remains accessible on ?nash=v3 and in the setup panel", async ({
+  page,
+}) => {
+  const errors = guardConsole(page);
+  await seedStorage(page);
+
+  await page.goto("/?nash");
+  const switchToOld = page.locator('[data-testid="nash-variant-link"]');
+  await expect(switchToOld).toHaveAttribute("href", /\?nash=v3$/);
+  await switchToOld.click();
+
+  await expect(page).toHaveURL(/\?nash=v3$/);
+  const row = page.locator('[data-party="nash"] .party-value');
+  for (const t of oldArtifact.teams) await expect(row).toContainText(t.id);
+
+  await page.locator('[data-party="nash"]').click();
+  await expect(page.locator('[data-testid="nash-mix"] .team-card')).toHaveCount(
+    oldArtifact.teams.length,
+  );
+  await page.locator("dialog.modal .modal-head button").click();
+
+  // Also selectable from the play door's setup panel (`nash-v3`).
+  await page.goto("/");
+  await page.locator('[data-party="settings"]').click();
+  await page.locator('[data-draw="nash-v3"]').click();
+  await expect(page.locator('[data-draw="nash-v3"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator('[data-testid="nash-mix"] .team-card')).toHaveCount(
+    oldArtifact.teams.length,
+  );
+  await page.locator("dialog.modal .modal-head button").click();
+  await expect(page.locator('[data-party="settings"] .party-value')).toContainText(
+    `Old mixture v3 (${oldArtifact.teams.length}`,
+  );
+  expect(errors).toEqual([]);
 });
 

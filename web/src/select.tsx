@@ -35,6 +35,7 @@ import type { MetaPool, PoolTeam, PriorReport } from "./types";
 import type { SelectedTeam } from "./app";
 import type { NashMix, NashTeam } from "./nash-mix";
 import type { DrawSource } from "./draw-source";
+import type { NashVariant } from "./info-mode";
 import {
   clearStoredPool,
   parsePoolText,
@@ -640,6 +641,7 @@ function PoolPanel(props: {
   drawSource: DrawSource;
   onDrawSource: (s: DrawSource) => void;
   nashMix: NashMix;
+  oldNashMix: NashMix;
 }) {
   const [result, setResult] = useState<PoolResult | null>(null);
   const fileLoaded = props.loaded.name !== null;
@@ -672,7 +674,7 @@ function PoolPanel(props: {
   return (
     <div class="pool-panel">
       <div class="draw-choice" role="group" aria-label={ui().drawSourceLabel}>
-        {(["catalog", "nash"] as const).map((source) => (
+        {(["catalog", "nash", "nash-v3"] as const).map((source) => (
           <button
             key={source}
             class="draw-choice-btn"
@@ -682,12 +684,17 @@ function PoolPanel(props: {
           >
             {source === "catalog"
               ? ui().drawCatalog(props.catalog.pool.teams.length)
-              : ui().drawNash(props.nashMix.teams.length)}
+              : source === "nash"
+                ? ui().drawNash(props.nashMix.teams.length)
+                : ui().drawOldNash(props.oldNashMix.teams.length)}
           </button>
         ))}
       </div>
       {!fileLoaded && props.drawSource === "nash" && (
         <NashMixPanel mix={props.nashMix} />
+      )}
+      {!fileLoaded && props.drawSource === "nash-v3" && (
+        <NashMixPanel mix={props.oldNashMix} />
       )}
       <p class="modal-note">{ui().poolHelp}</p>
       <div class="pool-actions">
@@ -774,6 +781,7 @@ function SetupPanel(props: {
   drawSource: DrawSource;
   onDrawSource: (s: DrawSource) => void;
   nashMix: NashMix;
+  oldNashMix: NashMix;
   prior: StoredPrior | null;
   onPrior: (p: StoredPrior | null) => void;
 }) {
@@ -788,6 +796,7 @@ function SetupPanel(props: {
           drawSource={props.drawSource}
           onDrawSource={props.onDrawSource}
           nashMix={props.nashMix}
+          oldNashMix={props.oldNashMix}
         />
       </section>
       <section class="setup-section">
@@ -811,9 +820,14 @@ export function StartScreen(props: {
   onLocale: (l: Locale) => void;
   /** `?nash`: fixed opponent mixture, no setup. */
   nash: boolean;
+  /** Which Nash mixture is active on `?nash` (`"new"` or `"v3"`). */
+  nashVariant: NashVariant;
   /** The solved mixture: `?nash`'s read-only opponent panel, and the setup
    * panel's Nash draw choice. */
   nashMix: NashMix;
+  /** The preserved v3 Nash mixture, kept alongside the new mixture until
+   * non-regression is confirmed. */
+  oldNashMix: NashMix;
   /** Where the bot's party comes from when no pool file is loaded. */
   drawSource: DrawSource;
   onDrawSource: (s: DrawSource) => void;
@@ -969,7 +983,9 @@ export function StartScreen(props: {
                   ? ui().poolLoaded(props.loadedPool.name, teams.length)
                   : props.drawSource === "nash"
                     ? ui().drawNash(props.nashMix.teams.length)
-                    : ui().poolBundled(teams.length),
+                    : props.drawSource === "nash-v3"
+                      ? ui().drawOldNash(props.oldNashMix.teams.length)
+                      : ui().poolBundled(teams.length),
                 props.prior ? props.prior.name : ui().priorNone,
               )}
             </span>
@@ -978,6 +994,21 @@ export function StartScreen(props: {
         <a class="start-link" href={`${import.meta.env.BASE_URL}?evaluate`}>
           {ui().evaluateLink}
         </a>
+        {nash && (
+          <a
+            class="start-link"
+            data-testid="nash-variant-link"
+            href={
+              props.nashVariant === "v3"
+                ? `${import.meta.env.BASE_URL}?nash`
+                : `${import.meta.env.BASE_URL}?nash=v3`
+            }
+          >
+            {props.nashVariant === "v3"
+              ? ui().nashSwitchNew
+              : ui().nashSwitchOld}
+          </a>
+        )}
       </main>
 
       {modal === "human" && (
@@ -1011,6 +1042,7 @@ export function StartScreen(props: {
             drawSource={props.drawSource}
             onDrawSource={props.onDrawSource}
             nashMix={props.nashMix}
+            oldNashMix={props.oldNashMix}
             prior={props.prior}
             onPrior={props.onPrior}
           />

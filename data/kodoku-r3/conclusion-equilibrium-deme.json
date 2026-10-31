@@ -1,5 +1,6 @@
 {
   "name": "conclusion-equilibrium-full-preview-nash-r1",
+  "source_solution": "data/dominance-audit-v10-fullnash/converged-report.json",
   "active_shells": 5,
   "support_size": 17,
   "min_matrix_payoff": 0.49999598809316453,

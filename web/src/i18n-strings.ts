@@ -153,6 +153,9 @@ export interface UIStrings {
   drawSourceLabel: string;
   drawCatalog: (n: number) => string;
   drawNash: (n: number) => string;
+  drawOldNash: (n: number) => string;
+  nashSwitchOld: string;
+  nashSwitchNew: string;
   // the start screen's link to the party evaluator (`?evaluate`)
   evaluateLink: string;
   poolLoaded: (name: string, n: number) => string;
@@ -446,6 +449,9 @@ const EN: UIStrings = {
   drawSourceLabel: "Where the opponent comes from",
   drawCatalog: (n) => `Built-in (${n} ${n === 1 ? "party" : "parties"})`,
   drawNash: (n) => `Solved mixture (${n} ${n === 1 ? "party" : "parties"})`,
+  drawOldNash: (n) => `Old mixture v3 (${n} ${n === 1 ? "party" : "parties"})`,
+  nashSwitchOld: "Play against the old mixture (v3)",
+  nashSwitchNew: "Play against the new solved mixture",
   evaluateLink: "Measure a party's strength",
   poolLoaded: (name, n) => `${name} (${n} ${n === 1 ? "team" : "teams"})`,
   poolHelp:
@@ -730,6 +736,9 @@ const JA: UIStrings = {
   drawSourceLabel: "相手パーティの抽選元",
   drawCatalog: (n) => `標準(${n}パーティ)`,
   drawNash: (n) => `結論の混合戦略(${n}パーティ)`,
+  drawOldNash: (n) => `旧混合戦略 v3(${n}パーティ)`,
+  nashSwitchOld: "旧混合戦略(v3)と対戦する",
+  nashSwitchNew: "新しい結論の混合戦略と対戦する",
   evaluateLink: "パーティの強さを測る",
   poolLoaded: (name, n) => `${name}(${n}チーム)`,
   poolHelp:
