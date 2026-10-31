@@ -191,27 +191,26 @@ fn apply_endgame_token(e: &mut EndgameRules, tok: &str) -> bool {
 }
 
 fn endgame_label(e: &EndgameRules) -> String {
-    if !e.any() {
+    if *e == EndgameRules::default() {
         return String::new();
     }
+    if *e == EndgameRules::none() {
+        return ":-endgame".into();
+    }
+    if *e == EndgameRules::all_with_early_stop() {
+        return ":early_stop".into();
+    }
+    let def = EndgameRules::default();
     let mut parts = Vec::new();
-    if e.fast_win && e.safe_win && e.comeback_loss {
-        if e.early_stop {
-            return ":endgame_es".into();
+    for (name, cur, d) in [
+        ("fast_win", e.fast_win, def.fast_win),
+        ("safe_win", e.safe_win, def.safe_win),
+        ("comeback_loss", e.comeback_loss, def.comeback_loss),
+        ("early_stop", e.early_stop, def.early_stop),
+    ] {
+        if cur != d {
+            parts.push(if cur { name.into() } else { format!("-{name}") });
         }
-        return ":endgame".into();
-    }
-    if e.fast_win {
-        parts.push("fast_win");
-    }
-    if e.safe_win {
-        parts.push("safe_win");
-    }
-    if e.comeback_loss {
-        parts.push("comeback_loss");
-    }
-    if e.early_stop {
-        parts.push("early_stop");
     }
     format!(":{}", parts.join(","))
 }

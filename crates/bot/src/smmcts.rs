@@ -166,7 +166,7 @@ pub struct RmConfig {
 ///    $\sqrt{E[R^2]}$, survival turns, and a static desperation tie-breaker.
 /// 4. `early_stop`: stop the search loop early when a 1-turn 100%-win KO or a fully
 ///    saturated terminal root is locked in.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EndgameRules {
     pub fast_win: bool,
     pub safe_win: bool,
@@ -174,7 +174,24 @@ pub struct EndgameRules {
     pub early_stop: bool,
 }
 
+impl Default for EndgameRules {
+    #[inline]
+    fn default() -> Self {
+        Self::all_decision()
+    }
+}
+
 impl EndgameRules {
+    #[inline]
+    pub const fn none() -> Self {
+        Self {
+            fast_win: false,
+            safe_win: false,
+            comeback_loss: false,
+            early_stop: false,
+        }
+    }
+
     #[inline]
     pub const fn any(self) -> bool {
         self.fast_win || self.safe_win || self.comeback_loss || self.early_stop
@@ -243,6 +260,7 @@ pub struct EndgameDecisionInfo {
 /// RNG draws or tree exploration.
 #[derive(Clone, Debug, Default)]
 pub struct EndgameRootStats {
+    pub base_turn_offset: u16,
     pub w2: Vec<f64>,
     pub win_n: Vec<u32>,
     pub loss_n: Vec<u32>,
@@ -254,6 +272,10 @@ pub struct EndgameRootStats {
 impl EndgameRootStats {
     pub fn new(b: &Battle, dex: &Dex, side: usize, acts: &[SearchChoice]) -> Self {
         let k = acts.len();
+        let base_turn_offset = u16::from(matches!(
+            b.request_state,
+            nc2000_engine::state::RequestState::Switch
+        ));
         let desperation = if matches!(b.request_state, nc2000_engine::state::RequestState::TeamPreview) {
             vec![0.0; k]
         } else {
@@ -262,6 +284,7 @@ impl EndgameRootStats {
                 .collect()
         };
         EndgameRootStats {
+            base_turn_offset,
             w2: vec![0.0; k],
             win_n: vec![0; k],
             loss_n: vec![0; k],
@@ -277,17 +300,18 @@ impl EndgameRootStats {
         root_turn: u16,
         side: usize,
         act_idx: usize,
-        reward0: f64,
+        my_reward: f64,
         end: crate::mcts::SimEndInfo,
     ) {
         let Some(w2) = self.w2.get_mut(act_idx) else { return };
-        let mine = if side == 0 { reward0 } else { 1.0 - reward0 };
+        let mine = my_reward;
         *w2 += mine * mine;
         let my_win_code = if side == 0 { 1 } else { 2 };
         let my_loss_code = if side == 0 { 2 } else { 1 };
         let is_win = end.outcome == my_win_code || mine >= 0.999_999;
         let is_loss = end.outcome == my_loss_code || mine <= 0.000_001;
-        let completed_turns = end.turn.saturating_sub(root_turn) as f64;
+        let base_turn = root_turn.saturating_add(self.base_turn_offset);
+        let completed_turns = end.turn.saturating_sub(base_turn) as f64;
         let opp_alive = end.alive[1 - side] as f64;
         let my_alive = end.alive[side] as f64;
         let win_t = if is_win {
@@ -323,7 +347,7 @@ impl EndgameRootStats {
         if !rules.early_stop || is_preview || target_iters < 128 {
             return false;
         }
-        let min_done = (target_iters / 3).clamp(96, 512);
+        let min_done = (target_iters / 6).clamp(96, 1536);
         if done < min_done || done % 32 != 0 {
             return false;
         }
@@ -334,13 +358,15 @@ impl EndgameRootStats {
         let Some(&legacy_idx) = elig.iter().max_by_key(|&&i| total_visits[i]) else {
             return false;
         };
+        let min_ko_v = (target_iters / 30).clamp(32, 256);
         // 1) Guaranteed 1-turn terminal KO lock: the leading action (or a fast_win
-        //    action when all alternatives are explored) has >= 32 visits, 100% terminal
-        //    win rate, and mean win turns <= 1.001 (every simulation KOs immediately).
+        //    action when all alternatives are explored) has >= min_ko_v visits, 100%
+        //    terminal win rate, and mean win turns <= 1.001 (every simulation KOs immediately).
         let n_leg = total_visits[legacy_idx];
-        if n_leg >= 32
+        if n_leg >= min_ko_v
             && self.win_n[legacy_idx] == n_leg
             && self.loss_n[legacy_idx] == 0
+            && (rewards[legacy_idx] / n_leg as f64) >= 0.999_999
             && (self.win_turns[legacy_idx] / n_leg as f64) <= 1.001
         {
             return true;
@@ -350,9 +376,10 @@ impl EndgameRootStats {
             if leg_mean >= 0.985 {
                 for &i in &elig {
                     let n = total_visits[i];
-                    if n >= 32
+                    if n >= min_ko_v
                         && self.win_n[i] == n
                         && self.loss_n[i] == 0
+                        && (rewards[i] / n as f64) >= 0.999_999
                         && (self.win_turns[i] / n as f64) <= 1.001
                     {
                         return true;
@@ -408,12 +435,17 @@ impl EndgameRootStats {
             .map(|i| {
                 let n = total_visits[i];
                 let mean = if n > 0 { rewards[i] / n as f64 } else { 0.5 };
-                let m2 = if n > 0 { self.w2[i] / n as f64 } else { 0.25 };
+                let w2_i = self.w2.get(i).copied().unwrap_or(0.0);
+                let win_n_i = self.win_n.get(i).copied().unwrap_or(0);
+                let loss_n_i = self.loss_n.get(i).copied().unwrap_or(0);
+                let win_t_i = self.win_turns.get(i).copied().unwrap_or(0.0);
+                let surv_t_i = self.survive_turns.get(i).copied().unwrap_or(0.0);
+                let m2 = if n > 0 { w2_i / n as f64 } else { 0.25 };
                 let downside = (1.0 - 2.0 * mean + m2).max(0.0);
-                let win_rate = if n > 0 { self.win_n[i] as f64 / n as f64 } else { 0.0 };
-                let loss_rate = if n > 0 { self.loss_n[i] as f64 / n as f64 } else { 0.0 };
-                let win_turns = if n > 0 { self.win_turns[i] / n as f64 } else { 20.0 };
-                let survive_turns = if n > 0 { self.survive_turns[i] / n as f64 } else { 1.0 };
+                let win_rate = if n > 0 { win_n_i as f64 / n as f64 } else { 0.0 };
+                let loss_rate = if n > 0 { loss_n_i as f64 / n as f64 } else { 0.0 };
+                let win_turns = if n > 0 { win_t_i / n as f64 } else { 20.0 };
+                let survive_turns = if n > 0 { surv_t_i / n as f64 } else { 1.0 };
                 let (trap_risk, mistake_ev) = if n > 0 && eligible(i) {
                     reply_metrics(i, n, mean)
                 } else {
@@ -446,7 +478,7 @@ impl EndgameRootStats {
             });
         }
 
-        let min_v = (n_max / 8).max(8).min(n_max);
+        let min_v = (n_max / 8).clamp(8, 256).min(n_max);
         let well_sampled: Vec<usize> = elig
             .iter()
             .copied()
@@ -457,13 +489,40 @@ impl EndgameRootStats {
             .map(|&i| metrics[i].mean)
             .fold(f64::NEG_INFINITY, f64::max);
         let mu_legacy = metrics[legacy_idx].mean;
+        let emp_var = |i: usize| -> f64 {
+            let n = total_visits[i];
+            if n == 0 {
+                return 0.25;
+            }
+            let m = rewards[i] / n as f64;
+            let m2 = self.w2.get(i).copied().unwrap_or(0.0) / n as f64;
+            (m2 - m * m).max(1e-4)
+        };
+        let se_vs_legacy = |i: usize| -> f64 {
+            let n_i = total_visits[i].max(1) as f64;
+            let n_l = total_visits[legacy_idx].max(1) as f64;
+            (emp_var(i) / n_i + emp_var(legacy_idx) / n_l).sqrt()
+        };
 
         // ---- Regime 1: Completely Winning (fast_win)
-        if rules.fast_win && mu_star >= 0.985 && mu_legacy >= 0.970 {
+        let max_win_rate = well_sampled
+            .iter()
+            .map(|&i| metrics[i].win_rate)
+            .fold(0.0_f64, f64::max);
+        let min_loss_rate = well_sampled
+            .iter()
+            .map(|&i| metrics[i].loss_rate)
+            .fold(1.0_f64, f64::min);
+        let is_fast_win_regime = (mu_star >= 0.985 && mu_legacy >= 0.970)
+            || (mu_star >= 0.93 && mu_legacy >= 0.91 && max_win_rate >= 0.85 && min_loss_rate <= 0.002);
+        if rules.fast_win && is_fast_win_regime {
             let top_win: Vec<usize> = well_sampled
                 .iter()
                 .copied()
-                .filter(|&i| metrics[i].mean >= mu_star - 0.012)
+                .filter(|&i| {
+                    let slack = (1.5 * se_vs_legacy(i)).clamp(0.0025, 0.012);
+                    metrics[i].mean + slack >= mu_star
+                })
                 .collect();
             let min_loss = top_win
                 .iter()
@@ -480,13 +539,26 @@ impl EndgameRootStats {
 
             for &i in &elig {
                 let m = &metrics[i];
-                metrics[i].score =
-                    m.mean - 0.50 * m.downside - 0.80 * m.loss_rate - 0.015 * m.win_turns;
+                let switch_turn_pen = if matches!(acts[legacy_idx], SearchChoice::Move(_))
+                    && matches!(m.action, SearchChoice::Switch(_))
+                {
+                    0.45
+                } else {
+                    0.0
+                };
+                metrics[i].score = m.mean
+                    + 0.08 * m.win_rate
+                    - 0.50 * m.downside
+                    - 0.80 * m.loss_rate
+                    - 0.015 * (m.win_turns + switch_turn_pen);
             }
+            let leg_win = metrics[legacy_idx].win_rate;
+            let leg_wt = metrics[legacy_idx].win_turns;
             let safe_winners: Vec<usize> = top_win
                 .into_iter()
                 .filter(|&i| {
-                    metrics[i].loss_rate <= min_loss + 0.004
+                    metrics[i].win_rate + 0.005 >= leg_win
+                        && metrics[i].loss_rate <= min_loss + 0.003
                         && metrics[i].downside <= min_down + 0.006
                         && metrics[i].trap_risk <= min_trap + 0.020
                 })
@@ -495,7 +567,16 @@ impl EndgameRootStats {
                 .iter()
                 .max_by(|&&a, &&b| metrics[a].score.total_cmp(&metrics[b].score))
             {
-                let chosen_idx = if metrics[best_idx].score > metrics[legacy_idx].score + 0.002 {
+                let min_wt_gain = if matches!(acts[legacy_idx], SearchChoice::Move(_))
+                    && matches!(acts[best_idx], SearchChoice::Switch(_))
+                {
+                    0.80
+                } else {
+                    0.45
+                };
+                let chosen_idx = if metrics[best_idx].score > metrics[legacy_idx].score + 0.003
+                    && metrics[best_idx].win_turns + min_wt_gain <= leg_wt
+                {
                     best_idx
                 } else {
                     legacy_idx
@@ -512,22 +593,22 @@ impl EndgameRootStats {
 
         // ---- Regime 2: Almost Winning (safe_win)
         // Guard against Jensen's inequality on 8-turn horizon cutoffs: a stalling move
-        // that ends in a non-terminal heuristic leaf (R ~ 0.89) has lower variance than
+        // that ends in a non-terminal heuristic leaf (R ~ 0.85) has lower variance than
         // a move that resolves terminally (90% R=1, 10% R=0), so we must never trade
         // terminal `win_rate` for unresolved horizon cutoffs. Only prefer an alternative
         // when it is well-sampled, preserves `mean` and terminal `win_rate`, and strictly
         // reduces terminal `loss_rate` or `trap_risk`.
-        if rules.safe_win && mu_star >= 0.88 && mu_legacy >= 0.86 {
-            let turn_w = if rules.fast_win && mu_star >= 0.95 { 0.004 } else { 0.0 };
+        if rules.safe_win && mu_star >= 0.75 && mu_legacy >= 0.72 {
+            let turn_w = if rules.fast_win && mu_star >= 0.90 { 0.004 } else { 0.0 };
             for &i in &elig {
                 let m = &metrics[i];
                 metrics[i].score = m.mean
-                    + 0.15 * m.win_rate
-                    - 1.10 * m.loss_rate
+                    + 0.18 * m.win_rate
+                    - 1.15 * m.loss_rate
                     - 0.30 * m.trap_risk
                     - turn_w * m.win_turns;
             }
-            let min_safe_v = (n_max * 2 / 5).max(16).min(n_max);
+            let min_safe_v = (n_max / 4).clamp(16, 160).min(n_max);
             let leg = &metrics[legacy_idx];
             let leg_score = leg.score;
             let leg_loss = leg.loss_rate;
@@ -537,13 +618,19 @@ impl EndgameRootStats {
                 .iter()
                 .copied()
                 .filter(|&i| {
+                    if i == legacy_idx {
+                        return true;
+                    }
+                    let slack = (1.25 * se_vs_legacy(i)).clamp(0.0020, 0.008);
                     total_visits[i] >= min_safe_v
-                        && metrics[i].mean + 0.012 >= mu_legacy
+                        && metrics[i].mean + slack >= mu_legacy
                         && metrics[i].win_rate + 0.015 >= leg_win
-                        && metrics[i].loss_rate <= leg_loss + 0.001
+                        && metrics[i].loss_rate <= leg_loss
                         && (metrics[i].loss_rate + 0.004 <= leg_loss
-                            || metrics[i].trap_risk + 0.040 <= leg_trap
-                            || metrics[i].mean >= mu_legacy + 0.005)
+                            || (metrics[i].trap_risk + 0.035 <= leg_trap
+                                && metrics[i].win_rate >= leg_win + 0.005)
+                            || (metrics[i].win_rate >= leg_win + 0.020
+                                && metrics[i].mean >= mu_legacy))
                 })
                 .collect();
             if let Some(&best_idx) = candidates
@@ -551,7 +638,7 @@ impl EndgameRootStats {
                 .max_by(|&&a, &&b| metrics[a].score.total_cmp(&metrics[b].score))
             {
                 let cand = &metrics[best_idx];
-                let overrides = cand.score > leg_score + 0.005;
+                let overrides = cand.score > leg_score + 0.004;
                 let chosen_idx = if overrides { best_idx } else { legacy_idx };
                 return Some(EndgameDecisionInfo {
                     regime: EndgameRegime::SafeWin,
@@ -564,10 +651,19 @@ impl EndgameRootStats {
         }
 
         // ---- Regime 3: Losing (comeback_loss)
-        // "失うもの無しにわずかな勝率を回収": only when truly losing (mu_star <= 0.08),
-        // and never sacrifice true MCTS mean (mean >= mu_legacy - 0.006).
-        if rules.comeback_loss && mu_star <= 0.08 {
-            let alpha = ((0.08 - mu_star) / 0.08).clamp(0.25, 1.00);
+        // "失うもの無しにわずかな勝率を回収": only when truly losing, NEVER reduce
+        // terminal `win_rate` or increase terminal `loss_rate`, never sacrifice true MCTS
+        // mean beyond standard error, and only use static `desperation` when every root
+        // action has 0 terminal wins and 100% terminal losses.
+        let is_comeback_regime = mu_star <= 0.08
+            || (mu_star <= 0.12 && max_win_rate <= 0.015 && min_loss_rate >= 0.85);
+        if rules.comeback_loss && is_comeback_regime {
+            let all_guaranteed_loss = elig.iter().all(|&i| {
+                self.win_n.get(i).copied().unwrap_or(0) == 0
+                    && self.loss_n.get(i).copied().unwrap_or(0) == total_visits[i]
+            });
+            let alpha = ((0.10 - mu_star.min(0.10)) / 0.10).clamp(0.25, 1.00);
+            let desp_scale = if all_guaranteed_loss { 1.0 } else { 0.0 };
             for &i in &elig {
                 let m = &metrics[i];
                 let m2 = if m.visits > 0 {
@@ -579,18 +675,52 @@ impl EndgameRootStats {
                 let survive_norm = (m.survive_turns / 10.0).min(1.5);
                 metrics[i].score = m.mean
                     + alpha
-                        * (0.18 * m.mistake_ev
-                            + 0.22 * upside
-                            + 0.20 * m.win_rate
-                            + 0.025 * survive_norm
-                            + 0.006 * m.desperation);
+                        * (0.22 * m.mistake_ev
+                            + 0.20 * upside
+                            + 0.25 * m.win_rate
+                            - 0.20 * m.loss_rate
+                            + 0.030 * survive_norm
+                            + 0.025 * desp_scale * m.desperation);
             }
-            let min_loss_v = (n_max / 5).max(10).min(n_max);
+            let min_loss_v = (n_max / 6).clamp(10, 128).min(n_max);
+            let leg_win = metrics[legacy_idx].win_rate;
+            let leg_loss = metrics[legacy_idx].loss_rate;
+            let leg_mev = metrics[legacy_idx].mistake_ev;
+            let leg_surv = metrics[legacy_idx].survive_turns;
             let candidates: Vec<usize> = elig
                 .iter()
                 .copied()
                 .filter(|&i| {
-                    total_visits[i] >= min_loss_v && metrics[i].mean + 0.006 >= mu_legacy
+                    if i == legacy_idx {
+                        return true;
+                    }
+                    let slack = (1.25 * se_vs_legacy(i)).clamp(0.0015, 0.005);
+                    let leg_win_n = self.win_n.get(legacy_idx).copied().unwrap_or(0);
+                    let i_win_n = self.win_n.get(i).copied().unwrap_or(0);
+                    let i_loss_n = self.loss_n.get(i).copied().unwrap_or(0);
+                    let never_lose_all_wins =
+                        leg_win_n == 0 || (i_win_n > 0 && i_loss_n < total_visits[i]);
+                    let se_win = ((leg_win * (1.0 - leg_win)) / (total_visits[legacy_idx].max(1) as f64)).sqrt();
+                    let no_terminal_regression = never_lose_all_wins
+                        && metrics[i].win_rate + se_win >= leg_win
+                        && metrics[i].loss_rate <= leg_loss + 0.0015;
+                    let has_gain = if !all_guaranteed_loss {
+                        metrics[i].mistake_ev >= leg_mev + 0.075
+                            || (metrics[i].win_rate >= leg_win + 0.003
+                                && metrics[i].mean + 0.0002 >= mu_legacy
+                                && metrics[i].mistake_ev + 0.020 >= leg_mev)
+                            || (metrics[i].loss_rate + 0.005 <= leg_loss
+                                && metrics[i].survive_turns >= leg_surv + 1.0)
+                    } else {
+                        metrics[i].mistake_ev >= leg_mev + 0.040
+                            || metrics[i].survive_turns >= leg_surv + 1.0
+                            || (metrics[i].mistake_ev + 0.005 >= leg_mev
+                                && metrics[i].desperation >= metrics[legacy_idx].desperation + 0.15)
+                    };
+                    total_visits[i] >= min_loss_v
+                        && metrics[i].mean + slack >= mu_legacy
+                        && no_terminal_regression
+                        && has_gain
                 })
                 .collect();
             if let Some(&best_idx) = candidates
@@ -653,7 +783,7 @@ pub fn reply_risk_and_mistake_ev(
     mean_i: f64,
     cells: impl Iterator<Item = (u32, f64)>,
 ) -> (f64, f64) {
-    let min_cell_n = (n_i / 20).max(5);
+    let min_cell_n = (n_i / 25).clamp(5, 32);
     let mut worst_drop = 0.0_f64;
     let mut smoothed_replies: Vec<(u32, f64)> = Vec::new();
     for (cn, cw) in cells {
@@ -664,14 +794,14 @@ pub fn reply_risk_and_mistake_ev(
             let shrunk_low = (cw + 4.0 * mean_i) / (cn as f64 + 4.0);
             worst_drop = worst_drop.max((mean_i - shrunk_low).max(0.0));
         }
-        let shrunk_up = (cw + 2.0 * mean_i) / (cn as f64 + 2.0);
+        let shrunk_up = (cw + 2.5 * mean_i) / (cn as f64 + 2.5);
         smoothed_replies.push((cn, shrunk_up));
     }
     let mistake_ev = if smoothed_replies.len() >= 2 {
         let min_idx = smoothed_replies
             .iter()
             .enumerate()
-            .filter(|(_, (cn, _))| *cn >= 2)
+            .filter(|(_, (cn, _))| *cn >= 3)
             .min_by(|(_, a), (_, b)| a.1.total_cmp(&b.1))
             .or_else(|| {
                 smoothed_replies
@@ -681,6 +811,8 @@ pub fn reply_risk_and_mistake_ev(
             })
             .map(|(idx, _)| idx)
             .unwrap_or(0);
+        // Cap visit weight at `cn <= 25` so a second opponent KO move with thousands
+        // of UCB visits at 27k budget does not drown out non-KO opponent mistakes.
         let mut sum_v = 0.0;
         let mut sum_w = 0.0;
         let mut max_v = mean_i;
@@ -688,7 +820,7 @@ pub fn reply_risk_and_mistake_ev(
             if idx == min_idx {
                 continue;
             }
-            let w = (cn as f64).sqrt();
+            let w = (cn as f64).clamp(1.0, 25.0).powf(0.25);
             sum_v += w * val;
             sum_w += w;
             if val > max_v {
@@ -696,7 +828,7 @@ pub fn reply_risk_and_mistake_ev(
             }
         }
         if sum_w > 0.0 {
-            0.65 * (sum_v / sum_w) + 0.35 * max_v
+            0.70 * (sum_v / sum_w) + 0.30 * max_v
         } else {
             mean_i
         }
@@ -1333,6 +1465,7 @@ pub(crate) fn run_iteration_with_root_child_value(
                     trace(SearchTrace::Leaf { battle: sim, rng, rollout: true });
                 }
                 if continuation.is_some() || history_policy.is_some() { sim.set_log_enabled(false); }
+                crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(sim, sim.outcome()));
                 break leaf(sim, rng, true);
             }
         }
@@ -2439,7 +2572,7 @@ impl SkuctSearch {
             sim.reseed(self.rng.next());
             let mut joint = [0usize; 2];
             let mut depth = 0u32;
-            run_iteration_with_leaf(
+            let r = run_iteration_with_leaf(
                 &self.cfg,
                 &mut self.rng,
                 &mut self.nodes,
@@ -2458,6 +2591,7 @@ impl SkuctSearch {
             self.scratch = Some(sim);
             self.depth_sum += depth as u64;
             self.done += 1;
+            self.record_root_endgame(r, joint);
         }
         self.done
     }
@@ -4152,15 +4286,20 @@ mod dominated_action_tests {
         }
         let n = [155u32, 145];
         let w = [155.0f64, 145.0];
-        // Default (off) preserves legacy argmax-visits (index 0)
+        // `EndgameRules::none()` (ablation) preserves legacy argmax-visits (index 0),
+        // while `EndgameRules::default()` (shipped) selects the 1-turn KO (index 1).
+        assert_eq!(
+            stats.select_best(EndgameRules::none(), &acts, &n, &n, &w, |_| true, |_, _, m| (0.0, m)),
+            Some(0)
+        );
         assert_eq!(
             stats.select_best(EndgameRules::default(), &acts, &n, &n, &w, |_| true, |_, _, m| (0.0, m)),
-            Some(0)
+            Some(1)
         );
         // FastWin picks index 1 (1-turn KO)
         let info = stats
             .analyze(
-                EndgameRules { fast_win: true, ..Default::default() },
+                EndgameRules { fast_win: true, ..EndgameRules::none() },
                 &acts,
                 &n,
                 &n,
@@ -4174,7 +4313,7 @@ mod dominated_action_tests {
         assert_eq!(info.chosen_idx, 1);
         assert!(
             stats.should_early_stop(
-                EndgameRules { fast_win: true, early_stop: true, ..Default::default() },
+                EndgameRules { fast_win: true, early_stop: true, ..EndgameRules::none() },
                 128,
                 300,
                 false,
@@ -4221,7 +4360,7 @@ mod dominated_action_tests {
         let sw = [146.0f64, 126.0 + 14.0 * 0.07];
         let safe_info = safe_stats
             .analyze(
-                EndgameRules { safe_win: true, ..Default::default() },
+                EndgameRules { safe_win: true, ..EndgameRules::none() },
                 &acts,
                 &sn,
                 &sn,
@@ -4267,7 +4406,7 @@ mod dominated_action_tests {
         let lw = [155.0 * 0.02, 145.0 * 0.02];
         let loss_info = loss_stats
             .analyze(
-                EndgameRules { comeback_loss: true, ..Default::default() },
+                EndgameRules { comeback_loss: true, ..EndgameRules::none() },
                 &acts,
                 &ln,
                 &ln,
@@ -4279,5 +4418,49 @@ mod dominated_action_tests {
         assert_eq!(loss_info.regime, EndgameRegime::ComebackLoss);
         assert_eq!(loss_info.legacy_idx, 0);
         assert_eq!(loss_info.chosen_idx, 1, "ComebackLoss picks the high-mistake-EV line");
+
+        // 4. Side 1 symmetry: verify `my_reward` is not double-flipped for side == 1.
+        let mut s1_stats = EndgameRootStats::new(&b, &dex, 1, &acts);
+        for _ in 0..80 {
+            s1_stats.record(
+                b.turn,
+                1,
+                0,
+                1.0,
+                crate::mcts::SimEndInfo {
+                    turn: b.turn + 3,
+                    outcome: 2,
+                    alive: [0, 2],
+                },
+            );
+            s1_stats.record(
+                b.turn,
+                1,
+                1,
+                1.0,
+                crate::mcts::SimEndInfo {
+                    turn: b.turn,
+                    outcome: 2,
+                    alive: [0, 2],
+                },
+            );
+        }
+        let s1_n = [80u32, 80];
+        let s1_w = [80.0f64, 80.0];
+        let s1_info = s1_stats
+            .analyze(
+                EndgameRules::all_decision(),
+                &acts,
+                &s1_n,
+                &s1_n,
+                &s1_w,
+                |_| true,
+                |_, _, m| (0.0, m),
+            )
+            .unwrap();
+        assert_eq!(s1_info.regime, EndgameRegime::FastWin);
+        assert_eq!(s1_info.chosen_idx, 1, "Side 1 FastWin selects the 1-turn KO");
+        assert!((s1_info.actions[1].win_rate - 1.0).abs() < 1e-9);
+        assert_eq!(s1_info.actions[1].loss_rate, 0.0);
     }
 }

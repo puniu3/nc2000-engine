@@ -1410,14 +1410,16 @@ impl BlindSearch {
     pub fn joint_probe_visits(&self) -> &[u32] { &self.joint_probe_n }
 
     fn reply_metrics(&self, own: usize, n_i: u32, mean_i: f64) -> (f64, f64) {
-        let cells = self
-            .joint
-            .iter()
-            .filter_map(|&(a, _c, n, w)| if a == own && n > 0 { Some((n, w)) } else { None });
-        let (mut trap_risk, mut mistake_ev) =
-            crate::smmcts::reply_risk_and_mistake_ev(n_i, mean_i, cells);
+        // Compute within-type reply risk and opponent-mistake EV per `RootTypeStats`
+        // (where the opponent's legal reply set is fixed), then aggregate across
+        // determinization types weighted by empirical visits `type_n`. Never pool
+        // `self.joint` across distinct opponent movesets, which would mistake a hard
+        // opponent candidate set for an opponent reply choice within the same game.
+        let mut trap_risk = 0.0_f64;
+        let mut mistake_weighted_sum = 0.0_f64;
+        let mut mistake_weight_total = 0.0_f64;
         for t in &self.root_types {
-            if t.samples < 4 || t.replies == 0 {
+            if t.replies == 0 {
                 continue;
             }
             let row_start = own * t.replies;
@@ -1426,23 +1428,31 @@ impl BlindSearch {
                 continue;
             };
             let type_n: u32 = row.iter().map(|&(n, _)| n).sum();
-            if type_n < 3 {
+            if type_n == 0 {
                 continue;
             }
             let type_w: f64 = row.iter().map(|&(_, w)| w).sum();
             let type_mean = type_w / type_n as f64;
-            let type_shrink = (type_n as f64 / (type_n as f64 + 6.0)).clamp(0.0, 1.0);
-            let type_drop = ((mean_i - type_mean).max(0.0) * type_shrink).clamp(0.0, 1.0);
             let (t_risk, t_mistake) = crate::smmcts::reply_risk_and_mistake_ev(
                 type_n,
                 type_mean,
                 row.iter().copied(),
             );
-            trap_risk = trap_risk.max(type_drop.max(t_risk * type_shrink));
-            if t.samples * 2 >= self.done {
-                mistake_ev = mistake_ev.max(t_mistake);
+            let w_t = type_n as f64;
+            mistake_weighted_sum += w_t * t_mistake;
+            mistake_weight_total += w_t;
+            if type_n >= 4 {
+                let type_shrink = (w_t / (w_t + 6.0)).clamp(0.0, 1.0);
+                let type_drop = ((mean_i - type_mean).max(0.0) * type_shrink).clamp(0.0, 1.0);
+                trap_risk = trap_risk.max(type_drop.max(t_risk * type_shrink));
             }
         }
+        let mistake_ev = if mistake_weight_total > 0.0 {
+            let unattributed = (n_i as f64 - mistake_weight_total).max(0.0);
+            (mistake_weighted_sum + unattributed * mean_i) / (mistake_weight_total + unattributed)
+        } else {
+            mean_i
+        };
         (trap_risk, mistake_ev)
     }
 
