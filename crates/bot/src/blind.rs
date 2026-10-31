@@ -243,6 +243,9 @@ fn search_choose(
     debug_assert_eq!(bs.actions(), choices, "root action set drifted from caller's choices");
     for _ in 0..cfg.iterations {
         bs.step_one(dex, &g.belief, &g.observer);
+        if bs.should_early_stop() {
+            break;
+        }
     }
     *rng = bs.rng.clone();
     bs.best().expect("search called with a non-empty choice list")
@@ -407,6 +410,7 @@ pub struct BlindSearch {
     /// sample count conflates "rarely chosen" with "rarely available", and
     /// only this tells them apart.
     avail: Vec<(SearchChoice, u32)>,
+    endgame: crate::smmcts::EndgameRootStats,
 }
 
 impl BlindSearch {
@@ -479,6 +483,7 @@ impl BlindSearch {
                 crate::smmcts::dominated_reason(&base, dex, side, c, cfg.mask_rules).is_some()
             })
             .collect();
+        let endgame = crate::smmcts::EndgameRootStats::new(&base, dex, side, &my_acts);
         BlindSearch {
             first_continuation: None,
             history_continuation: None,
@@ -507,6 +512,7 @@ impl BlindSearch {
             root_types: Vec::new(),
             root_type_index: FxHashMap::default(),
             avail: Vec::new(),
+            endgame,
         }
     }
 
@@ -1010,6 +1016,14 @@ impl BlindSearch {
     }
 
     fn record_joint(&mut self, root: usize, type_index: usize, my_pick: usize, joint: [usize; 2], r: f64) {
+        let mine = if self.side == 0 { r } else { 1.0 - r };
+        self.endgame.record(
+            self.base.turn,
+            self.side,
+            my_pick,
+            mine,
+            crate::mcts::last_sim_end(),
+        );
         let opp = 1 - self.side;
         let acts = &self.nodes[root].acts[opp];
         let stats = &mut self.root_types[type_index];
@@ -1017,7 +1031,7 @@ impl BlindSearch {
         if joint[opp] < stats.replies {
             let cell = &mut stats.cells[my_pick * stats.replies + joint[opp]];
             cell.0 += 1;
-            cell.1 += if self.side == 0 { r } else { 1. - r };
+            cell.1 += mine;
         }
         let indices = self.root_avail.entry(root).or_insert_with(|| {
             acts.iter().map(|&choice| {
@@ -1034,7 +1048,6 @@ impl BlindSearch {
             self.avail[index].1 += 1;
         }
         let Some(&opp_act) = acts.get(joint[opp]) else { return };
-        let mine = if self.side == 0 { r } else { 1.0 - r };
         let index = match self.joint_index.entry((my_pick, opp_act)) {
             std::collections::hash_map::Entry::Occupied(entry) => *entry.get(),
             std::collections::hash_map::Entry::Vacant(entry) => {
@@ -1396,14 +1409,123 @@ impl BlindSearch {
 
     pub fn joint_probe_visits(&self) -> &[u32] { &self.joint_probe_n }
 
+    fn reply_metrics(&self, own: usize, n_i: u32, mean_i: f64) -> (f64, f64) {
+        let cells = self
+            .joint
+            .iter()
+            .filter_map(|&(a, _c, n, w)| if a == own && n > 0 { Some((n, w)) } else { None });
+        let (mut trap_risk, mut mistake_ev) =
+            crate::smmcts::reply_risk_and_mistake_ev(n_i, mean_i, cells);
+        for t in &self.root_types {
+            if t.samples < 4 || t.replies == 0 {
+                continue;
+            }
+            let row_start = own * t.replies;
+            let row_end = row_start + t.replies;
+            let Some(row) = t.cells.get(row_start..row_end) else {
+                continue;
+            };
+            let type_n: u32 = row.iter().map(|&(n, _)| n).sum();
+            if type_n < 3 {
+                continue;
+            }
+            let type_w: f64 = row.iter().map(|&(_, w)| w).sum();
+            let type_mean = type_w / type_n as f64;
+            let type_shrink = (type_n as f64 / (type_n as f64 + 6.0)).clamp(0.0, 1.0);
+            let type_drop = ((mean_i - type_mean).max(0.0) * type_shrink).clamp(0.0, 1.0);
+            let (t_risk, t_mistake) = crate::smmcts::reply_risk_and_mistake_ev(
+                type_n,
+                type_mean,
+                row.iter().copied(),
+            );
+            trap_risk = trap_risk.max(type_drop.max(t_risk * type_shrink));
+            if t.samples * 2 >= self.done {
+                mistake_ev = mistake_ev.max(t_mistake);
+            }
+        }
+        (trap_risk, mistake_ev)
+    }
+
+    pub fn should_early_stop(&self) -> bool {
+        let allowed = |i: usize| self.my_mask.as_ref().map_or(true, |m| m[i]);
+        let safe = (0..self.my_acts.len()).any(|i| allowed(i) && !self.my_dominated[i]);
+        let eligible = |i: usize| allowed(i) && (!safe || !self.my_dominated[i]);
+        self.endgame.should_early_stop(
+            self.cfg.endgame_rules,
+            self.done,
+            self.cfg.iterations,
+            self.is_preview(),
+            &self.my_n,
+            &self.my_w,
+            eligible,
+        )
+    }
+
+    pub fn endgame_analysis(&self) -> Option<crate::smmcts::EndgameDecisionInfo> {
+        let allowed = |i: usize| self.my_mask.as_ref().map_or(true, |m| m[i]);
+        let safe = (0..self.my_acts.len()).any(|i| allowed(i) && !self.my_dominated[i]);
+        let eligible = |i: usize| allowed(i) && (!safe || !self.my_dominated[i]);
+        let ordinary = (0..self.my_acts.len())
+            .any(|i| eligible(i) && self.my_n[i] > self.joint_probe_n[i]);
+        let eff_n: Vec<u32> = (0..self.my_acts.len())
+            .map(|i| {
+                if ordinary {
+                    self.my_n[i] - self.joint_probe_n[i]
+                } else {
+                    self.my_n[i]
+                }
+            })
+            .collect();
+        self.endgame.analyze(
+            self.cfg.endgame_rules,
+            &self.my_acts,
+            &self.my_n,
+            &eff_n,
+            &self.my_w,
+            eligible,
+            |own, n_i, mean_i| self.reply_metrics(own, n_i, mean_i),
+        )
+    }
+
     pub fn best(&self) -> Option<SearchChoice> {
-        let allowed=|i:usize|self.my_mask.as_ref().map_or(true,|m|m[i]);
-        let safe=(0..self.my_acts.len()).any(|i|allowed(i) && !self.my_dominated[i]);
-        let eligible=|i:usize|allowed(i) && (!safe || !self.my_dominated[i]);
-        let ordinary=(0..self.my_acts.len()).any(|i|eligible(i) && self.my_n[i]>self.joint_probe_n[i]);
-        (0..self.my_acts.len()).filter(|&i|eligible(i))
-            .max_by_key(|&i|if ordinary {self.my_n[i]-self.joint_probe_n[i]} else {self.my_n[i]})
-            .map(|i|self.my_acts[i])
+        let allowed = |i: usize| self.my_mask.as_ref().map_or(true, |m| m[i]);
+        let safe = (0..self.my_acts.len()).any(|i| allowed(i) && !self.my_dominated[i]);
+        let eligible = |i: usize| allowed(i) && (!safe || !self.my_dominated[i]);
+        let ordinary = (0..self.my_acts.len())
+            .any(|i| eligible(i) && self.my_n[i] > self.joint_probe_n[i]);
+        if self.cfg.endgame_rules.decision_any() && !self.is_preview() {
+            let eff_n: Vec<u32> = (0..self.my_acts.len())
+                .map(|i| {
+                    if ordinary {
+                        self.my_n[i] - self.joint_probe_n[i]
+                    } else {
+                        self.my_n[i]
+                    }
+                })
+                .collect();
+            return self
+                .endgame
+                .select_best(
+                    self.cfg.endgame_rules,
+                    &self.my_acts,
+                    &self.my_n,
+                    &eff_n,
+                    &self.my_w,
+                    eligible,
+                    |own, n_i, mean_i| self.reply_metrics(own, n_i, mean_i),
+                )
+                .map(|i| self.my_acts[i]);
+        }
+        (0..self.my_acts.len())
+            .filter(|&i| eligible(i))
+            .max_by_key(|&i| {
+                if ordinary {
+                    self.my_n[i] - self.joint_probe_n[i]
+                } else {
+                    self.my_n[i]
+                }
+            })
+            .map(|i| self.my_acts[i])
     }
 
     /// Actual execution probabilities, not `rootPolicy` visit diagnostics.
@@ -1715,6 +1837,9 @@ impl Agent for OpenAgent {
         debug_assert_eq!(bs.actions(), choices, "root action set drifted from caller's choices");
         for _ in 0..self.cfg.iterations {
             bs.step_one(dex, &g.belief, &g.observer);
+            if bs.should_early_stop() {
+                break;
+            }
         }
         self.rng = bs.rng.clone();
         let picked = bs.best().expect("search called with a non-empty choice list");

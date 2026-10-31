@@ -145,10 +145,626 @@ pub struct RmConfig {
     /// shipped; an arena arm flips one field to A/B a mask change, which is
     /// the only harness that can see one at all (see `root_dominated`).
     pub mask_rules: MaskRules,
+    /// Optional endgame decision & budget rules for decided/near-decided boards.
+    /// Default = all `false` (bit-identical to baseline).
+    pub endgame_rules: EndgameRules,
     /// Optional external game-theoretic equity oracle mode (default `Off`).
     pub oracle: crate::oracle::OracleMode,
     /// Leaf tactical settlement & accounting/residual evaluation mode.
     pub settlement: crate::accounting::LeafSettlementMode,
+}
+
+/// Optional root decision & early-stop rules for won, near-won, and lost positions.
+///
+/// 1. `fast_win`: in completely winning positions ($\mu^* \ge 0.985$), prefer actions
+///    that minimize expected turns to win (`win_turns`) without increasing loss/downside risk.
+/// 2. `safe_win`: in near-winning positions ($\mu^* \ge 0.85$), penalize quadratic downside
+///    risk $E[(1 - R)^2]$, terminal loss rate, and worst-reply/worst-type drops to crush
+///    opponent comeback lines.
+/// 3. `comeback_loss`: in losing positions ($\mu^* \le 0.12$), weight opponent-mistake EV
+///    (payoff when the opponent misses their single best punishing reply), upside tail
+///    $\sqrt{E[R^2]}$, survival turns, and a static desperation tie-breaker.
+/// 4. `early_stop`: stop the search loop early when a 1-turn 100%-win KO or a fully
+///    saturated terminal root is locked in.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct EndgameRules {
+    pub fast_win: bool,
+    pub safe_win: bool,
+    pub comeback_loss: bool,
+    pub early_stop: bool,
+}
+
+impl EndgameRules {
+    #[inline]
+    pub const fn any(self) -> bool {
+        self.fast_win || self.safe_win || self.comeback_loss || self.early_stop
+    }
+
+    #[inline]
+    pub const fn decision_any(self) -> bool {
+        self.fast_win || self.safe_win || self.comeback_loss
+    }
+
+    #[inline]
+    pub const fn all_decision() -> Self {
+        Self {
+            fast_win: true,
+            safe_win: true,
+            comeback_loss: true,
+            early_stop: false,
+        }
+    }
+
+    #[inline]
+    pub const fn all_with_early_stop() -> Self {
+        Self {
+            fast_win: true,
+            safe_win: true,
+            comeback_loss: true,
+            early_stop: true,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EndgameRegime {
+    Normal,
+    FastWin,
+    SafeWin,
+    ComebackLoss,
+}
+
+#[derive(Clone, Debug)]
+pub struct EndgameActionMetrics {
+    pub action: SearchChoice,
+    pub visits: u32,
+    pub mean: f64,
+    pub downside: f64,
+    pub win_rate: f64,
+    pub loss_rate: f64,
+    pub win_turns: f64,
+    pub survive_turns: f64,
+    pub trap_risk: f64,
+    pub mistake_ev: f64,
+    pub desperation: f64,
+    pub score: f64,
+}
+
+#[derive(Clone, Debug)]
+pub struct EndgameDecisionInfo {
+    pub regime: EndgameRegime,
+    pub mu_star: f64,
+    pub legacy_idx: usize,
+    pub chosen_idx: usize,
+    pub actions: Vec<EndgameActionMetrics>,
+}
+
+/// Per-root-action auxiliary statistics accumulated alongside `w` without altering
+/// RNG draws or tree exploration.
+#[derive(Clone, Debug, Default)]
+pub struct EndgameRootStats {
+    pub w2: Vec<f64>,
+    pub win_n: Vec<u32>,
+    pub loss_n: Vec<u32>,
+    pub win_turns: Vec<f64>,
+    pub survive_turns: Vec<f64>,
+    pub desperation: Vec<f64>,
+}
+
+impl EndgameRootStats {
+    pub fn new(b: &Battle, dex: &Dex, side: usize, acts: &[SearchChoice]) -> Self {
+        let k = acts.len();
+        let desperation = if matches!(b.request_state, nc2000_engine::state::RequestState::TeamPreview) {
+            vec![0.0; k]
+        } else {
+            acts.iter()
+                .map(|&c| tactical_desperation_bonus(b, dex, side, c))
+                .collect()
+        };
+        EndgameRootStats {
+            w2: vec![0.0; k],
+            win_n: vec![0; k],
+            loss_n: vec![0; k],
+            win_turns: vec![0.0; k],
+            survive_turns: vec![0.0; k],
+            desperation,
+        }
+    }
+
+    #[inline]
+    pub fn record(
+        &mut self,
+        root_turn: u16,
+        side: usize,
+        act_idx: usize,
+        reward0: f64,
+        end: crate::mcts::SimEndInfo,
+    ) {
+        let Some(w2) = self.w2.get_mut(act_idx) else { return };
+        let mine = if side == 0 { reward0 } else { 1.0 - reward0 };
+        *w2 += mine * mine;
+        let my_win_code = if side == 0 { 1 } else { 2 };
+        let my_loss_code = if side == 0 { 2 } else { 1 };
+        let is_win = end.outcome == my_win_code || mine >= 0.999_999;
+        let is_loss = end.outcome == my_loss_code || mine <= 0.000_001;
+        let completed_turns = end.turn.saturating_sub(root_turn) as f64;
+        let opp_alive = end.alive[1 - side] as f64;
+        let my_alive = end.alive[side] as f64;
+        let win_t = if is_win {
+            completed_turns + 1.0
+        } else {
+            completed_turns + 2.0 + 3.0 * opp_alive + 6.0 * (1.0 - mine)
+        };
+        let survive_t = if is_loss {
+            completed_turns + 1.0
+        } else {
+            completed_turns + 2.0 + 3.0 * my_alive + 6.0 * mine
+        };
+        if is_win {
+            self.win_n[act_idx] += 1;
+        }
+        if is_loss {
+            self.loss_n[act_idx] += 1;
+        }
+        self.win_turns[act_idx] += win_t;
+        self.survive_turns[act_idx] += survive_t;
+    }
+
+    pub fn should_early_stop(
+        &self,
+        rules: EndgameRules,
+        done: u32,
+        target_iters: u32,
+        is_preview: bool,
+        total_visits: &[u32],
+        rewards: &[f64],
+        eligible: impl Fn(usize) -> bool,
+    ) -> bool {
+        if !rules.early_stop || is_preview || target_iters < 128 {
+            return false;
+        }
+        let min_done = (target_iters / 3).clamp(96, 512);
+        if done < min_done || done % 32 != 0 {
+            return false;
+        }
+        let elig: Vec<usize> = (0..total_visits.len()).filter(|&i| eligible(i)).collect();
+        if elig.len() <= 1 {
+            return true;
+        }
+        let Some(&legacy_idx) = elig.iter().max_by_key(|&&i| total_visits[i]) else {
+            return false;
+        };
+        // 1) Guaranteed 1-turn terminal KO lock: the leading action (or a fast_win
+        //    action when all alternatives are explored) has >= 32 visits, 100% terminal
+        //    win rate, and mean win turns <= 1.001 (every simulation KOs immediately).
+        let n_leg = total_visits[legacy_idx];
+        if n_leg >= 32
+            && self.win_n[legacy_idx] == n_leg
+            && self.loss_n[legacy_idx] == 0
+            && (self.win_turns[legacy_idx] / n_leg as f64) <= 1.001
+        {
+            return true;
+        }
+        if rules.fast_win && elig.iter().all(|&i| total_visits[i] >= 16) {
+            let leg_mean = rewards[legacy_idx] / n_leg.max(1) as f64;
+            if leg_mean >= 0.985 {
+                for &i in &elig {
+                    let n = total_visits[i];
+                    if n >= 32
+                        && self.win_n[i] == n
+                        && self.loss_n[i] == 0
+                        && (self.win_turns[i] / n as f64) <= 1.001
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        // 2) Full root saturation after 50% budget: every eligible action has >= 24 visits
+        //    and all are 100% immediate/1-turn terminal losses or 100% immediate wins.
+        if done >= (target_iters / 2).max(128) && elig.iter().all(|&i| total_visits[i] >= 24) {
+            let all_dead_now = elig.iter().all(|&i| {
+                let n = total_visits[i];
+                self.loss_n[i] == n
+                    && self.win_n[i] == 0
+                    && rewards[i] == 0.0
+                    && (self.survive_turns[i] / n as f64) <= 1.5
+            });
+            if all_dead_now {
+                return true;
+            }
+            let all_won_fast = elig.iter().all(|&i| {
+                let n = total_visits[i];
+                self.loss_n[i] == 0
+                    && self.win_n[i] == n
+                    && (rewards[i] / n as f64) >= 0.999
+                    && (self.win_turns[i] / n as f64) <= 2.0
+            });
+            if all_won_fast {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn analyze(
+        &self,
+        rules: EndgameRules,
+        acts: &[SearchChoice],
+        total_visits: &[u32],
+        effective_visits: &[u32],
+        rewards: &[f64],
+        eligible: impl Fn(usize) -> bool,
+        reply_metrics: impl Fn(usize, u32, f64) -> (f64, f64),
+    ) -> Option<EndgameDecisionInfo> {
+        let k = acts.len();
+        let elig: Vec<usize> = (0..k).filter(|&i| eligible(i)).collect();
+        if elig.is_empty() {
+            return None;
+        }
+        let legacy_idx = *elig.iter().max_by_key(|&&i| effective_visits[i])?;
+        let n_max = elig.iter().map(|&i| total_visits[i]).max().unwrap_or(0);
+        let mut metrics: Vec<EndgameActionMetrics> = (0..k)
+            .map(|i| {
+                let n = total_visits[i];
+                let mean = if n > 0 { rewards[i] / n as f64 } else { 0.5 };
+                let m2 = if n > 0 { self.w2[i] / n as f64 } else { 0.25 };
+                let downside = (1.0 - 2.0 * mean + m2).max(0.0);
+                let win_rate = if n > 0 { self.win_n[i] as f64 / n as f64 } else { 0.0 };
+                let loss_rate = if n > 0 { self.loss_n[i] as f64 / n as f64 } else { 0.0 };
+                let win_turns = if n > 0 { self.win_turns[i] / n as f64 } else { 20.0 };
+                let survive_turns = if n > 0 { self.survive_turns[i] / n as f64 } else { 1.0 };
+                let (trap_risk, mistake_ev) = if n > 0 && eligible(i) {
+                    reply_metrics(i, n, mean)
+                } else {
+                    (0.0, mean)
+                };
+                EndgameActionMetrics {
+                    action: acts[i],
+                    visits: n,
+                    mean,
+                    downside,
+                    win_rate,
+                    loss_rate,
+                    win_turns,
+                    survive_turns,
+                    trap_risk,
+                    mistake_ev,
+                    desperation: self.desperation.get(i).copied().unwrap_or(0.0),
+                    score: mean,
+                }
+            })
+            .collect();
+
+        if elig.len() <= 1 || n_max == 0 || !rules.decision_any() {
+            return Some(EndgameDecisionInfo {
+                regime: EndgameRegime::Normal,
+                mu_star: metrics[legacy_idx].mean,
+                legacy_idx,
+                chosen_idx: legacy_idx,
+                actions: metrics,
+            });
+        }
+
+        let min_v = (n_max / 8).max(8).min(n_max);
+        let well_sampled: Vec<usize> = elig
+            .iter()
+            .copied()
+            .filter(|&i| total_visits[i] >= min_v)
+            .collect();
+        let mu_star = well_sampled
+            .iter()
+            .map(|&i| metrics[i].mean)
+            .fold(f64::NEG_INFINITY, f64::max);
+        let mu_legacy = metrics[legacy_idx].mean;
+
+        // ---- Regime 1: Completely Winning (fast_win)
+        if rules.fast_win && mu_star >= 0.985 && mu_legacy >= 0.970 {
+            let top_win: Vec<usize> = well_sampled
+                .iter()
+                .copied()
+                .filter(|&i| metrics[i].mean >= mu_star - 0.012)
+                .collect();
+            let min_loss = top_win
+                .iter()
+                .map(|&i| metrics[i].loss_rate)
+                .fold(f64::INFINITY, f64::min);
+            let min_down = top_win
+                .iter()
+                .map(|&i| metrics[i].downside)
+                .fold(f64::INFINITY, f64::min);
+            let min_trap = top_win
+                .iter()
+                .map(|&i| metrics[i].trap_risk)
+                .fold(f64::INFINITY, f64::min);
+
+            for &i in &elig {
+                let m = &metrics[i];
+                metrics[i].score =
+                    m.mean - 0.50 * m.downside - 0.80 * m.loss_rate - 0.015 * m.win_turns;
+            }
+            let safe_winners: Vec<usize> = top_win
+                .into_iter()
+                .filter(|&i| {
+                    metrics[i].loss_rate <= min_loss + 0.004
+                        && metrics[i].downside <= min_down + 0.006
+                        && metrics[i].trap_risk <= min_trap + 0.020
+                })
+                .collect();
+            if let Some(&best_idx) = safe_winners
+                .iter()
+                .max_by(|&&a, &&b| metrics[a].score.total_cmp(&metrics[b].score))
+            {
+                let chosen_idx = if metrics[best_idx].score > metrics[legacy_idx].score + 0.002 {
+                    best_idx
+                } else {
+                    legacy_idx
+                };
+                return Some(EndgameDecisionInfo {
+                    regime: EndgameRegime::FastWin,
+                    mu_star,
+                    legacy_idx,
+                    chosen_idx,
+                    actions: metrics,
+                });
+            }
+        }
+
+        // ---- Regime 2: Almost Winning (safe_win)
+        // Guard against Jensen's inequality on 8-turn horizon cutoffs: a stalling move
+        // that ends in a non-terminal heuristic leaf (R ~ 0.89) has lower variance than
+        // a move that resolves terminally (90% R=1, 10% R=0), so we must never trade
+        // terminal `win_rate` for unresolved horizon cutoffs. Only prefer an alternative
+        // when it is well-sampled, preserves `mean` and terminal `win_rate`, and strictly
+        // reduces terminal `loss_rate` or `trap_risk`.
+        if rules.safe_win && mu_star >= 0.88 && mu_legacy >= 0.86 {
+            let turn_w = if rules.fast_win && mu_star >= 0.95 { 0.004 } else { 0.0 };
+            for &i in &elig {
+                let m = &metrics[i];
+                metrics[i].score = m.mean
+                    + 0.15 * m.win_rate
+                    - 1.10 * m.loss_rate
+                    - 0.30 * m.trap_risk
+                    - turn_w * m.win_turns;
+            }
+            let min_safe_v = (n_max * 2 / 5).max(16).min(n_max);
+            let leg = &metrics[legacy_idx];
+            let leg_score = leg.score;
+            let leg_loss = leg.loss_rate;
+            let leg_win = leg.win_rate;
+            let leg_trap = leg.trap_risk;
+            let candidates: Vec<usize> = elig
+                .iter()
+                .copied()
+                .filter(|&i| {
+                    total_visits[i] >= min_safe_v
+                        && metrics[i].mean + 0.012 >= mu_legacy
+                        && metrics[i].win_rate + 0.015 >= leg_win
+                        && metrics[i].loss_rate <= leg_loss + 0.001
+                        && (metrics[i].loss_rate + 0.004 <= leg_loss
+                            || metrics[i].trap_risk + 0.040 <= leg_trap
+                            || metrics[i].mean >= mu_legacy + 0.005)
+                })
+                .collect();
+            if let Some(&best_idx) = candidates
+                .iter()
+                .max_by(|&&a, &&b| metrics[a].score.total_cmp(&metrics[b].score))
+            {
+                let cand = &metrics[best_idx];
+                let overrides = cand.score > leg_score + 0.005;
+                let chosen_idx = if overrides { best_idx } else { legacy_idx };
+                return Some(EndgameDecisionInfo {
+                    regime: EndgameRegime::SafeWin,
+                    mu_star,
+                    legacy_idx,
+                    chosen_idx,
+                    actions: metrics,
+                });
+            }
+        }
+
+        // ---- Regime 3: Losing (comeback_loss)
+        // "失うもの無しにわずかな勝率を回収": only when truly losing (mu_star <= 0.08),
+        // and never sacrifice true MCTS mean (mean >= mu_legacy - 0.006).
+        if rules.comeback_loss && mu_star <= 0.08 {
+            let alpha = ((0.08 - mu_star) / 0.08).clamp(0.25, 1.00);
+            for &i in &elig {
+                let m = &metrics[i];
+                let m2 = if m.visits > 0 {
+                    (m.downside - 1.0 + 2.0 * m.mean).max(0.0)
+                } else {
+                    0.0
+                };
+                let upside = m2.sqrt();
+                let survive_norm = (m.survive_turns / 10.0).min(1.5);
+                metrics[i].score = m.mean
+                    + alpha
+                        * (0.18 * m.mistake_ev
+                            + 0.22 * upside
+                            + 0.20 * m.win_rate
+                            + 0.025 * survive_norm
+                            + 0.006 * m.desperation);
+            }
+            let min_loss_v = (n_max / 5).max(10).min(n_max);
+            let candidates: Vec<usize> = elig
+                .iter()
+                .copied()
+                .filter(|&i| {
+                    total_visits[i] >= min_loss_v && metrics[i].mean + 0.006 >= mu_legacy
+                })
+                .collect();
+            if let Some(&best_idx) = candidates
+                .iter()
+                .max_by(|&&a, &&b| metrics[a].score.total_cmp(&metrics[b].score))
+            {
+                let chosen_idx = if metrics[best_idx].score > metrics[legacy_idx].score + 0.001 {
+                    best_idx
+                } else {
+                    legacy_idx
+                };
+                return Some(EndgameDecisionInfo {
+                    regime: EndgameRegime::ComebackLoss,
+                    mu_star,
+                    legacy_idx,
+                    chosen_idx,
+                    actions: metrics,
+                });
+            }
+        }
+
+        Some(EndgameDecisionInfo {
+            regime: EndgameRegime::Normal,
+            mu_star,
+            legacy_idx,
+            chosen_idx: legacy_idx,
+            actions: metrics,
+        })
+    }
+
+    pub fn select_best(
+        &self,
+        rules: EndgameRules,
+        acts: &[SearchChoice],
+        total_visits: &[u32],
+        effective_visits: &[u32],
+        rewards: &[f64],
+        eligible: impl Fn(usize) -> bool,
+        reply_metrics: impl Fn(usize, u32, f64) -> (f64, f64),
+    ) -> Option<usize> {
+        let k = acts.len();
+        if !rules.decision_any() {
+            return (0..k).filter(|&i| eligible(i)).max_by_key(|&i| effective_visits[i]);
+        }
+        self.analyze(
+            rules,
+            acts,
+            total_visits,
+            effective_visits,
+            rewards,
+            eligible,
+            reply_metrics,
+        )
+        .map(|info| info.chosen_idx)
+    }
+}
+
+pub fn reply_risk_and_mistake_ev(
+    n_i: u32,
+    mean_i: f64,
+    cells: impl Iterator<Item = (u32, f64)>,
+) -> (f64, f64) {
+    let min_cell_n = (n_i / 20).max(5);
+    let mut worst_drop = 0.0_f64;
+    let mut smoothed_replies: Vec<(u32, f64)> = Vec::new();
+    for (cn, cw) in cells {
+        if cn == 0 {
+            continue;
+        }
+        if cn >= min_cell_n {
+            let shrunk_low = (cw + 4.0 * mean_i) / (cn as f64 + 4.0);
+            worst_drop = worst_drop.max((mean_i - shrunk_low).max(0.0));
+        }
+        let shrunk_up = (cw + 2.0 * mean_i) / (cn as f64 + 2.0);
+        smoothed_replies.push((cn, shrunk_up));
+    }
+    let mistake_ev = if smoothed_replies.len() >= 2 {
+        let min_idx = smoothed_replies
+            .iter()
+            .enumerate()
+            .filter(|(_, (cn, _))| *cn >= 2)
+            .min_by(|(_, a), (_, b)| a.1.total_cmp(&b.1))
+            .or_else(|| {
+                smoothed_replies
+                    .iter()
+                    .enumerate()
+                    .min_by(|(_, a), (_, b)| a.1.total_cmp(&b.1))
+            })
+            .map(|(idx, _)| idx)
+            .unwrap_or(0);
+        let mut sum_v = 0.0;
+        let mut sum_w = 0.0;
+        let mut max_v = mean_i;
+        for (idx, &(cn, val)) in smoothed_replies.iter().enumerate() {
+            if idx == min_idx {
+                continue;
+            }
+            let w = (cn as f64).sqrt();
+            sum_v += w * val;
+            sum_w += w;
+            if val > max_v {
+                max_v = val;
+            }
+        }
+        if sum_w > 0.0 {
+            0.65 * (sum_v / sum_w) + 0.35 * max_v
+        } else {
+            mean_i
+        }
+    } else {
+        mean_i
+    };
+    (worst_drop, mistake_ev)
+}
+
+/// Static desperation tie-breaker in `[0, 1]` used when a losing root is flat zero.
+pub fn tactical_desperation_bonus(
+    b: &Battle,
+    dex: &Dex,
+    side: usize,
+    c: SearchChoice,
+) -> f64 {
+    use nc2000_engine::state::Status;
+    let (Some(att), Some(def)) = (b.active_id(side), b.active_id(1 - side)) else {
+        return 0.0;
+    };
+    let me = b.poke(att);
+    let foe = b.poke(def);
+    if me.fainted || me.hp <= 0 || foe.fainted || foe.hp <= 0 {
+        return 0.0;
+    }
+    match c {
+        SearchChoice::Move(id) => {
+            let ms = dex.move_static(id);
+            let key = dex.moves.key(id);
+            if me.status == Status::Slp {
+                return if ms.sleep_usable { 0.90 } else { 0.10 };
+            }
+            let mut bonus = 0.0_f64;
+            if me.status == Status::Frz && matches!(key, "flamewheel" | "sacredfire") {
+                bonus += 0.70;
+            }
+            let dmg = crate::eval::expected_hit_fraction(b, dex, att, def, id, true).clamp(0.0, 1.5);
+            bonus += 0.45 * dmg.min(1.0);
+            if ms.priority > 0 && dmg > 0.0 {
+                bonus += 0.25;
+            }
+            if matches!(key, "protect" | "detect" | "endure") {
+                bonus += 0.20;
+            }
+            if ms.status.is_some() || ms.volatile_status.is_some() {
+                bonus += 0.25;
+            }
+            if ms.has_boosts || matches!(key, "curse" | "bellydrum") {
+                bonus += 0.20;
+            }
+            if !ms.secondaries.is_empty() && dmg > 0.0 {
+                bonus += 0.10;
+            }
+            bonus.clamp(0.0, 1.0)
+        }
+        SearchChoice::Switch(pos) => {
+            let Some(&slot) = b.sides[side].party.get(pos as usize - 1) else {
+                return 0.0;
+            };
+            let sub = &b.sides[side].roster[slot as usize];
+            if sub.fainted || sub.hp <= 0 {
+                return 0.0;
+            }
+            let hp_frac = (sub.hp as f64 / sub.maxhp.max(1) as f64).clamp(0.0, 1.0);
+            (0.15 + 0.20 * hp_frac).clamp(0.0, 1.0)
+        }
+        SearchChoice::Team(_) | SearchChoice::Pass => 0.0,
+    }
 }
 
 impl RmConfig {
@@ -198,6 +814,7 @@ impl Default for RmConfig {
             mask_rules: MaskRules::default(),
             oracle: crate::oracle::OracleMode::Off,
             settlement: crate::accounting::LeafSettlementMode::BlindSpotLeaf,
+            endgame_rules: EndgameRules::default(),
         }
     }
 }
@@ -669,6 +1286,7 @@ pub(crate) fn run_iteration_with_root_child_value(
             if let Some(trace) = trace.as_deref_mut() {
                 trace(SearchTrace::Leaf { battle: sim, rng, rollout: false });
             }
+            crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(sim, sim.outcome()));
             break leaf(sim, rng, false);
         }
         if decision_depth == 0 && continuation.is_some() { sim.set_log_enabled(true); }
@@ -681,11 +1299,13 @@ pub(crate) fn run_iteration_with_root_child_value(
         decision_depth += 1;
         if let Some(o) = sim.outcome() {
             if continuation.is_some() || history_policy.is_some() { sim.set_log_enabled(false); }
+            crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(sim, Some(o)));
             break outcome_reward(o);
         }
         if at_root {
             if let Some(value) = root_child_value.as_deref_mut().and_then(|evaluate| evaluate(sim)) {
                 assert!((0. ..=1.).contains(&value));
+                crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(sim, sim.outcome()));
                 break value;
             }
         }
@@ -694,6 +1314,7 @@ pub(crate) fn run_iteration_with_root_child_value(
             if let Some(trace) = trace.as_deref_mut() {
                 trace(SearchTrace::Leaf { battle: sim, rng, rollout: false });
             }
+            crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(sim, sim.outcome()));
             break leaf(sim, rng, false);
         }
         let key = key_of(cfg, dex, sim);
@@ -803,6 +1424,9 @@ pub struct SkuctSearch {
     /// Final-choice exclusions from `dominated_reason`. Only `best()` uses
     /// this mask; RmAgent's sampled policy reads unfiltered root statistics.
     root_dominated: [Vec<bool>; 2],
+    endgame: [EndgameRootStats; 2],
+    joint_n: Vec<u32>,
+    joint_w0: Vec<f64>,
 }
 
 /// A self-KO move used by the side's LAST mon is an unconditional immediate
@@ -1631,7 +2255,97 @@ impl SkuctSearch {
                 })
                 .collect::<Vec<bool>>()
         });
-        SkuctSearch { cfg, rng, root, scratch: None, turn_cap, nodes, table, done: 0, depth_sum: 0, root_dominated }
+        let endgame = [0usize, 1].map(|s| EndgameRootStats::new(&root, dex, s, &nodes[0].acts[s]));
+        let cells = nodes[0].acts[0].len().max(1) * nodes[0].acts[1].len().max(1);
+        SkuctSearch {
+            cfg,
+            rng,
+            root,
+            scratch: None,
+            turn_cap,
+            nodes,
+            table,
+            done: 0,
+            depth_sum: 0,
+            root_dominated,
+            endgame,
+            joint_n: vec![0u32; cells],
+            joint_w0: vec![0.0f64; cells],
+        }
+    }
+
+    fn record_root_endgame(&mut self, r0: f64, joint: [usize; 2]) {
+        let end = crate::mcts::last_sim_end();
+        let k0 = self.nodes[0].acts[0].len();
+        let k1 = self.nodes[0].acts[1].len();
+        if k0 > 0 && joint[0] < k0 {
+            self.endgame[0].record(self.root.turn, 0, joint[0], r0, end);
+        }
+        if k1 > 0 && joint[1] < k1 {
+            self.endgame[1].record(self.root.turn, 1, joint[1], 1.0 - r0, end);
+        }
+        let k1_stride = k1.max(1);
+        let cell = joint[0] * k1_stride + joint[1];
+        if cell < self.joint_n.len() {
+            self.joint_n[cell] += 1;
+            self.joint_w0[cell] += r0;
+        }
+    }
+
+    fn reply_metrics(&self, side: usize, own: usize, n_i: u32, mean_i: f64) -> (f64, f64) {
+        let foe = 1 - side;
+        let k_foe = self.nodes[0].acts[foe].len();
+        let k1_stride = self.nodes[0].acts[1].len().max(1);
+        if k_foe <= 1 {
+            return (0.0, mean_i);
+        }
+        reply_risk_and_mistake_ev(
+            n_i,
+            mean_i,
+            (0..k_foe).map(|j| {
+                let cell = if side == 0 {
+                    own * k1_stride + j
+                } else {
+                    j * k1_stride + own
+                };
+                let n = self.joint_n.get(cell).copied().unwrap_or(0);
+                let w0 = self.joint_w0.get(cell).copied().unwrap_or(0.0);
+                let w = if side == 0 { w0 } else { n as f64 - w0 };
+                (n, w)
+            }),
+        )
+    }
+
+    pub fn should_early_stop(&self, side: usize) -> bool {
+        let node = &self.nodes[0];
+        let sui = &self.root_dominated[side];
+        let safe = (0..node.acts[side].len()).any(|a| !sui.get(a).copied().unwrap_or(false));
+        let eligible = |a: usize| !safe || !sui.get(a).copied().unwrap_or(false);
+        self.endgame[side].should_early_stop(
+            self.cfg.endgame_rules,
+            self.done,
+            self.cfg.iterations,
+            self.is_preview(),
+            &node.n[side],
+            &node.w[side],
+            eligible,
+        )
+    }
+
+    pub fn endgame_analysis(&self, side: usize) -> Option<EndgameDecisionInfo> {
+        let node = &self.nodes[0];
+        let sui = &self.root_dominated[side];
+        let safe = (0..node.acts[side].len()).any(|a| !sui.get(a).copied().unwrap_or(false));
+        let eligible = |a: usize| !safe || !sui.get(a).copied().unwrap_or(false);
+        self.endgame[side].analyze(
+            self.cfg.endgame_rules,
+            &node.acts[side],
+            &node.n[side],
+            &node.n[side],
+            &node.w[side],
+            eligible,
+            |own, n_i, mean_i| self.reply_metrics(side, own, n_i, mean_i),
+        )
     }
 
     /// One UCB iteration (reset root, fresh chance seed, select/expand/
@@ -1666,6 +2380,7 @@ impl SkuctSearch {
         self.scratch = Some(sim);
         self.depth_sum += depth as u64;
         self.done += 1;
+        self.record_root_endgame(r, joint);
         (r, joint)
     }
 
@@ -1700,6 +2415,7 @@ impl SkuctSearch {
         self.scratch = Some(sim);
         self.depth_sum += depth as u64;
         self.done += 1;
+        self.record_root_endgame(r, joint);
         r
     }
 
@@ -1810,6 +2526,21 @@ impl SkuctSearch {
         // a guaranteed instant loss (2026-07-21 last-mon-Explosion report).
         let node = &self.nodes[0];
         let sui = &self.root_dominated[side];
+        if self.cfg.endgame_rules.decision_any() && !self.is_preview() {
+            let safe = (0..node.acts[side].len()).any(|a| !sui.get(a).copied().unwrap_or(false));
+            let eligible = |a: usize| !safe || !sui.get(a).copied().unwrap_or(false);
+            return self.endgame[side]
+                .select_best(
+                    self.cfg.endgame_rules,
+                    &node.acts[side],
+                    &node.n[side],
+                    &node.n[side],
+                    &node.w[side],
+                    eligible,
+                    |own, n_i, mean_i| self.reply_metrics(side, own, n_i, mean_i),
+                )
+                .map(|a| node.acts[side][a]);
+        }
         (0..node.acts[side].len())
             .filter(|&a| !sui.get(a).copied().unwrap_or(false))
             .max_by_key(|&a| node.n[side][a])
@@ -1864,13 +2595,22 @@ impl RmAgent {
                 late_n[cell] += 1;
                 late_w[cell] += r;
             }
+            if ts.should_early_stop(side) {
+                break;
+            }
         }
 
         let acts = ts.nodes[0].acts[side].clone();
 
         // preview root (or argmax ablation): most-visited action, point mass
         if !mixed_root {
-            let best = (0..acts.len()).max_by_key(|&a| ts.nodes[0].n[side][a]).unwrap();
+            let best = if self.cfg.endgame_rules.decision_any() && !ts.is_preview() {
+                ts.best(side)
+                    .and_then(|c| acts.iter().position(|&a| a == c))
+                    .unwrap_or_else(|| (0..acts.len()).max_by_key(|&a| ts.nodes[0].n[side][a]).unwrap())
+            } else {
+                (0..acts.len()).max_by_key(|&a| ts.nodes[0].n[side][a]).unwrap()
+            };
             let mut probs = vec![0.0; acts.len()];
             probs[best] = 1.0;
             self.rng = ts.rng;
@@ -3373,5 +4113,171 @@ mod dominated_action_tests {
                 "{key} vs stranded foe with no last_move must be masked"
             );
         }
+    }
+
+    #[test]
+    fn endgame_rules_fast_win_safe_win_comeback_loss_and_early_stop() {
+        let (dex, b) = setup();
+        let acts = vec![mv(&dex, "agility"), mv(&dex, "thunderbolt")];
+
+        // 1. FastWin: both moves win 100% (mean = 1.0, loss = 0), but action 0 (Agility)
+        //    wins in 4 turns with 155 visits while action 1 (Thunderbolt) wins in 1 turn
+        //    with 145 visits.
+        let mut stats = EndgameRootStats::new(&b, &dex, 0, &acts);
+        for _ in 0..155 {
+            stats.record(
+                b.turn,
+                0,
+                0,
+                1.0,
+                crate::mcts::SimEndInfo {
+                    turn: b.turn + 3,
+                    outcome: 1,
+                    alive: [2, 0],
+                },
+            );
+        }
+        for _ in 0..145 {
+            stats.record(
+                b.turn,
+                0,
+                1,
+                1.0,
+                crate::mcts::SimEndInfo {
+                    turn: b.turn,
+                    outcome: 1,
+                    alive: [2, 0],
+                },
+            );
+        }
+        let n = [155u32, 145];
+        let w = [155.0f64, 145.0];
+        // Default (off) preserves legacy argmax-visits (index 0)
+        assert_eq!(
+            stats.select_best(EndgameRules::default(), &acts, &n, &n, &w, |_| true, |_, _, m| (0.0, m)),
+            Some(0)
+        );
+        // FastWin picks index 1 (1-turn KO)
+        let info = stats
+            .analyze(
+                EndgameRules { fast_win: true, ..Default::default() },
+                &acts,
+                &n,
+                &n,
+                &w,
+                |_| true,
+                |_, _, m| (0.0, m),
+            )
+            .unwrap();
+        assert_eq!(info.regime, EndgameRegime::FastWin);
+        assert_eq!(info.legacy_idx, 0);
+        assert_eq!(info.chosen_idx, 1);
+        assert!(
+            stats.should_early_stop(
+                EndgameRules { fast_win: true, early_stop: true, ..Default::default() },
+                128,
+                300,
+                false,
+                &n,
+                &w,
+                |_| true,
+            ),
+            "early_stop triggers when a 1-turn 100%-win KO is locked in"
+        );
+
+        // 2. SafeWin: action 0 has slightly higher mean (0.9125) and visits (160) but 8.75%
+        //    catastrophic terminal losses, whereas action 1 has mean 0.907 (140 visits) with
+        //    90% terminal wins and 0% terminal losses.
+        let mut safe_stats = EndgameRootStats::new(&b, &dex, 0, &acts);
+        for k in 0..160 {
+            let win = k < 146;
+            safe_stats.record(
+                b.turn,
+                0,
+                0,
+                if win { 1.0 } else { 0.0 },
+                crate::mcts::SimEndInfo {
+                    turn: b.turn + 2,
+                    outcome: if win { 1 } else { 2 },
+                    alive: if win { [1, 0] } else { [0, 1] },
+                },
+            );
+        }
+        for k in 0..140 {
+            let r = if k < 126 { 1.0 } else { 0.07 };
+            safe_stats.record(
+                b.turn,
+                0,
+                1,
+                r,
+                crate::mcts::SimEndInfo {
+                    turn: b.turn + 2,
+                    outcome: if k < 126 { 1 } else { 0 },
+                    alive: [2, 1],
+                },
+            );
+        }
+        let sn = [160u32, 140];
+        let sw = [146.0f64, 126.0 + 14.0 * 0.07];
+        let safe_info = safe_stats
+            .analyze(
+                EndgameRules { safe_win: true, ..Default::default() },
+                &acts,
+                &sn,
+                &sn,
+                &sw,
+                |_| true,
+                |i, _, m| if i == 0 { (0.25, m) } else { (0.0, m) },
+            )
+            .unwrap();
+        assert_eq!(safe_info.regime, EndgameRegime::SafeWin);
+        assert_eq!(safe_info.legacy_idx, 0);
+        assert_eq!(safe_info.chosen_idx, 1, "SafeWin eliminates the 8.75% loss path");
+
+        // 3. ComebackLoss: both moves have 0.02 mean against opponent best play,
+        //    but action 1 survives 5 turns and recovers 0.45 when opponent errs.
+        let mut loss_stats = EndgameRootStats::new(&b, &dex, 0, &acts);
+        for _ in 0..155 {
+            loss_stats.record(
+                b.turn,
+                0,
+                0,
+                0.02,
+                crate::mcts::SimEndInfo {
+                    turn: b.turn,
+                    outcome: 2,
+                    alive: [0, 2],
+                },
+            );
+        }
+        for _ in 0..145 {
+            loss_stats.record(
+                b.turn,
+                0,
+                1,
+                0.02,
+                crate::mcts::SimEndInfo {
+                    turn: b.turn + 4,
+                    outcome: 2,
+                    alive: [0, 1],
+                },
+            );
+        }
+        let ln = [155u32, 145];
+        let lw = [155.0 * 0.02, 145.0 * 0.02];
+        let loss_info = loss_stats
+            .analyze(
+                EndgameRules { comeback_loss: true, ..Default::default() },
+                &acts,
+                &ln,
+                &ln,
+                &lw,
+                |_| true,
+                |i, _, _| if i == 0 { (0.0, 0.02) } else { (0.0, 0.45) },
+            )
+            .unwrap();
+        assert_eq!(loss_info.regime, EndgameRegime::ComebackLoss);
+        assert_eq!(loss_info.legacy_idx, 0);
+        assert_eq!(loss_info.chosen_idx, 1, "ComebackLoss picks the high-mistake-EV line");
     }
 }

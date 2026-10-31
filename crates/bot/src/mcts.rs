@@ -21,6 +21,8 @@
 //! configuration survives untouched as `Playout::Uniform` (same PRNG draw
 //! order) so gate measurements compare against the real baseline.
 
+use std::cell::Cell;
+
 use nc2000_engine::battle::{Outcome, SearchChoice};
 use nc2000_engine::dex::Dex;
 use nc2000_engine::fxhash::FxHashMap;
@@ -29,6 +31,65 @@ use nc2000_engine::state::Battle;
 use crate::agent::Agent;
 use crate::eval::{self, EvalWeights};
 use crate::rng::SplitMix64;
+
+/// Summary of the state at the end of a single MCTS simulation (tree terminal or rollout cutoff).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SimEndInfo {
+    pub turn: u16,
+    /// 0 = non-terminal (cutoff/leaf), 1 = P1Win, 2 = P2Win, 3 = Tie
+    pub outcome: u8,
+    /// Living Pokemon counts `[side 0, side 1]` at simulation end.
+    pub alive: [u8; 2],
+}
+
+impl SimEndInfo {
+    #[inline]
+    pub fn from_battle(b: &Battle, o: Option<Outcome>) -> Self {
+        let outcome = match o {
+            Some(Outcome::P1Win) => 1,
+            Some(Outcome::P2Win) => 2,
+            Some(Outcome::Tie) => 3,
+            None => 0,
+        };
+        let alive = [
+            b.sides[0].pokemon_left.max(0) as u8,
+            b.sides[1].pokemon_left.max(0) as u8,
+        ];
+        SimEndInfo { turn: b.turn, outcome, alive }
+    }
+
+    #[inline]
+    pub fn from_compact(cb: &nc2000_engine::compact::CompactBattle) -> Self {
+        SimEndInfo {
+            turn: cb.turn,
+            outcome: cb.outcome,
+            alive: [
+                cb.sides[0].alive_mask.count_ones() as u8,
+                cb.sides[1].alive_mask.count_ones() as u8,
+            ],
+        }
+    }
+}
+
+thread_local! {
+    static LAST_SIM_END: Cell<SimEndInfo> = const {
+        Cell::new(SimEndInfo {
+            turn: 0,
+            outcome: 0,
+            alive: [0, 0],
+        })
+    };
+}
+
+#[inline]
+pub fn set_last_sim_end(info: SimEndInfo) {
+    LAST_SIM_END.with(|c| c.set(info));
+}
+
+#[inline]
+pub fn last_sim_end() -> SimEndInfo {
+    LAST_SIM_END.with(|c| c.get())
+}
 
 /// Rollout policy + leaf evaluation (M6).
 #[derive(Clone, Debug)]
@@ -248,6 +309,7 @@ pub fn playout_value(
         Playout::Heavy { turns, .. } => turn_cap.min(sim.turn.saturating_add(*turns)),
     };
     if let Some(o) = sim.outcome() {
+        set_last_sim_end(SimEndInfo::from_battle(sim, Some(o)));
         return outcome_reward(o);
     }
     // If either side is still in TeamPreview, advance that single step on `Battle`
@@ -256,9 +318,11 @@ pub fn playout_value(
         || sim.sides[1].request_state() == Some(nc2000_engine::state::RequestKind::TeamPreview)
     {
         if let Some(o) = sim.outcome() {
+            set_last_sim_end(SimEndInfo::from_battle(sim, Some(o)));
             return outcome_reward(o);
         }
         if sim.turn > cutoff {
+            set_last_sim_end(SimEndInfo::from_battle(sim, None));
             return match playout {
                 Playout::Uniform => hp_eval(sim),
                 Playout::Heavy { weights, .. } => eval::eval_leaf(sim, dex, weights),
@@ -280,6 +344,7 @@ pub fn playout_value(
         cb.sides[0].side_flags |= 0x80;
     }
     if let crate::oracle::OracleMode::TreeLeaf { leaf_iters } = rules.oracle {
+        set_last_sim_end(SimEndInfo::from_compact(&cb));
         return crate::oracle::oracle_equity(&cb, &table, leaf_iters);
     }
     if matches!(playout, Playout::Heavy { .. })
@@ -288,8 +353,11 @@ pub fn playout_value(
     {
         if let crate::accounting::LeafSettlementMode::StochAcctRollout { turns } = rules.settlement
         {
-            return crate::accounting::stoch_accounting_rollout(&mut cb, &table, turns, rng);
+            let v = crate::accounting::stoch_accounting_rollout(&mut cb, &table, turns, rng);
+            set_last_sim_end(SimEndInfo::from_compact(&cb));
+            return v;
         }
+        set_last_sim_end(SimEndInfo::from_compact(&cb));
         return crate::accounting::evaluate_settled_leaf(&cb, &table, rules.settlement);
     }
     compact_playout_value(&mut cb, &table, playout, cutoff, rng, rules)
@@ -307,12 +375,22 @@ pub fn compact_playout_value(
 ) -> f64 {
     loop {
         match cb.outcome {
-            1 => return 1.0,
-            2 => return 0.0,
-            3 => return 0.5,
+            1 => {
+                set_last_sim_end(SimEndInfo::from_compact(cb));
+                return 1.0;
+            }
+            2 => {
+                set_last_sim_end(SimEndInfo::from_compact(cb));
+                return 0.0;
+            }
+            3 => {
+                set_last_sim_end(SimEndInfo::from_compact(cb));
+                return 0.5;
+            }
             _ => {}
         }
         if cb.turn > cutoff {
+            set_last_sim_end(SimEndInfo::from_compact(cb));
             return match playout {
                 Playout::Uniform => compact_hp_eval(cb, table),
                 Playout::Heavy { weights, .. } => match rules.oracle {
