@@ -1,0 +1,30 @@
+
+Running 19 tests using 1 worker
+
+(node:66968) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 tests/blind.spec.ts:292:1 › / and ?blind are the same blind door, and nothing about it is stored (339ms)
+  ✓   2 tests/blind.spec.ts:320:1 › a pool file saved by the open-sheet build is dropped, not restored (148ms)
+  ✓   3 tests/blind.spec.ts:343:1 › blind hides the foe's sets for the whole game, then reveals them at the end (2.3s)
+  ✓   4 tests/blind.spec.ts:420:1 › the sample belief prior loads, applies, and governs the bot's read (659ms)
+  ✓   5 tests/blind.spec.ts:513:1 › a pinned built-in party plays its exact catalog sets (266ms)
+  ✓   6 tests/solver.spec.ts:95:1 › the door opens, closes, and leaves the product page alone (225ms)
+  ✓   7 tests/solver.spec.ts:111:1 › an unfinished position is refused by name, not by the engine (365ms)
+  ✓   8 tests/solver.spec.ts:132:1 › every legal option comes back scored (514ms)
+  ✓   9 tests/solver.spec.ts:180:1 › their sets stay hidden, and only what was typed counts as shown (515ms)
+  ✓  10 tests/solver.spec.ts:212:1 › a roster copied from a pool team is identified (493ms)
+  ✓  11 tests/solver.spec.ts:223:1 › editing the position drops the answer it no longer explains (546ms)
+  ✓  12 tests/strength.spec.ts:3:1 › strength persists across reloads and play doors (340ms)
+(node:67291) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  13 tests/fork.spec.ts:45:1 › a hosted fork plays, forfeits, reveals, exports and persists (1.9s)
+  ✓  14 tests/fork.spec.ts:87:1 › a pasted fork is validated before any game starts (1.9s)
+  ✓  15 tests/fork.spec.ts:101:1 › bot-vs-bot trials run in workers, pair their arms, and export rows (1.5s)
+(node:67355) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  16 tests/kifu.spec.ts:23:1 › pasted HTML restores a scene, supports keyboard selection and resumes a game (495ms)
+  ✓  17 tests/kifu.spec.ts:50:1 › URL imports and a paired bot comparison run without technical controls (593ms)
+  ✓  18 tests/kifu.spec.ts:74:1 › a normal bot game copies only code and its link imports the same record (2.6s)
+  ✓  19 tests/kifu.spec.ts:107:1 › missing or damaged code keeps the input and offers a recoverable error (247ms)
+
+  19 passed (17.1s)

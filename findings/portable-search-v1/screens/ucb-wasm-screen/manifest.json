@@ -1,0 +1,12 @@
+{
+  "repeats": 3,
+  "iterations": 27000,
+  "sha256": {
+    "baseline/nc2000_wasm_bg.wasm": "198bc620f0b6c56e44bf7a74f76433fe7fa7e82efa9e518837133bd19b9efc03",
+    "baseline/nc2000_wasm.js": "e48aa2a7cebd8c1f47c2052d22dbd6bdb3b28f775f32a16f556924237f92bd66",
+    "candidate/nc2000_wasm_bg.wasm": "28f002cd64c46cc3fbd300c0de250ad706d3f4d7bbbb53479158691a28705e08",
+    "candidate/nc2000_wasm.js": "e48aa2a7cebd8c1f47c2052d22dbd6bdb3b28f775f32a16f556924237f92bd66",
+    "tools/perf-wasm.cjs": "cbe834c9b148425d77002fa4aa985c13851bad427c9ad0dd5fb5ee1d9c36a52e",
+    "data/belief-pool-v3/belief-pool.json": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20"
+  }
+}

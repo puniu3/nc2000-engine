@@ -1,0 +1,65 @@
+
+> nc2000-web@0.1.0 test:evaluate-worker
+> node tests/evaluate-worker.mjs
+
+{
+  "parity": [
+    "team 1, 4, 5",
+    "team 2, 5, 4"
+  ],
+  "resumedGames": 1,
+  "capped": [
+    "cap",
+    "cap"
+  ],
+  "longLogs": [
+    {
+      "turns": 500,
+      "lines": 8144,
+      "codeLength": 235
+    },
+    {
+      "turns": 500,
+      "lines": 8144,
+      "codeLength": 235
+    }
+  ],
+  "production": {
+    "preview": 729000,
+    "battle": 81000,
+    "games": [
+      {
+        "turns": 1,
+        "outcome": "win",
+        "selections": [
+          {
+            "side": 0,
+            "input": "team 1",
+            "iterations": 729000
+          },
+          {
+            "side": 1,
+            "input": "team 1",
+            "iterations": 729000
+          }
+        ]
+      },
+      {
+        "turns": 1,
+        "outcome": "win",
+        "selections": [
+          {
+            "side": 0,
+            "input": "team 1",
+            "iterations": 729000
+          },
+          {
+            "side": 1,
+            "input": "team 1",
+            "iterations": 729000
+          }
+        ]
+      }
+    ]
+  }
+}

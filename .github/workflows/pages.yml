@@ -13,13 +13,15 @@ name: pages
 on:
   workflow_dispatch:
   push:
-    branches: [master]
+    branches: [master, perf/portable-search-release]
     paths:
       - "web/**"
       - "crates/**"
       - "data/**"
       - "tools/preview-cache.js"
       - "tools/render-preview-cache-doc.py"
+      - "tools/render-native-handoff.py"
+      - "docs/NATIVE-FORK-HANDOFF.md"
       - "README.md"
       - ".github/workflows/pages.yml"
 
@@ -50,6 +52,11 @@ jobs:
         run: |
           curl -sSfL https://github.com/rustwasm/wasm-pack/releases/download/v0.13.1/wasm-pack-v0.13.1-x86_64-unknown-linux-musl.tar.gz | tar -xz
           sudo install wasm-pack-v0.13.1-x86_64-unknown-linux-musl/wasm-pack /usr/local/bin/
+
+      - name: Verify portable hashing and replay compatibility
+        run: |
+          cargo test -p nc2000-engine --lib
+          cargo test -p conformance --test kifu --test replay
 
       - name: Build wasm (tuned profile)
         run: crates/wasm/build.sh
@@ -100,8 +107,11 @@ jobs:
       - name: Build and verify server cache bindings
         run: |
           crates/wasm/build.sh nodejs
-          node crates/wasm/tests-node/preview-cache.js
+          for suite in smoke determinism parity kifu fork solver destiny-bond priority-heal residual-wait own-recovery-wait preview-cache; do
+            node "crates/wasm/tests-node/$suite.js"
+          done
           python3 tools/render-preview-cache-doc.py web/dist
+          python3 tools/render-native-handoff.py web/dist
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
@@ -109,6 +119,8 @@ jobs:
           path: web/dist
 
   deploy:
+    # Candidate pushes build reviewable artifacts; only master is published.
+    if: github.ref == 'refs/heads/master'
     needs: build
     runs-on: ubuntu-latest
     environment:

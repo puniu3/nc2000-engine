@@ -1,0 +1,401 @@
+{
+  "schema": "nc2000-perf-v1",
+  "mode": "blind",
+  "iterations": 3000,
+  "threads": 1,
+  "wall_seconds": 2.226977458,
+  "rows": [
+    {
+      "id": 0,
+      "tag": "preview",
+      "seconds": 0.041831541,
+      "completed": 3000,
+      "state": "11268349711871080355",
+      "signature": "85b50b11676101646e1b9d5c8257f79588a345310a2f95dc4a5129b2e8cfbd59"
+    },
+    {
+      "id": 1,
+      "tag": "ordinary",
+      "seconds": 0.0392465,
+      "completed": 3000,
+      "state": "7584677204740485896",
+      "signature": "c2814bd54fa3ce865b0d909712191df89e6b2509d884ce038780ef5c6c52cb96"
+    },
+    {
+      "id": 2,
+      "tag": "ordinary",
+      "seconds": 0.037300375,
+      "completed": 3000,
+      "state": "18080454720402234667",
+      "signature": "7739113ff36f50205bfa599476f0d9b734245f924a12bd9a540a9f5e7a9718f4"
+    },
+    {
+      "id": 3,
+      "tag": "ordinary",
+      "seconds": 0.0348135,
+      "completed": 3000,
+      "state": "6776810249439268084",
+      "signature": "8a49852fe53791528b065a5ec12f89bbd7886a0426b1ec7083972a3ae40b203f"
+    },
+    {
+      "id": 4,
+      "tag": "replacement",
+      "seconds": 0.013325334,
+      "completed": 3000,
+      "state": "7531813664557054523",
+      "signature": "954a81329df575152d3518f7fff15113ff072b8fb19571916bfb1e67f5716074"
+    },
+    {
+      "id": 5,
+      "tag": "preview",
+      "seconds": 0.046403667,
+      "completed": 3000,
+      "state": "2683365591011721249",
+      "signature": "d7b4ca343115f6f2d15a905bcb6fb2bf4ce1ff600ddded3c2f1d8055a972a89e"
+    },
+    {
+      "id": 6,
+      "tag": "ordinary",
+      "seconds": 0.056045583,
+      "completed": 3000,
+      "state": "8439520025649906978",
+      "signature": "ce40296b5e247163ba5ff48f01c5aa033e426674dc2500081c519ae6dafbaa42"
+    },
+    {
+      "id": 7,
+      "tag": "ordinary",
+      "seconds": 0.045246167,
+      "completed": 3000,
+      "state": "629439969385004062",
+      "signature": "ce2a89dcac8fbe64c38a944b080fc697b79e88f0fac929a3a209ce20c9a40215"
+    },
+    {
+      "id": 8,
+      "tag": "replacement",
+      "seconds": 0.036745667,
+      "completed": 3000,
+      "state": "17261144712794043946",
+      "signature": "a950d4d5a67deb8deb7db88437f013c4b171fa5d7f9ce56e37a6deabb016766b"
+    },
+    {
+      "id": 9,
+      "tag": "ordinary",
+      "seconds": 0.048422875,
+      "completed": 3000,
+      "state": "10129363344717864521",
+      "signature": "ae26cbb5873e4d907b18d9d156e96b5c4b865113ca89702ccd3a32846074d2b6"
+    },
+    {
+      "id": 10,
+      "tag": "preview",
+      "seconds": 0.043230958,
+      "completed": 3000,
+      "state": "16460693262315471118",
+      "signature": "87663fe800f18c54b92037c03a3f651e5b0a7971f47244440657696550dcf5d5"
+    },
+    {
+      "id": 11,
+      "tag": "ordinary",
+      "seconds": 0.039161584,
+      "completed": 3000,
+      "state": "2760965181788096491",
+      "signature": "915f37460d1093355f8a5ac46d4fccaf03c29fe98cc183c4c2d4f8aca48add9c"
+    },
+    {
+      "id": 12,
+      "tag": "replacement",
+      "seconds": 0.036973375,
+      "completed": 3000,
+      "state": "4724338834877224410",
+      "signature": "49a5212a519d3e612b15688e1ccca76c2da92216a11507f2621af5fe9614c3d8"
+    },
+    {
+      "id": 13,
+      "tag": "ordinary",
+      "seconds": 0.035484791,
+      "completed": 3000,
+      "state": "10165632686608099828",
+      "signature": "971cb336a7b08b1a1724ec49c26c89575712ec121e2391ab48679f192e769f30"
+    },
+    {
+      "id": 14,
+      "tag": "ordinary",
+      "seconds": 0.042682625,
+      "completed": 3000,
+      "state": "12120398696332806106",
+      "signature": "3e3d86972e2a0c5cbc570c945033b7e13226b6172f8e43e9a9815677c73bba34"
+    },
+    {
+      "id": 15,
+      "tag": "ordinary",
+      "seconds": 0.027722,
+      "completed": 3000,
+      "state": "9666386303002310861",
+      "signature": "8cc3c76afdf10833b426c12da60f89d14c7f8364d5c297f8df707b888b5bda1f"
+    },
+    {
+      "id": 16,
+      "tag": "preview",
+      "seconds": 0.050949625,
+      "completed": 3000,
+      "state": "10107712572356191185",
+      "signature": "cd6eaca8df6dc2ef7de02c65a4864c22a4dd5436cb95c5956018b169afcc8a25"
+    },
+    {
+      "id": 17,
+      "tag": "ordinary",
+      "seconds": 0.054575041,
+      "completed": 3000,
+      "state": "9038134034310998331",
+      "signature": "41d2df6bddcd3749e48b43710871e288f6d2b1962fbb8b667413b0eb73c55b3b"
+    },
+    {
+      "id": 18,
+      "tag": "ordinary",
+      "seconds": 0.052986292,
+      "completed": 3000,
+      "state": "249065774062871061",
+      "signature": "17edc6c020d1d88564c1fa0c3c6cb8c2bd143e9b7e5a5fdee2179b4533ef89c4"
+    },
+    {
+      "id": 19,
+      "tag": "ordinary",
+      "seconds": 0.058002958,
+      "completed": 3000,
+      "state": "3667426749436242601",
+      "signature": "dcef8270a856e34d1d152fd9fe2e52435df0504f9fed8ff2dc63d3c4afe00989"
+    },
+    {
+      "id": 20,
+      "tag": "replacement",
+      "seconds": 0.052769416,
+      "completed": 3000,
+      "state": "3539555095875835153",
+      "signature": "c2eea572c323327a1f8b715116e08bab6b7de62380c5e48970cd85e19df2be73"
+    },
+    {
+      "id": 21,
+      "tag": "ordinary",
+      "seconds": 0.050541833,
+      "completed": 3000,
+      "state": "6864974698548853831",
+      "signature": "94a1c818b7c5b2e1ea5ea100f1f3d95fdef0b00d97f41852d5a2164cc146a345"
+    },
+    {
+      "id": 22,
+      "tag": "preview",
+      "seconds": 0.051757958,
+      "completed": 3000,
+      "state": "14487348083147801879",
+      "signature": "e2f8ec8548f984a363fbef09f552e593fa7d7e9374dc85f8811e3aeba0ba231a"
+    },
+    {
+      "id": 23,
+      "tag": "ordinary",
+      "seconds": 0.058585292,
+      "completed": 3000,
+      "state": "955068081637671237",
+      "signature": "ab12cb11dd5e6ebe89751d7ae5041cf7dd03b9476b9efeec66cb55f54f1c3ff1"
+    },
+    {
+      "id": 24,
+      "tag": "ordinary",
+      "seconds": 0.0571725,
+      "completed": 3000,
+      "state": "17651270335977097793",
+      "signature": "4467ce7d51d6bf874f9f8f1b8951ea6718ba785b861bc59550131bcf50623987"
+    },
+    {
+      "id": 25,
+      "tag": "ordinary",
+      "seconds": 0.056394,
+      "completed": 3000,
+      "state": "12322957642020190760",
+      "signature": "6cbfdb7d6962f13d0da39478458e1a2b13347e35636fa57fd531b1603b152317"
+    },
+    {
+      "id": 26,
+      "tag": "replacement",
+      "seconds": 0.035643958,
+      "completed": 3000,
+      "state": "4588044305099503761",
+      "signature": "a4e1aa57b727e320eb849c926f54e6a1c8675df49839dc2a88b56d3a84f04732"
+    },
+    {
+      "id": 27,
+      "tag": "ordinary",
+      "seconds": 0.031620917,
+      "completed": 3000,
+      "state": "4836337296209428256",
+      "signature": "661414917c3b41c35669740039309d0d0eea797e35bee3aa63bbeeba53465f6e"
+    },
+    {
+      "id": 28,
+      "tag": "preview",
+      "seconds": 0.044811625,
+      "completed": 3000,
+      "state": "14105754743330318008",
+      "signature": "bdd27b412aca0ca69572aae6aac7a33a35e33a110102c7340e34c46e1a9f4707"
+    },
+    {
+      "id": 29,
+      "tag": "ordinary",
+      "seconds": 0.045458583,
+      "completed": 3000,
+      "state": "3968772056646405290",
+      "signature": "1cd8df8358552b65caa636be86255efb660dc232207ce3e698cd1cb9988c54c9"
+    },
+    {
+      "id": 30,
+      "tag": "ordinary",
+      "seconds": 0.042979125,
+      "completed": 3000,
+      "state": "12765192745669631034",
+      "signature": "f42d6a0789f6ae50b2cbc461a8ecae0d1c3b2a1da73f4f667e040371bf97e470"
+    },
+    {
+      "id": 31,
+      "tag": "replacement",
+      "seconds": 0.042539667,
+      "completed": 3000,
+      "state": "8503880258339198057",
+      "signature": "bb20c1d351151197164457c89cb85edcd4dd773b82849ed9c0f2b8cc73ccd0d8"
+    },
+    {
+      "id": 32,
+      "tag": "ordinary",
+      "seconds": 0.038713958,
+      "completed": 3000,
+      "state": "9189180949536407559",
+      "signature": "8d96cc28f2743354e5ffe9b94af23b14e0d50132fec6deed83adcf6deb39a067"
+    },
+    {
+      "id": 33,
+      "tag": "preview",
+      "seconds": 0.038936708,
+      "completed": 3000,
+      "state": "14686353416262730083",
+      "signature": "2a5403640426ef67da49eeba936f4c38401a155e7149d8f7ada42a90239d5d48"
+    },
+    {
+      "id": 34,
+      "tag": "perish",
+      "seconds": 0.0439025,
+      "completed": 3000,
+      "state": "18077940631525896865",
+      "signature": "2f3edb5a7f2b1e092166b25535b3e61459238ab3ff75cce5afb88c2b1b1548fe"
+    },
+    {
+      "id": 35,
+      "tag": "replacement",
+      "seconds": 0.035275375,
+      "completed": 3000,
+      "state": "17596009781716690773",
+      "signature": "bb20c1d351151197164457c89cb85edcd4dd773b82849ed9c0f2b8cc73ccd0d8"
+    },
+    {
+      "id": 36,
+      "tag": "perish",
+      "seconds": 0.034130375,
+      "completed": 3000,
+      "state": "2262126953151274300",
+      "signature": "f1c7cbec7b1b06ebf9e96e8f210b60554070b1ae37ebfe813c8e164fe7d4cece"
+    },
+    {
+      "id": 37,
+      "tag": "perish",
+      "seconds": 0.006338875,
+      "completed": 3000,
+      "state": "13672552912341263807",
+      "signature": "cf3f87e47528a669faf19e6e095dc2d2bf49c7582b373f1469246e3dbc4af3af"
+    },
+    {
+      "id": 38,
+      "tag": "preview",
+      "seconds": 0.059987375,
+      "completed": 3000,
+      "state": "13826454490124786367",
+      "signature": "66939bfba7f4299f05c0dc94b5c63c5007140fb98711bc7ac8d2ccf13316860d"
+    },
+    {
+      "id": 39,
+      "tag": "perish",
+      "seconds": 0.053083584,
+      "completed": 3000,
+      "state": "18368175817712746484",
+      "signature": "34e2b1b2c90f6d16a35f25ae2f830f86673e24c7c4d53c8369cf83696f8775f0"
+    },
+    {
+      "id": 40,
+      "tag": "perish",
+      "seconds": 0.046953708,
+      "completed": 3000,
+      "state": "10818179558469891157",
+      "signature": "8b874b40bd13ac85ba44e77d2b2e4c5d5905c2dd3ff2cd070d893e2f2bfc88a7"
+    },
+    {
+      "id": 41,
+      "tag": "perish",
+      "seconds": 0.034542042,
+      "completed": 3000,
+      "state": "17940350977744422594",
+      "signature": "eda9c0a0ac56649c1c90d85fdd8c0993986c080b6487202d08e320d8ac5243c1"
+    },
+    {
+      "id": 42,
+      "tag": "replacement",
+      "seconds": 0.039978666,
+      "completed": 3000,
+      "state": "13574116628666625794",
+      "signature": "9aa29254972ba2a2d84920e19ef7850975c43f76755585456141389ddf77cd09"
+    },
+    {
+      "id": 43,
+      "tag": "recovery",
+      "seconds": 0.045522208,
+      "completed": 3000,
+      "state": "13112554239115171514",
+      "signature": "92fa942e22358d367fedfc5770bbb9d3a1861ff696b9a424b9d5627fa7b7cde7"
+    },
+    {
+      "id": 44,
+      "tag": "recovery",
+      "seconds": 0.050891166,
+      "completed": 3000,
+      "state": "17224966773089256485",
+      "signature": "9a2e83bf1850751eb99a1cd54367a6f2040c372f260cf8f43fef6c3f4ea75842"
+    },
+    {
+      "id": 45,
+      "tag": "recovery",
+      "seconds": 0.050000625,
+      "completed": 3000,
+      "state": "9310190683951369162",
+      "signature": "70fa1d8af06d19a49104ad0689833b2d6b359e9abe86342f12044f20b92eba7a"
+    },
+    {
+      "id": 46,
+      "tag": "recovery",
+      "seconds": 0.067664417,
+      "completed": 3000,
+      "state": "7118465524938899425",
+      "signature": "8e8de722ca9bbacf5e961aa52775deef8e4d47d7cfc381d995830a32150f38cf"
+    },
+    {
+      "id": 47,
+      "tag": "recovery",
+      "seconds": 0.054667625,
+      "completed": 3000,
+      "state": "4191895423541086026",
+      "signature": "35c6160179f80baa2b0ea8d942b51e7b0447a41861939a5bd66e853cc5d0fdaf"
+    },
+    {
+      "id": 48,
+      "tag": "recovery",
+      "seconds": 0.074807917,
+      "completed": 3000,
+      "state": "9871812480732260928",
+      "signature": "94ce52d0a7f269d21d3c910fda7e31bd9e798d5fa6720408360782122ac775cc"
+    }
+  ]
+}

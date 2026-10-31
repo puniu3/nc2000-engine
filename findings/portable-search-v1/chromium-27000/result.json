@@ -1,0 +1,21 @@
+{
+  "median_ms": {
+    "baseline": 26366.900000572205,
+    "candidate": 23269.19999885559
+  },
+  "p95_ms": {
+    "baseline": 823.4000000953674,
+    "candidate": 756.8000001907349
+  },
+  "time_reduction": 0.11065346595022463,
+  "metric": "median of adjacent-work paired time reductions",
+  "pair_reductions": [
+    0.10952121155830064,
+    0.11748442181862062,
+    0.11065346595022463
+  ],
+  "exact_match": true,
+  "positions": 35,
+  "runtime": "chromium 149.0.7827.55",
+  "accepted": true
+}

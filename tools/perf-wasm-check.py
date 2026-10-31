@@ -11,11 +11,12 @@ p.add_argument('baseline', type=pathlib.Path)
 p.add_argument('candidate', type=pathlib.Path)
 p.add_argument('--out', type=pathlib.Path, required=True)
 p.add_argument('--repeats', type=int, default=3)
+p.add_argument('--iterations', type=int, default=3000)
 a = p.parse_args()
-assert a.repeats > 0
+assert min(a.repeats, a.iterations) > 0
 root = pathlib.Path(__file__).resolve().parent.parent
 modules = {k: getattr(a, k).resolve() for k in ['baseline', 'candidate']}
-manifest = {'repeats': a.repeats, 'sha256': {
+manifest = {'repeats': a.repeats, 'iterations': a.iterations, 'sha256': {
     f'{k}/{name}': hashlib.sha256((v / name).read_bytes()).hexdigest()
     for k, v in modules.items()
     for name in ['nc2000_wasm_bg.wasm', 'nc2000_wasm.js']}}
@@ -35,7 +36,7 @@ for repeat in range(a.repeats):
         if output.exists():
             run = json.loads(output.read_text())
         else:
-            result = subprocess.run(['node', str(root / 'tools/perf-wasm.cjs'), str(modules[arm])],
+            result = subprocess.run(['node', str(root / 'tools/perf-wasm.cjs'), str(modules[arm]), str(a.iterations)],
                                     text=True, capture_output=True, check=True)
             run = json.loads(result.stdout)
             output.write_text(json.dumps(run, indent=2) + '\n')

@@ -1,0 +1,15 @@
+{
+  "iterations": 27000,
+  "repeats": 3,
+  "runtime": "chromium",
+  "version": "149.0.7827.55",
+  "method": "alternating adjacent decisions; 1000-iteration warm-up",
+  "sha256": {
+    "/baseline/nc2000_wasm.js": "e48aa2a7cebd8c1f47c2052d22dbd6bdb3b28f775f32a16f556924237f92bd66",
+    "/baseline/nc2000_wasm_bg.wasm": "3164238a3912eb7444a9cf24c49281980893e332221cfc8c27accb750bb0c4ab",
+    "/candidate/nc2000_wasm.js": "e48aa2a7cebd8c1f47c2052d22dbd6bdb3b28f775f32a16f556924237f92bd66",
+    "/candidate/nc2000_wasm_bg.wasm": "5bf2f7d5bab238078fe8e5e01de70f39865cb4fa4a85f8bf799ff23e7ff75324",
+    "/pool": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
+    "/probe": "3be77c5f4235d33d9f66dd063314122224ce9504f57275617aa152e062fed826"
+  }
+}

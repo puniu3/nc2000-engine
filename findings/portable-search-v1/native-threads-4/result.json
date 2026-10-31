@@ -1,0 +1,33 @@
+{
+  "baseline": {
+    "median_seconds": 0.850444375,
+    "p95_seconds": {
+      "ordinary": 0.088567125,
+      "perish": 0.076554708,
+      "preview": 0.090853834,
+      "recovery": 0.078029417,
+      "replacement": 0.081482958
+    }
+  },
+  "candidate": {
+    "median_seconds": 0.738273917,
+    "p95_seconds": {
+      "ordinary": 0.077996875,
+      "perish": 0.066750291,
+      "preview": 0.071307834,
+      "recovery": 0.070660166,
+      "replacement": 0.067758625
+    }
+  },
+  "time_reduction": 0.131896290101278,
+  "p95_ratios": {
+    "ordinary": 0.8806526688091094,
+    "perish": 0.8719292744216333,
+    "preview": 0.7848632342802396,
+    "recovery": 0.9055580410141985,
+    "replacement": 0.8315680562308503
+  },
+  "exact_match": true,
+  "positions": 49,
+  "accepted": true
+}

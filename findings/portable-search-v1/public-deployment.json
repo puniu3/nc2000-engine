@@ -1,0 +1,38 @@
+{
+  "deploymentCommit": "4dd9d748f81472c30739afcef0bcfec6dc528456",
+  "workflowRun": 40086597749,
+  "workflowUrl": "https://github.com/puniu3/nc2000-engine/actions/runs/40086597749",
+  "status": "success",
+  "assets": {
+    "revision": "4dd9d748",
+    "base": "https://puniu3.github.io/nc2000-engine/",
+    "matchedCIAssets": [
+      "preview-cache.html",
+      "assets/solver-worker-BLaGT5io.js",
+      "assets/index-BOQU741E.js",
+      "assets/evaluate-worker-DYx400pt.js",
+      "assets/index-Dg-Jayzx.css",
+      "assets/fork-arena-worker-DEGAGUn3.js",
+      "assets/nc2000_wasm_bg-DZUshyB2.wasm",
+      "assets/bot-worker-DejN0-Vx.js",
+      "native-fork-handoff.md",
+      "index.html",
+      "preview-cache.js",
+      "data/meta-nash-v3/pool-artifact.json",
+      "data/belief-pool-v3/belief-pool.json",
+      "data/gen2stadium2.json",
+      "data/team-pool-v2/team-pool.json",
+      "native-fork-handoff.html"
+    ],
+    "zipInnerWasmAndHandoffMatch": true
+  },
+  "browser": {
+    "url": "https://puniu3.github.io/nc2000-engine/?release=4dd9d748",
+    "chromium": "149.0.7827.55",
+    "previewSource": "table",
+    "previewIterations": 0,
+    "battleIterations": 27000,
+    "best": "move reflect",
+    "pageErrors": []
+  }
+}

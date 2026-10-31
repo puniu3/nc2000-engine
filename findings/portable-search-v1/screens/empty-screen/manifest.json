@@ -1,0 +1,15 @@
+{
+  "binaries": {
+    "baseline": "5027beaa6248d0387b19cb143a8b71e68a1a3e7d370750f92a8a2f5e932f8945",
+    "candidate": "78003d0793b95c4b3d44c1b16c59b95a9f43aa8766d87b12170c299ad4dfa55b"
+  },
+  "mode": "blind",
+  "iterations": 3000,
+  "threads": 1,
+  "repeats": 3,
+  "inputs": {
+    "data/gen2stadium2.json": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+    "data/belief-pool-v3/belief-pool.json": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
+    "data/search-profiles.json": "157d49892b62fe4bb310e0a0d7f985ecabe6084ddcd5cad2e65ded65a2d9b862"
+  }
+}

@@ -1,0 +1,40 @@
+
+> nc2000-web@0.1.0 test:worker
+> node tests/worker-profile.mjs
+
+7:24:35 PM [vite] (client) ✨ new dependencies optimized: preact/jsx-dev-runtime
+7:24:35 PM [vite] (client) ✨ optimized dependencies changed. reloading
+[
+  {
+    "scenario": "fixed",
+    "c": 0.4,
+    "iterations": 512,
+    "expectedIterations": 512,
+    "policyMatches": true,
+    "wrongCoefficientMatches": false
+  },
+  {
+    "scenario": "early-flush",
+    "c": 0.4,
+    "iterations": 512,
+    "expectedIterations": 512,
+    "policyMatches": true,
+    "wrongCoefficientMatches": false
+  },
+  {
+    "scenario": "late-flush",
+    "c": 0.4,
+    "iterations": 512,
+    "expectedIterations": 512,
+    "policyMatches": true,
+    "wrongCoefficientMatches": false
+  },
+  {
+    "scenario": "background-complete",
+    "c": 0.4,
+    "iterations": 512,
+    "expectedIterations": 512,
+    "policyMatches": true,
+    "wrongCoefficientMatches": false
+  }
+]

@@ -28,5 +28,5 @@ try{
  const policy=JSON.parse(data.result.policy);assert.equal(data.result.src,'search');assert.equal(policy.preview,true);
  assert.equal(data.request.budget,config.unknownPreview);assert.equal(policy.iterations,config.unknownPreview);assert(data.request.ponder);assert.deepEqual(errors,[]);
  const result={budget:config.unknownPreview,actualIterations:policy.iterations,source:data.result.src,ms:data.result.ms,memoryBytes:data.result.wasmMemoryBytes,completedWhileHumanChoosing:true};
- fs.writeFileSync('../findings/fixed-budget-release-v1/live-unknown-preview-check.json',JSON.stringify(result,null,2)+'\n');console.log(result);
+ fs.writeFileSync(`${process.env.NC2000_CHECK_OUT ?? '../findings/fixed-budget-release-v1'}/live-unknown-preview-check.json`,JSON.stringify(result,null,2)+'\n');console.log(result);
 }finally{await browser?.close();await vite?.close();server.close();}

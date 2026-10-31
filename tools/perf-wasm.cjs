@@ -7,6 +7,8 @@ const poolText = fs.readFileSync(
 );
 const pool = JSON.parse(poolText);
 const dex = new wasm.Dex();
+const iterations = Number(process.argv[3] ?? 3000);
+if (!Number.isSafeInteger(iterations) || iterations < 1) throw new Error("invalid iterations");
 const rows = [];
 for (let game = 0; game < 3; game++) {
   const battle = new wasm.Battle(
@@ -22,7 +24,7 @@ for (let game = 0; game < 3; game++) {
     const picks = [];
     if (needs[1]) {
       const start = performance.now();
-      blind.step(3000);
+      blind.step(iterations);
       rows.push({
         game, decision, turn: battle.turn(), ms: performance.now() - start,
         signature: blind.rootPolicy(), best: blind.best(),

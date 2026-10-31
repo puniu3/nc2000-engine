@@ -1,0 +1,14 @@
+{
+  "runId": 40085868541,
+  "runUrl": "https://github.com/puniu3/nc2000-engine/actions/runs/40085868541",
+  "sourceCommit": "3ca866022ecf892f9edf976b3408af9d2e0539a9",
+  "artifactId": 12556908673,
+  "artifactSha256": "76d278a3af3cb5404b6ff6bbe38e2f74abfc50867b655777802dbf7e99103307",
+  "wasmSha256": "5bf2f7d5bab238078fe8e5e01de70f39865cb4fa4a85f8bf799ff23e7ff75324",
+  "nodeAndWebWasmIdentical": true,
+  "wasmBytes": 2648890,
+  "gzipBytes": 740276,
+  "handoffSha256": "c3eb82e5d8de697df7e3d4c001088c5ce2c6b42f6cbe18b12777449860112496",
+  "build": "success",
+  "deploy": "skipped (candidate branch)"
+}

@@ -1,0 +1,17 @@
+{
+  "reason": "Initial single-pair candidate latency increased, concentrated in a contiguous middle part of the run. Retain this pair and add two alternating-order pairs; do not discard outliers. Host processes were consuming CPU when inspected, but causation is not established.",
+  "initialDirectory": "findings/portable-search-v1/native-81000",
+  "confirmationDirectory": "findings/portable-search-v1/native-81000-confirmation",
+  "reusedPairs": [
+    0
+  ],
+  "additionalPairs": [
+    1,
+    2
+  ],
+  "hostSnapshotAfterRun": {
+    "audiomxd_cpu_percent": 72.1,
+    "configd_cpu_percent": 41.4,
+    "node_benchmark_cpu_percent": 100.7
+  }
+}

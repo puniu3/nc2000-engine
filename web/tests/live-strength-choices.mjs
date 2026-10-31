@@ -36,7 +36,7 @@ try{
   rows.push({strength,budget,previewIterations:0,battleIterations:JSON.parse(battle.policy).iterations,completedWhileHumanChoosing:true});
   await context.close();
  }
- const path='../findings/fixed-budget-release-v1/live-strength-choice-check.json';
+ const path=`${process.env.NC2000_CHECK_OUT ?? '../findings/fixed-budget-release-v1'}/live-strength-choice-check.json`;
  const prior=fs.existsSync(path)?JSON.parse(fs.readFileSync(path,'utf8')):[];
  fs.writeFileSync(path,JSON.stringify([...prior.filter(r=>!rows.some(n=>n.strength===r.strength)),...rows],null,2)+'\n');console.log(rows);
 }finally{await browser?.close();await vite?.close();server.close();}

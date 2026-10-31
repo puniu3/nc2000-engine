@@ -57,5 +57,5 @@ try {
   return {matchups,uniqueKeys:keys.size,allLegal:true,worker};
  },wasmPath);
  assert.equal(result.matchups,576);assert.equal(result.uniqueKeys,504);
- fs.writeFileSync('../findings/fixed-budget-release-v1/compiled-coverage.json',JSON.stringify(result,null,2)+'\n');console.log(result);
+ fs.writeFileSync(`${process.env.NC2000_CHECK_OUT ?? '../findings/fixed-budget-release-v1'}/compiled-coverage.json`,JSON.stringify(result,null,2)+'\n');console.log(result);
 }finally{await browser?.close();await vite?.close();server.close();}

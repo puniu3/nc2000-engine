@@ -1,0 +1,34 @@
+diff --git a/crates/bot/src/blind.rs b/crates/bot/src/blind.rs
+index 23c072c7..a13b1538 100644
+--- a/crates/bot/src/blind.rs
++++ b/crates/bot/src/blind.rs
+@@ -897,9 +897,9 @@ fn select_global(
+ ) -> usize {
+     let k = n.len();
+     let ok = |a: usize| mask.map_or(true, |m| m[a]);
+-    let untried: Vec<usize> = (0..k).filter(|&a| n[a] == 0 && ok(a)).collect();
+-    let pick = if !untried.is_empty() {
+-        untried[rng.below(untried.len())]
++    let untried = (0..k).filter(|&a| n[a] == 0 && ok(a)).count();
++    let pick = if untried != 0 {
++        (0..k).filter(|&a| n[a] == 0 && ok(a)).nth(rng.below(untried)).unwrap()
+     } else {
+         let total: u32 = n.iter().sum();
+         let ln_total = (total as f64).ln();
+diff --git a/crates/bot/src/smmcts.rs b/crates/bot/src/smmcts.rs
+index 208c75b8..a9303e6a 100644
+--- a/crates/bot/src/smmcts.rs
++++ b/crates/bot/src/smmcts.rs
+@@ -341,9 +341,9 @@ pub(crate) fn select_ucb(
+     side: usize,
+ ) -> usize {
+     let k = node.acts[side].len();
+-    let untried: Vec<usize> = (0..k).filter(|&a| node.n[side][a] == 0).collect();
+-    let pick = if !untried.is_empty() {
+-        untried[rng.below(untried.len())]
++    let untried = (0..k).filter(|&a| node.n[side][a] == 0).count();
++    let pick = if untried != 0 {
++        (0..k).filter(|&a| node.n[side][a] == 0).nth(rng.below(untried)).unwrap()
+     } else {
+         let total: u32 = node.n[side].iter().sum();
+         let ln_total = (total as f64).ln();

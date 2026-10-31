@@ -81,7 +81,8 @@ function serveRepoData(): Plugin {
 }
 
 // A production bundle must contain a complete artifact from these exact
-// policy inputs. Source changes require rebaking, never silently stale picks.
+// policy inputs. Source changes require rebaking or a separately audited
+// exact-behavior migration; stale inputs are never accepted.
 function verifyCompiledPreview(): Plugin {
   return {
     name: "verify-compiled-preview",

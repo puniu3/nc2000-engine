@@ -1,0 +1,10 @@
+{
+  "baseline": {
+    "wasmBytes": 2566941,
+    "gzipBytes": 726031
+  },
+  "final": {
+    "wasmBytes": 2599005,
+    "gzipBytes": 732765
+  }
+}

@@ -113,6 +113,13 @@ or deployment is implied by the experimental API.
 [Published API documentation and bindings](https://puniu3.github.io/nc2000-engine/preview-cache.html)
 are built from this section on every deployment.
 
+For forks running search on a server, the
+[native integration handoff](https://puniu3.github.io/nc2000-engine/native-fork-handoff.html)
+describes the Rust adapter, runtime parity gates, cache identity and
+server-specific follow-up experiments. Its authoritative source is
+[`docs/NATIVE-FORK-HANDOFF.md`](docs/NATIVE-FORK-HANDOFF.md), also published as
+[Markdown](https://puniu3.github.io/nc2000-engine/native-fork-handoff.md).
+
 ## Server-side preview cache interface
 
 `tools/preview-cache.js` supplies a Node.js interface for caching completed
