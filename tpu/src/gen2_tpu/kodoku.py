@@ -1344,8 +1344,10 @@ def _compute_side_slot_and_core_telemetry(
         dtype=np.float32,
     )
     for s in range(6):
-        if (not any_rem[s]) or all_rem[s]:
+        if all_rem[s]:
             v_minus_s = v_star
+        elif not any_rem[s]:
+            v_minus_s = 0.0
         else:
             v_minus_s = float(v_minus_batch[s])
         slot_marginals[s] = max(0.0, v_star - v_minus_s)
@@ -2396,15 +2398,148 @@ def preview_signature_sets(sets: list[dict[str, Any]]) -> tuple[tuple[str, int],
     return tuple(pairs)
 
 
+def solve_bayesian_shell_preview_nash_np(
+    matrices_km: np.ndarray,
+    alpha: np.ndarray | list[float] | None = None,
+    beta: np.ndarray | list[float] | None = None,
+    sweeps: int = 500,
+) -> tuple[float, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Solve the Bayesian Shell-vs-Shell Team Preview Nash Equilibrium when outer shells are shared.
+
+    Suppose Shell U has `n_u` variants with known frequency distribution `alpha` in Delta_{n_u}
+    sharing legal preview action set A (`|A| = n_a`), and Shell V has `n_v` variants with known
+    frequency distribution `beta` in Delta_{n_v} sharing legal preview action set B (`|B| = n_b`).
+    At Team Preview, each player knows their own variant (`k` or `m`) and sees only the opponent's
+    outer shell and prior variant weights (`beta` or `alpha`).
+
+    Args:
+        matrices_km: `float32[n_u, n_v, n_a, n_b]` full-combination 3v3 payoff matrices `M^{(k, m)}`.
+        alpha: `float32[n_u]` row shell variant weights (defaults to uniform `1 / n_u`).
+        beta: `float32[n_v]` col shell variant weights (defaults to uniform `1 / n_v`).
+        sweeps: Regret Matching+ sweeps.
+
+    Returns:
+        `(v_shell, v_per_u, v_per_v, x_star, y_star)`:
+          - `v_shell`: Overall Bayesian Nash value `sum_{k,m} alpha_k beta_m x_k^T M^{(k,m)} y_m`
+          - `v_per_u`: `float32[n_u]` equilibrium payoff of each variant `P_k` in Shell U
+          - `v_per_v`: `float32[n_v]` equilibrium payoff of each variant `Q_m` (from P's perspective)
+          - `x_star`: `float32[n_u, n_a]` equilibrium pick policies for each variant in Shell U
+          - `y_star`: `float32[n_v, n_b]` equilibrium pick policies for each variant in Shell V
+    """
+    mats = np.asarray(matrices_km, dtype=np.float32)
+    n_u, n_v, n_a, n_b = mats.shape
+    if alpha is None:
+        a_w = np.full((n_u,), 1.0 / max(1, n_u), dtype=np.float32)
+    else:
+        a_w = np.asarray(alpha, dtype=np.float32)
+        s_a = float(np.sum(a_w))
+        a_w = (a_w / s_a) if s_a > 1e-9 else np.full((n_u,), 1.0 / max(1, n_u), dtype=np.float32)
+
+    if beta is None:
+        b_w = np.full((n_v,), 1.0 / max(1, n_v), dtype=np.float32)
+    else:
+        b_w = np.asarray(beta, dtype=np.float32)
+        s_b = float(np.sum(b_w))
+        b_w = (b_w / s_b) if s_b > 1e-9 else np.full((n_v,), 1.0 / max(1, n_v), dtype=np.float32)
+
+    reg_p = np.zeros((n_u, n_a), dtype=np.float32)
+    reg_q = np.zeros((n_v, n_b), dtype=np.float32)
+    sum_p = np.zeros((n_u, n_a), dtype=np.float32)
+    sum_q = np.zeros((n_v, n_b), dtype=np.float32)
+    unif_p = np.full((n_u, n_a), 1.0 / max(1, n_a), dtype=np.float32)
+    unif_q = np.full((n_v, n_b), 1.0 / max(1, n_b), dtype=np.float32)
+
+    for t in range(1, max(1, int(sweeps)) + 1):
+        sp = np.sum(reg_p, axis=1, keepdims=True)
+        x_cur = np.where(sp > 1e-9, reg_p / np.maximum(sp, 1e-9), unif_p)
+        sq = np.sum(reg_q, axis=1, keepdims=True)
+        y_cur = np.where(sq > 1e-9, reg_q / np.maximum(sq, 1e-9), unif_q)
+
+        # Expected row utilities u_p[k, a] = sum_m beta_m (M[k, m] @ y_cur[m])[a]
+        by = b_w[:, None] * y_cur  # [n_v, n_b]
+        u_p = np.einsum("kmab,mb->ka", mats, by)  # [n_u, n_a]
+        v_p = np.sum(x_cur * u_p, axis=1, keepdims=True)
+
+        # Expected col utilities for Q: u_q[m, b] = 1 - sum_k alpha_k (x_cur[k] @ M[k, m])[b]
+        ax = a_w[:, None] * x_cur  # [n_u, n_a]
+        u_q = 1.0 - np.einsum("ka,kmab->mb", ax, mats)  # [n_v, n_b]
+        v_q = np.sum(y_cur * u_q, axis=1, keepdims=True)
+
+        reg_p = np.maximum(0.0, reg_p + (u_p - v_p))
+        reg_q = np.maximum(0.0, reg_q + (u_q - v_q))
+
+        w_t = float(t)
+        sum_p += w_t * x_cur
+        sum_q += w_t * y_cur
+
+    sp_tot = np.sum(sum_p, axis=1, keepdims=True)
+    x_star = np.where(sp_tot > 1e-9, sum_p / np.maximum(sp_tot, 1e-9), unif_p)
+    sq_tot = np.sum(sum_q, axis=1, keepdims=True)
+    y_star = np.where(sq_tot > 1e-9, sum_q / np.maximum(sq_tot, 1e-9), unif_q)
+
+    by_star = b_w[:, None] * y_star
+    u_p_star = np.einsum("kmab,mb->ka", mats, by_star)
+    v_per_u = np.sum(x_star * u_p_star, axis=1)
+
+    ax_star = a_w[:, None] * x_star
+    u_q_from_p = np.einsum("ka,kmab->mb", ax_star, mats)
+    v_per_v = np.sum(y_star * u_q_from_p, axis=1)
+
+    v_shell = float(np.sum(a_w * v_per_u))
+    return v_shell, v_per_u.astype(np.float32), v_per_v.astype(np.float32), x_star.astype(np.float32), y_star.astype(np.float32)
+
+
+def detect_hitchhiker_slots(
+    sets: list[dict[str, Any]],
+    slot_picks: np.ndarray | list[float],
+    slot_marginals: np.ndarray | list[float],
+    legal_action_count: int | None = None,
+    min_pick_threshold: float = 0.025,
+    min_marginal_threshold: float = 0.0015,
+) -> list[dict[str, Any]]:
+    """Pinpoint-detect Hitchhiker slots on a 6-Pokemon team from Full-Combination Nash telemetry.
+
+    A slot `s` is flagged as a Hitchhiker if:
+      1. Its equilibrium pick share `slot_picks[s] < min_pick_threshold` AND its Leave-One-Out
+         marginal Nash value `slot_marginals[s] < min_marginal_threshold`, OR
+      2. The team over-packs `>= 4` L55s (`legal_action_count <= 12`), forcing 2 L50s to 100%
+         pick rate and stranding 3 L55s on the bench every game as unpicked decoys.
+    """
+    picks = np.asarray(slot_picks, dtype=np.float32)
+    margs = np.asarray(slot_marginals, dtype=np.float32)
+    n55 = sum(1 for m in sets if int(m.get("level", 50)) >= 55)
+    overpacked_l55 = (n55 >= 4) or (legal_action_count is not None and int(legal_action_count) <= 12)
+    flagged: list[dict[str, Any]] = []
+    for s in range(min(6, len(sets))):
+        sp = str(sets[s].get("species", ""))
+        lv = int(sets[s].get("level", 50))
+        pk = float(picks[s]) if s < len(picks) else 0.0
+        mg = float(margs[s]) if s < len(margs) else 0.0
+        is_dead_slot = (pk < min_pick_threshold) and (mg < min_marginal_threshold)
+        is_l55_decoy = overpacked_l55 and (lv >= 55) and (pk < 0.25 or mg < 0.05)
+        if is_dead_slot or is_l55_decoy:
+            flagged.append(
+                {
+                    "slot": s,
+                    "species": sp,
+                    "level": lv,
+                    "pick_rate": round(pk, 6),
+                    "loo_marginal": round(mg, 6),
+                    "reason": "overpacked_l55_decoy" if is_l55_decoy and not is_dead_slot else "dead_nash_slot",
+                }
+            )
+    return flagged
+
+
 def build_coupled_shell_units(
     teams_p: list[dict[str, Any]],
     explicit_units: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    """Group `teams_p` into Zero-Smuggling Coupled-Shell Units (`SINGLE:<id>` or `DEME2:<id0>+<id1>`).
+    """Group `teams_p` into Zero-Smuggling Coupled-Shell Units (`DEME{n}:<id0>+...`).
 
     - If `explicit_units` is provided, validates and normalizes each unit `{"unit_id", "member_ids"}`.
-    - Otherwise, groups `teams_p` by canonical 6-mon `preview_signature_sets(sets)` (up to 2 members
-      per shell, matching `meta_eco.rs::add_shell_unit`).
+    - Otherwise, groups `teams_p` by canonical 6-mon `preview_signature_sets(sets)` with unbounded
+      variant cardinality `n >= 1` (`DEME{n}:...`).
     """
     id_to_idx = {str(t.get("id", f"p_{i}")): i for i, t in enumerate(teams_p)}
     if explicit_units is not None:
@@ -2413,11 +2548,7 @@ def build_coupled_shell_units(
             mids = [str(m) for m in u.get("member_ids", []) if str(m) in id_to_idx]
             if not mids:
                 continue
-            mids = mids[:2]
-            uid = str(
-                u.get("unit_id")
-                or (f"SINGLE:{mids[0]}" if len(mids) == 1 else f"DEME2:{mids[0]}+{mids[1]}")
-            )
+            uid = str(u.get("unit_id") or f"DEME{len(mids)}:{'+'.join(mids)}")
             sig = preview_signature_sets(teams_p[id_to_idx[mids[0]]]["sets"])
             out.append(
                 {
@@ -2437,13 +2568,13 @@ def build_coupled_shell_units(
         if sig not in sig_groups:
             sig_groups[sig] = []
             sig_order.append(sig)
-        if tid not in sig_groups[sig] and len(sig_groups[sig]) < 2:
+        if tid not in sig_groups[sig]:
             sig_groups[sig].append(tid)
 
     units_out: list[dict[str, Any]] = []
     for sig in sig_order:
         mids = sig_groups[sig]
-        uid = f"SINGLE:{mids[0]}" if len(mids) == 1 else f"DEME2:{mids[0]}+{mids[1]}"
+        uid = f"DEME{len(mids)}:{'+'.join(mids)}"
         units_out.append(
             {
                 "unit_id": uid,

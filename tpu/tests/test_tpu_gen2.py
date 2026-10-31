@@ -1119,7 +1119,7 @@ def test_coupled_shell_equilibrium_tpu(tmp_path: Path):
     units = build_coupled_shell_units(teams_p)
     assert len(units) == 2
     assert units[0]["unit_id"] == "DEME2:a_v1+a_v2"
-    assert units[1]["unit_id"] == "SINGLE:b_single"
+    assert units[1]["unit_id"] == "DEME1:b_single"
 
     summary = evaluate_kodoku_gauntlet_tpu(
         teams_p,
@@ -1139,6 +1139,73 @@ def test_coupled_shell_equilibrium_tpu(tmp_path: Path):
     payload = json.loads(out_json.read_text(encoding="utf-8"))
     assert "coupled_equilibrium" in payload
     assert len(payload["unit_cells"]) == 2 * 3
+
+
+def test_bayesian_shell_preview_nash_and_hitchhiker_detection():
+    """Verify `solve_bayesian_shell_preview_nash_np` solves asymmetric information
+    Shell-vs-Shell Team Preview games and `detect_hitchhiker_slots` pinpoints dead-bench
+    Hitchhikers (`pick_s < 0.015`, `LOO_dV_s < 0.0005`).
+    """
+    from gen2_tpu.kodoku import (
+        detect_hitchhiker_slots,
+        solve_bayesian_shell_preview_nash_np,
+    )
+
+    # 2 variants in Shell U (`ka = 3` legal lineups) vs 1 variant in Shell V (`kb = 3` legal lineups).
+    # Variant U0 dominates with lineup 0 against V's lineup 0, while U1 dominates with lineup 1 against V's lineup 1.
+    m_00 = np.array(
+        [
+            [0.90, 0.20, 0.60],
+            [0.30, 0.40, 0.60],
+            [0.40, 0.40, 0.50],
+        ],
+        dtype=np.float64,
+    )
+    m_10 = np.array(
+        [
+            [0.30, 0.40, 0.60],
+            [0.20, 0.90, 0.60],
+            [0.40, 0.40, 0.50],
+        ],
+        dtype=np.float64,
+    )
+    mats = np.stack([[m_00], [m_10]], axis=0)  # shape (2, 1, 3, 3)
+    val, per_u, per_v, p_strats, q_strats = solve_bayesian_shell_preview_nash_np(
+        mats,
+        alpha=np.array([0.5, 0.5], dtype=np.float64),
+        beta=np.array([1.0], dtype=np.float64),
+        sweeps=400,
+    )
+    assert 0.50 < val < 0.65
+    assert per_u.shape == (2,)
+    assert per_v.shape == (1,)
+    assert p_strats.shape == (2, 3)
+    assert q_strats.shape == (1, 3)
+    assert np.allclose(np.sum(p_strats, axis=1), 1.0, atol=1e-5)
+    assert np.allclose(np.sum(q_strats, axis=1), 1.0, atol=1e-5)
+
+    # Test pinpoint Hitchhiker detection (`detect_hitchhiker_slots`)
+    t_a, _ = _sample_6v6_teams()
+    t_seaking = [dict(m) for m in t_a]
+    t_seaking[5] = _mk_set("Seaking", 50, "Leftovers", ["Surf", "Horn Drill", "Rest", "Sleep Talk"])
+
+    flagged_hh = detect_hitchhiker_slots(
+        t_seaking,
+        slot_picks=[0.80, 0.75, 0.70, 0.45, 0.30, 0.00],
+        slot_marginals=[0.12, 0.08, 0.05, 0.03, 0.02, 0.00],
+    )
+    assert len(flagged_hh) == 1
+    assert flagged_hh[0]["slot"] == 5
+    assert flagged_hh[0]["species"] == "Seaking"
+    assert flagged_hh[0]["reason"] == "dead_nash_slot"
+
+    flagged_clean = detect_hitchhiker_slots(
+        t_a,
+        slot_picks=[0.55, 0.55, 0.50, 0.50, 0.45, 0.45],
+        slot_marginals=[0.05, 0.05, 0.04, 0.04, 0.03, 0.03],
+    )
+    assert len(flagged_clean) == 0
+
 
 
 
