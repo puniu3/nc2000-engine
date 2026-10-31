@@ -23,3 +23,19 @@ data/exp-siv-v1/cells/*.tmp
 data/meta-nash-v1/phase1.log
 data/meta-nash-v1/**/*.tmp
 data/meta-nash-v1/r2pricing.log
+# intermediate evolution, PSRO, and audit data
+data/eco-r*/
+data/eco-ring/
+data/kodoku-r*/
+!data/kodoku-r3/
+data/kodoku-r3/*
+!data/kodoku-r3/conclusion-equilibrium-deme.json
+data/psro-r*/
+data/dominance-audit-*/
+!data/dominance-audit-v8-clean/
+data/dominance-audit-v8-clean/*
+!data/dominance-audit-v8-clean/converged-report-v6.json
+data/team-selection-v2/stage-a-3000/
+findings/performance-scout-v1/
+findings/selection-matrix-estimate-v1/
+
