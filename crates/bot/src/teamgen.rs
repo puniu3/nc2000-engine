@@ -1118,6 +1118,121 @@ impl TeamGen {
         None
     }
 
+    /// Propose a same-shell sibling / camouflage variant from `parent` by applying 1..=3
+    /// `MoveSwap` (70%) and `ItemSwap` (30%) mutations while strictly preserving every slot's
+    /// Team Preview signature `(species, level, gender, has_item)`.
+    pub fn propose_same_shell(
+        &self,
+        dex: &Dex,
+        parent: &[Value],
+        rng: &mut SplitMix64,
+        tries: usize,
+    ) -> Option<Proposal> {
+        let mut parent_sig: Vec<(String, i64, String, bool)> = parent
+            .iter()
+            .map(|s| {
+                let sp = species_id(s);
+                let lv = set_level(s);
+                let g = s["gender"].as_str().unwrap_or("").to_uppercase();
+                let it = !toid(s["item"].as_str().unwrap_or("")).is_empty();
+                (sp, lv, g, it)
+            })
+            .collect();
+        parent_sig.sort();
+
+        for _ in 0..tries {
+            let step_roll = rng.below(20);
+            let num_steps = if step_roll < 10 {
+                1
+            } else if step_roll < 17 {
+                2
+            } else {
+                3
+            };
+            let mut raw = parent.to_vec();
+            let mut first_op = MutOp::MoveSwap;
+            let mut first_slot = 0usize;
+            let mut applied = 0usize;
+            for _ in 0..num_steps {
+                let slot = rng.below(6);
+                let op = if rng.below(10) < 7 {
+                    MutOp::MoveSwap
+                } else {
+                    MutOp::ItemSwap
+                };
+                let ok = match op {
+                    MutOp::MoveSwap => self.mut_move_swap(dex, &mut raw, slot, rng),
+                    MutOp::ItemSwap => self.mut_item_swap(dex, &mut raw, slot, rng),
+                    _ => unreachable!(),
+                };
+                if ok.is_some() {
+                    if applied == 0 {
+                        first_op = op;
+                        first_slot = slot;
+                    }
+                    applied += 1;
+                }
+            }
+            if applied == 0 {
+                continue;
+            }
+            for slot in 0..raw.len() {
+                self.repair_orphaned_moves(dex, &mut raw, slot, rng);
+                let cur_item = toid(raw[slot]["item"].as_str().unwrap_or(""));
+                if !cur_item.is_empty() {
+                    let valid_items = self.non_dominated_items(dex, &raw, slot, true);
+                    if !valid_items.iter().any(|it| toid(it) == cur_item) {
+                        let cands = self.non_dominated_items(dex, &raw, slot, false);
+                        if let Some(pick) = cands.get(rng.below(cands.len().max(1))) {
+                            raw[slot]["item"] = json!(pick);
+                        }
+                    }
+                }
+                optimize_set_dvs_evs(dex, &mut raw[slot]);
+                // If parent slot was Male ("M") and the mutated moveset has no Hidden Power,
+                // keep full Atk DVs/EVs so gender does not flip from "M" to "F" and break shell sharing.
+                let p_gender = parent[slot]["gender"].as_str().unwrap_or("");
+                let has_hp = move_ids(&raw[slot])
+                    .iter()
+                    .any(|m| m.starts_with("hiddenpower"));
+                if p_gender.eq_ignore_ascii_case("M") && !has_hp {
+                    raw[slot]["evs"] = json!({"hp": 255, "atk": 255, "def": 255, "spa": 255, "spd": 255, "spe": 255});
+                    if let Some(obj) = raw[slot].as_object_mut() {
+                        obj.remove("ivs");
+                        obj.remove("gender");
+                        obj.remove("shiny");
+                    }
+                }
+            }
+            let Some(team) = self.canonize(dex, &raw) else {
+                continue;
+            };
+            if team_key(&team) == team_key(parent) {
+                continue;
+            }
+            let mut cand_sig: Vec<(String, i64, String, bool)> = team
+                .iter()
+                .map(|s| {
+                    let sp = species_id(s);
+                    let lv = set_level(s);
+                    let g = s["gender"].as_str().unwrap_or("").to_uppercase();
+                    let it = !toid(s["item"].as_str().unwrap_or("")).is_empty();
+                    (sp, lv, g, it)
+                })
+                .collect();
+            cand_sig.sort();
+            if cand_sig != parent_sig {
+                continue;
+            }
+            return Some(Proposal {
+                op: first_op,
+                slot: first_slot,
+                team,
+            });
+        }
+        None
+    }
+
     /// Generate a random non-dominated legal team whose first `anchors.len()`
     /// slots use the specified species ids (with slot 0 given a Lv55 ace slot
     /// when legal) and that satisfies `constraint`.

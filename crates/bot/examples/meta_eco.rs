@@ -9419,8 +9419,11 @@ fn cmd_converge_conclusion(args: &[String]) {
     let cp_cols: usize = num(args, "--cp-cols", 10);
     let cp_add_games: u32 = num(args, "--cp-add-games", 8);
     let red_waves: usize = num(args, "--waves", 6);
-    let carry: usize = num(args, "--carry", 14);
-    let buds: usize = num(args, "--buds", 16);
+    let carry: usize = num(args, "--carry", 18);
+    let buds: usize = num(args, "--buds", 22);
+    let sibling_shells: usize = num(args, "--sibling-shells", 6);
+    let sibling_cands: usize = num(args, "--sibling-cands", 10);
+    let max_shell_variants: usize = num(args, "--max-shell-variants", 4);
     let cache_file = PathBuf::from(
         flag(args, "--cache-file")
             .unwrap_or_else(|| "data/dominance-audit-v9-clean/cache-cells.json".to_string()),
@@ -9531,9 +9534,16 @@ fn cmd_converge_conclusion(args: &[String]) {
         }
     }
 
-    // Also load any previously discovered Holdout Nemeses from previous convergence reports
-    // (Load v5, v4, v3, and v2 first so their IDs are never shadowed by v1!)
+    // Also load any previously discovered Holdout Nemeses and Sibling-Deme strains from previous convergence reports
+    // (Load v9, v5, v4, v3, and v2 first so their IDs are never shadowed by v1!)
+    let mut persisted_siblings: Vec<(String, String)> = Vec::new();
+    let mut persisted_nemeses: Vec<String> = Vec::new();
     for prev_path in [
+        root.join("data/dominance-audit-v9-clean/converged-report-s5.json"),
+        root.join("data/dominance-audit-v9-clean/converged-report-s4.json"),
+        root.join("data/dominance-audit-v9-clean/converged-report-s3.json"),
+        root.join("data/dominance-audit-v9-clean/converged-report-s2.json"),
+        root.join("data/dominance-audit-v9-clean/converged-report.json"),
         root.join("data/dominance-audit-v8-clean/converged-report-v6.json"),
         root.join("data/dominance-audit-v8-clean/converged-report-v5.json"),
         root.join("data/dominance-audit-v8-clean/converged-report-v4.json"),
@@ -9542,6 +9552,11 @@ fn cmd_converge_conclusion(args: &[String]) {
         root.join("data/dominance-audit-v8-clean/converged-report.json"),
         out_file.clone(),
     ] {
+        let prev_tag = prev_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("red-prev")
+            .replace("converged-report", "rp");
         if let Ok(txt) = std::fs::read_to_string(&prev_path) {
             if let Ok(v) = serde_json::from_str::<Value>(&txt) {
                 if let Some(rounds_arr) = v["rounds"].as_array() {
@@ -9551,14 +9566,42 @@ fn cmd_converge_conclusion(args: &[String]) {
                                 if let (Some(id), Some(sets)) =
                                     (n_val["id"].as_str(), n_val["sets"].as_array())
                                 {
-                                    register_team(
+                                    if let Some(reg_id) = register_team(
                                         &mut team_db,
                                         &mut seen_db_keys,
                                         &mut key_to_id,
                                         id,
-                                        "red-prev",
+                                        &prev_tag,
                                         sets,
-                                    );
+                                    ) {
+                                        let ho_wr =
+                                            n_val["holdout_red_wr"].as_f64().unwrap_or(0.0);
+                                        let tot_wr =
+                                            n_val["total_512g_red_wr"].as_f64().unwrap_or(0.0);
+                                        if ho_wr > 0.510 && tot_wr > 0.515 {
+                                            persisted_nemeses.push(reg_id);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if let Some(sibs) = r_val["forged_siblings"].as_array() {
+                            for s_val in sibs {
+                                if let (Some(id), Some(parent_id), Some(sets)) = (
+                                    s_val["id"].as_str(),
+                                    s_val["parent_id"].as_str(),
+                                    s_val["sets"].as_array(),
+                                ) {
+                                    if let Some(reg_id) = register_team(
+                                        &mut team_db,
+                                        &mut seen_db_keys,
+                                        &mut key_to_id,
+                                        id,
+                                        "sibling-forge",
+                                        sets,
+                                    ) {
+                                        persisted_siblings.push((parent_id.to_string(), reg_id));
+                                    }
                                 }
                             }
                         }
@@ -9579,6 +9622,10 @@ fn cmd_converge_conclusion(args: &[String]) {
 
     let mut units: Vec<ShellUnit> = Vec::new();
     let mut seen_unit_sigs: BTreeSet<PreviewSig> = BTreeSet::new();
+
+    let format_shell_unit_id = |m_ids: &[String]| -> String {
+        format!("DEME{}:{}", m_ids.len(), m_ids.join("+"))
+    };
 
     let add_shell_unit = |units_vec: &mut Vec<ShellUnit>,
                               seen_sigs: &mut BTreeSet<PreviewSig>,
@@ -9610,13 +9657,27 @@ fn cmd_converge_conclusion(args: &[String]) {
             }
         }
         if !seen_sigs.insert(sig.clone()) {
+            // General N-variant shell: merge any new member(s) into the existing shell with the same preview `sig`!
+            let mut added_any = false;
+            for u in units_vec.iter_mut() {
+                if u.sig == sig {
+                    for (k, mid) in resolved_ids.into_iter().enumerate() {
+                        if u.member_ids.len() < max_shell_variants && !u.member_ids.contains(&mid) {
+                            u.member_ids.push(mid);
+                            u.member_sets.push(resolved_sets[k].clone());
+                            u.member_raw.push(resolved_raw[k].clone());
+                            added_any = true;
+                        }
+                    }
+                    if added_any {
+                        u.unit_id = format_shell_unit_id(&u.member_ids);
+                    }
+                    return added_any;
+                }
+            }
             return false;
         }
-        let unit_id = if resolved_ids.len() == 1 {
-            format!("SINGLE:{}", resolved_ids[0])
-        } else {
-            format!("DEME2:{}+{}", resolved_ids[0], resolved_ids[1])
-        };
+        let unit_id = format_shell_unit_id(&resolved_ids);
         units_vec.push(ShellUnit {
             unit_id,
             sig,
@@ -9633,28 +9694,7 @@ fn cmd_converge_conclusion(args: &[String]) {
          db: &BTreeMap<String, (Vec<PokemonSet>, Vec<Value>, String)>,
          qid: &str|
          -> bool {
-            let Some((sets, raw, _)) = db.get(qid) else {
-                return false;
-            };
-            let sig = preview_sig_sets(sets);
-            if !seen_sigs.contains(&sig) {
-                return add_shell_unit(units_vec, seen_sigs, db, &[qid]);
-            }
-            // If `sig` is already in `units_vec` as a `SINGLE` unit, upgrade it to a 2-variant `DEME2` unit!
-            for u in units_vec.iter_mut() {
-                if u.sig == sig {
-                    if u.member_ids.len() == 1 && u.member_ids[0] != qid {
-                        let m0 = u.member_ids[0].clone();
-                        u.unit_id = format!("DEME2:{}+{}", m0, qid);
-                        u.member_ids.push(qid.to_string());
-                        u.member_sets.push(sets.clone());
-                        u.member_raw.push(raw.clone());
-                        return true;
-                    }
-                    return false;
-                }
-            }
-            false
+            add_shell_unit(units_vec, seen_sigs, db, &[qid])
         };
 
     // A. Register the Committed 2-Variant Deme Pairs (both existing elite Demes & newly invented Nemesis Demes!)
@@ -9690,6 +9730,14 @@ fn cmd_converge_conclusion(args: &[String]) {
     ];
     for &(a, b) in initial_deme_pairs {
         add_shell_unit(&mut units, &mut seen_unit_sigs, &team_db, &[a, b]);
+    }
+    for (p_id, s_id) in &persisted_siblings {
+        add_shell_unit(
+            &mut units,
+            &mut seen_unit_sigs,
+            &team_db,
+            &[p_id.as_str(), s_id.as_str()],
+        );
     }
 
     // B. Register the Pure Singletons (`alive = 1`)
@@ -9755,6 +9803,9 @@ fn cmd_converge_conclusion(args: &[String]) {
     for &s_id in initial_singletons {
         add_shell_unit(&mut units, &mut seen_unit_sigs, &team_db, &[s_id]);
     }
+    for nem_id in &persisted_nemeses {
+        promote_or_upgrade_shell_unit(&mut units, &mut seen_unit_sigs, &team_db, nem_id);
+    }
     // Also ensure every remaining outer shell from `report-step8-deme.json`'s `p_ids` is in `units`
     if let Ok(txt) = std::fs::read_to_string(root.join("data/dominance-audit-v7-deme/report-step8-deme.json")) {
         if let Ok(v) = serde_json::from_str::<Value>(&txt) {
@@ -9795,7 +9846,8 @@ fn cmd_converge_conclusion(args: &[String]) {
     for tid in team_db.keys() {
         if (tid.starts_with("red-oracle-")
             || tid.starts_with("red-r")
-            || tid.starts_with("red-v"))
+            || tid.starts_with("red-v")
+            || tid.starts_with("rp"))
             && q_seen.insert(tid.clone())
         {
             q_ids.push(tid.clone());
@@ -10015,9 +10067,19 @@ fn cmd_converge_conclusion(args: &[String]) {
                     cell_games[u_idx][j] = 64.0;
                     continue;
                 }
-                if let Some(&(sc, gms)) = unit_cache.get(&(u.unit_id.clone(), qid.clone())) {
+                if let Some(&(sc, gms)) = unit_cache
+                    .get(&(u.unit_id.clone(), qid.clone()))
+                    .or_else(|| {
+                        if u.member_ids.len() == 1 {
+                            unit_cache.get(&(format!("SINGLE:{}", u.member_ids[0]), qid.clone()))
+                        } else {
+                            None
+                        }
+                    })
+                {
                     payoff[u_idx][j] = sc;
                     cell_games[u_idx][j] = gms;
+                    unit_cache.insert((u.unit_id.clone(), qid.clone()), (sc, gms));
                     continue;
                 }
                 if u.member_ids.len() == 1 {
@@ -10108,7 +10170,7 @@ fn cmd_converge_conclusion(args: &[String]) {
                             let u = &units_ref[u_idx];
                             let qid = &q_ids_ref[j];
                             let (q_sets, _, _) = &team_db_ref[qid];
-                            let g_per_mem = if u.member_sets.len() == 1 { 4 } else { 2 };
+                            let g_per_mem = (4 / u.member_sets.len().max(1) as u32).max(2);
                             let p_seed = seed
                                 ^ (((u_idx * 1319 + j) as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15));
                             let (sc, gms) = eval_unit_vs_q(u, q_sets, g_per_mem, p_seed);
@@ -10327,11 +10389,8 @@ fn cmd_converge_conclusion(args: &[String]) {
                             let u = &units_ref[u_idx];
                             let qid = &q_ids_ref[j];
                             let (q_sets, _, _) = &team_db_ref[qid];
-                            let g_per_mem = if u.member_sets.len() == 1 {
-                                cp_add_games
-                            } else {
-                                (cp_add_games / 2).max(2)
-                            };
+                            let g_per_mem =
+                                (cp_add_games / u.member_sets.len().max(1) as u32).max(2);
                             let prev_g = cell_games_ref[u_idx][j] as u64;
                             let p_seed = seed
                                 ^ 0xA5A5_5A5A_1111_2222_u64
@@ -10401,6 +10460,383 @@ fn cmd_converge_conclusion(args: &[String]) {
                 .sum();
             if c_sc < 0.4995 {
                 outside_challenger_promotions.push(q_ids[j_out].clone());
+            }
+        }
+
+        // Phase 2.5: N-Variant Sibling-Deme Forge — synthesize same-shell siblings for top active shells
+        // of ANY current cardinality `n < max_shell_variants`, testing `(n + 1)`-variant Turn-0 preview ambiguity
+        // (`candidate_count: n -> n + 1`) and counter-tech against the shell's 8 worst counter-columns!
+        let mut forged_siblings_recs: Vec<Value> = Vec::new();
+        let mut forged_any_sibling = false;
+        let top_shell_targets: Vec<(usize, f64)> = active_units
+            .iter()
+            .copied()
+            .filter(|&(u_idx, w)| {
+                units[u_idx].member_ids.len() < max_shell_variants && w >= 0.025
+            })
+            .take(sibling_shells)
+            .collect();
+        if !top_shell_targets.is_empty() && sibling_cands > 0 {
+            eprintln!(
+                "\n  [Round {} Phase 2.5] N-Variant Sibling-Deme Forge: synthesizing {} same-shell candidates for {} top active shells (n -> n+1, max={})...",
+                o_round,
+                sibling_cands,
+                top_shell_targets.len(),
+                max_shell_variants
+            );
+            let mut forge_rng =
+                SplitMix64::new(seed ^ ((o_round as u64).wrapping_mul(0xD1B5_4A32_D192_ED03)));
+            for (t_rank, &(u_idx, w_shell)) in top_shell_targets.iter().enumerate() {
+                let cur_n = units[u_idx].member_ids.len();
+                let anchor_id = units[u_idx].member_ids[0].clone();
+                let cur_member_ids = units[u_idx].member_ids.clone();
+                let cur_member_sets = units[u_idx].member_sets.clone();
+                let cur_member_raw = units[u_idx].member_raw.clone();
+                let parent_sig = units[u_idx].sig.clone();
+
+                // Identify the 8 worst counter-columns `worst_qs` for this shell
+                let mut q_ranked: Vec<(usize, f64)> = (0..n_q)
+                    .filter(|&j| !cur_member_ids.contains(&q_ids[j]))
+                    .map(|j| (j, payoff[u_idx][j]))
+                    .collect();
+                q_ranked.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+                let worst_qs: Vec<usize> = q_ranked.iter().take(8).map(|&(j, _)| j).collect();
+                let parent_worst8_avg: f64 = worst_qs
+                    .iter()
+                    .map(|&j| payoff[u_idx][j])
+                    .sum::<f64>()
+                    / (worst_qs.len().max(1) as f64);
+
+                // Generate `sibling_cands` distinct same-shell variants by mutating across all `cur_n` members
+                let mut cands: Vec<(String, String, Vec<PokemonSet>, Vec<Value>)> = Vec::new();
+                let mut seen_cand_keys: BTreeSet<String> = seen_db_keys.clone();
+                for m_raw in &cur_member_raw {
+                    seen_cand_keys.insert(team_key(m_raw));
+                }
+                let mut tries = 0usize;
+                while cands.len() < sibling_cands && tries < sibling_cands * 25 {
+                    tries += 1;
+                    let base_raw = &cur_member_raw[(tries - 1) % cur_n];
+                    if let Some(prop) = gen.propose_same_shell(&dex, base_raw, &mut forge_rng, 180) {
+                        let k = team_key(&prop.team);
+                        if !seen_cand_keys.insert(k) {
+                            continue;
+                        }
+                        if let Ok(c_sets) = to_sets(&prop.team) {
+                            if preview_sig_sets(&c_sets) == parent_sig {
+                                let cid = format!(
+                                    "sib-r{}-n{}-{}-s{:02}",
+                                    o_round,
+                                    cur_n + 1,
+                                    anchor_id,
+                                    cands.len() + 1
+                                );
+                                let op_tag = format!("{}@{}", prop.op.name(), prop.slot);
+                                cands.push((cid, op_tag, c_sets, prop.team));
+                            }
+                        }
+                    }
+                }
+                if cands.is_empty() {
+                    continue;
+                }
+
+                // Screen all candidates in parallel against `worst_qs` under the `(cur_n + 1)`-variant Deme prior
+                let new_n = cur_n + 1;
+                let w_each = 1.0 / (new_n as f64);
+                let g_per_mem = (8 / new_n as u32).max(2);
+                let mut screen_scores: Vec<(usize, f64, f64)> = Vec::with_capacity(cands.len());
+                for (c_idx, (_, _, c_sets, _)) in cands.iter().enumerate() {
+                    let mut cand_mp = (*shared_clean_mp).clone();
+                    cand_mp
+                        .teams
+                        .retain(|t| preview_sig_sets(&t.sets) != parent_sig);
+                    for (m_i, m_sets) in cur_member_sets.iter().enumerate() {
+                        cand_mp.teams.push(nc2000_bot::preview::MetaTeam {
+                            id: format!("unit-{}", cur_member_ids[m_i]),
+                            sets: m_sets.clone(),
+                            weight: Some(w_each),
+                        });
+                    }
+                    cand_mp.teams.push(nc2000_bot::preview::MetaTeam {
+                        id: format!("unit-sib-{}", c_idx),
+                        sets: c_sets.clone(),
+                        weight: Some(w_each),
+                    });
+                    let cand_mp_arc = Arc::new(cand_mp);
+
+                    let cursor = std::sync::atomic::AtomicUsize::new(0);
+                    let mut q_outs: Vec<(f64, f64)> = Vec::with_capacity(worst_qs.len());
+                    std::thread::scope(|scope| {
+                        let mut handles = Vec::new();
+                        for _ in 0..threads.max(1).min(worst_qs.len()) {
+                            let (
+                                dex_ref,
+                                worst_qs_ref,
+                                cursor_ref,
+                                q_ids_ref,
+                                team_db_ref,
+                                cand_mp_ref,
+                                cur_sets_ref,
+                            ) = (
+                                &dex,
+                                &worst_qs,
+                                &cursor,
+                                &q_ids,
+                                &team_db,
+                                &cand_mp_arc,
+                                &cur_member_sets,
+                            );
+                            let c_sets_ref = c_sets;
+                            handles.push(scope.spawn(move || {
+                                let mut loc = Vec::new();
+                                loop {
+                                    let k =
+                                        cursor_ref.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                    if k >= worst_qs_ref.len() {
+                                        break;
+                                    }
+                                    let j = worst_qs_ref[k];
+                                    let (q_sets, _, _) = &team_db_ref[&q_ids_ref[j]];
+                                    let base_seed = seed
+                                        ^ 0x7777_8888_9999_AAAA_u64
+                                        ^ (((u_idx * 997 + c_idx * 131 + j) as u64)
+                                            .wrapping_mul(0x9E37_79B9_7F4A_7C15));
+                                    let mut sum_m = 0.0f64;
+                                    for (m_i, m_sets) in cur_sets_ref.iter().enumerate() {
+                                        let r_m = eval_blind_asymmetric_prior(
+                                            dex_ref,
+                                            m_sets,
+                                            std::slice::from_ref(&q_sets.to_vec()),
+                                            &[1.0],
+                                            cand_mp_ref.clone(),
+                                            cand_mp_ref.clone(),
+                                            g_per_mem,
+                                            iters,
+                                            c,
+                                            max_turns,
+                                            1,
+                                            base_seed ^ ((m_i as u64 + 1).wrapping_mul(0x1111)),
+                                        );
+                                        sum_m += r_m.score;
+                                    }
+                                    let r_c = eval_blind_asymmetric_prior(
+                                        dex_ref,
+                                        c_sets_ref,
+                                        std::slice::from_ref(&q_sets.to_vec()),
+                                        &[1.0],
+                                        cand_mp_ref.clone(),
+                                        cand_mp_ref.clone(),
+                                        g_per_mem,
+                                        iters,
+                                        c,
+                                        max_turns,
+                                        1,
+                                        base_seed ^ 0x9999,
+                                    );
+                                    sum_m += r_c.score;
+                                    loc.push((sum_m / (new_n as f64), r_c.score));
+                                }
+                                loc
+                            }));
+                        }
+                        for h in handles {
+                            q_outs.extend(h.join().unwrap());
+                        }
+                    });
+                    let deme_avg: f64 =
+                        q_outs.iter().map(|x| x.0).sum::<f64>() / (q_outs.len() as f64);
+                    let sib_only_avg: f64 =
+                        q_outs.iter().map(|x| x.1).sum::<f64>() / (q_outs.len() as f64);
+                    screen_scores.push((c_idx, deme_avg, sib_only_avg));
+                }
+                screen_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+                let (best_c_idx, best_deme_w8, best_sib_w8) = screen_scores[0];
+                let (ref best_cid, ref best_op, ref best_sets, ref best_raw) = cands[best_c_idx];
+
+                eprintln!(
+                    "    [Forge #{}/{} | {} (n={}->{}, w={:.4})] cur_worst8={:.4} -> best_deme_worst8={:.4} (sib_only={:.4}) via {} ({})",
+                    t_rank + 1,
+                    top_shell_targets.len(),
+                    units[u_idx].unit_id,
+                    cur_n,
+                    new_n,
+                    w_shell,
+                    parent_worst8_avg,
+                    best_deme_w8,
+                    best_sib_w8,
+                    best_cid,
+                    best_op
+                );
+
+                // Accept if expanding `n -> n + 1` improves worst-8 counter payoff by >= +0.015
+                if best_deme_w8 >= parent_worst8_avg + 0.015 {
+                    if let Some(reg_id) = register_team(
+                        &mut team_db,
+                        &mut seen_db_keys,
+                        &mut key_to_id,
+                        best_cid,
+                        "sibling-forge",
+                        best_raw,
+                    ) {
+                        // Expand `units[u_idx]` in-place from `n` to `n + 1` variants!
+                        units[u_idx].member_ids.push(reg_id.clone());
+                        units[u_idx].member_sets.push(best_sets.clone());
+                        units[u_idx].member_raw.push(best_raw.clone());
+                        units[u_idx].unit_id = format_shell_unit_id(&units[u_idx].member_ids);
+
+                        // Build updated prior with this expanded `(n + 1)`-variant unit and re-evaluate row `u_idx`
+                        let mut up_mp = (*shared_clean_mp).clone();
+                        up_mp
+                            .teams
+                            .retain(|t| preview_sig_sets(&t.sets) != parent_sig);
+                        for (m_i, m_sets) in units[u_idx].member_sets.iter().enumerate() {
+                            up_mp.teams.push(nc2000_bot::preview::MetaTeam {
+                                id: format!("unit-{}", units[u_idx].member_ids[m_i]),
+                                sets: m_sets.clone(),
+                                weight: Some(w_each),
+                            });
+                        }
+                        let up_mp_arc = Arc::new(up_mp);
+                        let new_member_sets = units[u_idx].member_sets.clone();
+
+                        // Select columns to re-evaluate cleanly under the `(n + 1)`-variant prior:
+                        // all members of `active_units` + the 24 lowest-scoring columns against `u_idx`
+                        let mut eval_cols_set: BTreeSet<usize> = BTreeSet::new();
+                        for &(au, _) in &active_units {
+                            for &jq in &unit_q_indices[au] {
+                                eval_cols_set.insert(jq);
+                            }
+                        }
+                        for &(jq, _) in q_ranked.iter().take(24) {
+                            eval_cols_set.insert(jq);
+                        }
+                        let eval_cols: Vec<usize> = eval_cols_set.into_iter().collect();
+                        let cursor = std::sync::atomic::AtomicUsize::new(0);
+                        let mut row_updates: Vec<(usize, f64, f64)> =
+                            Vec::with_capacity(eval_cols.len());
+                        std::thread::scope(|scope| {
+                            let mut handles = Vec::new();
+                            for _ in 0..threads.max(1) {
+                                let (
+                                    dex_ref,
+                                    eval_cols_ref,
+                                    cursor_ref,
+                                    q_ids_ref,
+                                    team_db_ref,
+                                    up_mp_ref,
+                                    m_sets_vec_ref,
+                                ) = (
+                                    &dex,
+                                    &eval_cols,
+                                    &cursor,
+                                    &q_ids,
+                                    &team_db,
+                                    &up_mp_arc,
+                                    &new_member_sets,
+                                );
+                                handles.push(scope.spawn(move || {
+                                    let mut loc = Vec::new();
+                                    loop {
+                                        let k = cursor_ref
+                                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                        if k >= eval_cols_ref.len() {
+                                            break;
+                                        }
+                                        let j = eval_cols_ref[k];
+                                        let (q_sets, _, _) = &team_db_ref[&q_ids_ref[j]];
+                                        let p_seed = seed
+                                            ^ 0xCAFE_F00D_1234_5678_u64
+                                            ^ (((u_idx * 1619 + j) as u64)
+                                                .wrapping_mul(0x9E37_79B9_7F4A_7C15));
+                                        let mut sum_sc = 0.0f64;
+                                        let mut tot_g = 0.0f64;
+                                        for (m_i, m_sets) in m_sets_vec_ref.iter().enumerate() {
+                                            let r_m = eval_blind_asymmetric_prior(
+                                                dex_ref,
+                                                m_sets,
+                                                std::slice::from_ref(&q_sets.to_vec()),
+                                                &[1.0],
+                                                up_mp_ref.clone(),
+                                                up_mp_ref.clone(),
+                                                g_per_mem,
+                                                iters,
+                                                c,
+                                                max_turns,
+                                                1,
+                                                p_seed ^ ((m_i as u64 + 1).wrapping_mul(0x1111)),
+                                            );
+                                            let gm = (g_per_mem + g_per_mem % 2) as f64;
+                                            sum_sc += r_m.score * gm;
+                                            tot_g += gm;
+                                        }
+                                        loc.push((j, sum_sc / tot_g.max(1.0), tot_g));
+                                    }
+                                    loc
+                                }));
+                            }
+                            for h in handles {
+                                row_updates.extend(h.join().unwrap());
+                            }
+                        });
+                        for (j, sc, gms) in row_updates {
+                            payoff[u_idx][j] = sc;
+                            cell_games[u_idx][j] = gms;
+                            unit_cache.insert(
+                                (units[u_idx].unit_id.clone(), q_ids[j].clone()),
+                                (sc, gms),
+                            );
+                        }
+                        for j in 0..n_q {
+                            if !unit_cache.contains_key(&(units[u_idx].unit_id.clone(), q_ids[j].clone())) {
+                                unit_cache.insert(
+                                    (units[u_idx].unit_id.clone(), q_ids[j].clone()),
+                                    (payoff[u_idx][j], cell_games[u_idx][j]),
+                                );
+                            }
+                        }
+                        if q_seen.insert(reg_id.clone()) {
+                            q_ids.push(reg_id.clone());
+                        }
+                        forged_siblings_recs.push(json!({
+                            "id": reg_id,
+                            "parent_id": anchor_id,
+                            "new_shell_size": new_n,
+                            "op": best_op,
+                            "parent_worst8_avg": parent_worst8_avg,
+                            "deme_worst8_avg": best_deme_w8,
+                            "sets": best_raw,
+                        }));
+                        forged_any_sibling = true;
+                    }
+                }
+            }
+            if forged_any_sibling {
+                save_unit_cache(&unit_cache);
+                let m_solve_re = build_m_solve(&payoff, &cell_games);
+                let m_in_re: Vec<Vec<f64>> =
+                    (0..n_u).map(|u| m_solve_re[u][0..n_u].to_vec()).collect();
+                let (w_u_in_re, _, _) = solve_rectangular_minimax(&m_in_re, 100_000);
+                let (w_u_rect_re, _, _) = solve_rectangular_minimax(&m_solve_re, 100_000);
+                let mut act_idx_re: Vec<usize> = (0..n_u)
+                    .filter(|&u| w_u_in_re[u] >= 0.002 || w_u_rect_re[u] >= 0.002)
+                    .collect();
+                if act_idx_re.is_empty() {
+                    act_idx_re = (0..n_u).collect();
+                }
+                let m_pol_re: Vec<Vec<f64>> =
+                    act_idx_re.iter().map(|&u| m_solve_re[u].clone()).collect();
+                let (w_pol_re, _, _) = solve_rectangular_minimax(&m_pol_re, 80_000);
+                active_units = act_idx_re
+                    .into_iter()
+                    .zip(w_pol_re.into_iter())
+                    .filter(|&(_, w)| w >= 0.002)
+                    .collect();
+                active_units.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+                let wu_sum_re: f64 = active_units.iter().map(|x| x.1).sum();
+                for x in &mut active_units {
+                    x.1 /= wu_sum_re;
+                }
             }
         }
 
@@ -10543,7 +10979,7 @@ fn cmd_converge_conclusion(args: &[String]) {
         }
         let mut population: Vec<RedStrain> = Vec::new();
         let mut seq = 1usize;
-        let island_tag = format!("red-v6-r{}", o_round);
+        let island_tag = format!("red-v6-s{}-r{}", seed % 10000, o_round);
 
         let push_red = |pop: &mut Vec<RedStrain>,
                         seen: &mut BTreeSet<String>,
@@ -10602,6 +11038,7 @@ fn cmd_converge_conclusion(args: &[String]) {
             .collect();
         outside_q.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
 
+        // 1. Closest outside-Q founders
         for &(j, _) in outside_q.iter().take(10) {
             let qid = &q_ids[j];
             if let Some((_, raw, _)) = team_db.get(qid) {
@@ -10617,7 +11054,29 @@ fn cmd_converge_conclusion(args: &[String]) {
                 );
             }
         }
-        // Anti-mirror counter-mutants of `\pi^*`'s top shells
+        // 2. Same-Shell Camouflage founders (`SAME-SHELL-AS-PI*`):
+        // strictly preserve the Team Preview `(species, level, gender, has_item)` of `\pi^*`'s top shells
+        // so Blue's `Belief::new` at Turn 0 attributes 100% of prior probability to `\pi^*`'s own set(s)!
+        for (idx, pid) in pi_ids.iter().take(12).enumerate() {
+            let base_raw = &pi_raw[idx];
+            for _ in 0..12 {
+                if let Some(prop) = gen.propose_same_shell(&dex, base_raw, &mut rng, 180) {
+                    if push_red(
+                        &mut population,
+                        &mut seen_red_keys,
+                        &mut seq,
+                        pid,
+                        "same-shell-camouflage",
+                        0,
+                        &format!("{}@{}", prop.op.name(), prop.slot),
+                        &prop.team,
+                    ) {
+                        break;
+                    }
+                }
+            }
+        }
+        // 3. Anti-mirror counter-mutants of `\pi^*`'s top shells (free structural / level / move / item mutations)
         for (idx, pid) in pi_ids.iter().take(10).enumerate() {
             let base_raw = &pi_raw[idx];
             for _ in 0..8 {
@@ -10692,9 +11151,9 @@ fn cmd_converge_conclusion(args: &[String]) {
         for w in 1..=red_waves {
             let tiers: [(usize, f64); 5] = [
                 (8, 0.0),     // 16 games
-                (24, 0.455),  // 48 games
-                (48, 0.485),  // 96 games
-                (80, 0.500),  // 160 games
+                (24, 0.435),  // 48 games (relaxed from 0.455 to reduce false-negative culling)
+                (48, 0.480),  // 96 games
+                (80, 0.495),  // 160 games
                 (128, 0.505), // 256 games
             ];
             for &(target_pairs, min_red_wr) in &tiers {
@@ -10748,12 +11207,13 @@ fn cmd_converge_conclusion(args: &[String]) {
             hall_of_fame.sort_by(|a, b| b.red_wr.partial_cmp(&a.red_wr).unwrap());
             let best = &population[0];
             eprintln!(
-                "  [{} wave {}/{}] best={} (from={}, op={}, Red_WR={:.4} / Blue_WR={:.4} over {}g) | HoF={}",
+                "  [{} wave {}/{}] best={} (from={}, origin={}, op={}, Red_WR={:.4} / Blue_WR={:.4} over {}g) | HoF={}",
                 island_tag,
                 w,
                 red_waves,
                 best.id,
                 best.parent_id,
+                best.origin,
                 best.last_op,
                 best.red_wr,
                 1.0 - best.red_wr,
@@ -10792,8 +11252,34 @@ fn cmd_converge_conclusion(args: &[String]) {
                 b_tries += 1;
                 let p_idx = (b_tries - 1) % survivors.len().max(1);
                 let parent = &survivors[p_idx];
+                let parent_shares_pi_shell =
+                    pi_shell_counts.contains_key(&preview_sig_sets(&parent.sets));
                 let roll = rng.below(100);
-                if roll < 70 {
+                // If parent is a same-shell camouflage strain, keep evolving move/item mix-ups inside the shell 60% of the time!
+                if (parent_shares_pi_shell && roll < 60) || (!parent_shares_pi_shell && roll < 20) {
+                    let base_for_camo = if parent_shares_pi_shell {
+                        &parent.raw
+                    } else {
+                        &pi_raw[rng.below(pi_raw.len().max(1))]
+                    };
+                    let p_label = if parent_shares_pi_shell {
+                        &parent.id
+                    } else {
+                        &pi_ids[rng.below(pi_ids.len().max(1))]
+                    };
+                    if let Some(prop) = gen.propose_same_shell(&dex, base_for_camo, &mut rng, 180) {
+                        push_red(
+                            &mut next_pop,
+                            &mut seen_red_keys,
+                            &mut seq,
+                            p_label,
+                            "same-shell-camouflage",
+                            w,
+                            &format!("{}@{}", prop.op.name(), prop.slot),
+                            &prop.team,
+                        );
+                    }
+                } else if roll < 75 {
                     if let Some(prop) = gen.propose_targeted(
                         &dex,
                         &parent.raw,
@@ -10930,6 +11416,7 @@ fn cmd_converge_conclusion(args: &[String]) {
                     &island_tag,
                     &s.raw,
                 ) {
+                    hall_of_fame[idx].id = reg_id.clone();
                     if q_seen.insert(reg_id.clone()) {
                         q_ids.push(reg_id.clone());
                     }
@@ -10961,6 +11448,7 @@ fn cmd_converge_conclusion(args: &[String]) {
             "active_shell_count": active_units.len(),
             "support_team_count": pi_ids.len(),
             "active_shells": active_summary,
+            "forged_siblings": forged_siblings_recs,
             "holdout_nemeses": holdout_recs,
             "newly_promoted_shells": newly_promoted,
         }));
