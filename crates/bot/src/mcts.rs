@@ -672,9 +672,7 @@ fn compact_blindspot_tactical_override(
     let me = &cb.mons[att_idx];
     let foe = &cb.mons[def_idx];
     let me_maxhp = table.mons[att_idx].maxhp.max(1) as f64;
-    let foe_maxhp = table.mons[def_idx].maxhp.max(1) as f64;
     let me_hp_frac = (me.hp() as f64) / me_maxhp;
-    let foe_hp_frac = (foe.hp() as f64) / foe_maxhp;
 
     let foe_berry = foe.item != 0
         && (table.mons[def_idx].is_mintberry || table.mons[def_idx].is_miracleberry);
@@ -699,7 +697,7 @@ fn compact_blindspot_tactical_override(
         + foe.boosts[2].max(0) as i32
         + foe.boosts[3].max(0) as i32
         + 2 * (foe.boosts[6].max(0) as i32);
-    if foe_setup >= 2 && best_score < 0.48 * foe_hp_frac {
+    if foe_setup >= 2 && best_score < 0.48 {
         let foe_imm_hit = if foe_guaranteed_asleep && !foe_has_sleeptalk {
             0.0
         } else {
@@ -710,13 +708,13 @@ fn compact_blindspot_tactical_override(
             if c < 4 {
                 let sk = table.move_specs[att_idx][c as usize].special_kind;
                 if sk == 27
-                    && (me_hp_frac > 0.75 * foe_imm_hit
+                    && (foe_imm_hit < 0.85
                         || cb.mon_action_speed(table, side, att_slot)
                             > cb.mon_action_speed(table, def_side, def_slot))
                 {
                     return Some(c);
                 }
-                if sk == 7 && foe_bench && me_hp_frac > 0.85 * foe_imm_hit {
+                if sk == 7 && foe_bench && foe_imm_hit < 0.85 {
                     return Some(c);
                 }
             }
@@ -768,7 +766,7 @@ fn compact_blindspot_tactical_override(
     if compact_side_has_usable_heal(cb, table, side, att_slot)
         && me_hp_frac >= 0.65
         && (me.vol_flags & (vol_bit::ENCORE | vol_bit::PERISH_SONG)) == 0
-        && best_score < 0.45 * foe_hp_frac
+        && best_score < 0.45
     {
         let mut foe_non_sd_hit = 0.0f64;
         let mut foe_has_counter = false;
@@ -865,14 +863,8 @@ fn compact_greedy_pick(
             return la_pick;
         }
         let bs_rollout = rules.settlement.uses_blindspot_rollout();
-        let def_idx = def_side * 3 + def_slot;
         let me_hp_frac = if bs_rollout {
             (cb.mons[att_idx].hp() as f64) / (table.mons[att_idx].maxhp.max(1) as f64)
-        } else {
-            0.0
-        };
-        let foe_hp_frac = if bs_rollout {
-            (cb.mons[def_idx].hp() as f64) / (table.mons[def_idx].maxhp.max(1) as f64)
         } else {
             0.0
         };
@@ -890,10 +882,10 @@ fn compact_greedy_pick(
                 if bs_rollout
                     && table.move_specs[att_idx][m_slot].is_selfdestruct
                     && me_hp_frac >= 0.50
-                    && raw_score < 0.82 * foe_hp_frac
+                    && raw_score < 0.82
                     && compact_side_has_usable_heal(cb, table, def_side, def_slot)
                     && cb.best_hit_fraction(table, def_side, def_slot, side, att_slot, true)
-                        < 0.75 * me_hp_frac
+                        < 0.75
                 {
                     if best.is_none() {
                         best = Some((c, 0.0, 0.0));

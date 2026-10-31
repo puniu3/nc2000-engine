@@ -870,6 +870,11 @@ pub struct MaskRules {
     /// "how much of the class is recoverable without ever being wrong".
     /// OFF by default.
     pub immunity_all_switchins: bool,
+    /// Extended provable no-op masks (`moonlight`/`morningsun`/`synthesis` at full HP,
+    /// last-mon `batonpass`, `bellydrum` at `<=50%` HP or `+6 Atk`, healthy-party `healbell`,
+    /// `disable`/`encore`/`spite`/`mirrormove`/`conversion2`/`mimic` vs stranded foe with
+    /// `last_move == None`, and narrowed `own_recovery_wait`).
+    pub extended_noops: bool,
 }
 
 impl Default for MaskRules {
@@ -882,6 +887,7 @@ impl Default for MaskRules {
             sleep_talk_awake: true,
             immunity_ignores_switch_read: false,
             immunity_all_switchins: false,
+            extended_noops: true,
         }
     }
 }
@@ -964,9 +970,30 @@ pub(crate) fn dominated_reason(
     if rules.own_recovery_wait
         && b.active_id(side).is_some_and(|id| {
             let me = b.poke(id);
-            !me.fainted && me.hp > 0 && me.hp < me.maxhp
-                && me.item.is_some() && me.item == dex.items.id("leftovers")
+            !me.fainted
+                && me.hp > 0
+                && me.hp < me.maxhp
+                && me.item.is_some()
+                && me.item == dex.items.id("leftovers")
         })
+        && (!rules.extended_noops
+            || b.active_id(1 - side).is_some_and(|f| {
+                let fp = b.poke(f);
+                fp.status == nc2000_engine::state::Status::Slp
+                    || fp.status == nc2000_engine::state::Status::Frz
+                    || fp.transformed
+                    || fp.move_slots.iter().any(|slot| !slot.shared)
+                    || crate::belief::format_learnsets()
+                        .species(dex.species.key(fp.species))
+                        .map_or(true, |ls| {
+                            ls.moves.iter().any(|m| {
+                                matches!(
+                                    m.as_str(),
+                                    "counter" | "mirrorcoat" | "metronome" | "mirrormove" | "sketch"
+                                )
+                            })
+                        })
+            }))
     {
         return None;
     }
@@ -1145,7 +1172,10 @@ fn noop_reason(
         let me = b.poke(att);
         me.hp >= me.maxhp
     };
-    if ms.heal.is_some() || key == "rest" {
+    if ms.heal.is_some()
+        || key == "rest"
+        || (rules.extended_noops && matches!(key, "moonlight" | "morningsun" | "synthesis"))
+    {
         verdict!(
             full_hp && faster_than_foe(b, dex, side)
                 && (!rules.priority_heal || !foe_may_preempt_with_damage(b, dex, side, ms.priority)),
@@ -1205,6 +1235,48 @@ fn noop_reason(
     // of 22 turns on the two that cannot do anything.
     if matches!(key, "perishsong" | "destinybond") && b.sides[side].pokemon_left == 1 {
         yes!("Perish Song and Destiny Bond fail from the last mon");
+    }
+    if rules.extended_noops && ms.self_switch.is_some() && !b.can_switch(side as u8) {
+        yes!("Baton Pass fails with nobody left to switch to");
+    }
+    if rules.extended_noops && key == "bellydrum" {
+        let me = b.poke(att);
+        let max_leftovers_gain = if me.item.is_some() && me.item == dex.items.id("leftovers") {
+            (me.maxhp / 16).max(1)
+        } else {
+            0
+        };
+        let foe_may_raise_hp = b.active_id(1 - side).is_some_and(|f| {
+            let fp = b.poke(f);
+            fp.transformed
+                || fp.move_slots.iter().any(|slot| !slot.shared)
+                || crate::belief::format_learnsets()
+                    .species(dex.species.key(fp.species))
+                    .map_or(true, |ls| {
+                        ls.moves.iter().any(|m| {
+                            matches!(
+                                m.as_str(),
+                                "painsplit" | "present" | "metronome" | "mirrormove" | "sketch"
+                            )
+                        })
+                    })
+        });
+        let hp_too_low_strict = (me.hp as f64) <= (me.maxhp as f64) / 2.0
+            && (faster_than_foe(b, dex, side)
+                || (!foe_may_raise_hp
+                    && ((me.hp + max_leftovers_gain) as f64) <= (me.maxhp as f64) / 2.0));
+        let atk_capped_strict = me.boosts[0] >= 6 && faster_than_foe(b, dex, side);
+        if hp_too_low_strict || atk_capped_strict {
+            yes!("Belly Drum needs over half HP and uncapped Attack");
+        }
+    }
+    if rules.extended_noops
+        && key == "healbell"
+        && faster_than_foe(b, dex, side)
+        && !foe_may_preempt_with_damage(b, dex, side, ms.priority)
+        && b.sides[side].roster.iter().all(|p| p.status == Status::None)
+    {
+        yes!("Heal Bell has no status to cure");
     }
     // ---- Sleep Talk / Snore chosen while AWAKE. `moveexec.rs:521`
     // (`("sleeptalk","onTry") | ("snore","onTry")` => `RV::from_bool(status ==
@@ -1372,6 +1444,27 @@ fn noop_reason(
         );
     }
 
+    if rules.extended_noops
+        && matches!(
+            key,
+            "disable" | "encore" | "spite" | "mirrormove" | "conversion2" | "mimic"
+        )
+    {
+        if let Some(def) = foe {
+            let d = b.poke(def);
+            let no_last = if key == "encore" {
+                d.last_move_encore.is_none()
+            } else {
+                d.last_move.is_none()
+            };
+            if no_last
+                && faster_than_foe(b, dex, side)
+                && !foe_may_preempt_with_damage(b, dex, side, ms.priority)
+            {
+                yes!("the target has not used a move yet");
+            }
+        }
+    }
     if let Some(v) = ms.volatile_status.as_deref() {
         // Non-Ghost Curse boosts the user (+1 Atk, +1 Def, -1 Spe) and clears
         // `volatile_status` (`moveexec.rs:576`), so it only fails when both
@@ -3194,5 +3287,91 @@ mod dominated_action_tests {
             None,
             "harmless sleep move into stranded sleeping foe is unmasked during residual wait"
         );
+    }
+
+    #[test]
+    fn belly_drum_baton_pass_heal_bell_morning_sun_and_own_recovery_wait_edges() {
+        let (dex, mut b) = setup();
+        let me = b.active_id(0).unwrap();
+        let foe = b.active_id(1).unwrap();
+        let rules = MaskRules::default();
+        b.poke_mut(me).boosts[4] = 6; // side 0 acts first
+
+        // 1. Moonlight / Morning Sun / Synthesis at full HP are provable no-ops
+        for key in ["moonlight", "morningsun", "synthesis"] {
+            assert_eq!(
+                noop_reason(&b, &dex, 0, mv(&dex, key), rules),
+                Some("healing at full HP, and faster"),
+                "{key} at full HP must be masked as a no-op"
+            );
+        }
+        b.poke_mut(me).hp -= 1;
+        for key in ["moonlight", "morningsun", "synthesis"] {
+            assert_eq!(noop_reason(&b, &dex, 0, mv(&dex, key), rules), None);
+        }
+        b.poke_mut(me).hp = b.poke(me).maxhp;
+
+        // 2. Baton Pass with bench alive is live; when stranded (last mon), it is a no-op
+        assert_eq!(noop_reason(&b, &dex, 0, mv(&dex, "batonpass"), rules), None);
+        strand(&mut b, 0);
+        assert_eq!(
+            noop_reason(&b, &dex, 0, mv(&dex, "batonpass"), rules),
+            Some("Baton Pass fails with nobody left to switch to")
+        );
+
+        // 3. Belly Drum when HP <= 50% or Attack already at +6 is a no-op
+        assert_eq!(noop_reason(&b, &dex, 0, mv(&dex, "bellydrum"), rules), None);
+        b.poke_mut(me).hp = b.poke(me).maxhp / 2;
+        assert_eq!(
+            noop_reason(&b, &dex, 0, mv(&dex, "bellydrum"), rules),
+            Some("Belly Drum needs over half HP and uncapped Attack")
+        );
+        // Even with Leftovers and slower, if hp + leftovers <= maxhp/2 and foe has no Pain Split/Present/Metronome, still no-op
+        let orig_foe_species = b.poke(foe).species;
+        b.poke_mut(foe).species = dex.species.id("cloyster").unwrap();
+        b.poke_mut(me).boosts[4] = -6;
+        b.poke_mut(me).item = dex.items.id("leftovers");
+        b.poke_mut(me).hp = b.poke(me).maxhp / 4;
+        assert_eq!(
+            noop_reason(&b, &dex, 0, mv(&dex, "bellydrum"), rules),
+            Some("Belly Drum needs over half HP and uncapped Attack")
+        );
+        // Narrowed own_recovery_wait must NOT unmask dead Belly Drum against Cloyster (no Counter/Mirror Coat/Metronome)
+        assert!(
+            dominated_reason(&b, &dex, 0, mv(&dex, "bellydrum"), rules).is_some(),
+            "Leftovers alone must not unmask dead Belly Drum against Cloyster"
+        );
+        b.poke_mut(foe).species = orig_foe_species;
+        // At full HP and +6 Attack while faster, Belly Drum also fails
+        b.poke_mut(me).hp = b.poke(me).maxhp;
+        b.poke_mut(me).boosts[4] = 6;
+        b.poke_mut(me).boosts[0] = 6;
+        assert_eq!(
+            noop_reason(&b, &dex, 0, mv(&dex, "bellydrum"), rules),
+            Some("Belly Drum needs over half HP and uncapped Attack")
+        );
+        b.poke_mut(me).boosts[0] = 0;
+
+        // 4. Heal Bell when no party member has a major status
+        assert_eq!(
+            noop_reason(&b, &dex, 0, mv(&dex, "healbell"), rules),
+            Some("Heal Bell has no status to cure")
+        );
+        b.set_status(&dex, me, "par", Some(foe), EffectHandle::None, true);
+        assert_eq!(noop_reason(&b, &dex, 0, mv(&dex, "healbell"), rules), None);
+        b.pokemon_clear_status(&dex, me);
+
+        // 5. Disable / Encore / Spite / Mirror Move / Conversion2 / Mimic vs stranded foe with last_move == None
+        strand(&mut b, 1);
+        b.poke_mut(foe).last_move = None;
+        b.poke_mut(foe).last_move_encore = None;
+        b.poke_mut(me).boosts[4] = 6;
+        for key in ["disable", "encore", "spite", "mirrormove", "conversion2", "mimic"] {
+            assert_eq!(
+                noop_reason(&b, &dex, 0, mv(&dex, key), rules),
+                Some("the target has not used a move yet"),
+                "{key} vs stranded foe with no last_move must be masked"
+            );
+        }
     }
 }

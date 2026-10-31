@@ -42,7 +42,9 @@ use nc2000_bot::oracle::{
 use nc2000_bot::preview::{load_meta_pool, MetaPool};
 use nc2000_bot::rng::SplitMix64;
 use nc2000_bot::runner::{play_game, GameResult};
-use nc2000_bot::smmcts::{dominated_actions, RmAgent, RmConfig, SelRule, SkuctSearch};
+use nc2000_bot::smmcts::{
+    dominated_actions, dominated_actions_with, MaskRules, RmAgent, RmConfig, SelRule, SkuctSearch,
+};
 use nc2000_bot::{Belief, BlindAgent, BlindSearch, Observer, OpenAgent};
 use nc2000_engine::battle::{Outcome, PokemonSet, SearchChoice};
 use nc2000_engine::compact::{CompactBattle, MatchTable};
@@ -101,6 +103,7 @@ struct ArmSpec {
     oracle: OracleMode,
     settlement: LeafSettlementMode,
     iters_override: Option<u32>,
+    extended_noops: bool,
 }
 
 fn parse_arm_spec(raw: &str) -> ArmSpec {
@@ -116,6 +119,15 @@ fn parse_arm_spec(raw: &str) -> ArmSpec {
             oracle: OracleMode::Off,
             settlement: LeafSettlementMode::LegacyRollout,
             iters_override,
+            extended_noops: false,
+        };
+    }
+    if spec == "oldmask" {
+        return ArmSpec {
+            oracle: OracleMode::Off,
+            settlement: RmConfig::default().settlement,
+            iters_override,
+            extended_noops: false,
         };
     }
     if spec == "shipped" || spec == "default" {
@@ -123,6 +135,7 @@ fn parse_arm_spec(raw: &str) -> ArmSpec {
             oracle: OracleMode::Off,
             settlement: RmConfig::default().settlement,
             iters_override,
+            extended_noops: true,
         };
     }
     if spec == "echo" {
@@ -130,6 +143,7 @@ fn parse_arm_spec(raw: &str) -> ArmSpec {
             oracle: OracleMode::EchoBase,
             settlement: LeafSettlementMode::LegacyRollout,
             iters_override,
+            extended_noops: true,
         };
     }
     if spec == "rollacct0" {
@@ -137,6 +151,7 @@ fn parse_arm_spec(raw: &str) -> ArmSpec {
             oracle: OracleMode::Off,
             settlement: LeafSettlementMode::RolloutAcct0,
             iters_override,
+            extended_noops: true,
         };
     }
     if spec == "bsleaf" {
@@ -144,6 +159,7 @@ fn parse_arm_spec(raw: &str) -> ArmSpec {
             oracle: OracleMode::Off,
             settlement: LeafSettlementMode::BlindSpotLeaf,
             iters_override,
+            extended_noops: true,
         };
     }
     if spec == "bsroll" {
@@ -151,6 +167,7 @@ fn parse_arm_spec(raw: &str) -> ArmSpec {
             oracle: OracleMode::Off,
             settlement: LeafSettlementMode::BlindSpotRollout,
             iters_override,
+            extended_noops: true,
         };
     }
     if spec == "bsboth" {
@@ -158,6 +175,7 @@ fn parse_arm_spec(raw: &str) -> ArmSpec {
             oracle: OracleMode::Off,
             settlement: LeafSettlementMode::BlindSpotBoth,
             iters_override,
+            extended_noops: true,
         };
     }
     if spec == "acct0" {
@@ -165,6 +183,7 @@ fn parse_arm_spec(raw: &str) -> ArmSpec {
             oracle: OracleMode::Off,
             settlement: LeafSettlementMode::Accounting0,
             iters_override,
+            extended_noops: true,
         };
     }
     if let Some(rest) = spec.strip_prefix("mm1:") {
@@ -173,6 +192,7 @@ fn parse_arm_spec(raw: &str) -> ArmSpec {
             oracle: OracleMode::Off,
             settlement: LeafSettlementMode::Minimax1 { max_k },
             iters_override,
+            extended_noops: true,
         };
     }
     if let Some(rest) = spec.strip_prefix("amm1:") {
@@ -181,6 +201,7 @@ fn parse_arm_spec(raw: &str) -> ArmSpec {
             oracle: OracleMode::Off,
             settlement: LeafSettlementMode::AdaptiveMinimax1 { max_k },
             iters_override,
+            extended_noops: true,
         };
     }
     if let Some(rest) = spec.strip_prefix("qh1:") {
@@ -189,6 +210,7 @@ fn parse_arm_spec(raw: &str) -> ArmSpec {
             oracle: OracleMode::Off,
             settlement: LeafSettlementMode::QuiesceHot1 { max_k },
             iters_override,
+            extended_noops: true,
         };
     }
     if let Some(rest) = spec.strip_prefix("rmm:") {
@@ -202,6 +224,7 @@ fn parse_arm_spec(raw: &str) -> ArmSpec {
                 rollout_turns,
             },
             iters_override,
+            extended_noops: true,
         };
     }
     if let Some(rest) = spec.strip_prefix("saroll:") {
@@ -210,6 +233,7 @@ fn parse_arm_spec(raw: &str) -> ArmSpec {
             oracle: OracleMode::Off,
             settlement: LeafSettlementMode::StochAcctRollout { turns },
             iters_override,
+            extended_noops: true,
         };
     }
     if let Some(rest) = spec.strip_prefix("q2:") {
@@ -220,6 +244,7 @@ fn parse_arm_spec(raw: &str) -> ArmSpec {
             oracle: OracleMode::Off,
             settlement: LeafSettlementMode::Quiesce2 { k1, k2 },
             iters_override,
+            extended_noops: true,
         };
     }
     if let Some(rest) = spec.strip_prefix("cutoff:") {
@@ -228,6 +253,7 @@ fn parse_arm_spec(raw: &str) -> ArmSpec {
             oracle: OracleMode::Cutoff { leaf_iters },
             settlement: LeafSettlementMode::LegacyRollout,
             iters_override,
+            extended_noops: true,
         };
     }
     if let Some(rest) = spec.strip_prefix("treeleaf:") {
@@ -236,6 +262,7 @@ fn parse_arm_spec(raw: &str) -> ArmSpec {
             oracle: OracleMode::TreeLeaf { leaf_iters },
             settlement: LeafSettlementMode::LegacyRollout,
             iters_override,
+            extended_noops: true,
         };
     }
     if let Some(rest) = spec.strip_prefix("coupled:") {
@@ -249,10 +276,11 @@ fn parse_arm_spec(raw: &str) -> ArmSpec {
             },
             settlement: LeafSettlementMode::LegacyRollout,
             iters_override,
+            extended_noops: true,
         };
     }
     panic!(
-        "unknown arm spec `{raw}` (expected legacy|off|echo|acct0|mm1:K|q2:K1,K2|cutoff:M|treeleaf:M|coupled:Mr,Ml[@iters])"
+        "unknown arm spec `{raw}` (expected legacy|oldmask|shipped|off|echo|acct0|mm1:K|q2:K1,K2|cutoff:M|treeleaf:M|coupled:Mr,Ml[@iters])"
     );
 }
 
@@ -353,6 +381,7 @@ fn build_rm_config(iters: u32, c: f64, oracle: OracleMode) -> RmConfig {
 fn build_rm_config_arm(default_iters: u32, c: f64, spec: ArmSpec) -> RmConfig {
     let mut cfg = build_rm_config(spec.iters_override.unwrap_or(default_iters), c, spec.oracle);
     cfg.settlement = spec.settlement;
+    cfg.mask_rules.extended_noops = spec.extended_noops;
     cfg
 }
 
@@ -2126,12 +2155,18 @@ fn collect_blind_checkpoints(
     belief_pool: &MetaPool,
     target_count: usize,
     base_seed: u64,
+    opportunity_only: bool,
 ) -> Vec<BlindCheckpoint> {
     let mut rng = SplitMix64::new(base_seed ^ 0xD17E_26E4_CE00_CAFE);
     let mut out = Vec::new();
     let mut game_idx = 0usize;
+    let max_games = if opportunity_only {
+        target_count * 40
+    } else {
+        target_count * 6
+    };
 
-    while out.len() < target_count && game_idx < target_count * 6 {
+    while out.len() < target_count && game_idx < max_games {
         let is_off_pool = (game_idx % 3) == 2 && !off_teams.is_empty();
         let t1 = &cat_teams[rng.below(cat_teams.len())];
         let t2 = if is_off_pool {
@@ -2194,7 +2229,19 @@ fn collect_blind_checkpoints(
                         let (table, cb) = CompactBattle::from_battle(&battle, dex);
                         let sl = classify_slice(&cb, &table);
                         let t = battle.turn;
-                        let phase_opt = if !took_early && (2..=6).contains(&t) && rng.below(2) == 0 {
+                        let phase_opt = if opportunity_only {
+                            let old_rules = MaskRules {
+                                extended_noops: false,
+                                ..MaskRules::default()
+                            };
+                            let old_dom = dominated_actions_with(&battle, dex, 0, old_rules);
+                            if dom != old_dom {
+                                took_mid = true;
+                                Some("mask_opp")
+                            } else {
+                                None
+                            }
+                        } else if !took_early && (2..=6).contains(&t) && rng.below(2) == 0 {
                             took_early = true;
                             Some("early_3v3")
                         } else if !took_mid
@@ -2490,6 +2537,7 @@ fn run_divergence(args: &[String]) {
     let vs_spec = parse_arm_spec(&vs_str);
     let threads = flag_usize(args, "--threads", default_threads());
     let base_seed = flag_u64(args, "--seed", 20261030);
+    let opportunity_only = flag_bool(args, "--opportunity", false);
 
     let belief_pool = Arc::new(load_meta_pool(
         &root.join("data/belief-pool-v3/belief-pool.json"),
@@ -2500,11 +2548,12 @@ fn run_divergence(args: &[String]) {
         &[
             "data/meta-pool-v0/meta-pool.json",
             "data/eco-pool/master-pool.json",
+            "data/kodoku-r3/conclusion-equilibrium-deme.json",
         ],
     );
 
     println!(
-        "=== Step 1: Collecting {n_checkpoints} Nontrivial Blind Decision Checkpoints (catalog + off-pool fallback) ==="
+        "=== Step 1: Collecting {n_checkpoints} Nontrivial Blind Decision Checkpoints (catalog + off-pool fallback, opportunity_only={opportunity_only}) ==="
     );
     let t_col = Instant::now();
     let checkpoints = collect_blind_checkpoints(
@@ -2514,6 +2563,7 @@ fn run_divergence(args: &[String]) {
         &belief_pool,
         n_checkpoints,
         base_seed,
+        opportunity_only,
     );
     let off_cnt = checkpoints.iter().filter(|c| c.is_off_pool).count();
     println!(

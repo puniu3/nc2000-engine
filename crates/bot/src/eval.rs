@@ -689,6 +689,8 @@ fn compact_side_false_boost_refund(
     }
 
     let act_spec = &table.mons[act_idx];
+    let mut delta = 0.0;
+
     let dis = (act_mon.vol_flags & vol_bit::DISABLE) != 0;
     let dis_slot = ((act_mon.slot_refs >> 4) & 0x03) as usize;
     let mut has_any_phys = false;
@@ -734,7 +736,6 @@ fn compact_side_false_boost_refund(
         }
     }
 
-    let mut delta = 0.0;
     let mut atk_refunded = false;
 
     // 1. Swagger false-boost refund: only when `act_mon` has no self-setup/sustain move and no team Baton Pass,
@@ -1005,9 +1006,7 @@ fn compact_side_blindspot_ledger(
         if foe_can_act_soon {
             let f_dis = (foe_mon.vol_flags & vol_bit::DISABLE) != 0;
             let f_dis_slot = ((foe_mon.slot_refs >> 4) & 0x03) as usize;
-            let foe_hp_frac =
-                (foe_mon.hp() as f64) / (table.mons[foe_idx].maxhp.max(1) as f64);
-            let foe_survives_first = my_hit < 0.90 * foe_hp_frac;
+            let foe_survives_first = my_hit < 0.90;
             let mut foe_has_wiper = false;
             let mut foe_has_perish = false;
             let mut foe_has_lethal_boom = false;
@@ -1038,7 +1037,7 @@ fn compact_side_blindspot_ledger(
                         m_i,
                         w.couple_evasion,
                     );
-                    if boom_dmg >= 0.65 * hp_frac {
+                    if boom_dmg >= 0.65 {
                         foe_has_lethal_boom = true;
                     }
                 }
@@ -1123,26 +1122,26 @@ fn compact_side_blindspot_ledger(
         let mut sust = if has_heal {
             if st == Status::Slp as u8 {
                 let rem = act_mon.status_counter().saturating_sub(1) as f64;
-                let hp_wake = (hp_frac - rem * foe_hit * 0.85).clamp(0.0, 1.0);
+                let hp_wake = hp_frac * (1.0 - rem * foe_hit * 0.85).clamp(0.0, 1.0);
                 if rem == 0.0 || hp_wake > 0.25 {
                     0.70
                 } else {
                     0.30 * hp_frac
                 }
-            } else if hp_frac > foe_hit || me_faster {
+            } else if foe_hit < 0.85 || me_faster {
                 hp_frac.max(0.85)
             } else {
                 0.40 * hp_frac
             }
         } else if st == Status::Slp as u8 && !has_sleeptalk {
             let rem = act_mon.status_counter().saturating_sub(1) as f64;
-            let hp_wake = (hp_frac - rem * foe_hit.max(0.15) * 0.85).clamp(0.0, 1.0);
-            if rem == 0.0 && (hp_frac > foe_hit || me_faster) {
+            let hp_wake = hp_frac * (1.0 - rem * foe_hit.max(0.15) * 0.85).clamp(0.0, 1.0);
+            if rem == 0.0 && (foe_hit < 0.85 || me_faster) {
                 0.65 * hp_frac
             } else {
                 0.25 * hp_wake
             }
-        } else if hp_frac > foe_hit || me_faster {
+        } else if foe_hit < 0.85 || me_faster {
             hp_frac
         } else {
             0.30 * hp_frac
