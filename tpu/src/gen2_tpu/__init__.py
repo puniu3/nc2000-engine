@@ -436,6 +436,9 @@ def main(argv: list[str] | None = None) -> None:
     p_kod.add_argument("--refine-games", type=int, default=6)
     p_kod.add_argument("--screen-turns", type=int, default=40)
     p_kod.add_argument("--refine-turns", type=int, default=60)
+    p_kod.add_argument("--screen-stride", type=int, default=1)
+    p_kod.add_argument("--cells-games", type=float, default=4.0)
+    p_kod.add_argument("--no-slot-telemetry", action="store_true")
     p_kod.add_argument("--seed", type=int, default=20260405)
 
     p_bnd = sub.add_parser(
@@ -485,6 +488,12 @@ def main(argv: list[str] | None = None) -> None:
         )
         print(f"Wrote PairTable ({id_a} vs {id_b}, v*={res.value:.4f}) to {ns.out}")
     elif ns.cmd == "kodoku-cells":
+        raw_p_obj = json.loads(Path(ns.pool_p).read_text(encoding="utf-8"))
+        explicit_units = (
+            raw_p_obj.get("units")
+            if isinstance(raw_p_obj, dict) and isinstance(raw_p_obj.get("units"), list)
+            else None
+        )
         teams_p = _load_pool_teams(ns.pool_p)
         teams_q = _load_pool_teams(ns.pool_q) if ns.pool_q else None
         summary = evaluate_kodoku_gauntlet_tpu(
@@ -495,18 +504,21 @@ def main(argv: list[str] | None = None) -> None:
             refine_games=ns.refine_games,
             screen_turns=ns.screen_turns,
             refine_turns=ns.refine_turns,
+            screen_stride=ns.screen_stride,
+            compute_slot_telemetry=not ns.no_slot_telemetry,
             seed=ns.seed,
         )
         coupled_eq = solve_coupled_shell_equilibrium_tpu(
             summary,
             teams_p=teams_p,
             teams_q=teams_q,
-            games_per_member_cell=float(max(1, ns.refine_games)),
+            explicit_units=explicit_units,
+            games_per_member_cell=float(ns.cells_games),
         )
         export_dominance_audit_cells_json(
             ns.out,
             summary,
-            games_per_cell=float(max(1, ns.refine_games)),
+            games_per_cell=float(ns.cells_games),
             coupled_equilibrium=coupled_eq,
         )
         print(

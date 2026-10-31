@@ -9534,6 +9534,7 @@ fn cmd_converge_conclusion(args: &[String]) {
     // Also load any previously discovered Holdout Nemeses from previous convergence reports
     // (Load v5, v4, v3, and v2 first so their IDs are never shadowed by v1!)
     for prev_path in [
+        root.join("data/dominance-audit-v8-clean/converged-report-v6.json"),
         root.join("data/dominance-audit-v8-clean/converged-report-v5.json"),
         root.join("data/dominance-audit-v8-clean/converged-report-v4.json"),
         root.join("data/dominance-audit-v8-clean/converged-report-v3.json"),
@@ -9792,9 +9793,60 @@ fn cmd_converge_conclusion(args: &[String]) {
         }
     }
     for tid in team_db.keys() {
-        if (tid.starts_with("red-oracle-") || tid.starts_with("red-r")) && q_seen.insert(tid.clone()) {
+        if (tid.starts_with("red-oracle-")
+            || tid.starts_with("red-r")
+            || tid.starts_with("red-v"))
+            && q_seen.insert(tid.clone())
+        {
             q_ids.push(tid.clone());
         }
+    }
+
+    if let Some(export_dir_str) = flag(args, "--export-tpu-pools") {
+        let export_dir = PathBuf::from(export_dir_str);
+        std::fs::create_dir_all(&export_dir).unwrap();
+        let mut p_seen: BTreeSet<String> = BTreeSet::new();
+        let mut pool_p_json: Vec<Value> = Vec::new();
+        let mut units_json: Vec<Value> = Vec::new();
+        for u in &units {
+            units_json.push(json!({
+                "unit_id": u.unit_id,
+                "member_ids": u.member_ids,
+            }));
+            for (k, mid) in u.member_ids.iter().enumerate() {
+                if p_seen.insert(mid.clone()) {
+                    pool_p_json.push(json!({
+                        "id": mid,
+                        "sets": u.member_raw[k],
+                    }));
+                }
+            }
+        }
+        let mut pool_q_json: Vec<Value> = Vec::new();
+        for qid in &q_ids {
+            if let Some((_, raw, _)) = team_db.get(qid) {
+                pool_q_json.push(json!({
+                    "id": qid,
+                    "sets": raw,
+                }));
+            }
+        }
+        write_json_atomic(
+            &export_dir.join("pool-p.json"),
+            &json!({ "teams": pool_p_json, "units": units_json }),
+        );
+        write_json_atomic(
+            &export_dir.join("pool-q.json"),
+            &json!({ "teams": pool_q_json }),
+        );
+        eprintln!(
+            "Exported TPU pools to {}: {} ShellUnits ({} P teams) x {} Q challengers",
+            export_dir.display(),
+            units_json.len(),
+            pool_p_json.len(),
+            pool_q_json.len()
+        );
+        return;
     }
 
     // Load historical caches:
@@ -10080,6 +10132,16 @@ fn cmd_converge_conclusion(args: &[String]) {
         }
 
         let save_unit_cache = |uc: &BTreeMap<(String, String), (f64, f64)>| {
+            let cell_recs: Vec<Value> = single_cache
+                .iter()
+                .map(|((pid, qid), &sc)| {
+                    json!({
+                        "p_id": pid,
+                        "q_id": qid,
+                        "score": sc,
+                    })
+                })
+                .collect();
             let recs: Vec<Value> = uc
                 .iter()
                 .map(|((uid, qid), &(sc, gms))| {
@@ -10091,7 +10153,10 @@ fn cmd_converge_conclusion(args: &[String]) {
                     })
                 })
                 .collect();
-            write_json_atomic(&cache_file, &json!({ "unit_cells": recs }));
+            write_json_atomic(
+                &cache_file,
+                &json!({ "cells": cell_recs, "unit_cells": recs }),
+            );
         };
         if !missing_jobs.is_empty() {
             save_unit_cache(&unit_cache);

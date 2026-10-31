@@ -1809,6 +1809,93 @@ def _get_jit_multi_roster_subgame_fn(turns: int, eps: float):
     return _fn
 
 
+@partial(jax.jit, static_argnames=("sweeps",))
+def _solve_batched_rect_rm_plus_values_and_policies(
+    payoff_batch: jax.Array,
+    mask_rows_batch: jax.Array,
+    mask_cols_batch: jax.Array,
+    sweeps: int = 500,
+) -> RectEquilibriumResult:
+    """Solve `B` rectangular RM+ games in parallel via `jax.vmap`."""
+    return jax.vmap(
+        lambda m, mr, mc: solve_rect_rm_plus_jax(
+            m, mask_rows=mr, mask_cols=mc, sweeps=sweeps
+        )
+    )(payoff_batch, mask_rows_batch, mask_cols_batch)
+
+
+def _execute_multi_roster_trajectory_batches(
+    stacked_rosters: RosterTable6,
+    r1_all: np.ndarray,
+    r2_all: np.ndarray,
+    pa_all: np.ndarray,
+    pb_all: np.ndarray,
+    bs_all: np.ndarray,
+    ps_all: np.ndarray,
+    sw_all: np.ndarray,
+    turns: int,
+    eps: float,
+    shared_dex: SharedDexTable,
+    weights: EvalWeights,
+    residual_bundle: ResidualBundle | None,
+    max_traj_chunk: int = 8192,
+) -> np.ndarray:
+    """Execute `N` trajectories across arbitrary roster pairs in fixed `<= max_traj_chunk` TPU batches."""
+    tot_trajs = int(r1_all.shape[0])
+    if tot_trajs == 0:
+        return np.zeros((0,), dtype=np.float32)
+
+    out_vals = np.zeros((tot_trajs,), dtype=np.float32)
+    multi_fn = _get_jit_multi_roster_subgame_fn(int(turns), float(eps))
+
+    for st in range(0, tot_trajs, max_traj_chunk):
+        ed = min(tot_trajs, st + max_traj_chunk)
+        cur_n = ed - st
+        cap = _bucket_multi_pair_trajectory_capacity(cur_n)
+
+        r1_c = r1_all[st:ed]
+        r2_c = r2_all[st:ed]
+        pa_c = pa_all[st:ed]
+        pb_c = pb_all[st:ed]
+        bs_c = bs_all[st:ed]
+        ps_c = ps_all[st:ed]
+        sw_c = sw_all[st:ed]
+
+        if cur_n < cap:
+            pad_n = cap - cur_n
+            r1_c = np.concatenate([r1_c, np.zeros((pad_n,), dtype=np.int32)], axis=0)
+            r2_c = np.concatenate([r2_c, np.zeros((pad_n,), dtype=np.int32)], axis=0)
+            pa_c = np.concatenate([pa_c, np.repeat(pa_c[:1], pad_n, axis=0)], axis=0)
+            pb_c = np.concatenate([pb_c, np.repeat(pb_c[:1], pad_n, axis=0)], axis=0)
+            bs_c = np.concatenate([bs_c, np.repeat(bs_c[:1], pad_n, axis=0)], axis=0)
+            ps_c = np.concatenate([ps_c, np.repeat(ps_c[:1], pad_n, axis=0)], axis=0)
+            sw_c = np.concatenate([sw_c, np.zeros((pad_n,), dtype=bool)], axis=0)
+
+        r1_j = jnp.asarray(r1_c, dtype=jnp.int32)
+        r2_j = jnp.asarray(r2_c, dtype=jnp.int32)
+        batched_r_p1 = jax.tree_util.tree_map(lambda x: x[r1_j], stacked_rosters)
+        batched_r_p2 = jax.tree_util.tree_map(lambda x: x[r2_j], stacked_rosters)
+
+        vals_chunk = np.asarray(
+            multi_fn(
+                batched_r_p1,
+                batched_r_p2,
+                jnp.asarray(pa_c, dtype=jnp.int32),
+                jnp.asarray(pb_c, dtype=jnp.int32),
+                jnp.asarray(bs_c, dtype=jnp.uint32),
+                jnp.asarray(ps_c, dtype=jnp.uint32),
+                jnp.asarray(sw_c, dtype=jnp.bool_),
+                shared_dex,
+                weights,
+                residual_bundle,
+            ),
+            dtype=np.float32,
+        )
+        out_vals[st:ed] = vals_chunk[:cur_n]
+
+    return out_vals
+
+
 def evaluate_kodoku_gauntlet_tpu(
     teams_p: list[dict[str, Any]],
     teams_q: list[dict[str, Any]] | None = None,
@@ -1824,13 +1911,16 @@ def evaluate_kodoku_gauntlet_tpu(
     weights: EvalWeights | None = None,
     residual_bundle: ResidualBundle | None = None,
     rm_sweeps: int = 500,
+    screen_stride: int = 1,
+    compute_slot_telemetry: bool = True,
+    max_traj_chunk: int = 8192,
 ) -> KodokuGauntletSummary:
     """Evaluate a pool of 6-mon teams `teams_p` against opponent pool `teams_q` using Two-Stage Core-Nash.
 
     Each entry in `teams_p` / `teams_q` is a dict `{"id": str, "sets": list[dict]}` (matching
     `nc2000-engine` pool JSONs). If `teams_q` is `None`, evaluates symmetric round-robin `P x P`.
-    Fuses Stage-2 refinement rollouts across all `(i, j)` matchups into a single multi-roster
-    TPU XLA batch so small Stage-2 support matrices (`3 x 3 = 9` cells) saturate all TPU VPU lanes.
+    Fuses Stage-2 refinement rollouts across all `(i, j)` matchups into fixed `<= max_traj_chunk`
+    TPU XLA batches so small Stage-2 support matrices (`3 x 3 = 9` cells) saturate all TPU VPU lanes.
     """
     if weights is None:
         weights = default_eval_weights()
@@ -1843,6 +1933,8 @@ def evaluate_kodoku_gauntlet_tpu(
     n_q = len(teams_q)
     p_ids = [str(t.get("id", f"p_{i}")) for i, t in enumerate(teams_p)]
     q_ids = [str(t.get("id", f"q_{j}")) for j, t in enumerate(teams_q)]
+    p_id_to_idx = {pid: i for i, pid in enumerate(p_ids)}
+    q_id_to_idx = {qid: j for j, qid in enumerate(q_ids)}
 
     rosters_p = [compile_roster6(t["sets"], dex_path=dex_path) for t in teams_p]
     rosters_q = (
@@ -1865,42 +1957,60 @@ def evaluate_kodoku_gauntlet_tpu(
     eff_cores = np.zeros((n_p,), dtype=np.float32)
     core_acc_per_p: list[dict[int, float]] = [{} for _ in range(n_p)]
 
-    # Collect active `(i, j)` pairs to evaluate
+    # Collect active `(i, j)` pairs to evaluate, exploiting `P ∩ Q` skew-symmetry
     active_pairs: list[tuple[int, int, int]] = []
+    mirror_fill_pairs: list[tuple[int, int, int, int]] = []
     for i in range(n_p):
+        pid = p_ids[i]
         for j in range(n_q):
-            if symmetric and j < i:
-                continue
-            if symmetric and i == j:
+            qid = q_ids[j]
+            if pid == qid:
                 payoff_mat[i, j] = 0.5
                 continue
+            if symmetric and j < i:
+                continue
+            if not symmetric and (qid in p_id_to_idx) and (pid in q_id_to_idx):
+                i_mir = p_id_to_idx[qid]
+                j_mir = q_id_to_idx[pid]
+                if i_mir < i:
+                    mirror_fill_pairs.append((i, j, i_mir, j_mir))
+                    continue
             active_pairs.append((i, j, seed + i * 10007 + j * 97))
 
     if active_pairs:
+        stride = max(1, int(screen_stride))
         legals_p = [
-            [int(idx) for idx in np.flatnonzero(np.asarray(r.legal_mask_60))] or [0]
+            ([int(idx) for idx in np.flatnonzero(np.asarray(r.legal_mask_60))][::stride]) or [0]
             for r in rosters_p
         ]
         legals_q = (
             legals_p
             if symmetric
             else [
-                [int(idx) for idx in np.flatnonzero(np.asarray(r.legal_mask_60))] or [0]
+                ([int(idx) for idx in np.flatnonzero(np.asarray(r.legal_mask_60))][::stride]) or [0]
                 for r in rosters_q
             ]
         )
 
+        all_rosters = rosters_p if symmetric else (rosters_p + rosters_q)
+        q_offset = 0 if symmetric else n_p
+        stacked_rosters = jax.tree_util.tree_map(
+            lambda *xs: jnp.stack(xs, axis=0), *all_rosters
+        )
+
         # Stage 1: Screen each `(i, j)` pair and extract orthogonal supports `(sup_a, sup_b)`
         stage1_records: list[tuple[int, int, int, np.ndarray, list[int], list[int]]] = []
-        for i, j, pair_seed in active_pairs:
-            la = legals_p[i]
-            lb = legals_q[j]
-            na, nb = len(la), len(lb)
-            if screen_games <= 0 or support_k <= 0:
-                screen_mat = np.full((na, nb), 0.5, dtype=np.float32)
-                sup_a = list(la)
-                sup_b = list(lb)
-            else:
+        if screen_games <= 0 or support_k <= 0:
+            for i, j, pair_seed in active_pairs:
+                la = legals_p[i]
+                lb = legals_q[j]
+                screen_mat = np.full((len(la), len(lb)), 0.5, dtype=np.float32)
+                stage1_records.append((i, j, pair_seed, screen_mat, list(la), list(lb)))
+        elif stride == 1 and len(active_pairs) <= 32:
+            for i, j, pair_seed in active_pairs:
+                la = legals_p[i]
+                lb = legals_q[j]
+                na, nb = len(la), len(lb)
                 grid_a, grid_b = np.meshgrid(
                     np.asarray(la, dtype=np.int32),
                     np.asarray(lb, dtype=np.int32),
@@ -1931,20 +2041,139 @@ def evaluate_kodoku_gauntlet_tpu(
                 u_b = np.asarray(1.0 - s1_sol.ev_col, dtype=np.float32)
                 sup_a = select_top_k_orthogonal(la, e0, u_a, min(support_k, na))
                 sup_b = select_top_k_orthogonal(lb, e1, u_b, min(support_k, nb))
-            stage1_records.append((i, j, pair_seed, screen_mat, sup_a, sup_b))
+                stage1_records.append((i, j, pair_seed, screen_mat, sup_a, sup_b))
+        else:
+            # Fused multi-pair Stage-1 screening + batched vmap RM+ solver
+            eff_s1_games = max(1, screen_games + (screen_games % 2 if screen_games > 1 else 0))
+            g_indices_s1 = np.arange(eff_s1_games, dtype=np.uint32)
+            ps_indices_s1 = g_indices_s1 // np.uint32(2)
+            sw_g_s1 = (g_indices_s1 % np.uint32(2)) == np.uint32(1)
+            max_act_dim = max(
+                max(len(x) for x in legals_p),
+                max(len(x) for x in legals_q),
+            )
+            pairs_per_s1_batch = max(1, min(256, max_traj_chunk // max(1, max_act_dim * max_act_dim * eff_s1_games)) * 16)
+            for b_st in range(0, len(active_pairs), pairs_per_s1_batch):
+                b_ed = min(len(active_pairs), b_st + pairs_per_s1_batch)
+                batch_pairs = active_pairs[b_st:b_ed]
+                r1_l: list[np.ndarray] = []
+                r2_l: list[np.ndarray] = []
+                pa_l: list[np.ndarray] = []
+                pb_l: list[np.ndarray] = []
+                bs_l: list[np.ndarray] = []
+                ps_l: list[np.ndarray] = []
+                sw_l: list[np.ndarray] = []
+                s1_slices: list[tuple[int, int, int, int]] = []
+                cur_s1 = 0
+                for i, j, pair_seed in batch_pairs:
+                    la = legals_p[i]
+                    lb = legals_q[j]
+                    na, nb = len(la), len(lb)
+                    n_cells = na * nb
+                    grid_a, grid_b = np.meshgrid(
+                        np.asarray(la, dtype=np.int32),
+                        np.asarray(lb, dtype=np.int32),
+                        indexing="ij",
+                    )
+                    pa_cells = PREVIEW_ACTIONS_0BASED_NP[grid_a.reshape(-1)]
+                    pb_cells = PREVIEW_ACTIONS_0BASED_NP[grid_b.reshape(-1)]
+                    pa_rep = np.tile(pa_cells, (eff_s1_games, 1))
+                    pb_rep = np.tile(pb_cells, (eff_s1_games, 1))
+                    sw_rep = np.repeat(sw_g_s1, n_cells)
+                    pa_p1 = np.where(sw_rep[:, None], pb_rep, pa_rep)
+                    pb_p2 = np.where(sw_rep[:, None], pa_rep, pb_rep)
+                    idx_a = i
+                    idx_b = q_offset + j
+                    r1_idx = np.where(sw_rep, idx_b, idx_a).astype(np.int32)
+                    r2_idx = np.where(sw_rep, idx_a, idx_b).astype(np.int32)
 
-        # Stage 2: Either reuse Stage-1 matrix or fuse all `(i, j)` Stage-2 rollouts into one TPU call
+                    base_s1 = pair_seed ^ 0xA5A5_1111
+                    hi_b = np.uint32((base_s1 >> 32) & 0xFFFFFFFF)
+                    lo_b = np.uint32(base_s1 & 0xFFFFFFFF)
+                    p_idx_arr = np.arange(n_cells, dtype=np.uint32)[None, :]
+                    ps_idx_arr = ps_indices_s1[:, None]
+                    s_hi = hi_b ^ (ps_idx_arr * np.uint32(0x9E3779B9))
+                    s_lo = lo_b + ps_idx_arr * np.uint32(0x85EBCA6B)
+                    b_hi = (s_hi ^ (p_idx_arr * np.uint32(0x9E3779B9))).reshape(-1)
+                    b_lo = (s_lo + (p_idx_arr * np.uint32(0x85EBCA6B) + np.uint32(1))).reshape(-1)
+                    p_hi = ((s_hi + np.uint32(0xC2B2AE35)) ^ (p_idx_arr * np.uint32(0x27D4EB2F))).reshape(-1)
+                    p_lo = (s_lo ^ (p_idx_arr * np.uint32(0x165667B1) + np.uint32(7))).reshape(-1)
+
+                    n_traj_p = n_cells * eff_s1_games
+                    r1_l.append(r1_idx)
+                    r2_l.append(r2_idx)
+                    pa_l.append(pa_p1)
+                    pb_l.append(pb_p2)
+                    bs_l.append(np.stack([b_hi, b_lo], axis=-1))
+                    ps_l.append(np.stack([p_hi, p_lo], axis=-1))
+                    sw_l.append(sw_rep)
+                    s1_slices.append((cur_s1, cur_s1 + n_traj_p, na, nb))
+                    cur_s1 += n_traj_p
+
+                vals_s1_flat = _execute_multi_roster_trajectory_batches(
+                    stacked_rosters,
+                    np.concatenate(r1_l, axis=0),
+                    np.concatenate(r2_l, axis=0),
+                    np.concatenate(pa_l, axis=0),
+                    np.concatenate(pb_l, axis=0),
+                    np.concatenate(bs_l, axis=0),
+                    np.concatenate(ps_l, axis=0),
+                    np.concatenate(sw_l, axis=0),
+                    turns=screen_turns,
+                    eps=eps,
+                    shared_dex=shared_dex,
+                    weights=weights,
+                    residual_bundle=residual_bundle,
+                    max_traj_chunk=max_traj_chunk,
+                )
+
+                b_len = len(batch_pairs)
+                pad_b = ((b_len + 15) // 16) * 16
+                mats_padded = np.full((pad_b, max_act_dim, max_act_dim), 0.5, dtype=np.float32)
+                mr_padded = np.zeros((pad_b, max_act_dim), dtype=bool)
+                mc_padded = np.zeros((pad_b, max_act_dim), dtype=bool)
+                mr_padded[b_len:, 0] = True
+                mc_padded[b_len:, 0] = True
+                raw_s1_mats: list[np.ndarray] = []
+
+                for idx_in_b, (st_i, ed_i, na, nb) in enumerate(s1_slices):
+                    p_vals = vals_s1_flat[st_i:ed_i].reshape(eff_s1_games, na * nb)
+                    smat = np.mean(p_vals, axis=0).reshape(na, nb)
+                    raw_s1_mats.append(smat)
+                    mats_padded[idx_in_b, :na, :nb] = smat
+                    mr_padded[idx_in_b, :na] = True
+                    mc_padded[idx_in_b, :nb] = True
+
+                sol_batch = _solve_batched_rect_rm_plus_values_and_policies(
+                    jnp.asarray(mats_padded, dtype=jnp.float32),
+                    jnp.asarray(mr_padded, dtype=jnp.bool_),
+                    jnp.asarray(mc_padded, dtype=jnp.bool_),
+                    sweeps=rm_sweeps,
+                )
+                pa_batch = np.asarray(sol_batch.p_a, dtype=np.float32)
+                pb_batch = np.asarray(sol_batch.p_b, dtype=np.float32)
+                evr_batch = np.asarray(sol_batch.ev_row, dtype=np.float32)
+                evc_batch = np.asarray(sol_batch.ev_col, dtype=np.float32)
+
+                for idx_in_b, (i, j, pair_seed) in enumerate(batch_pairs):
+                    la = legals_p[i]
+                    lb = legals_q[j]
+                    na, nb = len(la), len(lb)
+                    smat = raw_s1_mats[idx_in_b]
+                    e0 = pa_batch[idx_in_b, :na]
+                    e1 = pb_batch[idx_in_b, :nb]
+                    u_a = evr_batch[idx_in_b, :na]
+                    u_b = 1.0 - evc_batch[idx_in_b, :nb]
+                    sup_a = select_top_k_orthogonal(la, e0, u_a, min(support_k, na))
+                    sup_b = select_top_k_orthogonal(lb, e1, u_b, min(support_k, nb))
+                    stage1_records.append((i, j, pair_seed, smat, sup_a, sup_b))
+
+        # Stage 2: Either reuse Stage-1 matrix or fuse all `(i, j)` Stage-2 rollouts into chunked TPU calls
         eff_refine_games = max(1, refine_games if refine_games > 0 else screen_games)
         can_reuse_s1 = (
             screen_games > 0
             and refine_games <= screen_games
             and refine_turns == screen_turns
-        )
-
-        all_rosters = rosters_p if symmetric else (rosters_p + rosters_q)
-        q_offset = 0 if symmetric else n_p
-        stacked_rosters = jax.tree_util.tree_map(
-            lambda *xs: jnp.stack(xs, axis=0), *all_rosters
         )
 
         refine_mats: list[np.ndarray] = []
@@ -2018,97 +2247,111 @@ def evaluate_kodoku_gauntlet_tpu(
                 slices_info.append((cursor, cursor + n_traj_pair, ka, kb))
                 cursor += n_traj_pair
 
-            tot_s2_trajs = cursor
-            cap_s2 = _bucket_multi_pair_trajectory_capacity(tot_s2_trajs)
-            r1_all = np.concatenate(r1_idx_list, axis=0)
-            r2_all = np.concatenate(r2_idx_list, axis=0)
-            pa_all = np.concatenate(pa_list, axis=0)
-            pb_all = np.concatenate(pb_list, axis=0)
-            bs_all = np.concatenate(b_seeds_list, axis=0)
-            ps_all = np.concatenate(p_seeds_list, axis=0)
-            sw_all = np.concatenate(sw_list, axis=0)
-
-            if tot_s2_trajs < cap_s2:
-                pad_n = cap_s2 - tot_s2_trajs
-                r1_all = np.concatenate([r1_all, np.zeros((pad_n,), dtype=np.int32)], axis=0)
-                r2_all = np.concatenate([r2_all, np.zeros((pad_n,), dtype=np.int32)], axis=0)
-                pa_all = np.concatenate([pa_all, np.repeat(pa_all[:1], pad_n, axis=0)], axis=0)
-                pb_all = np.concatenate([pb_all, np.repeat(pb_all[:1], pad_n, axis=0)], axis=0)
-                bs_all = np.concatenate([bs_all, np.repeat(bs_all[:1], pad_n, axis=0)], axis=0)
-                ps_all = np.concatenate([ps_all, np.repeat(ps_all[:1], pad_n, axis=0)], axis=0)
-                sw_all = np.concatenate([sw_all, np.zeros((pad_n,), dtype=bool)], axis=0)
-
-            r1_j = jnp.asarray(r1_all, dtype=jnp.int32)
-            r2_j = jnp.asarray(r2_all, dtype=jnp.int32)
-            batched_r_p1 = jax.tree_util.tree_map(lambda x: x[r1_j], stacked_rosters)
-            batched_r_p2 = jax.tree_util.tree_map(lambda x: x[r2_j], stacked_rosters)
-
-            multi_fn = _get_jit_multi_roster_subgame_fn(int(refine_turns), float(eps))
-            s2_vals_flat = np.asarray(
-                multi_fn(
-                    batched_r_p1,
-                    batched_r_p2,
-                    jnp.asarray(pa_all, dtype=jnp.int32),
-                    jnp.asarray(pb_all, dtype=jnp.int32),
-                    jnp.asarray(bs_all, dtype=jnp.uint32),
-                    jnp.asarray(ps_all, dtype=jnp.uint32),
-                    jnp.asarray(sw_all, dtype=jnp.bool_),
-                    shared_dex,
-                    weights,
-                    residual_bundle,
-                ),
-                dtype=np.float32,
+            s2_vals_flat = _execute_multi_roster_trajectory_batches(
+                stacked_rosters,
+                np.concatenate(r1_idx_list, axis=0),
+                np.concatenate(r2_idx_list, axis=0),
+                np.concatenate(pa_list, axis=0),
+                np.concatenate(pb_list, axis=0),
+                np.concatenate(b_seeds_list, axis=0),
+                np.concatenate(p_seeds_list, axis=0),
+                np.concatenate(sw_list, axis=0),
+                turns=refine_turns,
+                eps=eps,
+                shared_dex=shared_dex,
+                weights=weights,
+                residual_bundle=residual_bundle,
+                max_traj_chunk=max_traj_chunk,
             )
             for st_i, ed_i, ka, kb in slices_info:
                 pair_vals = s2_vals_flat[st_i:ed_i].reshape(eff_refine_games, ka * kb)
                 refine_mats.append(np.mean(pair_vals, axis=0).reshape(ka, kb))
 
-        for (i, j, _, _, sup_a, sup_b), refine_mat in zip(stage1_records, refine_mats):
-            s2_sol = solve_rect_rm_plus_jax(
-                jnp.asarray(refine_mat, dtype=jnp.float32), sweeps=rm_sweeps
+        if not compute_slot_telemetry:
+            max_k = max(
+                1,
+                max(max( m.shape[0], m.shape[1] ) for m in refine_mats),
             )
-            x_star = np.asarray(s2_sol.p_a, dtype=np.float32)
-            y_star = np.asarray(s2_sol.p_b, dtype=np.float32)
-            ev_row_a = np.asarray(s2_sol.ev_row, dtype=np.float32)
-            ev_row_b = np.asarray(1.0 - s2_sol.ev_col, dtype=np.float32)
+            n_recs = len(stage1_records)
+            s2_chunk = 512
+            for c_st in range(0, n_recs, s2_chunk):
+                c_ed = min(n_recs, c_st + s2_chunk)
+                cur_c = c_ed - c_st
+                pad_c = ((cur_c + 15) // 16) * 16
+                rm_pad = np.full((pad_c, max_k, max_k), 0.5, dtype=np.float32)
+                mr_pad = np.zeros((pad_c, max_k), dtype=bool)
+                mc_pad = np.zeros((pad_c, max_k), dtype=bool)
+                mr_pad[cur_c:, 0] = True
+                mc_pad[cur_c:, 0] = True
+                for idx_c in range(cur_c):
+                    rmat = refine_mats[c_st + idx_c]
+                    ka, kb = rmat.shape
+                    rm_pad[idx_c, :ka, :kb] = rmat
+                    mr_pad[idx_c, :ka] = True
+                    mc_pad[idx_c, :kb] = True
+                sol_s2 = _solve_batched_rect_rm_plus_values_and_policies(
+                    jnp.asarray(rm_pad, dtype=jnp.float32),
+                    jnp.asarray(mr_pad, dtype=jnp.bool_),
+                    jnp.asarray(mc_pad, dtype=jnp.bool_),
+                    sweeps=rm_sweeps,
+                )
+                vals_s2 = np.asarray(sol_s2.value, dtype=np.float32)
+                for idx_c in range(cur_c):
+                    i, j, _, _, _, _ = stage1_records[c_st + idx_c]
+                    v_star = float(vals_s2[idx_c])
+                    payoff_mat[i, j] = v_star
+                    if symmetric and i != j:
+                        payoff_mat[j, i] = 1.0 - v_star
+        else:
+            for (i, j, _, _, sup_a, sup_b), refine_mat in zip(stage1_records, refine_mats):
+                s2_sol = solve_rect_rm_plus_jax(
+                    jnp.asarray(refine_mat, dtype=jnp.float32), sweeps=rm_sweeps
+                )
+                x_star = np.asarray(s2_sol.p_a, dtype=np.float32)
+                y_star = np.asarray(s2_sol.p_b, dtype=np.float32)
+                ev_row_a = np.asarray(s2_sol.ev_row, dtype=np.float32)
+                ev_row_b = np.asarray(1.0 - s2_sol.ev_col, dtype=np.float32)
 
-            (
-                sp_a,
-                sw_a,
-                sm_a,
-                cs_a,
-                _,
-                v_star,
-            ) = _compute_side_slot_and_core_telemetry(
-                sup_a, x_star, ev_row_a, refine_mat, sweeps=rm_sweeps
-            )
-            (
-                sp_b,
-                sw_b,
-                sm_b,
-                cs_b,
-                _,
-                _,
-            ) = _compute_side_slot_and_core_telemetry(
-                sup_b, y_star, ev_row_b, (1.0 - refine_mat.T), sweeps=rm_sweeps
-            )
+                (
+                    sp_a,
+                    sw_a,
+                    sm_a,
+                    cs_a,
+                    _,
+                    v_star,
+                ) = _compute_side_slot_and_core_telemetry(
+                    sup_a, x_star, ev_row_a, refine_mat, sweeps=rm_sweeps
+                )
+                (
+                    sp_b,
+                    sw_b,
+                    sm_b,
+                    cs_b,
+                    _,
+                    _,
+                ) = _compute_side_slot_and_core_telemetry(
+                    sup_b, y_star, ev_row_b, (1.0 - refine_mat.T), sweeps=rm_sweeps
+                )
 
-            payoff_mat[i, j] = v_star
-            wj = float(w_q[j])
-            slot_picks[i] += wj * sp_a
-            slot_wins[i] += wj * sw_a
-            slot_marginals[i] += wj * sm_a
-            for cm, (cp, _) in cs_a.items():
-                core_acc_per_p[i][cm] = core_acc_per_p[i].get(cm, 0.0) + wj * cp
+                payoff_mat[i, j] = v_star
+                wj = float(w_q[j])
+                slot_picks[i] += wj * sp_a
+                slot_wins[i] += wj * sw_a
+                slot_marginals[i] += wj * sm_a
+                for cm, (cp, _) in cs_a.items():
+                    core_acc_per_p[i][cm] = core_acc_per_p[i].get(cm, 0.0) + wj * cp
 
-            if symmetric and i != j:
-                payoff_mat[j, i] = 1.0 - v_star
-                wi = float(w_q[i])
-                slot_picks[j] += wi * sp_b
-                slot_wins[j] += wi * sw_b
-                slot_marginals[j] += wi * sm_b
-                for cm, (cp, _) in cs_b.items():
-                    core_acc_per_p[j][cm] = core_acc_per_p[j].get(cm, 0.0) + wi * cp
+                if symmetric and i != j:
+                    payoff_mat[j, i] = 1.0 - v_star
+                    wi = float(w_q[i])
+                    slot_picks[j] += wi * sp_b
+                    slot_wins[j] += wi * sw_b
+                    slot_marginals[j] += wi * sm_b
+                    for cm, (cp, _) in cs_b.items():
+                        core_acc_per_p[j][cm] = core_acc_per_p[j].get(cm, 0.0) + wi * cp
+
+        for i, j, i_mir, j_mir in mirror_fill_pairs:
+            payoff_mat[i, j] = 1.0 - payoff_mat[i_mir, j_mir]
 
     for i in range(n_p):
         core_acc = core_acc_per_p[i]
