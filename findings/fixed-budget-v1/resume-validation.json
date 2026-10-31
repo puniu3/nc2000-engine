@@ -1,8 +1,0 @@
-{
-  "source_sha256": "7d580e9c76be97e91da7363c004e1d80af028f1b634828170061f4e5bfa920dd",
-  "reference_source_sha256": "2ab88adc94dfac68c48e28ec4cea697b106d2a9c00a3e9bc4a7089df81565713",
-  "passed": true,
-  "schedule_parity": true,
-  "test": "cargo test --locked --release -p nc2000-bot --example budget_resume",
-  "checks": "Three seeds, repeated checkpoint/replay boundaries including preview; every decision, final outcome, final RNG equal to uninterrupted BlindAgent. Original fixed-agent trajectory test also passed."
-}

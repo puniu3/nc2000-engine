@@ -1,9 +1,0 @@
-   Compiling nc2000-bot v0.1.0 (/Volumes/Work/puniu/nc2000-engine/crates/bot)
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.39s
-     Running unittests examples/hp_information_duel.rs (target/debug/examples/hp_information_duel-b174ddd4c08ac122)
-
-running 1 test
-test tests::oracle_changes_only_move_knowledge_and_keeps_revision_stable ... ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
-

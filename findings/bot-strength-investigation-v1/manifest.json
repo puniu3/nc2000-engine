@@ -1,7 +1,0 @@
-{
-  "crates/bot/examples/strength_investigation.rs": "1cb227a9fb4e9767f0a26e35bdf23206157b19ab043f5f60c5ba531e836254a6",
-  "target/release/examples/strength_investigation": "45e2bcbde023c419c0d31b164f8c6bee7bdd262672bec3df75caa2c16d27461a",
-  "data/search-profiles.json": "157d49892b62fe4bb310e0a0d7f985ecabe6084ddcd5cad2e65ded65a2d9b862",
-  "data/belief-pool-v3/belief-pool.json": "b2a2bee56df07571949eb94782ed184a98fa886ef299a709d60076be01099b20",
-  "findings/bot-strength-investigation-v1/corpus.jsonl": "c0be68e51457b3bc258990f542181d59d82eeca4e3fed4286287a7005f725cff"
-}

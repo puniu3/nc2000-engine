@@ -1,6 +1,0 @@
-{
-  "helper_sha256": "416f201859c13cd8cb53720857da802c9f28cf22180bf2d432a76be8818d7637",
-  "binary_sha256": "8739ba46c157a8d28d3a727cacd0fc15f311fbad7b05cc591d5482e8b5baf04d",
-  "records_sha256": "3af8a597b75a497358bd7ac973edf8ede81dbad263a5ae2781991d6e5201657f",
-  "scope": "Match the integrated library to every frozen standalone leaf and pending script, exact probabilities and outcomes; replay every leaf to its exact state key. Verification work excluded from graph comparison."
-}

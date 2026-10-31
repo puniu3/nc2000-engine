@@ -1,8 +1,0 @@
-{
-  "trial": 1,
-  "arm": "conserve-heal",
-  "returncode": 0,
-  "seconds": 236.83274698257446,
-  "stdout": "g4 12 conserve-heal 1 1 31\n",
-  "stderr": ""
-}

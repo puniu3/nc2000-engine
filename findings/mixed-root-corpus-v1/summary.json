@@ -1,8 +1,0 @@
-{
-  "positions": 54,
-  "decisions": 93,
-  "searches": 372,
-  "unchanged": 372,
-  "triggered": [],
-  "scope": "All non-forced endpoints in the frozen 72-position endgame corpus; two fresh seeds at 27000 iterations, both pinned-team and shipped-pool searches. Trigger margin is a heuristic. Archived matrix losses are conditional on the actual full state and optimal continuation; unresolved bounds do not establish safety or regret at a blind information set. No human calibration and no change to the default selector."
-}

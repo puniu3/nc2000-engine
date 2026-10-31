@@ -1,8 +1,0 @@
-{
-  "command": [
-    "python3",
-    "findings/fixed-budget-v1/cloud/bake3.py"
-  ],
-  "setup": "sh findings/fixed-budget-v1/cloud/setup.sh",
-  "output_limit_bytes": 209715200
-}

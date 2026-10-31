@@ -1,8 +1,0 @@
-{
-  "project": "focus-cairn-458511-f1",
-  "location": "us-central1",
-  "bucket": "focus-cairn-458511-f1-spot-batch-us-central1",
-  "service_account": "spot-batch-worker@focus-cairn-458511-f1.iam.gserviceaccount.com",
-  "network": "projects/focus-cairn-458511-f1/global/networks/spot-batch",
-  "subnet": "projects/focus-cairn-458511-f1/regions/us-central1/subnetworks/spot-batch"
-}

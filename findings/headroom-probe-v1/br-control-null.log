@@ -1,8 +1,0 @@
-24 teams in pool (fixtures)
-0 baked pair tables loaded from /Volumes/Archive/puniu/internal-offload-20261015/work/nc2000-engine/data/preview-tables-v0
-  8/8 games (0s)
-A=exploit-control:blind:30:0.4:16 vs B=exploit-control:blind:30:0.4:16   8 games, seed 2026101611, 10 threads
-A: 4W 4L 0T   score 0.500 +/- 0.000 (95% CI)
-avg turns 21.0   0.1s total   71.94 games/s   think ms/move A 1.5 B 1.7
-turn caps 0   think p95/p99 ms A 3.5/6.2 B 3.5/13.4
-split pairs 0/4   crn agent seeds true

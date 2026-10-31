@@ -1,6 +1,0 @@
-{
-  "helper_sha256": "ad0bd0e7df40886086a5f4e5001ac3dd099fa00b8bfcf86b8db2b98bcdfde76c",
-  "binary_sha256": "44a09d3b08c1b87935c99d9150440060c50d860ac64bc644e44fec2634cf5971",
-  "input_records_sha256": "7f4ec1cc7f19e41b9c182a3256b293cc92157dcc7bde7909371212e27c167579",
-  "scope": "Re-enumerate all 256 completed sampled cells, compare saved masses, replay every complete representative script, verify exact state keys and full trace lengths, count leaves carrying merged probability. Additional verification runs are not performance samples."
-}

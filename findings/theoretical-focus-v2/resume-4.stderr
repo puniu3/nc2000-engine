@@ -1,3 +1,0 @@
-loop4-t500 pass=0 value=Bounds { lo: 0.0, hi: 1.0 } loss=Bounds { lo: 0.0, hi: 1.0 } runs=2000000 nodes=138928 closed=13255
-loop4-t500 pass=1 value=Bounds { lo: 0.0, hi: 1.0 } loss=Bounds { lo: 0.0, hi: 1.0 } runs=3625679 nodes=271868 closed=28169
-loop4-t500 "NodeBudget" runs=3625679 depthlimit=0 elapsed=62.4

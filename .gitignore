@@ -36,6 +36,5 @@ data/dominance-audit-*/
 data/dominance-audit-v8-clean/*
 !data/dominance-audit-v8-clean/converged-report-v6.json
 data/team-selection-v2/stage-a-3000/
-findings/performance-scout-v1/
-findings/selection-matrix-estimate-v1/
+/findings/
 

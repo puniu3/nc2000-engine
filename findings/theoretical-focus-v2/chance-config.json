@@ -1,7 +1,0 @@
-{
-  "work": 200000,
-  "nodes": 100000,
-  "milliseconds": 10000,
-  "depth": 24,
-  "mode": "chance-audit"
-}

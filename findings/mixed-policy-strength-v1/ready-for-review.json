@@ -1,9 +1,0 @@
-{
-  "created_utc": "2026-10-18T01:18:43.021093+00:00",
-  "status": "reviewed",
-  "summary_sha256": "03abf864dfc0495bc4ea8a59187e35cd0a47185514caa22407f8f55fb13b0b2a",
-  "main_games": 1096,
-  "reviewed_utc": "2026-10-18T01:24:02.865626+00:00",
-  "integrity_audit": "final-audit.json",
-  "presentation_checks": "final-preview-checks.json"
-}

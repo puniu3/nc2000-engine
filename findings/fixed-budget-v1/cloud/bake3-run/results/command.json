@@ -1,8 +1,0 @@
-{
-  "command": [
-    "python3",
-    "findings/fixed-budget-v1/cloud/bake3.py"
-  ],
-  "returncode": 0,
-  "wall_seconds": 2601.065735761
-}

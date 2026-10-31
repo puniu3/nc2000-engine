@@ -1,1 +1,0 @@
-{"change":"Use deployed enumerate_step returning Option<StepEnum>; require Some through expect instead of partial-enumerator exhausted/pending checks. Same complete-support obligation and same candidate runtime code.","initial_failure":"Current research tests referenced enumerate_step_partial, absent from deployed engine. No matchup failures or production source changes."}

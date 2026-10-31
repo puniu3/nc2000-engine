@@ -1,8 +1,0 @@
-{
-  "command": [
-    "python3",
-    "findings/budget-allocation-v1/cloud/run.py"
-  ],
-  "setup": "sh findings/budget-allocation-v1/cloud/setup.sh",
-  "output_limit_bytes": 209715200
-}

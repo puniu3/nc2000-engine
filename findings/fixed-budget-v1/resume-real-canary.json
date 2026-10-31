@@ -1,6 +1,0 @@
-{
-  "passed": true,
-  "job": "battle243-p000-s1.json",
-  "checkpoint_turn": 4,
-  "checks": "Every decision and final outcome identical to the original uninterrupted 81k/243k harness, excluding elapsed times."
-}

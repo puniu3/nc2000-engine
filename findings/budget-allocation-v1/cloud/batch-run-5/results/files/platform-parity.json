@@ -1,6 +1,0 @@
-{
-  "passed": true,
-  "canary_games": 2,
-  "platform": "Linux-6.1.0-53-cloud-amd64-x86_64-with-glibc2.36",
-  "machine": "x86_64"
-}

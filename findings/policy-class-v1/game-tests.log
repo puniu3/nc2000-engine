@@ -1,9 +1,0 @@
-   Compiling nc2000-bot v0.1.0 (/Volumes/Archive/puniu/internal-offload-20261015/work/nc2000-engine/crates/bot)
-    Finished `release` profile [optimized] target(s) in 4.91s
-     Running tests/interval_root_games.rs (target/release/deps/interval_root_games-f3b99ead240dd722)
-
-running 2 tests
-test resource_waiting_requires_a_continuation_policy_not_just_one_mixed_move ... ok
-test policy_iteration_improves_all_states_and_solves_finite_games ... ok
-
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s

@@ -1,7 +1,0 @@
-{
-  "matrices": 21028,
-  "invalid_distributions": 0,
-  "affected_roots": 0,
-  "minimum_weight": 0.0,
-  "scope": "All row/column restrictions with at least two actions per side from both endpoint matrices of the 41-position ceiling audit. Restrictions include but are not limited to the live solver supports. Negative probabilities reproduce the invalid-policy condition; this does not establish the cause of every observed fallback or its strength impact."
-}

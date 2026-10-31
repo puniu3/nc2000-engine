@@ -1,9 +1,0 @@
-{"time": "2026-10-16T16:27:19.270842+00:00", "phase": "preflight_ok", "allowance_yen": 176.4}
-{"time": "2026-10-16T16:27:24.515958+00:00", "phase": "submitted", "job": "projects/focus-cairn-458511-f1/locations/us-central1/jobs/sb-20261016162717-6ed2ad17"}
-{"time": "2026-10-16T16:27:25.689946+00:00", "phase": "job_state", "state": "QUEUED"}
-{"time": "2026-10-16T16:27:42.656750+00:00", "phase": "job_state", "state": "SCHEDULED"}
-{"time": "2026-10-16T16:29:00.205149+00:00", "phase": "job_state", "state": "RUNNING"}
-{"time": "2026-10-16T17:14:01.401344+00:00", "phase": "job_state", "state": "SUCCEEDED"}
-{"time": "2026-10-16T17:14:07.733911+00:00", "phase": "results_collected", "returncode": 0, "bytes": 30470}
-{"time": "2026-10-16T17:14:07.734330+00:00", "phase": "cleanup_started"}
-{"time": "2026-10-16T17:15:43.166573+00:00", "phase": "cleanup_verified"}

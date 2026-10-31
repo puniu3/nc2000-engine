@@ -1,6 +1,0 @@
-{
-  "reason": "Resume-only correction: JSON deserializes target tuples as lists. Normalize the comparison; preserve the original runner and original protocol. All game parameters and the measured binary are unchanged; completed games are validated and reused.",
-  "protocol_sha256": "bc121fb2c076064b56e0c070b3c465f8474c8272c4ed7c027b095248a4afcbcc",
-  "original_runner_sha256": "59d19161dc8f96833ea4f8d3c78aa570b42c1107c2b478ae489081c851709ce6",
-  "fixed_runner_sha256": "075ae8d79a844f0da37978a4232676edf9ef34a55ff60b09a7b60d51604268bb"
-}

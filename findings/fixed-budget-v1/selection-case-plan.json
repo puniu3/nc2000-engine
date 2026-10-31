@@ -1,6 +1,0 @@
-{
-  "root": 14,
-  "search_seed": 135721,
-  "recorded_at": "2026-10-16T18:06:04.165696+00:00",
-  "reason": "Illustrative case selected before inspecting aggregate continuation scores: the unresolved lower-budget action changes one selected Pokemon, while all three higher budgets agree. Report its paired continuation results regardless of sign; not a separate confirmatory claim."
-}

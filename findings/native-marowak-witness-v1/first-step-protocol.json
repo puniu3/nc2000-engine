@@ -1,8 +1,0 @@
-{
-  "schema": "nc2000-native-marowak-first-step-v1",
-  "roots_sha256": "25b96f79745bb52028ec4e9b93577e42ce13d4d0325590239053bc0029c6f04c",
-  "dex_sha256": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
-  "helper_sha256": "6bd213af476dd68d02477dab28ae68c3e81eea180a2d05f15c36094867849da1",
-  "solver_binary_sha256": "439d4b3c1ecce34c8f813aefadd568fe6bfbaeb518ffa6920041b39ad0857808",
-  "scope": "Complete one-step enumeration, both attacks crossed with all four legal opponent replies. Outcome probabilities and live HP/status/boost/item projections only. Equality here is not full successor equivalence: PP, last move, and histories remain distinct."
-}

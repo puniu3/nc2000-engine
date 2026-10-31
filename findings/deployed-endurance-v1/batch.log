@@ -1,2 +1,0 @@
-{"trial": 1, "arm": "baseline", "returncode": 0, "seconds": 267.39627504348755, "stdout": "g4 12 baseline 1 1 35\n", "stderr": ""}
-{"trial": 1, "arm": "conserve-heal", "returncode": 0, "seconds": 236.83274698257446, "stdout": "g4 12 conserve-heal 1 1 31\n", "stderr": ""}

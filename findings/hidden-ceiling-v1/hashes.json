@@ -1,8 +1,0 @@
-{
-  "findings/hidden-terminal-v1/records.json.gz": "f8376f2a5e8e233c5641a63857332063a87bd997e5c3fae2ded95174fa03a364",
-  "findings/terminal-certificate-v1/records.json.gz": "3767bebaadd3862e5addaf16342a61916ef10b235376ae18f1ca572ad00dea14",
-  "tools/hidden-ceiling-probe": "bfa1e02ef05dfaf793899c51465687dfa2bcf952bb833202fc00883fbe15b4ce",
-  "tools/hidden-terminal-probe": "27b43b8b8c8098b018b38a0a28898465c2d78613e611e1e125d3d02e9786dcb0",
-  "tools/terminal-certificate-probe": "3787bc739413d1439e9d51d3ab80204e6636695779179e05d6d8dfbb30f98e61",
-  "tools/policy-witness-probe": "6b9d217c06b8cf49bbdee0c7f10dde5d62e6ce3a409bd6daf5ccdbf38c4094be"
-}

@@ -1,7 +1,0 @@
-{
-  "helper_sha256": "b797c36b06194c05a64ff421028dd5d34bb61cba2462d5d2aff6b8edb7f4f151",
-  "binary_sha256": "b7dd872d2b97ec0b0b25d062a8160f282214c0197d15dfa2dab772c5a5b73e1d",
-  "records_sha256": "6c479cbcfd7cdb709ccfc163b249c9e67088cef8288ae19a8e0b155bd58cccc0",
-  "bounds_sha256": "61fdba7d569f729f09404877bd8e4b2b98ddde0905a41f141044ccff6f7ec515",
-  "scope": "Verify manually selected wake-priority actions with the new FixedPolicySolver API, then re-enumerate every saved cell. Verification costs excluded from performance."
-}

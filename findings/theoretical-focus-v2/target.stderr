@@ -1,4 +1,0 @@
-g4-t10 "TimeBudget" runs=489908 depthlimit=0 elapsed=60.0
-g4-t53 "NodeBudget" runs=1001348 depthlimit=0 elapsed=58.1
-loop4-t500 "WorkExhausted" runs=2000000 depthlimit=0 elapsed=21.7
-loop12-t500 "WorkExhausted" runs=2000000 depthlimit=0 elapsed=17.3

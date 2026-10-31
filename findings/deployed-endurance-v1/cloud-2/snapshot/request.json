@@ -1,8 +1,0 @@
-{
-  "command": [
-    "python3",
-    "tools/endurance-cloud.py"
-  ],
-  "setup": "apt-get update -qq && apt-get install -y -qq nodejs python3",
-  "output_limit_bytes": 209715200
-}

@@ -1,7 +1,0 @@
-{
-  "algorithm_sources_identical": true,
-  "changed_files": [
-    "crates/bot/examples/budget_allocation.rs"
-  ],
-  "change": "Job selection and worker count only; frozen schedules and game function preserved."
-}
