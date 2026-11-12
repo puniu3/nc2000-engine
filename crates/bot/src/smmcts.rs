@@ -148,6 +148,94 @@ pub struct RmConfig {
     pub endgame_rules: EndgameRules,
     /// Leaf tactical settlement & evaluation mode.
     pub settlement: crate::accounting::LeafSettlementMode,
+    /// Aggregate `BlindSearch` interior nodes by publicly visible state (`visible_state_key`)
+    /// across determinizations instead of disjoint full-state worlds.
+    pub ismcts_visible_tree: bool,
+    /// Collapse non-threshold damage rolls into a single state, splitting only on semantic
+    /// KO/Sub/Heal/Flail/residual-death cliffs and full-HP Markovian confluence.
+    pub semantic_hp_thresholds: bool,
+    /// 3-rank action pruning (`Unmarked` / `Marked` soft gate / `NoOp` hard prune).
+    pub three_rank_pruning: bool,
+    /// Visit count at which `Marked` actions unlock with a narrow empirical-Bayes prior.
+    pub marked_unlock_visits: u32,
+}
+
+/// 3-rank action classification for search tree pruning:
+/// - `Unmarked`: standard tactically live action, explored immediately from visit 0.
+/// - `Marked`: soft-pruned action (switch-read into immunity/statused foe, strictly outclassed
+///   attack, premature >87.5% heal, or heavily punished switch-in); gated behind
+///   `marked_unlock_visits` with a narrow empirical-Bayes prior so it never burns early budget
+///   yet can still overtake if exploration proves it wins.
+/// - `NoOp`: provably dead/self-loss action, hard-pruned unless all legal choices are `NoOp`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ActionRank {
+    #[default]
+    Unmarked,
+    Marked,
+    NoOp,
+}
+
+/// Online Welford HP distribution (`mean`, `m2`, `[min_hp, max_hp]`) recorded per active side
+/// on merged semantic-HP nodes, with exact Markovian reset at full HP (`hp >= maxhp`).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MonHpDist {
+    pub n: u32,
+    pub mean: f32,
+    pub m2: f32,
+    pub min_hp: i16,
+    pub max_hp: i16,
+}
+
+impl MonHpDist {
+    #[inline]
+    pub fn observe(&mut self, hp: i16, maxhp: i16) {
+        if hp <= 0 {
+            self.n = 1;
+            self.mean = 0.0;
+            self.m2 = 0.0;
+            self.min_hp = 0;
+            self.max_hp = 0;
+            return;
+        }
+        if hp >= maxhp {
+            // Exact Markovian confluence on full recovery (e.g. Rest / full Recover).
+            self.n = self.n.saturating_add(1);
+            self.mean = maxhp as f32;
+            self.m2 = 0.0;
+            self.min_hp = maxhp;
+            self.max_hp = maxhp;
+            return;
+        }
+        let x = hp as f32;
+        if self.n == 0 {
+            self.n = 1;
+            self.mean = x;
+            self.m2 = 0.0;
+            self.min_hp = hp;
+            self.max_hp = hp;
+        } else {
+            self.n = self.n.saturating_add(1);
+            let delta = x - self.mean;
+            self.mean += delta / (self.n as f32);
+            let delta2 = x - self.mean;
+            self.m2 += delta * delta2;
+            if hp < self.min_hp {
+                self.min_hp = hp;
+            }
+            if hp > self.max_hp {
+                self.max_hp = hp;
+            }
+        }
+    }
+
+    #[inline]
+    pub fn std_dev(&self) -> f32 {
+        if self.n <= 1 {
+            0.0
+        } else {
+            (self.m2 / (self.n as f32)).max(0.0).sqrt()
+        }
+    }
 }
 
 /// Optional root decision & early-stop rules for won, near-won, and lost positions.
@@ -924,10 +1012,10 @@ impl RmConfig {
             settlement: self.settlement,
         }
     }
-}
 
-impl Default for RmConfig {
-    fn default() -> Self {
+    /// Previous shallow MCTS + 8-turn heavy max-damage rollout configuration, preserved for
+    /// A/B benchmarking and regression duels against the rollout-free ISMCTS + solver default.
+    pub fn legacy_heavy_rollout() -> Self {
         RmConfig {
             iterations: 1000,
             rule: SelRule::Rm,
@@ -955,6 +1043,47 @@ impl Default for RmConfig {
             mask_rules: MaskRules::default(),
             settlement: crate::accounting::LeafSettlementMode::BlindSpotLeaf,
             endgame_rules: EndgameRules::default(),
+            ismcts_visible_tree: false,
+            semantic_hp_thresholds: false,
+            three_rank_pruning: false,
+            marked_unlock_visits: 12,
+        }
+    }
+}
+
+impl Default for RmConfig {
+    fn default() -> Self {
+        RmConfig {
+            iterations: 1000,
+            rule: SelRule::Rm,
+            probe: 0.25,
+            mix_actions: 3,
+            c: 1.0,
+            collapse_sleep_actions: true,
+            root_revisit_interval: 0,
+            canonical_claw_key: false,
+            unseen_claw_root: false,
+            horizon: 100,
+            playout: Playout::heavy(),
+            threshold: 0.5,
+            hp_buckets: 16,
+            solve_sweeps: 2000,
+            rollout_status: false,
+            rollout_switch: false,
+            rollout_perish: false,
+            rollout_combo: true,
+            rollout_capped_damage: false,
+            rollout_residual: false,
+            rollout_baton_pass: true,
+            threshold_key: false,
+            key_no_damage: true,
+            mask_rules: MaskRules::default(),
+            settlement: crate::accounting::LeafSettlementMode::SolverQuiescence,
+            endgame_rules: EndgameRules::default(),
+            ismcts_visible_tree: true,
+            semantic_hp_thresholds: true,
+            three_rank_pruning: true,
+            marked_unlock_visits: 12,
         }
     }
 }
@@ -962,10 +1091,14 @@ impl Default for RmConfig {
 pub(crate) struct Node {
     /// Legal actions per side at this state (empty = side owes nothing; <= 6 for all move/switch states).
     pub(crate) acts: [nc2000_engine::smallvec::SmallVec<[SearchChoice; 6]>; 2],
+    /// Action pruning rank aligned with `acts`.
+    pub(crate) ranks: [nc2000_engine::smallvec::SmallVec<[ActionRank; 6]>; 2],
     /// Per-action sample counts (UCB1).
     pub(crate) n: [nc2000_engine::smallvec::SmallVec<[u32; 6]>; 2],
     /// Per-action reward sums (UCB1).
     pub(crate) w: [nc2000_engine::smallvec::SmallVec<[f64; 6]>; 2],
+    /// Online HP distribution per active side across merged semantic-HP trajectories.
+    pub(crate) hp_dist: [MonHpDist; 2],
     /// Team-preview node (always UCB1 + argmax).
     pub(crate) preview: bool,
 }
@@ -993,32 +1126,63 @@ pub enum SearchTrace<'a> {
 
 impl Node {
     pub(crate) fn at(sim: &mut Battle, dex: &Dex) -> Node {
-        Self::build(sim, dex, false)
+        Self::build(sim, dex, false, None)
     }
 
-    fn build(sim: &mut Battle, dex: &Dex, collapse_sleep: bool) -> Node {
+    pub(crate) fn at_root(sim: &mut Battle, dex: &Dex, cfg: &RmConfig) -> Node {
+        let mut node = Self::build(sim, dex, false, None);
+        if cfg.three_rank_pruning && !node.preview {
+            for side in 0..2 {
+                node.ranks[side] = classify_actions_soft_only(sim, dex, side, &node.acts[side], cfg);
+            }
+        }
+        observe_battle_hp_dist(sim, &mut node.hp_dist);
+        node
+    }
+
+    fn build(
+        sim: &mut Battle,
+        dex: &Dex,
+        collapse_sleep: bool,
+        prune_cfg: Option<&RmConfig>,
+    ) -> Node {
         use nc2000_engine::smallvec::{smallvec, SmallVec};
         let mut acts = [SmallVec::new(), SmallVec::new()];
         sim.legal_choices_into(dex, 0, &mut acts[0]);
         sim.legal_choices_into(dex, 1, &mut acts[1]);
-        if collapse_sleep {
+        let preview = acts
+            .iter()
+            .any(|a| matches!(a.first(), Some(SearchChoice::Team(_))));
+        if collapse_sleep && !preview {
             for side in 0..2 {
                 collapse_sleep_choices_smallvec(sim, dex, side, &mut acts[side]);
             }
         }
-        let preview = acts
-            .iter()
-            .any(|a| matches!(a.first(), Some(SearchChoice::Team(_))));
+        let ranks = if let Some(cfg) = prune_cfg.filter(|c| c.three_rank_pruning && !preview) {
+            [
+                classify_actions_sim(sim, dex, 0, &mut acts[0], cfg),
+                classify_actions_sim(sim, dex, 1, &mut acts[1], cfg),
+            ]
+        } else {
+            [
+                smallvec![ActionRank::Unmarked; acts[0].len()],
+                smallvec![ActionRank::Unmarked; acts[1].len()],
+            ]
+        };
+        let mut hp_dist = [MonHpDist::default(); 2];
+        observe_battle_hp_dist(sim, &mut hp_dist);
         Node {
             n: [smallvec![0; acts[0].len()], smallvec![0; acts[1].len()]],
             w: [smallvec![0.0; acts[0].len()], smallvec![0.0; acts[1].len()]],
+            ranks,
+            hp_dist,
             preview,
             acts,
         }
     }
 
     fn continuation(sim: &mut Battle, dex: &Dex, cfg: &RmConfig) -> Node {
-        Self::build(sim, dex, cfg.collapse_sleep_actions)
+        Self::build(sim, dex, cfg.collapse_sleep_actions, Some(cfg))
     }
 
     /// Blend a raw child trajectory return `raw_val0` toward the empirical-Bayes minimax value
@@ -1096,7 +1260,7 @@ pub fn collapse_sleep_choices(b: &Battle, dex: &Dex, side: usize, choices: &mut 
     });
 }
 
-fn collapse_sleep_choices_smallvec(
+pub(crate) fn collapse_sleep_choices_smallvec(
     b: &Battle,
     dex: &Dex,
     side: usize,
@@ -1216,11 +1380,1372 @@ pub fn key_for_test(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
     key_of(cfg, dex, b)
 }
 
-/// Node key. With `threshold_key`, each active's HP is first canonicalised to
-/// its class representative, so the existing uniform hashing lands exactly one
-/// class per bucket; bench mons keep the uniform grid, since they are not the
-/// ones being hit and a damage estimate per bench mon would be paid on every
-/// descent step. The battle is restored before returning.
+/// Public-only check for whether damage bookkeeping (`attacked_by` / `last_damage`) can be
+/// observed by future moves, without inspecting hidden opponent movesets.
+pub(crate) fn public_damage_bookkeeping_observable(
+    b: &Battle,
+    dex: &Dex,
+    viewer_side: usize,
+) -> bool {
+    if b.sides[viewer_side].roster.iter().any(|p| {
+        p.base_move_slots
+            .iter()
+            .chain(p.move_slots.iter())
+            .any(|slot| matches!(dex.moves.key(slot.id), "counter" | "mirrorcoat"))
+    }) {
+        return true;
+    }
+    let learnsets = crate::belief::format_learnsets();
+    b.sides[1 - viewer_side].roster.iter().any(|p| {
+        let sp_key = dex.species.key(p.base_species);
+        learnsets.species(sp_key).map_or(true, |ls| {
+            ls.moves
+                .iter()
+                .any(|m| matches!(m.as_str(), "counter" | "mirrorcoat"))
+        })
+    })
+}
+
+#[inline]
+pub(crate) fn observe_battle_hp_dist(b: &Battle, dist: &mut [MonHpDist; 2]) {
+    for s in 0..2 {
+        if let Some(id) = b.active_id(s) {
+            let p = b.poke(id);
+            let hp = if p.fainted { 0 } else { p.hp.clamp(0, i16::MAX as i32) as i16 };
+            let maxhp = p.maxhp.clamp(1, i16::MAX as i32) as i16;
+            dist[s].observe(hp, maxhp);
+        }
+    }
+}
+
+#[inline]
+fn gen2_boost_stat(raw: i32, stage: i8) -> f64 {
+    const NUM: [i32; 13] = [25, 28, 33, 40, 50, 66, 100, 150, 200, 250, 300, 350, 400];
+    let idx = (stage.clamp(-6, 6) + 6) as usize;
+    ((raw * NUM[idx] / 100).clamp(1, 999)) as f64
+}
+
+#[inline]
+fn canonical_gen2_stat(base: u16, level: u8) -> i32 {
+    (((i32::from(base) + 15) * 2 + 63) * i32::from(level)) / 100 + 5
+}
+
+#[inline]
+fn canonical_gen2_maxhp(base_hp: u16, level: u8) -> i32 {
+    (((i32::from(base_hp) + 15) * 2 + 63) * i32::from(level)) / 100 + i32::from(level) + 10
+}
+
+#[inline]
+fn flail_hp_tier(hp: i64, maxhp: i64) -> u16 {
+    let r = (hp * 48 / maxhp.max(1)).max(1);
+    if r < 2 {
+        0
+    } else if r < 5 {
+        1
+    } else if r < 10 {
+        2
+    } else if r < 17 {
+        3
+    } else if r < 33 {
+        4
+    } else {
+        5
+    }
+}
+
+#[inline]
+fn ko_band_from_bounds(hp: i32, min_dmg: i32, max_dmg: i32) -> u16 {
+    if max_dmg <= 0 {
+        5
+    } else if min_dmg >= hp {
+        0
+    } else if max_dmg >= hp {
+        1
+    } else if 2 * min_dmg >= hp {
+        2
+    } else if 2 * max_dmg >= hp {
+        3
+    } else if 3 * max_dmg >= hp {
+        4
+    } else {
+        5
+    }
+}
+
+#[inline]
+fn fast_poke_stat(dex: &Dex, p: &nc2000_engine::state::Pokemon, stat_idx: usize) -> f64 {
+    use nc2000_engine::state::Status;
+    let mut v = gen2_boost_stat(p.stored_stats[stat_idx], p.boosts[stat_idx]);
+    match stat_idx {
+        0 => {
+            if p.item.is_some()
+                && p.item == dex.known_items.thickclub
+                && (Some(p.species) == dex.known_species.cubone
+                    || Some(p.species) == dex.known_species.marowak)
+            {
+                v = (v * 2.0).min(999.0);
+            }
+            if p.status == Status::Brn {
+                v = (v * 0.5).floor().max(1.0);
+            }
+        }
+        1 | 3 => {
+            if p.item.is_some()
+                && p.item == dex.known_items.metalpowder
+                && Some(p.species) == dex.known_species.ditto
+                && !p.transformed
+            {
+                v = (v * 1.5).floor().min(999.0);
+            }
+        }
+        2 => {
+            if p.item.is_some()
+                && p.item == dex.known_items.lightball
+                && Some(p.species) == dex.known_species.pikachu
+            {
+                v = (v * 2.0).min(999.0);
+            }
+        }
+        4 => {
+            if p.status == Status::Par {
+                v = (v * 0.25).floor().max(1.0);
+            }
+        }
+        _ => {}
+    }
+    v
+}
+
+fn residual_death_clock_band(
+    b: &Battle,
+    dex: &Dex,
+    id: PokeId,
+    hp: i32,
+    maxhp: i32,
+    know_item: bool,
+) -> u16 {
+    use nc2000_engine::state::{Status, DK};
+    let dt = nc2000_engine::compact::dex_tables(dex);
+    let p = b.poke(id);
+    let mut drain_16ths = 0i32;
+    match p.status {
+        Status::Brn | Status::Psn => drain_16ths += 2,
+        Status::Tox => {
+            let stg = p.status_state.get_int(DK::Time).clamp(1, 15) as i32;
+            drain_16ths += 2 * stg;
+        }
+        Status::Slp => {
+            if !p.volatiles.is_empty()
+                && dt.night_cond.is_some_and(|cid| p.has_volatile(cid))
+            {
+                drain_16ths += 4;
+            }
+        }
+        _ => {}
+    }
+    if !p.volatiles.is_empty() {
+        if dt.curse_cond.is_some_and(|cid| p.has_volatile(cid)) {
+            drain_16ths += 4;
+        }
+        if dt.seed_cond.is_some_and(|cid| p.has_volatile(cid)) {
+            drain_16ths += 2;
+        }
+        if nc2000_engine::cond_id!(dex, "partiallytrapped").is_some_and(|cid| p.has_volatile(cid))
+        {
+            drain_16ths += 2;
+        }
+    }
+    if b.field.weather.is_some() && b.field.weather == dt.sand_cond {
+        let mut tmask = 1u32 << (p.types.t[0].0 & 31);
+        if p.types.n >= 2 {
+            tmask |= 1u32 << (p.types.t[1].0 & 31);
+        }
+        if (tmask & dt.sandstorm_immune_mask) == 0 {
+            drain_16ths += 2;
+        }
+    }
+    if know_item
+        && p.item
+            .and_then(|it| dt.item_specs.get(it.0 as usize))
+            .is_some_and(|s| s.is_leftovers)
+    {
+        drain_16ths -= 1;
+    }
+    if drain_16ths <= 0 {
+        return 5;
+    }
+    let per_turn = ((maxhp * drain_16ths) / 16).max(1);
+    (((hp + per_turn - 1) / per_turn).clamp(1, 5) - 1) as u16
+}
+
+fn best_move_damage_bounds_sim(
+    b: &Battle,
+    dex: &Dex,
+    att: PokeId,
+    def: PokeId,
+) -> (i32, i32) {
+    let dt = nc2000_engine::compact::dex_tables(dex);
+    let a = b.poke(att);
+    let d = b.poke(def);
+    let def_side = def.side as usize;
+    let has_sc = !b.sides[def_side].side_conditions.is_empty();
+    let reflect = has_sc
+        && dt
+            .refl_cond
+            .is_some_and(|cid| b.sides[def_side].has_side_condition(cid));
+    let lightscreen = has_sc
+        && dt
+            .ls_cond
+            .is_some_and(|cid| b.sides[def_side].has_side_condition(cid));
+    let phys_atk = fast_poke_stat(dex, a, 0);
+    let phys_def = fast_poke_stat(dex, d, 1) * if reflect { 2.0 } else { 1.0 };
+    let spec_atk = fast_poke_stat(dex, a, 2);
+    let spec_def = fast_poke_stat(dex, d, 3) * if lightscreen { 2.0 } else { 1.0 };
+    let lvl_fac = (f64::from(a.level) * 2.0 / 5.0 + 2.0).floor();
+
+    let mut best_min = 0i32;
+    let mut best_max = 0i32;
+    for slot in a.move_slots.iter() {
+        if slot.pp == 0 || slot.disabled {
+            continue;
+        }
+        let mspec = &dt.move_specs[slot.id.0 as usize];
+        let (move_type, is_phys, is_status, bp) = match mspec.var_bp_kind {
+            1 => (
+                nc2000_engine::dex::TypeId(mspec.move_type),
+                mspec.is_physical,
+                mspec.is_status,
+                a.happiness as i32 * 10 / 25,
+            ),
+            2 => (
+                nc2000_engine::dex::TypeId(mspec.move_type),
+                mspec.is_physical,
+                mspec.is_status,
+                (255 - a.happiness as i32) * 10 / 25,
+            ),
+            3 => {
+                let hpt = a.hp_type;
+                let phys = (dt.special_type_mask & (1u32 << (hpt.0 & 31))) == 0;
+                (hpt, phys, false, a.hp_power)
+            }
+            4 => {
+                let ratio = ((a.hp as i64 * 48) / (a.maxhp.max(1) as i64)).max(1);
+                let vbp = if ratio < 2 {
+                    200
+                } else if ratio < 5 {
+                    150
+                } else if ratio < 10 {
+                    100
+                } else if ratio < 17 {
+                    80
+                } else if ratio < 33 {
+                    40
+                } else {
+                    20
+                };
+                (
+                    nc2000_engine::dex::TypeId(mspec.move_type),
+                    mspec.is_physical,
+                    mspec.is_status,
+                    vbp,
+                )
+            }
+            _ => (
+                nc2000_engine::dex::TypeId(mspec.move_type),
+                mspec.is_physical,
+                mspec.is_status,
+                mspec.base_power as i32,
+            ),
+        };
+        if mspec.fixed_damage == 0 && (is_status || bp <= 0) {
+            continue;
+        }
+        if type_immune_to(b, dex, move_type, def) {
+            continue;
+        }
+        let (min_d, max_d) = if mspec.fixed_damage != 0 {
+            let fd = if mspec.fixed_damage < 0 {
+                i32::from(a.level)
+            } else {
+                i32::from(mspec.fixed_damage)
+            };
+            (fd, fd)
+        } else {
+            let row = &dt.type_chart[(move_type.0 as usize).min(19)];
+            let mut eff = 1.0f64;
+            for t in d.types.iter() {
+                match row[(t.0 as usize).min(19)] {
+                    1 => eff *= 2.0,
+                    -1 => eff *= 0.5,
+                    _ => {}
+                }
+            }
+            let atk = if is_phys { phys_atk } else { spec_atk };
+            let mut dfn = if is_phys { phys_def } else { spec_def };
+            if mspec.is_selfdestruct && is_phys {
+                dfn = (dfn * 0.5).floor().max(1.0);
+            }
+            let core = (lvl_fac * (bp as f64) * atk / dfn.max(1.0) / 50.0).floor() + 2.0;
+            let stab = if a.types.has(move_type) { 1.5 } else { 1.0 };
+            let hits = f64::from(mspec.multihit_mean_x2) * 0.5;
+            let max_raw = (core * stab * eff * hits).floor().max(1.0) as i32;
+            let min_raw = ((max_raw * 217) / 255).max(1);
+            (min_raw, max_raw)
+        };
+        if max_d > best_max || (max_d == best_max && min_d > best_min) {
+            best_max = max_d;
+            best_min = min_d;
+        }
+    }
+    (best_min, best_max)
+}
+
+/// Semantic HP signature on concrete `Battle` (`0` = fainted, `0xFFFF` = exact full HP,
+/// `1..=0xFFFE` = packed `(ko_band, residual_clock, sub_cliff, half_cliff, flail_tier)`).
+pub(crate) fn semantic_active_hp_sig_sim(
+    b: &Battle,
+    dex: &Dex,
+    def: PokeId,
+    att: Option<PokeId>,
+) -> u16 {
+    let d = b.poke(def);
+    if d.fainted || d.hp <= 0 {
+        return 0;
+    }
+    if d.hp >= d.maxhp {
+        return 0xFFFF;
+    }
+    let (min_d, max_d) = match att {
+        Some(a_id) if !b.poke(a_id).fainted && b.poke(a_id).hp > 0 => {
+            best_move_damage_bounds_sim(b, dex, a_id, def)
+        }
+        _ => (0, 0),
+    };
+    let ko = ko_band_from_bounds(d.hp, min_d, max_d);
+    let res = residual_death_clock_band(b, dex, def, d.hp, d.maxhp, true);
+    let sub = u16::from((d.hp as i64) * 4 > (d.maxhp as i64));
+    let half = u16::from((d.hp as i64) * 2 > (d.maxhp as i64));
+    let flail = flail_hp_tier(d.hp as i64, d.maxhp as i64);
+    1 + (ko | (res << 3) | (sub << 6) | (half << 7) | (flail << 8))
+}
+
+/// Strictly public-only semantic HP signature for `BlindSearch` visible-state aggregation:
+/// - For `target_side == viewer_side`: uses own exact `(hp, maxhp, def, spd)` against canonical
+///   incoming STAB threats from opponent's public `(species, level, types, boosts, status)`.
+/// - For `target_side != viewer_side`: uses opponent's public 48-unit HP bar (`announce_hp`)
+///   scaled onto canonical `(species, level)` max HP, against viewer's concrete active moves!
+/// Zero hidden opponent stats, moves, items, or sub-bar exact HP are ever read.
+pub(crate) fn semantic_active_hp_sig_public(
+    b: &Battle,
+    dex: &Dex,
+    viewer_side: usize,
+    target_side: usize,
+) -> u16 {
+    use nc2000_engine::state::Status;
+    let Some(t_id) = b.active_id(target_side) else {
+        return 0;
+    };
+    let tp = b.poke(t_id);
+    if tp.fainted || tp.hp <= 0 {
+        return 0;
+    }
+    if tp.hp >= tp.maxhp {
+        return 0xFFFF;
+    }
+    let dt = nc2000_engine::compact::dex_tables(dex);
+    let reflect = !b.sides[target_side].side_conditions.is_empty()
+        && dt
+            .refl_cond
+            .is_some_and(|cid| b.sides[target_side].has_side_condition(cid));
+    let lightscreen = !b.sides[target_side].side_conditions.is_empty()
+        && dt
+            .ls_cond
+            .is_some_and(|cid| b.sides[target_side].has_side_condition(cid));
+
+    if target_side == viewer_side {
+        let hp = tp.hp;
+        let maxhp = tp.maxhp.max(1);
+        let (min_d, max_d) = if let Some(opp_id) = b.active_id(1 - viewer_side) {
+            let op = b.poke(opp_id);
+            if op.fainted || op.hp <= 0 {
+                (0, 0)
+            } else {
+                let sp = dex.species.get(op.species);
+                let c_atk = gen2_boost_stat(canonical_gen2_stat(sp.base_stats.atk, op.level), op.boosts[0])
+                    * if op.status == Status::Brn { 0.5 } else { 1.0 };
+                let c_spa = gen2_boost_stat(canonical_gen2_stat(sp.base_stats.spa, op.level), op.boosts[2]);
+                let my_def = fast_poke_stat(dex, tp, 1) * if reflect { 2.0 } else { 1.0 };
+                let my_spd = fast_poke_stat(dex, tp, 3) * if lightscreen { 2.0 } else { 1.0 };
+                let mut b_min = 0i32;
+                let mut b_max = 0i32;
+                for st_t in op.types.iter() {
+                    if type_immune_to(b, dex, st_t, t_id) {
+                        continue;
+                    }
+                    let row = &dt.type_chart[(st_t.0 as usize).min(19)];
+                    let mut eff = 1.0f64;
+                    for dt_t in tp.types.iter() {
+                        match row[(dt_t.0 as usize).min(19)] {
+                            1 => eff *= 2.0,
+                            -1 => eff *= 0.5,
+                            _ => {}
+                        }
+                    }
+                    let phys = (dt.special_type_mask & (1u32 << (st_t.0 & 31))) == 0;
+                    let (atk, dfn) = if phys { (c_atk, my_def) } else { (c_spa, my_spd) };
+                    let core = ((f64::from(op.level) * 2.0 / 5.0 + 2.0).floor() * 90.0 * atk
+                        / dfn.max(1.0)
+                        / 50.0)
+                        .floor()
+                        + 2.0;
+                    let max_raw = (core * 1.5 * eff).floor().max(1.0) as i32;
+                    let min_raw = ((max_raw * 217) / 255).max(1);
+                    if max_raw > b_max {
+                        b_max = max_raw;
+                        b_min = min_raw;
+                    }
+                }
+                (b_min, b_max)
+            }
+        } else {
+            (0, 0)
+        };
+        let ko = ko_band_from_bounds(hp, min_d, max_d);
+        let res = residual_death_clock_band(b, dex, t_id, hp, maxhp, true);
+        let sub = u16::from((hp as i64) * 4 > (maxhp as i64));
+        let half = u16::from((hp as i64) * 2 > (maxhp as i64));
+        let flail = flail_hp_tier(hp as i64, maxhp as i64);
+        1 + (ko | (res << 3) | (sub << 6) | (half << 7) | (flail << 8))
+    } else {
+        // Opponent active: quantize strictly through the public 48-pixel Stadium HP bar!
+        let bar48 = crate::import::announce_hp(tp.hp, tp.maxhp, 48).clamp(1, 47);
+        let sp = dex.species.get(tp.species);
+        let c_maxhp = canonical_gen2_maxhp(sp.base_stats.hp, tp.level).max(48);
+        let c_hp = ((c_maxhp * bar48) / 48).clamp(1, c_maxhp - 1);
+        let c_def = gen2_boost_stat(canonical_gen2_stat(sp.base_stats.def, tp.level), tp.boosts[1])
+            * if reflect { 2.0 } else { 1.0 };
+        let c_spd = gen2_boost_stat(canonical_gen2_stat(sp.base_stats.spd, tp.level), tp.boosts[3])
+            * if lightscreen { 2.0 } else { 1.0 };
+
+        let mut best_min = 0i32;
+        let mut best_max = 0i32;
+        if let Some(my_id) = b.active_id(viewer_side) {
+            let mp = b.poke(my_id);
+            if !mp.fainted && mp.hp > 0 {
+                let phys_atk = fast_poke_stat(dex, mp, 0);
+                let spec_atk = fast_poke_stat(dex, mp, 2);
+                for slot in mp.move_slots.iter() {
+                    if slot.pp == 0 || slot.disabled {
+                        continue;
+                    }
+                    let mspec = &dt.move_specs[slot.id.0 as usize];
+                    let (move_type, is_phys, is_status, bp) = match mspec.var_bp_kind {
+                        1 => (
+                            nc2000_engine::dex::TypeId(mspec.move_type),
+                            mspec.is_physical,
+                            mspec.is_status,
+                            mp.happiness as i32 * 10 / 25,
+                        ),
+                        2 => (
+                            nc2000_engine::dex::TypeId(mspec.move_type),
+                            mspec.is_physical,
+                            mspec.is_status,
+                            (255 - mp.happiness as i32) * 10 / 25,
+                        ),
+                        3 => {
+                            let hpt = mp.hp_type;
+                            let phys = (dt.special_type_mask & (1u32 << (hpt.0 & 31))) == 0;
+                            (hpt, phys, false, mp.hp_power)
+                        }
+                        4 => {
+                            let ratio = ((mp.hp as i64 * 48) / (mp.maxhp.max(1) as i64)).max(1);
+                            let vbp = if ratio < 2 {
+                                200
+                            } else if ratio < 5 {
+                                150
+                            } else if ratio < 10 {
+                                100
+                            } else if ratio < 17 {
+                                80
+                            } else if ratio < 33 {
+                                40
+                            } else {
+                                20
+                            };
+                            (
+                                nc2000_engine::dex::TypeId(mspec.move_type),
+                                mspec.is_physical,
+                                mspec.is_status,
+                                vbp,
+                            )
+                        }
+                        _ => (
+                            nc2000_engine::dex::TypeId(mspec.move_type),
+                            mspec.is_physical,
+                            mspec.is_status,
+                            mspec.base_power as i32,
+                        ),
+                    };
+                    if mspec.fixed_damage == 0 && (is_status || bp <= 0) {
+                        continue;
+                    }
+                    if type_immune_to(b, dex, move_type, t_id) {
+                        continue;
+                    }
+                    let (min_d, max_d) = if mspec.fixed_damage != 0 {
+                        let fd = if mspec.fixed_damage < 0 {
+                            i32::from(mp.level)
+                        } else {
+                            i32::from(mspec.fixed_damage)
+                        };
+                        (fd, fd)
+                    } else {
+                        let row = &dt.type_chart[(move_type.0 as usize).min(19)];
+                        let mut eff = 1.0f64;
+                        for dt_t in tp.types.iter() {
+                            match row[(dt_t.0 as usize).min(19)] {
+                                1 => eff *= 2.0,
+                                -1 => eff *= 0.5,
+                                _ => {}
+                            }
+                        }
+                        let atk = if is_phys { phys_atk } else { spec_atk };
+                        let mut dfn = if is_phys { c_def } else { c_spd };
+                        if mspec.is_selfdestruct && is_phys {
+                            dfn = (dfn * 0.5).floor().max(1.0);
+                        }
+                        let core = ((f64::from(mp.level) * 2.0 / 5.0 + 2.0).floor()
+                            * (bp as f64)
+                            * atk
+                            / dfn.max(1.0)
+                            / 50.0)
+                            .floor()
+                            + 2.0;
+                        let stab = if mp.types.has(move_type) { 1.5 } else { 1.0 };
+                        let hits = f64::from(mspec.multihit_mean_x2) * 0.5;
+                        let max_raw = (core * stab * eff * hits).floor().max(1.0) as i32;
+                        let min_raw = ((max_raw * 217) / 255).max(1);
+                        (min_raw, max_raw)
+                    };
+                    if max_d > best_max || (max_d == best_max && min_d > best_min) {
+                        best_max = max_d;
+                        best_min = min_d;
+                    }
+                }
+            }
+        }
+        let ko = ko_band_from_bounds(c_hp, best_min, best_max);
+        let res = residual_death_clock_band(b, dex, t_id, c_hp, c_maxhp, false);
+        let sub = u16::from(bar48 > 12);
+        let half = u16::from(bar48 > 24);
+        let flail = flail_hp_tier(bar48 as i64, 48);
+        1 + (ko | (res << 3) | (sub << 6) | (half << 7) | (flail << 8))
+    }
+}
+
+/// Compact semantic HP signature for inactive bench Pokemon (`0` = fainted, `7` = full HP,
+/// `1..=6` = Spikes death cliff / 25% Sub cliff / 50% Heal cliff / 75% bulk band).
+#[inline]
+pub(crate) fn semantic_bench_hp_sig(bar48: i32, has_spikes: bool, is_flying: bool) -> u8 {
+    if bar48 <= 0 {
+        return 0;
+    }
+    if bar48 >= 48 {
+        return 7;
+    }
+    if has_spikes && !is_flying && bar48 <= 6 {
+        return 1;
+    }
+    if bar48 <= 12 {
+        2
+    } else if bar48 <= 24 {
+        3
+    } else if bar48 <= 36 {
+        4
+    } else {
+        5
+    }
+}
+
+fn acute_wait_value_live(b: &Battle, dex: &Dex, side: usize, rules: MaskRules) -> bool {
+    let dt = nc2000_engine::compact::dex_tables(dex);
+    if b.active_id(side).is_some_and(|id| {
+        let me = b.poke(id);
+        !me.volatiles.is_empty()
+            && dt.enc_cond.is_some_and(|cond| me.has_volatile(cond))
+            && (dt.sub_cond.is_some_and(|cond| me.has_volatile(cond))
+                || me.boosts.iter().take(5).any(|&x| x > 0)
+                || b.active_id(1 - side).is_some_and(|f| b.poke(f).trapped))
+    }) {
+        return true;
+    }
+    if rules.destiny_bond_wait
+        && b.active_id(1 - side).is_some_and(|id| {
+            let fp = b.poke(id);
+            !fp.volatiles.is_empty() && dt.dbond_cond.is_some_and(|cond| fp.has_volatile(cond))
+        })
+    {
+        return true;
+    }
+    if b.active_id(1 - side)
+        .and_then(|id| {
+            let fp = b.poke(id);
+            if fp.volatiles.is_empty() {
+                None
+            } else {
+                dt.perish_cond.and_then(|cond| fp.volatile(cond))
+            }
+        })
+        .and_then(|v| v.duration)
+        == Some(1)
+    {
+        return true;
+    }
+    if rules.residual_damage_wait && foe_has_residual_damage(b, dex, side) {
+        return true;
+    }
+    if rules.own_recovery_wait
+        && b.active_id(side).is_some_and(|id| {
+            let me = b.poke(id);
+            !me.fainted
+                && me.hp > 0
+                && me.hp < me.maxhp
+                && me
+                    .item
+                    .and_then(|it| dt.item_specs.get(it.0 as usize))
+                    .is_some_and(|s| s.is_leftovers)
+        })
+        && b.active_id(1 - side).is_some_and(|f| {
+            let fp = b.poke(f);
+            matches!(
+                fp.status,
+                nc2000_engine::state::Status::Slp | nc2000_engine::state::Status::Frz
+            )
+        })
+    {
+        return true;
+    }
+    false
+}
+
+#[inline]
+fn is_standard_damaging_move(ms: &nc2000_engine::dex::MoveStatic, key: &str) -> bool {
+    let pure_var_bp =
+        key.starts_with("hiddenpower") || matches!(key, "return" | "frustration");
+    ms.category != nc2000_engine::dex::Category::Status
+        && key != "icywind"
+        && !ms.has_boosts
+        && ms.status.is_none()
+        && ms.volatile_status.is_none()
+        && ms.side_condition.is_none()
+        && ms.weather.is_none()
+        && ms.pseudo_weather.is_none()
+        && ms.heal.is_none()
+        && ms.drain.is_none()
+        && ms.self_switch.is_none()
+        && !ms.force_switch
+        && !ms.ohko
+        && !ms.selfdestruct
+        && (ms.callbacks.is_empty() || pure_var_bp)
+}
+
+#[inline]
+fn is_pure_damaging_move(ms: &nc2000_engine::dex::MoveStatic, key: &str) -> bool {
+    ms.secondaries.is_empty() && is_standard_damaging_move(ms, key)
+}
+
+#[inline]
+fn is_drawback_free_damaging_move(ms: &nc2000_engine::dex::MoveStatic, key: &str) -> bool {
+    let benign_cb = key.starts_with("hiddenpower")
+        || matches!(
+            key,
+            "return" | "frustration" | "earthquake" | "surf" | "gust" | "twister" | "stomp"
+        );
+    ms.category != nc2000_engine::dex::Category::Status
+        && ms.recoil.is_none()
+        && !ms.struggle_recoil
+        && !ms.selfdestruct
+        && ms.self_effect.is_none()
+        && ms.self_switch.is_none()
+        && !ms.force_switch
+        && (ms.callbacks.is_empty() || benign_cb)
+}
+
+#[inline]
+fn own_eot_fatal_residual(_b: &Battle, dex: &Dex, p: &nc2000_engine::state::Pokemon) -> bool {
+    use nc2000_engine::state::Status;
+    if p.hp <= 0 {
+        return false;
+    }
+    let dt = nc2000_engine::compact::dex_tables(dex);
+    let maxhp = p.maxhp.max(1);
+    let mut net_loss = match p.status {
+        Status::Brn | Status::Psn => (maxhp / 8).max(1),
+        Status::Tox => (maxhp / 16).max(1),
+        _ => 0,
+    };
+    if !p.volatiles.is_empty() && dt.curse_cond.is_some_and(|cid| p.has_volatile(cid)) {
+        net_loss += (maxhp / 4).max(1);
+    }
+    if net_loss <= 0 {
+        return false;
+    }
+    if p.item
+        .and_then(|it| dt.item_specs.get(it.0 as usize))
+        .is_some_and(|s| s.is_leftovers)
+    {
+        net_loss -= (maxhp / 16).max(1);
+    }
+    net_loss >= p.hp
+}
+
+#[inline]
+fn move_base_acc_pct(ms: &nc2000_engine::dex::MoveStatic) -> i32 {
+    match ms.accuracy {
+        nc2000_engine::dex::Accuracy::AlwaysHits => 101,
+        nc2000_engine::dex::Accuracy::Pct(p) => p,
+    }
+}
+
+fn classify_actions_soft_only(
+    b: &Battle,
+    dex: &Dex,
+    side: usize,
+    acts: &[SearchChoice],
+    cfg: &RmConfig,
+) -> nc2000_engine::smallvec::SmallVec<[ActionRank; 6]> {
+    use nc2000_engine::dex::Category;
+    use nc2000_engine::smallvec::{smallvec, SmallVec};
+    use nc2000_engine::state::{RequestKind, Status};
+    let k = acts.len();
+    if !cfg.three_rank_pruning || k <= 1 {
+        return smallvec![ActionRank::Unmarked; k];
+    }
+    if acute_wait_value_live(b, dex, side, cfg.mask_rules) {
+        return smallvec![ActionRank::Unmarked; k];
+    }
+    let Some(att) = b.active_id(side) else {
+        return smallvec![ActionRank::Unmarked; k];
+    };
+    let me = b.poke(att);
+    if me.fainted || me.hp <= 0 {
+        return smallvec![ActionRank::Unmarked; k];
+    }
+    let foe_opt = b.active_id(1 - side).filter(|&d| {
+        let p = b.poke(d);
+        !p.fainted && p.hp > 0
+    });
+    let Some(def) = foe_opt else {
+        return smallvec![ActionRank::Unmarked; k];
+    };
+    let dt = nc2000_engine::compact::dex_tables(dex);
+    let d = b.poke(def);
+    let sub_up = !d.volatiles.is_empty()
+        && dt.sub_cond.is_some_and(|sid| d.has_volatile(sid));
+    let is_move_req = b.sides[side].request_state() == Some(RequestKind::Move);
+    let (foe_min_dmg, foe_max_dmg) = best_move_damage_bounds_sim(b, dex, def, att);
+    let foe_awake = !matches!(d.status, Status::Slp | Status::Frz);
+    let foe_faster = d.speed > me.speed
+        && !(me.item.is_some() && me.item == dex.known_items.quickclaw);
+
+    let mut hit_fracs: SmallVec<[f64; 6]> = smallvec![0.0; k];
+    for (i, &c) in acts.iter().enumerate() {
+        if let SearchChoice::Move(mid) = c {
+            hit_fracs[i] = crate::eval::expected_hit_fraction(b, dex, att, def, mid, true);
+        }
+    }
+
+    let mut ranks: SmallVec<[ActionRank; 6]> = smallvec![ActionRank::Unmarked; k];
+    for (i, &c) in acts.iter().enumerate() {
+        match c {
+            SearchChoice::Move(mid) => {
+                let key = dex.moves.key(mid);
+                let ms = dex.move_static(mid);
+                let is_hp = key.starts_with("hiddenpower");
+                let move_type = if is_hp {
+                    me.hp_type
+                } else {
+                    ms.move_type
+                };
+                let foe_targeted =
+                    matches!(ms.target, "normal" | "allAdjacentFoes" | "allAdjacent");
+
+                // 0. Sleep-only move (Sleep Talk / Snore) while awake.
+                if ms.sleep_usable && me.status != Status::Slp {
+                    ranks[i] = ActionRank::Marked;
+                    continue;
+                }
+
+                // 1. Switch-read into currently immune active.
+                if foe_targeted
+                    && !ms.ignore_immunity
+                    && !ms.selfdestruct
+                    && move_type != dex.known_types.unknown
+                    && type_immune_to(b, dex, move_type, def)
+                {
+                    ranks[i] = ActionRank::Marked;
+                    continue;
+                }
+
+                // 2. Status / volatile move that fails against the mon currently in front.
+                if ms.category == Category::Status && foe_targeted {
+                    if let Some(st) = ms.status {
+                        let check = if st == "tox" { "psn" } else { st };
+                        let sleep_clause_blocked =
+                            st == "slp" && b.has_sleeping_pokemon(1 - side);
+                        if d.status != Status::None
+                            || sub_up
+                            || sleep_clause_blocked
+                            || d.types.iter().any(|t| dex.status_key_immune(check, t))
+                        {
+                            ranks[i] = ActionRank::Marked;
+                            continue;
+                        }
+                    } else if let Some(v) = ms.volatile_status {
+                        if key != "curse" && key != "swagger" {
+                            let already = dex.conds_id(v).is_some_and(|vid| d.has_volatile(vid));
+                            let grass_seed =
+                                key == "leechseed" && d.has_type(dex.known_types.grass);
+                            if already || sub_up || grass_seed {
+                                ranks[i] = ActionRank::Marked;
+                                continue;
+                            }
+                        }
+                    } else if ms.has_boosts && ms.boosts.iter().all(|&(_, amt)| amt < 0) && sub_up {
+                        ranks[i] = ActionRank::Marked;
+                        continue;
+                    }
+                }
+
+                // 3. Premature recovery at >= 87.5% HP.
+                if matches!(
+                    key,
+                    "recover" | "milkdrink" | "softboiled" | "moonlight" | "morningsun" | "synthesis"
+                ) && (me.hp as i64) * 8 >= (me.maxhp as i64) * 7
+                {
+                    ranks[i] = ActionRank::Marked;
+                    continue;
+                }
+                if key == "rest"
+                    && me.status == Status::None
+                    && (me.hp as i64) * 8 >= (me.maxhp as i64) * 7
+                {
+                    ranks[i] = ActionRank::Marked;
+                    continue;
+                }
+
+                // 4. Suicidal boost into faster deterministic KO or fatal own end-of-turn residual.
+                let fatal_own_res = own_eot_fatal_residual(b, dex, me);
+                if ms.category == Category::Status
+                    && ms.priority <= 0
+                    && (ms.has_boosts || key == "bellydrum" || key == "curse")
+                    && key != "rest"
+                    && ms.self_switch.is_none()
+                    && ((foe_awake && foe_faster && foe_min_dmg >= me.hp) || fatal_own_res)
+                {
+                    ranks[i] = ActionRank::Marked;
+                    continue;
+                }
+                if key == "bellydrum"
+                    && foe_awake
+                    && ((me.hp - me.maxhp / 2) <= foe_max_dmg.max(0))
+                {
+                    ranks[i] = ActionRank::Marked;
+                    continue;
+                }
+
+                // 5. Strictly dominated pure damaging move (or >2.5x outclassed secondary coverage).
+                if is_standard_damaging_move(ms, key) && hit_fracs[i] > 0.0 {
+                    let is_pure = ms.secondaries.is_empty();
+                    let my_phys = if is_hp {
+                        (dt.special_type_mask & (1u32 << (move_type.0 & 31))) == 0
+                    } else {
+                        ms.category == Category::Physical
+                    };
+                    let my_acc = move_base_acc_pct(ms);
+                    let dominated_by_peer = (0..k).any(|j| {
+                        if j == i {
+                            return false;
+                        }
+                        let SearchChoice::Move(other_id) = acts[j] else {
+                            return false;
+                        };
+                        let okey = dex.moves.key(other_id);
+                        let oms = dex.move_static(other_id);
+                        let o_is_hp = okey.starts_with("hiddenpower");
+                        let omove_type = if o_is_hp {
+                            me.hp_type
+                        } else {
+                            oms.move_type
+                        };
+                        let ophys = if o_is_hp {
+                            (dt.special_type_mask & (1u32 << (omove_type.0 & 31))) == 0
+                        } else {
+                            oms.category == Category::Physical
+                        };
+                        if !is_drawback_free_damaging_move(oms, okey)
+                            || oms.priority < ms.priority
+                            || move_base_acc_pct(oms) < my_acc
+                        {
+                            return false;
+                        }
+                        if is_pure && ophys == my_phys {
+                            let ratio = if omove_type == move_type { 1.05 } else { 1.40 };
+                            hit_fracs[j] > hit_fracs[i] * ratio
+                        } else {
+                            hit_fracs[j] > hit_fracs[i] * 2.50
+                        }
+                    });
+                    if dominated_by_peer {
+                        ranks[i] = ActionRank::Marked;
+                        continue;
+                    }
+                }
+            }
+            SearchChoice::Switch(pos) if is_move_req => {
+                if let Some(&slot) = b.sides[side].party.get((pos as usize).saturating_sub(1)) {
+                    let sub_id = PokeId {
+                        side: side as u8,
+                        slot,
+                    };
+                    let sub = b.poke(sub_id);
+                    if !sub.fainted && sub.hp > 0 {
+                        let has_spikes = !b.sides[side].side_conditions.is_empty()
+                            && dt
+                                .spikes_cond
+                                .is_some_and(|cid| b.sides[side].has_side_condition(cid));
+                        let spikes_dmg =
+                            if has_spikes && !sub.has_type(dex.known_types.flying) {
+                                (sub.maxhp / 8).max(1)
+                            } else {
+                                0
+                            };
+                        let (_, incoming_max) = if foe_awake {
+                            best_move_damage_bounds_sim(b, dex, def, sub_id)
+                        } else {
+                            (0, 0)
+                        };
+                        if (spikes_dmg + incoming_max) * 100 >= sub.hp * 70 {
+                            ranks[i] = ActionRank::Marked;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if ranks.iter().all(|&r| r != ActionRank::Unmarked) {
+        ranks.fill(ActionRank::Unmarked);
+    }
+    ranks
+}
+
+/// 3-rank interior node action pruning:
+/// 1. Hard-prunes `NoOp` (`dominated_reason`) whenever at least one non-`NoOp` action exists.
+/// 2. Classifies remaining actions into `Unmarked` vs `Marked` (soft gate).
+pub fn classify_actions_sim(
+    b: &Battle,
+    dex: &Dex,
+    side: usize,
+    acts: &mut nc2000_engine::smallvec::SmallVec<[SearchChoice; 6]>,
+    cfg: &RmConfig,
+) -> nc2000_engine::smallvec::SmallVec<[ActionRank; 6]> {
+    use nc2000_engine::smallvec::smallvec;
+    if !cfg.three_rank_pruning || acts.len() <= 1 {
+        return smallvec![ActionRank::Unmarked; acts.len()];
+    }
+    let mut keep_mask = [true; 8];
+    let mut any_non_noop = false;
+    if acts.len() <= keep_mask.len() {
+        for (i, &c) in acts.iter().enumerate() {
+            let is_noop = dominated_reason(b, dex, side, c, cfg.mask_rules).is_some();
+            keep_mask[i] = !is_noop;
+            if !is_noop {
+                any_non_noop = true;
+            }
+        }
+        if any_non_noop {
+            let mut idx = 0usize;
+            acts.retain(|_| {
+                let keep = keep_mask[idx];
+                idx += 1;
+                keep
+            });
+        }
+    }
+    classify_actions_soft_only(b, dex, side, acts, cfg)
+}
+
+/// Strictly public-only root action classifier (`Unmarked` / `Marked`, never `NoOp`) for
+/// `BlindSearch`. Reads zero hidden opponent stats, moves, items, exact HP, or unappeared bench.
+pub fn classify_actions_public_root(
+    b: &Battle,
+    dex: &Dex,
+    viewer_side: usize,
+    acts: &[SearchChoice],
+    cfg: &RmConfig,
+) -> Vec<ActionRank> {
+    use nc2000_engine::dex::Category;
+    use nc2000_engine::state::Status;
+    let k = acts.len();
+    if !cfg.three_rank_pruning
+        || k <= 1
+        || matches!(acts.first(), Some(SearchChoice::Team(_)))
+        || acute_wait_value_live(b, dex, viewer_side, cfg.mask_rules)
+    {
+        return vec![ActionRank::Unmarked; k];
+    }
+    let Some(att) = b.active_id(viewer_side) else {
+        return vec![ActionRank::Unmarked; k];
+    };
+    let me = b.poke(att);
+    if me.fainted || me.hp <= 0 {
+        return vec![ActionRank::Unmarked; k];
+    }
+    let Some(def) = b.active_id(1 - viewer_side).filter(|&d| {
+        let p = b.poke(d);
+        !p.fainted && p.hp > 0
+    }) else {
+        return vec![ActionRank::Unmarked; k];
+    };
+    let dt = nc2000_engine::compact::dex_tables(dex);
+    let d = b.poke(def);
+    let sub_up = !d.volatiles.is_empty()
+        && dt.sub_cond.is_some_and(|sid| d.has_volatile(sid));
+    let opp_side = &b.sides[1 - viewer_side];
+    let public_opp_sleeping = opp_side.roster.iter().any(|p| {
+        (p.is_active || p.previously_switched_in > 0) && !p.fainted && p.status == Status::Slp
+    });
+
+    let sp = dex.species.get(d.species);
+    let opp_sc = !opp_side.side_conditions.is_empty();
+    let reflect = opp_sc
+        && dt
+            .refl_cond
+            .is_some_and(|cid| opp_side.has_side_condition(cid));
+    let lightscreen = opp_sc
+        && dt
+            .ls_cond
+            .is_some_and(|cid| opp_side.has_side_condition(cid));
+    let c_def = gen2_boost_stat(canonical_gen2_stat(sp.base_stats.def, d.level), d.boosts[1])
+        * if reflect { 2.0 } else { 1.0 };
+    let c_spd = gen2_boost_stat(canonical_gen2_stat(sp.base_stats.spd, d.level), d.boosts[3])
+        * if lightscreen { 2.0 } else { 1.0 };
+    let my_phys_atk = fast_poke_stat(dex, me, 0);
+    let my_spec_atk = fast_poke_stat(dex, me, 2);
+
+    let mut canon_dmg = vec![0.0f64; k];
+    for (i, &c) in acts.iter().enumerate() {
+        let SearchChoice::Move(mid) = c else {
+            continue;
+        };
+        let mspec = &dt.move_specs[mid.0 as usize];
+        let (move_type, is_phys, is_status, bp) = match mspec.var_bp_kind {
+            1 => (
+                nc2000_engine::dex::TypeId(mspec.move_type),
+                mspec.is_physical,
+                mspec.is_status,
+                me.happiness as i32 * 10 / 25,
+            ),
+            2 => (
+                nc2000_engine::dex::TypeId(mspec.move_type),
+                mspec.is_physical,
+                mspec.is_status,
+                (255 - me.happiness as i32) * 10 / 25,
+            ),
+            3 => {
+                let hpt = me.hp_type;
+                let phys = (dt.special_type_mask & (1u32 << (hpt.0 & 31))) == 0;
+                (hpt, phys, false, me.hp_power)
+            }
+            _ => (
+                nc2000_engine::dex::TypeId(mspec.move_type),
+                mspec.is_physical,
+                mspec.is_status,
+                mspec.base_power as i32,
+            ),
+        };
+        if mspec.fixed_damage == 0 && (is_status || bp <= 0) {
+            continue;
+        }
+        if type_immune_to(b, dex, move_type, def) {
+            continue;
+        }
+        let acc = nc2000_engine::compact::hit_probability_branchless(
+            mspec.base_acc_pct,
+            mspec.always_hit,
+            me.boosts[5],
+            d.boosts[6],
+            mspec.ignore_accuracy,
+            mspec.ignore_evasion,
+            mspec.ignore_positive_evasion,
+        );
+        let raw = if mspec.fixed_damage != 0 {
+            if mspec.fixed_damage < 0 {
+                f64::from(me.level)
+            } else {
+                f64::from(mspec.fixed_damage)
+            }
+        } else {
+            let row = &dt.type_chart[(move_type.0 as usize).min(19)];
+            let mut eff = 1.0f64;
+            for t in d.types.iter() {
+                match row[(t.0 as usize).min(19)] {
+                    1 => eff *= 2.0,
+                    -1 => eff *= 0.5,
+                    _ => {}
+                }
+            }
+            let atk = if is_phys { my_phys_atk } else { my_spec_atk };
+            let dfn = if is_phys { c_def } else { c_spd };
+            let core = ((f64::from(me.level) * 2.0 / 5.0 + 2.0).floor() * (bp as f64) * atk
+                / dfn.max(1.0)
+                / 50.0)
+                .floor()
+                + 2.0;
+            let stab = if me.types.has(move_type) { 1.5 } else { 1.0 };
+            let hits = f64::from(mspec.multihit_mean_x2) * 0.5;
+            core * stab * eff * hits
+        };
+        canon_dmg[i] = raw * acc;
+    }
+
+    let mut ranks = vec![ActionRank::Unmarked; k];
+    for (i, &c) in acts.iter().enumerate() {
+        let SearchChoice::Move(mid) = c else {
+            continue;
+        };
+        let key = dex.moves.key(mid);
+        let ms = dex.move_static(mid);
+        let is_hp = key.starts_with("hiddenpower");
+        let move_type = if is_hp {
+            me.hp_type
+        } else {
+            ms.move_type
+        };
+        let foe_targeted = matches!(ms.target, "normal" | "allAdjacentFoes" | "allAdjacent");
+
+        if ms.sleep_usable && me.status != Status::Slp {
+            ranks[i] = ActionRank::Marked;
+            continue;
+        }
+
+        if foe_targeted
+            && !ms.ignore_immunity
+            && !ms.selfdestruct
+            && move_type != dex.known_types.unknown
+            && type_immune_to(b, dex, move_type, def)
+        {
+            ranks[i] = ActionRank::Marked;
+            continue;
+        }
+
+        if ms.category == Category::Status && foe_targeted {
+            if let Some(st) = ms.status {
+                let check = if st == "tox" { "psn" } else { st };
+                let sleep_blocked = st == "slp" && public_opp_sleeping;
+                if d.status != Status::None
+                    || sub_up
+                    || sleep_blocked
+                    || d.types.iter().any(|t| dex.status_key_immune(check, t))
+                {
+                    ranks[i] = ActionRank::Marked;
+                    continue;
+                }
+            } else if let Some(v) = ms.volatile_status {
+                if key != "curse" && key != "swagger" {
+                    let already = dex.conds_id(v).is_some_and(|vid| d.has_volatile(vid));
+                    let grass_seed = key == "leechseed" && d.has_type(dex.known_types.grass);
+                    if already || sub_up || grass_seed {
+                        ranks[i] = ActionRank::Marked;
+                        continue;
+                    }
+                }
+            } else if ms.has_boosts && ms.boosts.iter().all(|&(_, amt)| amt < 0) && sub_up {
+                ranks[i] = ActionRank::Marked;
+                continue;
+            }
+        }
+
+        if matches!(
+            key,
+            "recover" | "milkdrink" | "softboiled" | "moonlight" | "morningsun" | "synthesis"
+        ) && (me.hp as i64) * 8 >= (me.maxhp as i64) * 7
+        {
+            ranks[i] = ActionRank::Marked;
+            continue;
+        }
+        if key == "rest"
+            && me.status == Status::None
+            && (me.hp as i64) * 8 >= (me.maxhp as i64) * 7
+        {
+            ranks[i] = ActionRank::Marked;
+            continue;
+        }
+
+        if ms.category == Category::Status
+            && ms.priority <= 0
+            && (ms.has_boosts || key == "bellydrum" || key == "curse")
+            && key != "rest"
+            && ms.self_switch.is_none()
+            && own_eot_fatal_residual(b, dex, me)
+        {
+            ranks[i] = ActionRank::Marked;
+            continue;
+        }
+
+        if is_standard_damaging_move(ms, key) && canon_dmg[i] > 0.0 {
+            let is_pure = ms.secondaries.is_empty();
+            let my_phys = if is_hp {
+                (dt.special_type_mask & (1u32 << (move_type.0 & 31))) == 0
+            } else {
+                ms.category == Category::Physical
+            };
+            let my_acc = move_base_acc_pct(ms);
+            let dominated_by_peer = (0..k).any(|j| {
+                if j == i {
+                    return false;
+                }
+                let SearchChoice::Move(other_id) = acts[j] else {
+                    return false;
+                };
+                let okey = dex.moves.key(other_id);
+                let oms = dex.move_static(other_id);
+                let o_is_hp = okey.starts_with("hiddenpower");
+                let omove_type = if o_is_hp {
+                    me.hp_type
+                } else {
+                    oms.move_type
+                };
+                let ophys = if o_is_hp {
+                    (dt.special_type_mask & (1u32 << (omove_type.0 & 31))) == 0
+                } else {
+                    oms.category == Category::Physical
+                };
+                if !is_drawback_free_damaging_move(oms, okey)
+                    || oms.priority < ms.priority
+                    || move_base_acc_pct(oms) < my_acc
+                {
+                    return false;
+                }
+                if is_pure && ophys == my_phys {
+                    let ratio = if omove_type == move_type { 1.05 } else { 1.40 };
+                    canon_dmg[j] > canon_dmg[i] * ratio
+                } else {
+                    canon_dmg[j] > canon_dmg[i] * 2.50
+                }
+            });
+            if dominated_by_peer {
+                ranks[i] = ActionRank::Marked;
+            }
+        }
+    }
+
+    if ranks.iter().all(|&r| r != ActionRank::Unmarked) {
+        ranks.fill(ActionRank::Unmarked);
+    }
+    ranks
+}
+
+/// Ranked UCB1 with narrow soft-pruning gate for `ActionRank::Marked`:
+/// - `Unmarked` actions explore immediately from visit 0.
+/// - `Marked` actions stay gated while `total_n < cfg.marked_unlock_visits`, then unlock with
+///   an empirical-Bayes pessimistic virtual prior `(N_PRIOR = 3.0, Q_PRIOR = r_bar_unmarked - 0.08)`
+///   so inferior options stop consuming visits immediately while genuine switch-reads/reversals
+///   can still overtake.
+pub(crate) fn select_ucb_ranked(
+    cfg: &RmConfig,
+    rng: &mut SplitMix64,
+    counts: &mut [u32],
+    rewards: &[f64],
+    ranks: &[ActionRank],
+) -> usize {
+    let k = counts.len();
+    if !cfg.three_rank_pruning || ranks.len() != k {
+        return select_ucb_counts(cfg.c, rng, counts, rewards);
+    }
+
+    let mut n_untried_unmarked = 0usize;
+    for a in 0..k {
+        if counts[a] == 0 && ranks[a] == ActionRank::Unmarked {
+            n_untried_unmarked += 1;
+        }
+    }
+    if n_untried_unmarked > 0 {
+        let mut target = rng.below(n_untried_unmarked);
+        let mut chosen = 0;
+        for a in 0..k {
+            if counts[a] == 0 && ranks[a] == ActionRank::Unmarked {
+                if target == 0 {
+                    chosen = a;
+                    break;
+                }
+                target -= 1;
+            }
+        }
+        counts[chosen] += 1;
+        return chosen;
+    }
+
+    let total: u32 = counts.iter().sum();
+    if total == 0 {
+        return select_ucb_counts(cfg.c, rng, counts, rewards);
+    }
+    let ln_total = (total as f64).ln();
+    let open_marked = total >= cfg.marked_unlock_visits;
+
+    let mut unm_n = 0u32;
+    let mut unm_w = 0.0f64;
+    for a in 0..k {
+        if ranks[a] == ActionRank::Unmarked {
+            unm_n += counts[a];
+            unm_w += rewards[a];
+        }
+    }
+    let r_bar = if unm_n > 0 {
+        unm_w / (unm_n as f64)
+    } else {
+        0.5
+    };
+    const N_PRIOR: f64 = 3.0;
+    let q_prior = (r_bar - 0.08).clamp(0.02, 0.92);
+
+    let mut best = 0usize;
+    let mut best_v = f64::NEG_INFINITY;
+    for a in 0..k {
+        match ranks[a] {
+            ActionRank::NoOp => continue,
+            ActionRank::Marked if !open_marked => continue,
+            ActionRank::Marked => {
+                let na = counts[a] as f64 + N_PRIOR;
+                let wa = rewards[a] + N_PRIOR * q_prior;
+                let jitter = 0.75 + 0.50 * rng.next_f64();
+                let v = wa / na + cfg.c * jitter * (ln_total / na).sqrt();
+                if v > best_v {
+                    best_v = v;
+                    best = a;
+                }
+            }
+            ActionRank::Unmarked => {
+                let na = counts[a].max(1) as f64;
+                let jitter = 0.75 + 0.50 * rng.next_f64();
+                let v = rewards[a] / na + cfg.c * jitter * (ln_total / na).sqrt();
+                if v > best_v {
+                    best_v = v;
+                    best = a;
+                }
+            }
+        }
+    }
+    counts[best] += 1;
+    best
+}
+
+/// Node key. With `threshold_key` or `semantic_hp_thresholds`, each active's HP is canonicalised
+/// to its threshold class so non-critical damage rolls merge into a single node while semantic
+/// KO/Sub/Heal/Flail/residual-death cliffs and full-HP Markovian recovery split cleanly.
+/// The battle is restored before returning.
 #[inline]
 pub(crate) fn key_of(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
     key_of_cached(cfg, dex, b, None)
@@ -1245,38 +2770,74 @@ pub(crate) fn key_of_cached(
     if cfg.hp_buckets <= 0 {
         return hash(b, None, false);
     }
-    if !cfg.threshold_key {
+    if cfg.threshold_key {
+        // Both classes are read before either mon is edited: Flail/Reversal make
+        // the attacker's own HP an input to its damage.
+        let ids = [0usize, 1].map(|s| b.active_id(s));
+        let classes = [0usize, 1].map(|s| ids[s].map(|id| hp_class(b, dex, id, ids[1 - s])));
+        let mut saved = [None, None];
+        for s in 0..2 {
+            if let (Some(id), Some(c)) = (ids[s], classes[s]) {
+                let slot = id.slot as usize;
+                let p = &mut b.sides[id.side as usize].roster[slot];
+                saved[s] = Some((id, p.hp));
+                p.hp = ((p.maxhp as i64 * (2 * c + 1) / (2 * HP_CLASSES)).max(1)) as i32;
+            }
+        }
+        let key = hash(b, Some(cfg.hp_buckets), cfg.key_no_damage);
+        for entry in saved.into_iter().flatten() {
+            let (id, hp) = entry;
+            b.sides[id.side as usize].roster[id.slot as usize].hp = hp;
+        }
+        return key;
+    }
+    if !cfg.semantic_hp_thresholds {
         return hash(b, Some(cfg.hp_buckets), cfg.key_no_damage);
     }
-    // Both classes are read before either mon is edited: Flail/Reversal make
-    // the attacker's own HP an input to its damage.
     let ids = [0usize, 1].map(|s| b.active_id(s));
-    let classes = [0usize, 1].map(|s| ids[s].map(|id| hp_class(b, dex, id, ids[1 - s])));
+    let sigs =
+        [0usize, 1].map(|s| ids[s].map(|id| semantic_active_hp_sig_sim(b, dex, id, ids[1 - s])));
     let mut saved = [None, None];
     for s in 0..2 {
-        if let (Some(id), Some(c)) = (ids[s], classes[s]) {
+        if let Some(id) = ids[s] {
             let slot = id.slot as usize;
             let p = &mut b.sides[id.side as usize].roster[slot];
-            saved[s] = Some((id, p.hp));
-            p.hp = ((p.maxhp as i64 * (2 * c + 1) / (2 * HP_CLASSES)).max(1)) as i32;
+            if p.hp > 0 && !p.fainted && p.hp < p.maxhp {
+                saved[s] = Some((id, p.hp));
+                p.hp = (p.maxhp / 2).max(1);
+            }
         }
     }
-    let key = hash(b, Some(cfg.hp_buckets), cfg.key_no_damage);
+    let mut key = hash(b, Some(cfg.hp_buckets), cfg.key_no_damage);
     for entry in saved.into_iter().flatten() {
         let (id, hp) = entry;
         b.sides[id.side as usize].roster[id.slot as usize].hp = hp;
     }
+    let mut mix =
+        u64::from(sigs[0].unwrap_or(0xFFFE)) | (u64::from(sigs[1].unwrap_or(0xFFFE)) << 16);
+    mix = (mix ^ (mix >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    key ^= mix ^ (mix >> 27);
     key
 }
 
-/// UCB1 (untried-first, then mean + c·sqrt(ln N / n)).
+/// UCB1 (untried-first, then mean + c·sqrt(ln N / n), with optional 3-rank soft gate).
 pub(crate) fn select_ucb(
     cfg: &RmConfig,
     rng: &mut SplitMix64,
     node: &mut Node,
     side: usize,
 ) -> usize {
-    select_ucb_counts(cfg.c, rng, &mut node.n[side], &node.w[side])
+    if node.preview {
+        select_ucb_counts(cfg.c, rng, &mut node.n[side], &node.w[side])
+    } else {
+        select_ucb_ranked(
+            cfg,
+            rng,
+            &mut node.n[side],
+            &node.w[side],
+            &node.ranks[side],
+        )
+    }
 }
 
 pub(crate) fn select_ucb_counts(
@@ -1582,11 +3143,12 @@ pub(crate) fn run_iteration_with_root_child_value_cached(
         let key = key_of_cached(cfg, dex, sim, cache);
         match table.get(&key) {
             Some(&child) => {
+                observe_battle_hp_dist(sim, &mut nodes[child].hp_dist);
                 *depth_out += 1;
                 node_idx = child;
             }
             None => {
-                // expand exactly one node per iteration, then roll out
+                // expand exactly one node per iteration, then settle leaf
                 let child = nodes.len();
                 nodes.push(Node::continuation(sim, dex, cfg));
                 table.insert(key, child);
@@ -1605,13 +3167,6 @@ pub(crate) fn run_iteration_with_root_child_value_cached(
             }
         }
     };
-
-    if let Some(trace) = trace {
-        trace(SearchTrace::Result {
-            battle: sim,
-            reward0,
-        });
-    }
 
     let mut path_nodes = [start; 32];
     let mut path_nodes_len = 0usize;
@@ -1641,6 +3196,12 @@ pub(crate) fn run_iteration_with_root_child_value_cached(
     for (ni, s, ai) in path_overflow {
         nodes[ni].w[s][ai] += if s == 0 { reward0 } else { 1.0 - reward0 };
     }
+    if let Some(trace) = trace {
+        trace(SearchTrace::Result {
+            battle: sim,
+            reward0: root_reward0,
+        });
+    }
     root_reward0
 }
 
@@ -1660,7 +3221,46 @@ pub(crate) fn leaf_eval_cached(
     match &cfg.playout {
         Playout::Uniform => crate::mcts::hp_eval(sim),
         Playout::Heavy { weights, .. } => {
-            if cfg.settlement.uses_blindspot_leaf() {
+            if cfg.settlement.is_solver_quiescence() {
+                crate::eval::eval_solver_leaf_cached(sim, dex, weights, rc)
+            } else if cfg.settlement.uses_blindspot_leaf() {
+                crate::eval::eval_leaf_blindspot_cached(sim, dex, weights, rc)
+            } else {
+                crate::eval::eval_leaf_cached(sim, dex, weights, rc)
+            }
+        }
+    }
+}
+
+#[inline]
+pub(crate) fn leaf_eval_dist_cached(
+    cfg: &RmConfig,
+    sim: &Battle,
+    dex: &Dex,
+    hp_dist: &[MonHpDist; 2],
+    cache: Option<&nc2000_engine::battle::BattleSearchCache>,
+) -> f64 {
+    let rc = cache.map(|c| &c.roster_compact);
+    match &cfg.playout {
+        Playout::Uniform => crate::mcts::hp_eval(sim),
+        Playout::Heavy { weights, .. } => {
+            if cfg.settlement.is_solver_quiescence() {
+                let (table, cb) =
+                    nc2000_engine::compact::CompactBattle::from_battle_with_roster_cache(
+                        sim, dex, rc,
+                    );
+                crate::eval::compact_eval_solver_leaf_dist(
+                    &cb,
+                    &table,
+                    weights,
+                    [hp_dist[0].mean, hp_dist[1].mean],
+                    [hp_dist[0].std_dev(), hp_dist[1].std_dev()],
+                    [
+                        (hp_dist[0].min_hp, hp_dist[0].max_hp),
+                        (hp_dist[1].min_hp, hp_dist[1].max_hp),
+                    ],
+                )
+            } else if cfg.settlement.uses_blindspot_leaf() {
                 crate::eval::eval_leaf_blindspot_cached(sim, dex, weights, rc)
             } else {
                 crate::eval::eval_leaf_cached(sim, dex, weights, rc)
@@ -2613,6 +4213,7 @@ impl SkuctSearch {
             crate::accounting::LeafSettlementMode::BlindSpotLeaf
                 | crate::accounting::LeafSettlementMode::BlindSpotRollout
                 | crate::accounting::LeafSettlementMode::BlindSpotBoth
+                | crate::accounting::LeafSettlementMode::SolverQuiescence
         ) {
             cfg.settlement = crate::accounting::LeafSettlementMode::LegacyRollout;
         }
@@ -2620,7 +4221,7 @@ impl SkuctSearch {
         root.set_log_enabled(false);
         let cache = build_search_cache(&cfg, dex, &root);
         let turn_cap = root.turn.saturating_add(cfg.horizon);
-        let nodes = vec![Node::at(&mut root, dex)];
+        let nodes = vec![Node::at_root(&mut root, dex, &cfg)];
         let mut table = FxHashMap::default();
         table.insert(key_of_cached(&cfg, dex, &mut root, Some(&cache)), 0usize);
         let root_dominated = [0usize, 1].map(|s| {

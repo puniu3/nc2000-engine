@@ -439,6 +439,23 @@ pub fn eval_leaf_blindspot_cached(
     compact_eval_leaf_blindspot(&cb, &table, w)
 }
 
+/// Rollout-free analytical solver leaf evaluation on `Battle`.
+#[inline]
+pub fn eval_solver_leaf(b: &Battle, dex: &Dex, w: &EvalWeights) -> f64 {
+    eval_solver_leaf_cached(b, dex, w, None)
+}
+
+#[inline]
+pub fn eval_solver_leaf_cached(
+    b: &Battle,
+    dex: &Dex,
+    w: &EvalWeights,
+    roster_cache: Option<&nc2000_engine::compact::RosterCompactCache>,
+) -> f64 {
+    let (table, cb) = CompactBattle::from_battle_with_roster_cache(b, dex, roster_cache);
+    compact_eval_solver_leaf(&cb, &table, w)
+}
+
 /// Best expected hit fraction over the attacker's usable move slots
 /// (unclamped: >1 = expected OHKO with margin). `couple_evasion` folds the
 /// gen-2 accuracy/evasion stage multipliers into each move's hit chance.
@@ -759,6 +776,1402 @@ pub fn compact_eval_leaf(cb: &CompactBattle, table: &MatchTable, w: &EvalWeights
 pub fn compact_eval_leaf_blindspot(cb: &CompactBattle, table: &MatchTable, w: &EvalWeights) -> f64 {
     assert!((0.0..=1.0).contains(&w.leaf_alpha), "leaf alpha must be in [0,1]");
     0.5 + w.leaf_alpha * (compact_eval01_blindspot(cb, table, w) - 0.5)
+}
+
+/// Rollout-free analytical solver leaf evaluation on `CompactBattle`:
+/// 1. Exact terminal payoff (`0.0 / 0.5 / 1.0`).
+/// 2. Analytical minimax/Nash forced-switch resolution (`request == 2`) on 192-byte stack copies
+///    (so fainted actives are replaced deterministically with Spikes before board evaluation).
+/// 3. Exact coupled Bellman-Toeplitz 1v1 race (`toeplitz_coupled_race` + `compact_perish_margin`)
+///    and entry-cost-aware $k_0 \times k_1$ Bellman-Toeplitz matchup matrix on multi-mon boards.
+#[inline]
+pub fn compact_eval_solver_leaf(cb: &CompactBattle, table: &MatchTable, w: &EvalWeights) -> f64 {
+    assert!((0.0..=1.0).contains(&w.leaf_alpha), "leaf alpha must be in [0,1]");
+    match cb.outcome {
+        1 => return 1.0,
+        2 => return 0.0,
+        3 => return 0.5,
+        _ => {}
+    }
+    let val = compact_eval01_solver_resolved(cb, table, w);
+    0.5 + w.leaf_alpha * (val - 0.5)
+}
+
+/// Rollout-free analytical solver leaf evaluation integrating over recorded node HP width/variance
+/// via 3-point symmetric Gauss-moment quadrature (`mean - std`, `mean`, `mean + std` with weights
+/// `[0.25, 0.50, 0.25]`, clamped to `[min_hp, max_hp]`). Collapses to 1-point evaluation when
+/// both active HP standard deviations are `< 2.0` HP.
+#[inline]
+pub fn compact_eval_solver_leaf_dist(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    w: &EvalWeights,
+    active_hp_mean: [f32; 2],
+    active_hp_std: [f32; 2],
+    active_hp_bounds: [(i16, i16); 2],
+) -> f64 {
+    match cb.outcome {
+        1 => return 1.0,
+        2 => return 0.0,
+        3 => return 0.5,
+        _ => {}
+    }
+    if cb.sides[0].request == 2
+        || cb.sides[1].request == 2
+        || (active_hp_std[0] < 2.0 && active_hp_std[1] < 2.0)
+    {
+        return compact_eval_solver_leaf(cb, table, w);
+    }
+    let act0 = cb.sides[0].active_idx as usize;
+    let act1 = cb.sides[1].active_idx as usize;
+    let alive0 = (cb.sides[0].alive_mask & (1 << act0)) != 0 && cb.mons[act0].hp() > 0;
+    let alive1 = (cb.sides[1].alive_mask & (1 << act1)) != 0 && cb.mons[3 + act1].hp() > 0;
+    if !alive0 || !alive1 {
+        return compact_eval_solver_leaf(cb, table, w);
+    }
+
+    let clamp_hp = |s: usize, x: f32, cur: i16, maxhp: i16| -> i16 {
+        let (lo, hi) = active_hp_bounds[s];
+        let lo_eff = if lo > 0 { lo } else { 1 };
+        let hi_eff = if hi > 0 { hi.min(maxhp) } else { cur.max(1) };
+        (x.round() as i16).clamp(lo_eff, hi_eff.max(lo_eff))
+    };
+    let max0 = table.mons[act0].maxhp.max(1);
+    let max1 = table.mons[3 + act1].maxhp.max(1);
+    let m0 = if active_hp_mean[0] > 0.0 {
+        active_hp_mean[0]
+    } else {
+        cb.mons[act0].hp() as f32
+    };
+    let m1 = if active_hp_mean[1] > 0.0 {
+        active_hp_mean[1]
+    } else {
+        cb.mons[3 + act1].hp() as f32
+    };
+
+    let h0_mid = clamp_hp(0, m0, cb.mons[act0].hp(), max0);
+    let h1_mid = clamp_hp(1, m1, cb.mons[3 + act1].hp(), max1);
+    let h0_lo = clamp_hp(0, m0 - active_hp_std[0], cb.mons[act0].hp(), max0);
+    let h0_hi = clamp_hp(0, m0 + active_hp_std[0], cb.mons[act0].hp(), max0);
+    let h1_lo = clamp_hp(1, m1 - active_hp_std[1], cb.mons[3 + act1].hp(), max1);
+    let h1_hi = clamp_hp(1, m1 + active_hp_std[1], cb.mons[3 + act1].hp(), max1);
+
+    let mut base = *cb;
+    base.mons[act0].hp_pool[0] = h0_mid;
+    base.mons[3 + act1].hp_pool[0] = h1_mid;
+    let v_mid = compact_eval01_solver_core(&base, table, w);
+    if h0_lo == h0_hi && h1_lo == h1_hi {
+        return 0.5 + w.leaf_alpha * (v_mid - 0.5);
+    }
+    // Antithetic 3-point quadrature preserving strict antisymmetry under side swap:
+    // pair `(h0_lo, h1_hi)` (pessimistic for S0) with `(h0_hi, h1_lo)` (optimistic for S0).
+    let mut lo_cb = base;
+    lo_cb.mons[act0].hp_pool[0] = h0_lo;
+    lo_cb.mons[3 + act1].hp_pool[0] = h1_hi;
+    let v_pess = compact_eval01_solver_core(&lo_cb, table, w);
+
+    let mut hi_cb = base;
+    hi_cb.mons[act0].hp_pool[0] = h0_hi;
+    hi_cb.mons[3 + act1].hp_pool[0] = h1_lo;
+    let v_opt = compact_eval01_solver_core(&hi_cb, table, w);
+
+    let val = 0.25 * v_pess + 0.50 * v_mid + 0.25 * v_opt;
+    0.5 + w.leaf_alpha * (val - 0.5)
+}
+
+#[inline]
+fn resolve_forced_switch_in_place(
+    cb: &mut CompactBattle,
+    table: &MatchTable,
+    switch_actions: [u8; 2],
+) {
+    if ((cb.sides[0].side_flags | cb.sides[1].side_flags) & 0x10) != 0 {
+        cb.prng_seed = 0x9E37_79B9_7F4A_7C15;
+        cb.step_switch(table, switch_actions);
+        return;
+    }
+    let bp_fix = (cb.sides[0].side_flags & 0x80) == 0;
+    for side in 0..2usize {
+        if cb.sides[side].request == 2 {
+            let act = switch_actions[side];
+            let slot = if act >= 4 {
+                (act - 4).min(2)
+            } else {
+                (cb.sides[side].alive_mask.trailing_zeros() as u8).min(2)
+            };
+            if (cb.sides[side].alive_mask & (1 << slot)) != 0 {
+                let old_idx = side * 3 + (cb.sides[side].active_idx.min(2) as usize);
+                let baton_pass = bp_fix && cb.mons[old_idx].hp() > 0;
+                exec_compact_switch_deterministic(cb, table, side, slot, baton_pass);
+            }
+        }
+        cb.sides[side].request = 1;
+    }
+    for _ in 0..2 {
+        if cb.outcome != 0 {
+            break;
+        }
+        for side in 0..2usize {
+            let p_idx = cb.sides[side].active_idx as usize;
+            let m_idx = side * 3 + p_idx;
+            if cb.mons[m_idx].hp() <= 0 {
+                cb.sides[side].alive_mask &= !(1 << p_idx);
+                let foe_side = side ^ 1;
+                let foe_idx = foe_side * 3 + cb.sides[foe_side].active_idx as usize;
+                cb.mons[foe_idx].vol_flags &= !vol_bit::TRAPPED_OR_LOCKED;
+            }
+        }
+        let a0 = cb.sides[0].alive_mask;
+        let a1 = cb.sides[1].alive_mask;
+        if a0 == 0 && a1 == 0 {
+            cb.outcome = if cb.sides[0].last_move_selfko != u8::MAX {
+                2
+            } else if cb.sides[1].last_move_selfko != u8::MAX {
+                1
+            } else {
+                3
+            };
+            return;
+        } else if a0 == 0 {
+            cb.outcome = 2;
+            return;
+        } else if a1 == 0 {
+            cb.outcome = 1;
+            return;
+        }
+        let mut switched_again = false;
+        for side in 0..2usize {
+            let p_idx = cb.sides[side].active_idx as usize;
+            if (cb.sides[side].alive_mask & (1 << p_idx)) == 0 {
+                let next_slot = (cb.sides[side].alive_mask.trailing_zeros() as u8).min(2);
+                exec_compact_switch_deterministic(cb, table, side, next_slot, false);
+                switched_again = true;
+            }
+        }
+        if !switched_again {
+            break;
+        }
+    }
+}
+
+#[inline]
+fn exec_compact_switch_deterministic(
+    cb: &mut CompactBattle,
+    table: &MatchTable,
+    side: usize,
+    target_party_idx: u8,
+    baton_pass: bool,
+) {
+    let old_idx = side * 3 + (cb.sides[side].active_idx.min(2) as usize);
+    let saved_boosts = cb.mons[old_idx].boosts;
+    let saved_sub = cb.mons[old_idx].hp_pool[1];
+    let pass_mask = vol_bit::SUBSTITUTE
+        | vol_bit::CONFUSION
+        | vol_bit::LEECH_SEED
+        | vol_bit::CURSE
+        | vol_bit::PERISH_SONG;
+    let saved_vols = cb.mons[old_idx].vol_flags & pass_mask;
+    let saved_conf_t = cb.mons[old_idx].timers[0];
+    let saved_perish_t = cb.mons[old_idx].perish_turns();
+
+    cb.mons[old_idx].boosts = [0; 7];
+    cb.mons[old_idx].hp_pool[1] = 0;
+    let keep_status_drops = (if cb.mons[old_idx].status_raw() == Status::Par as u8 {
+        vol_bit::PAR_SPEED_DROP
+    } else {
+        0
+    }) | (if cb.mons[old_idx].status_raw() == Status::Brn as u8 {
+        vol_bit::BRN_ATK_DROP
+    } else {
+        0
+    });
+    cb.mons[old_idx].vol_flags = keep_status_drops;
+    cb.mons[old_idx].timers = [0; 4];
+    cb.mons[old_idx].slot_refs = 0;
+
+    if !baton_pass {
+        let foe_side = side ^ 1;
+        let foe_idx = foe_side * 3 + (cb.sides[foe_side].active_idx.min(2) as usize);
+        cb.mons[foe_idx].vol_flags &= !vol_bit::TRAPPED_OR_LOCKED;
+    }
+
+    cb.sides[side].active_idx = target_party_idx;
+    let new_idx = side * 3 + target_party_idx as usize;
+    if baton_pass {
+        cb.mons[new_idx].boosts = saved_boosts;
+        cb.mons[new_idx].hp_pool[1] = saved_sub;
+        cb.mons[new_idx].vol_flags |= saved_vols;
+        cb.mons[new_idx].timers[0] = saved_conf_t;
+        cb.mons[new_idx].set_perish_turns(saved_perish_t);
+    }
+    if cb.mons[new_idx].status_raw() == Status::Par as u8 {
+        cb.mons[new_idx].vol_flags |= vol_bit::PAR_SPEED_DROP;
+    }
+    if cb.mons[new_idx].status_raw() == Status::Brn as u8 {
+        cb.mons[new_idx].vol_flags |= vol_bit::BRN_ATK_DROP;
+    }
+    if cb.mons[new_idx].status_raw() == Status::Tox as u8 {
+        let cur = cb.mons[new_idx].status_counter() & 0x0F;
+        cb.mons[new_idx].set_status(Status::Psn as u8, cur);
+    }
+
+    let spikes_layers = cb.sides[side].side_flags & 0x03;
+    if spikes_layers != 0
+        && (table.mons[new_idx].type_mask & (1u32 << (table.flying_type & 31))) == 0
+    {
+        let spike_dmg = match spikes_layers {
+            1 => table.mons[new_idx].quantum_1_8,
+            2 => (table.mons[new_idx].maxhp / 6).max(1),
+            _ => (table.mons[new_idx].maxhp / 4).max(1),
+        };
+        cb.mons[new_idx].apply_damage_branchless(spike_dmg, true);
+    }
+    let mon = &mut cb.mons[new_idx];
+    if mon.hp() > 0 && mon.item != 0 {
+        let spec = &table.mons[new_idx];
+        let st = mon.status_raw();
+        if spec.is_mintberry && st == Status::Slp as u8 {
+            mon.set_status(Status::None as u8, 0);
+            mon.item = 0;
+        } else if spec.is_miracleberry && (st != 0 || (mon.vol_flags & vol_bit::CONFUSION) != 0) {
+            mon.set_status(Status::None as u8, 0);
+            mon.vol_flags &=
+                !(vol_bit::CONFUSION | vol_bit::PAR_SPEED_DROP | vol_bit::BRN_ATK_DROP);
+            mon.timers[0] = 0;
+            mon.item = 0;
+        } else if spec.is_goldberry && mon.hp() <= spec.maxhp / 2 {
+            mon.hp_pool[0] = (mon.hp() + 30).min(spec.maxhp);
+            mon.item = 0;
+        } else if spec.is_berry && mon.hp() <= spec.maxhp / 2 {
+            mon.hp_pool[0] = (mon.hp() + 10).min(spec.maxhp);
+            mon.item = 0;
+        }
+    }
+}
+
+#[inline]
+fn compact_eval01_solver_resolved(cb: &CompactBattle, table: &MatchTable, w: &EvalWeights) -> f64 {
+    match cb.outcome {
+        1 => return 1.0,
+        2 => return 0.0,
+        3 => return 0.5,
+        _ => {}
+    }
+    let r0 = cb.sides[0].request == 2;
+    let r1 = cb.sides[1].request == 2;
+    if !r0 && !r1 {
+        return compact_eval01_solver_core(cb, table, w);
+    }
+    let mut cs0 = [7u8; 7];
+    let n0 = if r0 {
+        cb.legal_actions(table, 0, &mut cs0).max(1)
+    } else {
+        1
+    };
+    let mut cs1 = [7u8; 7];
+    let n1 = if r1 {
+        cb.legal_actions(table, 1, &mut cs1).max(1)
+    } else {
+        1
+    };
+    let k0 = n0.min(3);
+    let k1 = n1.min(3);
+    let mut mat = [[0.0f64; 3]; 3];
+    for (i, &a0) in cs0[..k0].iter().enumerate() {
+        for (j, &a1) in cs1[..k1].iter().enumerate() {
+            let mut next = *cb;
+            resolve_forced_switch_in_place(&mut next, table, [a0, a1]);
+            let v01 = match next.outcome {
+                1 => 1.0,
+                2 => 0.0,
+                3 => 0.5,
+                _ => compact_eval01_solver_core(&next, table, w),
+            };
+            mat[i][j] = 2.0 * v01 - 1.0;
+        }
+    }
+    (0.5 * (1.0 + matrix_game_value_3x3(&mat, k0, k1))).clamp(0.0, 1.0)
+}
+
+#[inline]
+fn compact_counter_coat_side_credit(cb: &CompactBattle, table: &MatchTable, s: usize) -> f64 {
+    let side_st = &cb.sides[s];
+    let foe_s = 1 - s;
+    let foe_st = &cb.sides[foe_s];
+    let act_slot = side_st.active_idx as usize;
+    let foe_slot = foe_st.active_idx as usize;
+    if (side_st.alive_mask & (1 << act_slot)) == 0 || (foe_st.alive_mask & (1 << foe_slot)) == 0 {
+        return 0.0;
+    }
+    let my_idx = s * 3 + act_slot;
+    let foe_idx = foe_s * 3 + foe_slot;
+    let my_mon = &cb.mons[my_idx];
+    let foe_mon = &cb.mons[foe_idx];
+    if my_mon.hp() <= 0 || foe_mon.hp() <= 0 {
+        return 0.0;
+    }
+    let my_st = my_mon.status_raw();
+    if my_st == Status::Slp as u8 || my_st == Status::Frz as u8 {
+        return 0.0;
+    }
+    let my_spec = &table.mons[my_idx];
+    let foe_spec = &table.mons[foe_idx];
+    let foe_fore = (foe_mon.vol_flags & vol_bit::FORESIGHT) != 0;
+    let my_dis = (my_mon.vol_flags & vol_bit::DISABLE) != 0;
+    let my_dis_slot = ((my_mon.slot_refs >> 4) & 0x03) as usize;
+    let mut has_counter = false;
+    let mut has_coat = false;
+    for m_i in 0..my_spec.num_moves as usize {
+        if my_mon.pp[m_i] == 0 || (my_dis && m_i == my_dis_slot) {
+            continue;
+        }
+        let ms = &table.move_specs[my_idx][m_i];
+        match ms.special_kind {
+            11 if !table.effectiveness_ext(ms.move_type, foe_spec, foe_fore).1 => {
+                has_counter = true;
+            }
+            12 if !table.effectiveness_ext(ms.move_type, foe_spec, false).1 => {
+                has_coat = true;
+            }
+            _ => {}
+        }
+    }
+    if !has_counter && !has_coat {
+        return 0.0;
+    }
+    let direct_eff = cb.best_hit_fraction(table, s, act_slot, foe_s, foe_slot, true);
+    if direct_eff >= 0.20 {
+        return 0.0;
+    }
+
+    let foe_dis = (foe_mon.vol_flags & vol_bit::DISABLE) != 0;
+    let foe_dis_slot = ((foe_mon.slot_refs >> 4) & 0x03) as usize;
+    let my_hp = my_mon.hp() as f64;
+    let foe_hp = (foe_mon.hp().max(1)) as f64;
+    let mut best_phys_dmg = 0.0f64;
+    let mut best_spec_dmg = 0.0f64;
+    for m_i in 0..foe_spec.num_moves as usize {
+        if foe_mon.pp[m_i] == 0 || (foe_dis && m_i == foe_dis_slot) {
+            continue;
+        }
+        let ms = &table.move_specs[foe_idx][m_i];
+        if ms.is_status && ms.fixed_damage == 0 {
+            continue;
+        }
+        let (frac, _) =
+            cb.expected_hit_fraction_with_acc(table, foe_s, foe_slot, s, act_slot, m_i, true);
+        let d = frac * my_hp;
+        if d <= 0.0 {
+            continue;
+        }
+        if ms.is_physical {
+            if d > best_phys_dmg {
+                best_phys_dmg = d;
+            }
+        } else if d > best_spec_dmg {
+            best_spec_dmg = d;
+        }
+    }
+    let max_in = best_phys_dmg.max(best_spec_dmg);
+    if max_in <= 1.0 || my_hp <= max_in {
+        return 0.0;
+    }
+    let can_counter = has_counter && best_phys_dmg > 1.0 && 2.0 * best_phys_dmg >= 0.5 * foe_hp;
+    let can_coat = has_coat && best_spec_dmg > 1.0 && 2.0 * best_spec_dmg >= 0.5 * foe_hp;
+    if !can_counter && !can_coat {
+        return 0.0;
+    }
+    let p_reflect: f64 = match (best_phys_dmg > 1.0, best_spec_dmg > 1.0) {
+        (true, true) => {
+            if can_counter && can_coat {
+                0.45
+            } else {
+                0.15
+            }
+        }
+        (true, false) if can_counter => 0.72,
+        (false, true) if can_coat => 0.72,
+        _ => 0.0,
+    };
+    if p_reflect <= 0.0 {
+        return 0.0;
+    }
+    let survivable = ((my_hp / max_in).ceil() as i32 - 1).clamp(1, 6) as f64;
+    let p_win = 1.0 - (1.0 - p_reflect).powf(survivable);
+    let ko_scale = ((2.0 * max_in) / foe_hp).clamp(0.5, 1.0);
+    1.65 * p_win * ko_scale
+}
+
+#[inline]
+fn compact_counter_coat_solver_diff(cb: &CompactBattle, table: &MatchTable) -> f64 {
+    compact_counter_coat_side_credit(cb, table, 0) - compact_counter_coat_side_credit(cb, table, 1)
+}
+
+#[inline]
+fn compact_solver_side_bench_tempo(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    w: &EvalWeights,
+    s: usize,
+    act_eff: f64,
+    foe_eff: f64,
+) -> f64 {
+    let side_st = &cb.sides[s];
+    let foe_s = 1 - s;
+    let foe_st = &cb.sides[foe_s];
+    let act_slot = side_st.active_idx as usize;
+    let foe_slot = foe_st.active_idx as usize;
+    if (side_st.alive_mask & (1 << act_slot)) == 0 || (foe_st.alive_mask & (1 << foe_slot)) == 0 {
+        return 0.0;
+    }
+    let act_idx = s * 3 + act_slot;
+    let foe_idx = foe_s * 3 + foe_slot;
+    let act_mon = &cb.mons[act_idx];
+    if act_mon.hp() <= 0 || cb.mons[foe_idx].hp() <= 0 {
+        return 0.0;
+    }
+
+    let mut delta = 0.0;
+
+    // 1. Bench threat reserve: when a passive/walled active Pokemon has an awake offensive
+    //    check on the bench, fainting the passive active does not suddenly "create" threat
+    //    out of thin air (preventing anti-monotonic bonuses for letting fodder stay alive).
+    if side_st.alive_mask.count_ones() >= 2 && w.threat > 0.0 {
+        let mut best_bench_eff = 0.0f64;
+        for b in 0..3usize {
+            if b == act_slot || (side_st.alive_mask & (1 << b)) == 0 {
+                continue;
+            }
+            let b_idx = s * 3 + b;
+            let b_st = cb.mons[b_idx].status_raw();
+            if cb.mons[b_idx].hp() <= 0 || b_st == Status::Slp as u8 || b_st == Status::Frz as u8 {
+                continue;
+            }
+            let eff = cb
+                .best_hit_fraction(table, s, b, foe_s, foe_slot, w.couple_evasion)
+                .min(1.0);
+            if eff > best_bench_eff {
+                best_bench_eff = eff;
+            }
+        }
+        let cur = act_eff.min(1.0);
+        if best_bench_eff > cur {
+            let doom = foe_eff.clamp(0.0, 1.0);
+            let reserve = 0.15 + 0.70 * doom * doom;
+            delta += reserve * w.threat * (best_bench_eff - cur);
+        }
+    }
+
+    // 2. Revenge-forced boost write-down: if `act_mon` holds non-passed positive stat stages
+    //    (`0..5`) while the opponent has an awake faster KO check (either already in or waiting
+    //    on the bench after Spikes), `act_mon` will be forced out and lose its boosts rather
+    //    than sweeping.
+    let has_pos_boost = act_mon.boosts[..5].iter().any(|&b| b > 0);
+    let has_bp = (table.mons[act_idx].role_flags & nc2000_engine::compact::role_bit::BATON_PASS)
+        != 0
+        && side_st.alive_mask.count_ones() >= 2;
+    if has_pos_boost && !has_bp {
+        let my_spd = cb.mon_action_speed(table, s, act_slot);
+        let foe_spikes = foe_st.side_flags & 0x03;
+        let flying_mask = 1u32 << (table.flying_type & 31);
+        let mut max_revenge_ko = 0.0f64;
+        for fb in 0..3usize {
+            if (foe_st.alive_mask & (1 << fb)) == 0 {
+                continue;
+            }
+            let fb_idx = foe_s * 3 + fb;
+            let fb_mon = &cb.mons[fb_idx];
+            let fb_st = fb_mon.status_raw();
+            if fb_mon.hp() <= 0 || fb_st == Status::Slp as u8 || fb_st == Status::Frz as u8 {
+                continue;
+            }
+            let spk = if fb == foe_slot
+                || foe_spikes == 0
+                || (table.mons[fb_idx].type_mask & flying_mask) != 0
+            {
+                0
+            } else {
+                match foe_spikes {
+                    1 => table.mons[fb_idx].quantum_1_8,
+                    2 => (table.mons[fb_idx].maxhp / 6).max(1),
+                    _ => (table.mons[fb_idx].maxhp / 4).max(1),
+                }
+            };
+            let hp_after_spk = fb_mon.hp() - spk;
+            if hp_after_spk <= 0 {
+                continue;
+            }
+            let mut probe = *cb;
+            probe.sides[foe_s].active_idx = fb as u8;
+            probe.mons[fb_idx].hp_pool[0] = hp_after_spk;
+            if probe.mon_action_speed(table, foe_s, fb) > my_spd {
+                let ko = crate::linear::DmgKernel1D::best_attack(&probe, table, foe_s, fb, s, act_slot)
+                    .ko_prob(act_mon.hp()) as f64;
+                if ko > max_revenge_ko {
+                    max_revenge_ko = ko;
+                }
+            }
+        }
+        if max_revenge_ko > 0.0 {
+            let pos_credit: f64 = (0..5)
+                .filter(|&i| act_mon.boosts[i] > 0)
+                .map(|i| w.boost[i] * f64::from(act_mon.boosts[i]))
+                .sum();
+            let frac = if (act_mon.vol_flags & vol_bit::ENCORE) != 0 {
+                0.35
+            } else {
+                0.70
+            };
+            delta -= frac * max_revenge_ko * pos_credit;
+        }
+    }
+
+    delta
+}
+
+#[inline]
+fn compact_eval01_solver_core(cb: &CompactBattle, table: &MatchTable, w: &EvalWeights) -> f64 {
+    let n0 = cb.sides[0].alive_mask.count_ones();
+    let n1 = cb.sides[1].alive_mask.count_ones();
+    if n0 == 0 && n1 == 0 {
+        return 0.5;
+    }
+    if n0 == 0 {
+        return 0.0;
+    }
+    if n1 == 0 {
+        return 1.0;
+    }
+    let cc_diff = compact_counter_coat_solver_diff(cb, table);
+    if n0 == 1 && n1 == 1 {
+        let base = compact_eval01_blindspot(cb, table, w);
+        if cc_diff == 0.0 {
+            return base;
+        }
+        let clamped = base.clamp(1e-6, 1.0 - 1e-6);
+        let base_logit = (clamped / (1.0 - clamped)).ln();
+        let logit = 0.25 * base_logit + w.scale * cc_diff;
+        return 1.0 / (1.0 + (-logit).exp());
+    }
+
+    let (s0, eff0) = compact_side_score_with_eff(cb, table, w, 0);
+    let (s1, eff1) = compact_side_score_with_eff(cb, table, w, 1);
+    let bench_tempo = compact_solver_side_bench_tempo(cb, table, w, 0, eff0, eff1)
+        - compact_solver_side_bench_tempo(cb, table, w, 1, eff1, eff0);
+    let mut diff = (s0 - s1)
+        + bench_tempo
+        + compact_false_boost_refund_diff(cb, table, w)
+        + crate::linear::compact_perish_margin(cb, table)
+        + cc_diff;
+    if w.race > 0.0 {
+        diff += 0.24 * w.race * compact_solver_exchange_margin(cb, table);
+    } else if w.exchange != 0.0 {
+        diff += w.exchange * compact_solver_exchange_margin(cb, table);
+    }
+    let mut logit = w.scale * diff;
+    if w.residual_scale != 0.0 {
+        logit += w.residual_scale * compact_eval_residual_sym(cb, table, [eff0, eff1]);
+    }
+    1.0 / (1.0 + (-logit).exp())
+}
+
+/// Zero-allocation, strictly antisymmetric ($V(-M^\top) = -V(M)$) zero-sum game value
+/// solver for $k_0 \times k_1$ matrices ($1 \le k_0, k_1 \le 3$) with payoffs in `[-1, 1]`.
+#[inline]
+pub fn matrix_game_value_3x3(cells: &[[f64; 3]; 3], k0: usize, k1: usize) -> f64 {
+    if k0 == 0 || k1 == 0 {
+        return 0.0;
+    }
+    if k0 == 1 && k1 == 1 {
+        return cells[0][0];
+    }
+    if k0 == 1 {
+        let mut m = cells[0][0];
+        for j in 1..k1 {
+            if cells[0][j] < m {
+                m = cells[0][j];
+            }
+        }
+        return m;
+    }
+    if k1 == 1 {
+        let mut m = cells[0][0];
+        for row in &cells[1..k0] {
+            if row[0] > m {
+                m = row[0];
+            }
+        }
+        return m;
+    }
+
+    let mut maximin = f64::NEG_INFINITY;
+    for row in &cells[..k0] {
+        let mut rmin = f64::INFINITY;
+        for &v in &row[..k1] {
+            if v < rmin {
+                rmin = v;
+            }
+        }
+        if rmin > maximin {
+            maximin = rmin;
+        }
+    }
+    let mut minimax = f64::INFINITY;
+    for j in 0..k1 {
+        let mut cmax = f64::NEG_INFINITY;
+        for row in &cells[..k0] {
+            if row[j] > cmax {
+                cmax = row[j];
+            }
+        }
+        if cmax < minimax {
+            minimax = cmax;
+        }
+    }
+    if minimax <= maximin + 1e-9 {
+        return 0.5 * (maximin + minimax);
+    }
+    if k0 == 2 && k1 == 2 {
+        let (a, b, c, d) = (cells[0][0], cells[0][1], cells[1][0], cells[1][1]);
+        let denom = a - b - c + d;
+        if denom.abs() > 1e-12 {
+            return ((a * d - b * c) / denom).clamp(-1.0, 1.0);
+        }
+        return 0.5 * (maximin + minimax);
+    }
+
+    // Simultaneous-update RM+ with linear averaging on stack arrays (exact antisymmetry).
+    let mut reg0 = [0.0f64; 3];
+    let mut reg1 = [0.0f64; 3];
+    let mut sum0 = [0.0f64; 3];
+    let mut sum1 = [0.0f64; 3];
+    let inv0 = 1.0 / (k0 as f64);
+    let inv1 = 1.0 / (k1 as f64);
+    for t in 1..=24u32 {
+        let rsum0: f64 = reg0[..k0].iter().sum();
+        let mut p0 = [inv0; 3];
+        if rsum0 > 1e-15 {
+            for i in 0..k0 {
+                p0[i] = reg0[i] / rsum0;
+            }
+        }
+        let rsum1: f64 = reg1[..k1].iter().sum();
+        let mut p1 = [inv1; 3];
+        if rsum1 > 1e-15 {
+            for j in 0..k1 {
+                p1[j] = reg1[j] / rsum1;
+            }
+        }
+        let mut row_ev = [0.0f64; 3];
+        let mut col_ev = [0.0f64; 3];
+        let mut u = 0.0f64;
+        for i in 0..k0 {
+            let mut ev_i = 0.0f64;
+            for j in 0..k1 {
+                let c_ij = cells[i][j];
+                ev_i += p1[j] * c_ij;
+                col_ev[j] -= p0[i] * c_ij;
+            }
+            row_ev[i] = ev_i;
+            u += p0[i] * ev_i;
+        }
+        let wt = t as f64;
+        for i in 0..k0 {
+            reg0[i] = (reg0[i] + row_ev[i] - u).max(0.0);
+            sum0[i] += wt * p0[i];
+        }
+        for j in 0..k1 {
+            reg1[j] = (reg1[j] + col_ev[j] + u).max(0.0);
+            sum1[j] += wt * p1[j];
+        }
+    }
+    let w0: f64 = sum0[..k0].iter().sum();
+    let w1: f64 = sum1[..k1].iter().sum();
+    if w0 <= 0.0 || w1 <= 0.0 {
+        return 0.5 * (maximin + minimax);
+    }
+    let mut val = 0.0f64;
+    for i in 0..k0 {
+        let s0 = sum0[i] / w0;
+        for j in 0..k1 {
+            val += s0 * (sum1[j] / w1) * cells[i][j];
+        }
+    }
+    val.clamp(-1.0, 1.0)
+}
+
+/// Entry-cost-aware $k_0 \times k_1$ Bellman-Toeplitz matchup matrix value in `[-1, 1]`.
+/// Evaluates every living pair `(a, d)` via `linear::toeplitz_coupled_race`, charging Spikes +
+/// expected switch-in entry damage when switching a bench Pokemon into the opposing active,
+/// respecting trapping (`TRAPPED_OR_LOCKED`), and discounting boosted sweeps against healthy
+/// `Haze`/`Roar`/`Whirlwind` answers (`role_bit::PHAZE_OR_HAZE`).
+pub fn compact_solver_exchange_margin(cb: &CompactBattle, table: &MatchTable) -> f64 {
+    use nc2000_engine::compact::role_bit;
+
+    let mut mine = [0usize; 3];
+    let mut k0 = 0usize;
+    let mut theirs = [0usize; 3];
+    let mut k1 = 0usize;
+    for slot in 0..3usize {
+        if (cb.sides[0].alive_mask & (1 << slot)) != 0 && cb.mons[slot].hp() > 0 {
+            mine[k0] = slot;
+            k0 += 1;
+        }
+        if (cb.sides[1].alive_mask & (1 << slot)) != 0 && cb.mons[3 + slot].hp() > 0 {
+            theirs[k1] = slot;
+            k1 += 1;
+        }
+    }
+    if k0 == 0 || k1 == 0 {
+        return 0.0;
+    }
+
+    let act0 = cb.sides[0].active_idx as usize;
+    let act1 = cb.sides[1].active_idx as usize;
+    let flying_mask = 1u32 << (table.flying_type & 31);
+
+    let spikes_dmg = |s: usize, slot: usize| -> i16 {
+        if slot == (cb.sides[s].active_idx as usize) {
+            return 0;
+        }
+        let idx = s * 3 + slot;
+        if (table.mons[idx].type_mask & flying_mask) != 0 {
+            return 0;
+        }
+        let layers = (cb.sides[s].side_flags & 0x03) as usize;
+        if layers == 0 {
+            return 0;
+        }
+        const AMTS: [i32; 4] = [0, 3, 4, 6];
+        ((AMTS[layers] * table.mons[idx].maxhp as i32) / 24).max(1) as i16
+    };
+
+    let has_var_dmg = |s: usize, slot: usize| -> bool {
+        let idx = s * 3 + slot;
+        let nm = table.mons[idx].num_moves as usize;
+        (0..nm).any(|m_i| {
+            let ms = &table.move_specs[idx][m_i];
+            ms.var_bp_kind == 4 || ms.special_kind == 15 || ms.special_kind == 17
+        })
+    };
+
+    #[derive(Clone, Copy, Default)]
+    struct MonStaticProf {
+        hp0: i16,
+        maxhp: f64,
+        spd: i32,
+        is_inactive: bool,
+        has_sleep_berry: bool,
+        act_mult: f64,
+        conf_ko_mult: f64,
+        conf_wait: f64,
+        is_asleep_no_berry: bool,
+        wake_turns: f64,
+        has_sleep_talk: bool,
+        self_drain: f64,
+        heal_kind: u8,
+        one_res_tick: i16,
+        spk_dmg: i16,
+        has_var: bool,
+        has_pos_boost: bool,
+        can_phaze: bool,
+    }
+
+    let build_static_prof = |s: usize, slot: usize, foe_k: usize| -> MonStaticProf {
+        let idx = s * 3 + slot;
+        let mon = &cb.mons[idx];
+        let spec = &table.mons[idx];
+        let maxhp = f64::from(spec.maxhp.max(1));
+        let mut spd_probe = *cb;
+        spd_probe.sides[s].active_idx = slot as u8;
+        let spd = spd_probe.mon_action_speed(table, s, slot);
+        let st = mon.status_raw();
+        let is_frz = st == Status::Frz as u8 && !(mon.item != 0 && spec.is_miracleberry);
+        let is_inactive = is_frz || (mon.slot_refs & 0x80) != 0;
+        let has_sleep_berry = mon.item != 0 && (spec.is_mintberry || spec.is_miracleberry);
+        let act_mult = if st == Status::Par as u8 { 0.75 } else { 1.0 };
+        let is_confused = (mon.vol_flags & vol_bit::CONFUSION) != 0 && mon.timers[0] > 1;
+        let conf_ko_mult = if is_confused { 0.50 } else { 1.0 };
+        let conf_wait = if is_confused {
+            0.50 * f64::from((mon.timers[0] - 1).min(4))
+        } else {
+            0.0
+        };
+        let is_asleep_no_berry = st == Status::Slp as u8 && !has_sleep_berry;
+        let wake_turns = if is_asleep_no_berry {
+            (f64::from((mon.status_counter() & 0x0F).max(1)) - 1.0).max(0.5)
+        } else {
+            0.0
+        };
+        let has_sleep_talk = (spec.role_flags & role_bit::SLEEP_USABLE) != 0;
+
+        let mut self_drain = 0.0f64;
+        let mut slip: i16 = 0;
+        if st == Status::Tox as u8 {
+            let cnt_i = ((mon.status_counter() & 0x0F) + 1).clamp(1, 15);
+            let cnt = f64::from(cnt_i);
+            self_drain += f64::from(spec.quantum_1_16) * (cnt + 0.5);
+            slip += spec.quantum_1_16.saturating_mul(cnt_i as i16);
+        } else if st == Status::Psn as u8 || st == Status::Brn as u8 {
+            self_drain += f64::from(spec.quantum_1_8);
+            slip += spec.quantum_1_8;
+        }
+        if (mon.vol_flags & vol_bit::LEECH_SEED) != 0 {
+            self_drain += f64::from(spec.quantum_1_8);
+        }
+        if (mon.vol_flags & vol_bit::CURSE) != 0 {
+            self_drain += (maxhp * 0.25).floor().max(1.0);
+        }
+        if cb.weather_kind == 3
+            && cb.weather_turns > 0
+            && (spec.type_mask & table.sandstorm_immune_mask) == 0
+        {
+            self_drain += f64::from(spec.quantum_1_8);
+        }
+        if mon.item != 0 && spec.is_leftovers {
+            self_drain -= f64::from(spec.quantum_1_16);
+            slip -= spec.quantum_1_16;
+        }
+        let heal_kind = if is_frz {
+            0
+        } else if (spec.role_flags & role_bit::HALF_HEAL) != 0 {
+            1
+        } else if (spec.role_flags & role_bit::REST) != 0 {
+            2
+        } else {
+            0
+        };
+        let has_pos_boost = mon.boosts[..5].iter().any(|&b| b > 0);
+        let can_phaze = (spec.role_flags & role_bit::PHAZE_OR_HAZE) != 0
+            && st != Status::Slp as u8
+            && st != Status::Frz as u8
+            && (0..spec.num_moves as usize).any(|m| {
+                mon.pp[m] > 0
+                    && (table.move_specs[idx][m].special_kind == 27
+                        || (table.move_specs[idx][m].special_kind == 7 && foe_k > 1))
+            });
+
+        MonStaticProf {
+            hp0: mon.hp(),
+            maxhp,
+            spd,
+            is_inactive,
+            has_sleep_berry,
+            act_mult,
+            conf_ko_mult,
+            conf_wait,
+            is_asleep_no_berry,
+            wake_turns,
+            has_sleep_talk,
+            self_drain,
+            heal_kind,
+            one_res_tick: slip.max(0),
+            spk_dmg: spikes_dmg(s, slot),
+            has_var: has_var_dmg(s, slot),
+            has_pos_boost,
+            can_phaze,
+        }
+    };
+
+    let mut prof0 = [MonStaticProf::default(); 3];
+    let mut prof1 = [MonStaticProf::default(); 3];
+    for &a in &mine[..k0] {
+        prof0[a] = build_static_prof(0, a, k1);
+    }
+    for &d in &theirs[..k1] {
+        prof1[d] = build_static_prof(1, d, k0);
+    }
+
+    let mut base01 = [[crate::linear::DmgKernel1D::zero(); 3]; 3];
+    let mut base10 = [[crate::linear::DmgKernel1D::zero(); 3]; 3];
+    let mut enc01 = [crate::linear::DmgKernel1D::zero(); 3];
+    let mut enc10 = [crate::linear::DmgKernel1D::zero(); 3];
+    let enc_turns0 = if (cb.sides[0].alive_mask & (1 << act0)) != 0
+        && (cb.mons[act0].vol_flags & vol_bit::ENCORE) != 0
+    {
+        cb.mons[act0].timers[1]
+    } else {
+        0
+    };
+    let enc_turns1 = if (cb.sides[1].alive_mask & (1 << act1)) != 0
+        && (cb.mons[3 + act1].vol_flags & vol_bit::ENCORE) != 0
+    {
+        cb.mons[3 + act1].timers[1]
+    } else {
+        0
+    };
+    let mut st01 = [[crate::linear::DmgKernel1D::zero(); 3]; 3];
+    let mut st10 = [[crate::linear::DmgKernel1D::zero(); 3]; 3];
+    for &a in &mine[..k0] {
+        for &d in &theirs[..k1] {
+            base01[a][d] = crate::linear::DmgKernel1D::best_attack(cb, table, 0, a, 1, d);
+            base10[d][a] = crate::linear::DmgKernel1D::best_attack(cb, table, 1, d, 0, a);
+            if a == act0 && enc_turns0 >= 1 {
+                let es = cb.mons[act0].encore_slot() as usize;
+                if es < table.mons[act0].num_moves as usize && cb.mons[act0].pp[es] > 0 {
+                    enc01[d] = crate::linear::DmgKernel1D::for_move(cb, table, 0, act0, 1, d, es);
+                }
+            }
+            if d == act1 && enc_turns1 >= 1 {
+                let es = cb.mons[3 + act1].encore_slot() as usize;
+                if es < table.mons[3 + act1].num_moves as usize && cb.mons[3 + act1].pp[es] > 0 {
+                    enc10[a] = crate::linear::DmgKernel1D::for_move(cb, table, 1, act1, 0, a, es);
+                }
+            }
+            if prof0[a].is_asleep_no_berry && prof0[a].has_sleep_talk {
+                st01[a][d] = crate::linear::DmgKernel1D::sleep_talk(cb, table, 0, a, 1, d);
+            }
+            if prof1[d].is_asleep_no_berry && prof1[d].has_sleep_talk {
+                st10[d][a] = crate::linear::DmgKernel1D::sleep_talk(cb, table, 1, d, 0, a);
+            }
+        }
+    }
+
+    let entry_hit = |att_s: usize, att_slot: usize, def_slot: usize| -> i16 {
+        let att_idx = att_s * 3 + att_slot;
+        let att_mon = &cb.mons[att_idx];
+        let p = if att_s == 0 {
+            &prof0[att_slot]
+        } else {
+            &prof1[att_slot]
+        };
+        if p.hp0 <= 0 || p.is_inactive {
+            return 0;
+        }
+        let asleep_locked = p.is_asleep_no_berry && att_mon.status_counter() >= 2;
+        let mut dmg = if asleep_locked {
+            if p.has_sleep_talk {
+                if att_s == 0 {
+                    st01[att_slot][def_slot].mean_dmg
+                } else {
+                    st10[att_slot][def_slot].mean_dmg
+                }
+            } else {
+                0.0
+            }
+        } else if att_s == 0 && att_slot == act0 && enc_turns0 >= 2 {
+            enc01[def_slot].mean_dmg
+        } else if att_s == 1 && att_slot == act1 && enc_turns1 >= 2 {
+            enc10[def_slot].mean_dmg
+        } else if att_s == 0 {
+            base01[att_slot][def_slot].mean_dmg
+        } else {
+            base10[att_slot][def_slot].mean_dmg
+        };
+        if att_mon.status_raw() == Status::Par as u8 {
+            dmg *= 0.75;
+        }
+        if (att_mon.vol_flags & vol_bit::CONFUSION) != 0 && att_mon.timers[0] > 1 {
+            dmg *= 0.50;
+        }
+        dmg.round().max(0.0) as i16
+    };
+
+    #[derive(Clone, Copy)]
+    struct PairSideProfile {
+        hp: f64,
+        maxhp: f64,
+        spd: i32,
+        ko1_awake: f64,
+        eff_dpt: f64,
+        sleep_wait: f64,
+        slp_turns_to_wake: f64,
+        self_drain: f64,
+        heal_kind: u8,
+        has_sleep_berry: bool,
+    }
+
+    let eval_side_at_hps = |att_s: usize,
+                            att_slot: usize,
+                            att_hp: i16,
+                            def_slot: usize,
+                            def_hp: i16,
+                            override_state: Option<&CompactBattle>|
+     -> PairSideProfile {
+        let sp = if att_s == 0 {
+            &prof0[att_slot]
+        } else {
+            &prof1[att_slot]
+        };
+        let hp = f64::from(att_hp.max(1));
+        let spd = if let Some(st) = override_state {
+            st.mon_action_speed(table, att_s, att_slot)
+        } else {
+            sp.spd
+        };
+        let (ko1_awake, eff_dpt, sleep_wait, slp_turns_to_wake) = if sp.is_inactive {
+            (0.0, 0.0, 8.0, 8.0)
+        } else {
+            let hp_changed = att_hp != sp.hp0
+                || def_hp
+                    != (if att_s == 0 {
+                        prof1[def_slot].hp0
+                    } else {
+                        prof0[def_slot].hp0
+                    });
+            let kern = if let Some(st) = override_state {
+                crate::linear::DmgKernel1D::best_attack(
+                    st,
+                    table,
+                    att_s,
+                    att_slot,
+                    1 - att_s,
+                    def_slot,
+                )
+            } else if sp.has_var && hp_changed {
+                let mut tmp = *cb;
+                tmp.mons[att_s * 3 + att_slot].hp_pool[0] = att_hp;
+                tmp.mons[(1 - att_s) * 3 + def_slot].hp_pool[0] = def_hp;
+                crate::linear::DmgKernel1D::best_attack(
+                    &tmp,
+                    table,
+                    att_s,
+                    att_slot,
+                    1 - att_s,
+                    def_slot,
+                )
+            } else if att_s == 0 {
+                base01[att_slot][def_slot]
+            } else {
+                base10[att_slot][def_slot]
+            };
+            let (awake_dpt, awake_ko1) = if override_state.is_none()
+                && ((att_s == 0 && att_slot == act0 && enc_turns0 >= 1)
+                    || (att_s == 1 && att_slot == act1 && enc_turns1 >= 1))
+            {
+                let (et, ek) = if att_s == 0 {
+                    (enc_turns0, &enc01[def_slot])
+                } else {
+                    (enc_turns1, &enc10[def_slot])
+                };
+                let w_enc = (f64::from(et.saturating_sub(1)) / 3.0).clamp(0.45, 1.0);
+                let dpt = (w_enc * f64::from(ek.mean_dmg)
+                    + (1.0 - w_enc) * f64::from(kern.mean_dmg))
+                    * sp.act_mult;
+                let ko1 = if et >= 2 {
+                    f64::from(ek.ko_prob(def_hp)) * sp.act_mult * sp.conf_ko_mult
+                } else {
+                    f64::from(kern.ko_prob(def_hp)) * sp.act_mult * sp.conf_ko_mult
+                };
+                (dpt, ko1)
+            } else {
+                (
+                    f64::from(kern.mean_dmg) * sp.act_mult,
+                    f64::from(kern.ko_prob(def_hp)) * sp.act_mult * sp.conf_ko_mult,
+                )
+            };
+            if sp.is_asleep_no_berry {
+                if sp.has_sleep_talk {
+                    let st_kern = if let Some(st) = override_state {
+                        crate::linear::DmgKernel1D::sleep_talk(
+                            st,
+                            table,
+                            att_s,
+                            att_slot,
+                            1 - att_s,
+                            def_slot,
+                        )
+                    } else if att_s == 0 {
+                        st01[att_slot][def_slot]
+                    } else {
+                        st10[att_slot][def_slot]
+                    };
+                    let st_ko1 = f64::from(st_kern.ko_prob(def_hp)) * sp.act_mult * sp.conf_ko_mult;
+                    let st_dpt = f64::from(st_kern.mean_dmg) * sp.act_mult;
+                    (
+                        st_ko1,
+                        0.65 * st_dpt + 0.35 * awake_dpt,
+                        sp.conf_wait,
+                        sp.wake_turns,
+                    )
+                } else {
+                    (
+                        0.0,
+                        awake_dpt,
+                        sp.wake_turns + sp.conf_wait,
+                        sp.wake_turns,
+                    )
+                }
+            } else {
+                (awake_ko1, awake_dpt, sp.conf_wait, 0.0)
+            }
+        };
+
+        PairSideProfile {
+            hp,
+            maxhp: sp.maxhp,
+            spd,
+            ko1_awake,
+            eff_dpt,
+            sleep_wait,
+            slp_turns_to_wake,
+            self_drain: sp.self_drain,
+            heal_kind: sp.heal_kind,
+            has_sleep_berry: sp.has_sleep_berry,
+        }
+    };
+
+    let fast_pair_race_at = |a: usize,
+                             hp_a: i16,
+                             d: usize,
+                             hp_d: i16,
+                             override_state: Option<&CompactBattle>|
+     -> (f64, f64, f64) {
+        let p0 = eval_side_at_hps(0, a, hp_a, d, hp_d, override_state);
+        let p1 = eval_side_at_hps(1, d, hp_d, a, hp_a, override_state);
+
+        let kill_metrics = |att: &PairSideProfile, def: &PairSideProfile| -> (f64, f64) {
+            let p_first = if att.spd > def.spd {
+                att.ko1_awake
+            } else if att.spd == def.spd {
+                0.5 * att.ko1_awake
+            } else {
+                0.0
+            };
+            let inc = (att.eff_dpt + def.self_drain).max(0.0);
+            let wall_raw = match def.heal_kind {
+                1 => {
+                    let cap = 0.46 * def.maxhp;
+                    if inc < cap {
+                        ((cap - inc) / (0.25 * def.maxhp)).clamp(0.0, 0.80)
+                    } else {
+                        0.0
+                    }
+                }
+                2 => {
+                    let inc_rest = (att.eff_dpt + def.self_drain.min(0.0)).max(0.0);
+                    let cap = if def.has_sleep_berry {
+                        0.44 * def.maxhp
+                    } else {
+                        0.30 * def.maxhp
+                    };
+                    if inc_rest < cap {
+                        ((cap - inc_rest) / (0.20 * def.maxhp)).clamp(0.0, 0.78)
+                    } else {
+                        0.0
+                    }
+                }
+                _ => 0.0,
+            };
+            let reach = if def.slp_turns_to_wake > 0.0 {
+                let dmg_while_asleep = def.slp_turns_to_wake * inc;
+                if dmg_while_asleep >= def.hp {
+                    0.0
+                } else {
+                    ((def.hp - dmg_while_asleep) / def.maxhp).clamp(0.0, 1.0)
+                }
+            } else if def.spd > att.spd {
+                1.0
+            } else if def.spd == att.spd {
+                1.0 - 0.5 * att.ko1_awake
+            } else {
+                1.0 - att.ko1_awake
+            };
+            let wall = (wall_raw * reach.clamp(0.0, 1.0)).clamp(0.0, 0.80);
+            let dps = (att.eff_dpt + def.self_drain).max(0.25) * (1.0 - wall);
+            let spd_lead = if att.spd > def.spd {
+                0.45
+            } else if att.spd == def.spd {
+                0.225
+            } else {
+                0.0
+            };
+            let ttk = (att.sleep_wait + def.hp / dps - spd_lead).max(0.35);
+            (p_first, 1.0 / ttk)
+        };
+
+        let (pf0, r0) = kill_metrics(&p0, &p1);
+        let (pf1, r1) = kill_metrics(&p1, &p0);
+        let q0 = {
+            let u = r0 * r0;
+            u * u * r0
+        };
+        let q1 = {
+            let u = r1 * r1;
+            u * u * r1
+        };
+        let body = (q0 - q1) / (q0 + q1 + 1e-9);
+        let margin = ((pf0 - pf1) + (1.0 - pf0) * (1.0 - pf1) * body).clamp(-1.0, 1.0);
+        (margin, p0.ko1_awake, p1.ko1_awake)
+    };
+
+    let race_with_phaze_at = |a: usize, hp_a: i16, d: usize, hp_d: i16| -> f64 {
+        let (raw, ko0_on_1, ko1_on_0) = fast_pair_race_at(a, hp_a, d, hp_d, None);
+        let boost0 = prof0[a].has_pos_boost;
+        let boost1 = prof1[d].has_pos_boost;
+        if !boost0 && !boost1 {
+            return raw;
+        }
+        let phaze1 = boost0 && prof1[d].can_phaze;
+        let phaze0 = boost1 && prof0[a].can_phaze;
+        if !phaze0 && !phaze1 {
+            return raw;
+        }
+        let p1 = if phaze1 {
+            (1.0 - ko0_on_1).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let p0 = if phaze0 {
+            (1.0 - ko1_on_0).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        if p0 <= 1e-4 && p1 <= 1e-4 {
+            return raw;
+        }
+        let mut cleared = *cb;
+        cleared.sides[0].active_idx = a as u8;
+        cleared.sides[1].active_idx = d as u8;
+        cleared.mons[a].hp_pool[0] = hp_a;
+        cleared.mons[3 + d].hp_pool[0] = hp_d;
+        if p1 > 1e-4 {
+            for b in &mut cleared.mons[a].boosts[..5] {
+                if *b > 0 {
+                    *b = 0;
+                }
+            }
+        }
+        if p0 > 1e-4 {
+            for b in &mut cleared.mons[3 + d].boosts[..5] {
+                if *b > 0 {
+                    *b = 0;
+                }
+            }
+        }
+        let (unboosted, _, _) = fast_pair_race_at(a, hp_a, d, hp_d, Some(&cleared));
+        let w_clear = p0.max(p1) * 0.75;
+        (1.0 - w_clear) * raw + w_clear * unboosted
+    };
+
+    let trapped0 = (cb.sides[0].alive_mask & (1 << act0)) != 0
+        && cb.mons[act0].hp() > 0
+        && (cb.mons[act0].vol_flags & vol_bit::TRAPPED_OR_LOCKED) != 0;
+    let trapped1 = (cb.sides[1].alive_mask & (1 << act1)) != 0
+        && cb.mons[3 + act1].hp() > 0
+        && (cb.mons[3 + act1].vol_flags & vol_bit::TRAPPED_OR_LOCKED) != 0;
+
+    let act_vs_act = if (cb.sides[0].alive_mask & (1 << act0)) != 0
+        && cb.mons[act0].hp() > 0
+        && (cb.sides[1].alive_mask & (1 << act1)) != 0
+        && cb.mons[3 + act1].hp() > 0
+    {
+        race_with_phaze_at(act0, prof0[act0].hp0, act1, prof1[act1].hp0)
+    } else {
+        0.0
+    };
+
+    let mut sac_a_vs_act1 = [0.0f64; 3];
+    for &a in &mine[..k0] {
+        if a != act0 {
+            let d_hp = prof1[act1].hp0 - prof1[act1].one_res_tick;
+            let hp_free = prof0[a].hp0 - prof0[a].spk_dmg;
+            sac_a_vs_act1[a] = match (hp_free <= 0, d_hp <= 0) {
+                (true, true) => 0.0,
+                (true, false) => -1.0,
+                (false, true) => 1.0,
+                (false, false) => race_with_phaze_at(a, hp_free, act1, d_hp),
+            };
+        }
+    }
+    let mut sac_act0_vs_d = [0.0f64; 3];
+    for &d in &theirs[..k1] {
+        if d != act1 {
+            let a_hp = prof0[act0].hp0 - prof0[act0].one_res_tick;
+            let hp_free = prof1[d].hp0 - prof1[d].spk_dmg;
+            sac_act0_vs_d[d] = match (a_hp <= 0, hp_free <= 0) {
+                (true, true) => 0.0,
+                (true, false) => -1.0,
+                (false, true) => 1.0,
+                (false, false) => race_with_phaze_at(act0, a_hp, d, hp_free),
+            };
+        }
+    }
+
+    let cost0 = 0.25
+        + 0.45
+            * (f64::from(cb.mons[act0].hp().max(0))
+                / f64::from(table.mons[act0].maxhp.max(1)))
+            .clamp(0.0, 1.0);
+    let cost1 = 0.25
+        + 0.45
+            * (f64::from(cb.mons[3 + act1].hp().max(0))
+                / f64::from(table.mons[3 + act1].maxhp.max(1)))
+            .clamp(0.0, 1.0);
+
+    let mut mat = [[0.0f64; 3]; 3];
+    for (i, &a) in mine[..k0].iter().enumerate() {
+        for (j, &d) in theirs[..k1].iter().enumerate() {
+            mat[i][j] = match (a == act0, d == act1) {
+                (true, true) => act_vs_act,
+                (false, true) => {
+                    let sac_val = (sac_a_vs_act1[a] - cost0).max(-1.0);
+                    if trapped0 {
+                        sac_val
+                    } else {
+                        let hit = entry_hit(1, d, a);
+                        let hp_after = prof0[a].hp0 - prof0[a].spk_dmg - hit;
+                        let hard_val = if hp_after <= 0 {
+                            -1.0
+                        } else {
+                            race_with_phaze_at(a, hp_after, d, prof1[d].hp0)
+                        };
+                        if act_vs_act < 0.0 {
+                            hard_val.max(sac_val)
+                        } else {
+                            hard_val
+                        }
+                    }
+                }
+                (true, false) => {
+                    let sac_val = (sac_act0_vs_d[d] + cost1).min(1.0);
+                    if trapped1 {
+                        sac_val
+                    } else {
+                        let hit = entry_hit(0, a, d);
+                        let hp_after = prof1[d].hp0 - prof1[d].spk_dmg - hit;
+                        let hard_val = if hp_after <= 0 {
+                            1.0
+                        } else {
+                            race_with_phaze_at(a, prof0[a].hp0, d, hp_after)
+                        };
+                        if act_vs_act > 0.0 {
+                            hard_val.min(sac_val)
+                        } else {
+                            hard_val
+                        }
+                    }
+                }
+                (false, false) => {
+                    let mut hp_a = prof0[a].hp0 - prof0[a].spk_dmg;
+                    let mut hp_d = prof1[d].hp0 - prof1[d].spk_dmg;
+                    if hp_a > 0 && hp_d > 0 {
+                        if act_vs_act < -1e-6 {
+                            let adv = sac_a_vs_act1[a].clamp(0.0, 1.0);
+                            let w_first = (-act_vs_act).clamp(0.0, 1.0);
+                            let hit_d =
+                                ((w_first * adv) * f64::from(entry_hit(0, a, d))).round() as i16;
+                            hp_d -= hit_d;
+                        } else if act_vs_act > 1e-6 {
+                            let adv = (-sac_act0_vs_d[d]).clamp(0.0, 1.0);
+                            let w_first = act_vs_act.clamp(0.0, 1.0);
+                            let hit_a =
+                                ((w_first * adv) * f64::from(entry_hit(1, d, a))).round() as i16;
+                            hp_a -= hit_a;
+                        }
+                    }
+                    match (hp_a <= 0, hp_d <= 0) {
+                        (true, true) => 0.0,
+                        (true, false) => -1.0,
+                        (false, true) => 1.0,
+                        (false, false) => race_with_phaze_at(a, hp_a, d, hp_d),
+                    }
+                }
+            };
+        }
+    }
+
+    matrix_game_value_3x3(&mat, k0, k1).clamp(-1.0, 1.0)
 }
 
 /// Win-probability-shaped eval in `(0, 1)` from side 0's perspective on `CompactBattle`,

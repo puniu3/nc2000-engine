@@ -1,14 +1,14 @@
 {
   "schema_version": "nc2000-sdk-v1",
   "position_schema": "nc2000-position-v1",
-  "created_at": "2026-11-12T16:26:59.200Z",
-  "engine_git_sha": "00a25544c60204400f1b2ffd2e597950e94ac934",
-  "wasm_sha256": "a3c31abb02976c7328c237e3256c220ca1067041103abb603e424ef8341e9fb8",
+  "created_at": "2026-11-12T22:16:37.981Z",
+  "engine_git_sha": "bb1887e2e226a5e2ef89ed2ef29735c496699ef5",
+  "wasm_sha256": "7ca27a87ad2978cf483201833d101610a4d4ec5fc716219b8c815689954c6b23",
   "dex_sha256": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
   "default_belief_sha256": "50618a2a5a59f6cb2e652bce2146987923e88217b471ff0ecb845cc84be5fb5b",
   "file_hashes": {
     "crates/wasm/pkg-node/nc2000_wasm.js": "4f2a9c3f2615befe8489ad67adef7c8af4c96d34ad39726a7daac49b88f840ae",
-    "crates/wasm/pkg-node/nc2000_wasm_bg.wasm": "a3c31abb02976c7328c237e3256c220ca1067041103abb603e424ef8341e9fb8",
+    "crates/wasm/pkg-node/nc2000_wasm_bg.wasm": "7ca27a87ad2978cf483201833d101610a4d4ec5fc716219b8c815689954c6b23",
     "crates/wasm/pkg-node/package.json": "b826a8c48da1df4bff1379c8f5d77ecaabf5ff63adc277b3b22f06fef8033027",
     "data/gen2stadium2.json": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
     "data/i18n-ja.json": "53fcc1589b170c0a78d561947f540726342cca93cf341e4138668f1c1ca20c33",
@@ -17,7 +17,7 @@
     "data/team-pool-v2/team-pool.json": "5b7b7189e6c01b56285386bf03dc5837c26c58c9a0065cd7c08283c15029f56b",
     "data/kodoku-r3/conclusion-equilibrium-deme.json": "dc4eba46a6291d52c4985a124d3a50ccfca3891220a8a431652ab2a1ef36c437",
     "data/belief-pool-v3/belief-pool.json": "50618a2a5a59f6cb2e652bce2146987923e88217b471ff0ecb845cc84be5fb5b",
-    "data/compiled-preview-v1.json": "137923037fa532df888dd675741a25081373aaebfcf82bbc6a3ece05bb2e561b",
+    "data/compiled-preview-v1.json": "6e7917ee7baf2e887e10654cb0b33b3ca71babc6cddc3a0489dadc4c97300642",
     "tools/diagnose-position.js": "f64540832886ce5b179430697633e7c55e174499d2ae7f531280e7bf3d7a8cc0"
   }
 }

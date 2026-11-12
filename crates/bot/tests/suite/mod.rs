@@ -14,6 +14,7 @@ mod hidden_pick_legality;
 mod hidden_power_damage;
 mod import;
 mod interval_root_games;
+mod ismcts_solver;
 mod mask_sleep_talk;
 mod own_recovery_wait;
 mod perish_deadline;

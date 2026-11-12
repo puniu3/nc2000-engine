@@ -137,7 +137,15 @@ fn active_mixture_is_identical_across_ambiguous_hidden_stats() {
         let other = battle.legal_choices(&dex, 1)[0];
         battle.apply_choices(&dex, [Some(pick), Some(other)]).unwrap();
         for (side, hp) in [(0, 68), (1, 120)] {
-            let id = battle.active_id(side).unwrap(); battle.poke_mut(id).hp = hp;
+            let id = battle.active_id(side).unwrap();
+            battle.poke_mut(id).hp = hp;
+            let subject = format!("p{}a: {}", side + 1, battle.poke(id).name.as_str());
+            let (secret, shared) = battle.get_health(id);
+            battle.add_split(
+                if side == 0 { "p1" } else { "p2" },
+                &["-damage", &subject, &secret],
+                &["-damage", &subject, &shared],
+            );
         }
         let before_rng = agent.search_rng_state();
         let legal = battle.legal_choices(&dex, 0);

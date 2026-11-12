@@ -333,7 +333,9 @@ pub fn playout_value_cached(
             return match playout {
                 Playout::Uniform => hp_eval(sim),
                 Playout::Heavy { weights, .. } => {
-                    if rules.settlement.uses_blindspot_leaf() {
+                    if rules.settlement.is_solver_quiescence() {
+                        eval::eval_solver_leaf_cached(sim, dex, weights, roster_cache)
+                    } else if rules.settlement.uses_blindspot_leaf() {
                         eval::eval_leaf_blindspot_cached(sim, dex, weights, roster_cache)
                     } else {
                         eval::eval_leaf_cached(sim, dex, weights, roster_cache)
@@ -356,12 +358,17 @@ pub fn playout_value_cached(
         set_last_sim_end(SimEndInfo::from_battle(sim, Some(o)));
         return outcome_reward(o);
     }
-    if sim.turn > turn_cap || matches!(playout, Playout::Heavy { turns: 0, .. }) {
+    if sim.turn > turn_cap
+        || matches!(playout, Playout::Heavy { turns: 0, .. })
+        || (rules.settlement.is_solver_quiescence() && matches!(playout, Playout::Heavy { .. }))
+    {
         set_last_sim_end(SimEndInfo::from_battle(sim, None));
         return match playout {
             Playout::Uniform => hp_eval(sim),
             Playout::Heavy { weights, .. } => {
-                if rules.settlement.uses_blindspot_leaf() {
+                if rules.settlement.is_solver_quiescence() {
+                    eval::eval_solver_leaf_cached(sim, dex, weights, roster_cache)
+                } else if rules.settlement.uses_blindspot_leaf() {
                     eval::eval_leaf_blindspot_cached(sim, dex, weights, roster_cache)
                 } else {
                     eval::eval_leaf_cached(sim, dex, weights, roster_cache)
@@ -411,12 +418,16 @@ pub fn compact_playout_value(
             }
             _ => {}
         }
-        if cb.turn > cutoff {
+        if cb.turn > cutoff
+            || (rules.settlement.is_solver_quiescence() && matches!(playout, Playout::Heavy { .. }))
+        {
             set_last_sim_end(SimEndInfo::from_compact(cb));
             return match playout {
                 Playout::Uniform => compact_hp_eval(cb, table),
                 Playout::Heavy { weights, .. } => {
-                    if rules.settlement.uses_blindspot_leaf() {
+                    if rules.settlement.is_solver_quiescence() {
+                        eval::compact_eval_solver_leaf(cb, table, weights)
+                    } else if rules.settlement.uses_blindspot_leaf() {
                         eval::compact_eval_leaf_blindspot(cb, table, weights)
                     } else {
                         eval::compact_eval_leaf(cb, table, weights)
