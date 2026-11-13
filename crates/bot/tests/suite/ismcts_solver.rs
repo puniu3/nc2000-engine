@@ -30,6 +30,57 @@ use nc2000_engine::{
 
 use super::common;
 
+// The abandoned bundle remains opt-in for its regression tests, never the product default.
+fn experimental_solver_config() -> RmConfig {
+    RmConfig {
+        collapse_sleep_actions: true,
+        key_no_damage: true,
+        settlement: nc2000_bot::accounting::LeafSettlementMode::SolverQuiescence,
+        ismcts_visible_tree: true,
+        semantic_hp_thresholds: true,
+        three_rank_pruning: true,
+        ..RmConfig::legacy_heavy_rollout()
+    }
+}
+
+#[test]
+fn default_search_uses_eight_turn_rollout_without_experimental_bundle() {
+    let cfg = RmConfig::default();
+    assert_eq!(
+        format!("{cfg:?}"),
+        format!("{:?}", RmConfig::legacy_heavy_rollout())
+    );
+    assert!(!cfg.ismcts_visible_tree && !cfg.semantic_hp_thresholds && !cfg.three_rank_pruning);
+    assert_eq!(
+        cfg.settlement,
+        nc2000_bot::accounting::LeafSettlementMode::BlindSpotLeaf
+    );
+    assert!(matches!(
+        cfg.playout,
+        nc2000_bot::mcts::Playout::Heavy { turns: 8, .. }
+    ));
+
+    let dex = common::dex();
+    // Recover-only mirrors cannot end early; the actual rollout must advance all eight turns.
+    let team = vec![make_set("Starmie", "Leftovers", &["Recover"], 50)];
+    let mut battle = Battle::from_fixture(dex, "1,2,3,4", &team, &team).unwrap();
+    let picks = [0, 1].map(|side| battle.legal_choices(dex, side).into_iter().next());
+    battle.apply_choices(dex, picks).unwrap();
+    let turn = battle.turn;
+    let value = nc2000_bot::mcts::playout_value(
+        &mut battle,
+        dex,
+        &cfg.playout,
+        turn + cfg.horizon,
+        &mut nc2000_bot::SplitMix64::new(777),
+        cfg.rollout_rules(),
+    );
+    assert!(value.is_finite() && (0.0..=1.0).contains(&value));
+    let end = nc2000_bot::mcts::last_sim_end();
+    assert_eq!(end.outcome, 0);
+    assert_eq!(end.turn, turn + 8);
+}
+
 fn make_set(species: &str, item: &str, moves: &[&str], level: u8) -> PokemonSet {
     serde_json::from_value(serde_json::json!({
         "name": species,
@@ -163,7 +214,7 @@ fn solver_leaf_is_strictly_antisymmetric_across_1v1_multimon_wobbuffet_and_force
 #[test]
 fn semantic_hp_collapses_non_threshold_rolls_splits_cliffs_and_merges_full_hp_recovery() {
     let dex = common::dex();
-    let cfg = RmConfig::default();
+    let cfg = experimental_solver_config();
     let s0 = vec![make_set("Snorlax", "Leftovers", &["Body Slam", "Earthquake", "Curse", "Rest"], 55)];
     let s1 = vec![make_set("Zapdos", "Leftovers", &["Thunderbolt", "Hidden Power Ice", "Whirlwind", "Rest"], 55)];
     let (mut b_roll_lo, _) = swap_sides_battle(dex, &s0, &s1, 99);
@@ -218,7 +269,7 @@ fn semantic_hp_collapses_non_threshold_rolls_splits_cliffs_and_merges_full_hp_re
 #[test]
 fn three_rank_pruning_hard_prunes_noop_and_soft_gates_marked_actions() {
     let dex = common::dex();
-    let cfg = RmConfig::default();
+    let cfg = experimental_solver_config();
     let s0 = vec![
         make_set("Marowak", "Thick Club", &["Earthquake", "Rock Slide", "Swords Dance", "Rest"], 50),
         make_set("Starmie", "Leftovers", &["Surf", "Thunderbolt", "Safeguard", "Recover"], 50),
@@ -267,7 +318,7 @@ fn ismcts_aggregates_visible_states_deepens_search_and_nails_report_4296_tactics
     let dex = common::dex();
     let pool = common::team_pool_v2();
 
-    // 1. Compare search depth & node aggregation: default (5-pillar ISMCTS + solver) vs legacy heavy rollout
+    // 1. Compare search depth & node aggregation: explicit experimental 5-pillar ISMCTS + solver vs legacy heavy rollout
     let own = pool.teams[0].sets.clone();
     let cand_a = pool.teams[1].sets.clone();
     let mut cand_b = cand_a.clone();
@@ -308,7 +359,7 @@ fn ismcts_aggregates_visible_states_deepens_search_and_nails_report_4296_tactics
     let cfg_new = RmConfig {
         iterations: iters,
         c: 0.4,
-        ..RmConfig::default()
+        ..experimental_solver_config()
     };
     let cfg_leg = RmConfig {
         iterations: iters,
@@ -359,7 +410,7 @@ fn ismcts_aggregates_visible_states_deepens_search_and_nails_report_4296_tactics
         let cfg = RmConfig {
             iterations: 3_000,
             c: 0.4,
-            ..RmConfig::default()
+            ..experimental_solver_config()
         };
         let mut agent = ProtocolAgent::new(dex, 1, mpool.clone(), cfg, 61001);
         agent.pin_opponent(opp_sets.clone());

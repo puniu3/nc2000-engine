@@ -1013,8 +1013,8 @@ impl RmConfig {
         }
     }
 
-    /// Previous shallow MCTS + 8-turn heavy max-damage rollout configuration, preserved for
-    /// A/B benchmarking and regression duels against the rollout-free ISMCTS + solver default.
+    /// Production baseline: state-keyed MCTS with an eight-turn heavy rollout.
+    /// Kept as a named constructor for controlled experiments against the default.
     pub fn legacy_heavy_rollout() -> Self {
         RmConfig {
             iterations: 1000,
@@ -1053,38 +1053,7 @@ impl RmConfig {
 
 impl Default for RmConfig {
     fn default() -> Self {
-        RmConfig {
-            iterations: 1000,
-            rule: SelRule::Rm,
-            probe: 0.25,
-            mix_actions: 3,
-            c: 1.0,
-            collapse_sleep_actions: true,
-            root_revisit_interval: 0,
-            canonical_claw_key: false,
-            unseen_claw_root: false,
-            horizon: 100,
-            playout: Playout::heavy(),
-            threshold: 0.5,
-            hp_buckets: 16,
-            solve_sweeps: 2000,
-            rollout_status: false,
-            rollout_switch: false,
-            rollout_perish: false,
-            rollout_combo: true,
-            rollout_capped_damage: false,
-            rollout_residual: false,
-            rollout_baton_pass: true,
-            threshold_key: false,
-            key_no_damage: true,
-            mask_rules: MaskRules::default(),
-            settlement: crate::accounting::LeafSettlementMode::SolverQuiescence,
-            endgame_rules: EndgameRules::default(),
-            ismcts_visible_tree: true,
-            semantic_hp_thresholds: true,
-            three_rank_pruning: true,
-            marked_unlock_visits: 12,
-        }
+        Self::legacy_heavy_rollout()
     }
 }
 

@@ -31,7 +31,7 @@ inherits the legacy settlement mode. Existing ISMCTS HP bookkeeping remains
 in the library, but semantic HP merging and solver quadrature are disabled.
 
 This is a configuration-level isolation using the current search library.
-The production default and locked preview artifacts are unchanged. A positive
+At experiment time, the production default and locked preview artifacts were unchanged. A positive
 result here would justify further validation, not an automatic production
 promotion or a claim that the ISMCTS implementation is formally sound.
 
@@ -129,3 +129,9 @@ Raw per-pair records and timing arrays remain under `tmp/ismcts-only/`.
 The 27k catalog run's harness hash predates only the addition of preview timing
 arrays to disk traces and a terminal-outcome assertion in the null self-test;
 its simulation and configuration code are identical to the final harness.
+
+Following this experiment, the production default was restored to
+`RmConfig::legacy_heavy_rollout()` (the eight-turn rollout configuration on
+GitHub master at `bb1887e2`). The ISMCTS-only runner remains available for
+explicit experiments; solver-bundle tests now construct their configuration
+explicitly. Preview artifacts are regenerated for the restored default.
