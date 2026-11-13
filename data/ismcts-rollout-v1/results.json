@@ -1,0 +1,262 @@
+{
+  "experiment": "ismcts-visible-tree-with-eight-turn-heavy-rollout",
+  "date": "2026-11-13",
+  "library_revision": "4dae00a241911c7406ef49ecdd66ec29536658d1",
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01) (Homebrew)",
+  "build_command": "cargo build --release -p nc2000-bot --example ismcts_rollout_duel",
+  "current_harness_sha256": "0447d2ae67073696ca8dce854bb60a90c75437516110d9f4c621296408438e52",
+  "harness_note": "The catalog-27k run predates only the addition of preview timing fields to disk traces and a terminal-outcome assertion in the null self-test; simulation and configuration code are identical.",
+  "timing_note": "Local concurrent wall-clock latency; 81k and offpool ran concurrently and overlapped the tail of 27k. This is an equal-iteration comparison, not an equal-time gate.",
+  "production_default_changed": false,
+  "self_test": {
+    "self_test": "ok",
+    "null_pairs": 8,
+    "rollout_end_turn": 9,
+    "depth": [
+      {
+        "arm": "legacy",
+        "side": 0,
+        "nodes": 2415,
+        "mean_depth": 0.5908333333333333,
+        "max_depth": 2
+      },
+      {
+        "arm": "ismcts",
+        "side": 0,
+        "nodes": 2415,
+        "mean_depth": 2.3941666666666666,
+        "max_depth": 5
+      },
+      {
+        "arm": "legacy",
+        "side": 1,
+        "nodes": 2421,
+        "mean_depth": 0.4220833333333333,
+        "max_depth": 2
+      },
+      {
+        "arm": "ismcts",
+        "side": 1,
+        "nodes": 2419,
+        "mean_depth": 2.3183333333333334,
+        "max_depth": 5
+      }
+    ]
+  },
+  "additional_checks": [
+    "thread-count result invariance",
+    "shard schedule invariance",
+    "cap separated from engine ties",
+    "live-preview identical-policy null control",
+    "unknown CLI flag rejected"
+  ],
+  "runs": {
+    "catalog-27k": {
+      "summary": {
+        "arm_a": "ismcts",
+        "arm_b": "legacy",
+        "battle_iters": 27000,
+        "preview_iters": 27000,
+        "c": 0.4,
+        "hp_buckets": 16,
+        "preview_mode": "compiled-shared",
+        "pool_mode": "catalog",
+        "pairs": 64,
+        "games": 128,
+        "wins": 57,
+        "losses": 71,
+        "ties": 0,
+        "capped": 0,
+        "score": 0.445313,
+        "se": 0.041841,
+        "ci95_pair_normal": [
+          0.3633047487361035,
+          0.5273202512638965
+        ],
+        "score_bounds": [
+          0.4453125,
+          0.4453125
+        ],
+        "score_convention": "win=1, terminal tie=0.5, loss=0; unresolved=0.5 midpoint with bounds",
+        "seed": 20261113,
+        "start_pair": 0,
+        "end_pair": 64,
+        "stride": 1,
+        "offset": 0,
+        "threads": 8,
+        "max_turns": 1001,
+        "inputs_sha256": {
+          "data/compiled-preview-v1.json": "6e7917ee7baf2e887e10654cb0b33b3ca71babc6cddc3a0489dadc4c97300642",
+          "data/belief-pool-v3/belief-pool.json": "50618a2a5a59f6cb2e652bce2146987923e88217b471ff0ecb845cc84be5fb5b",
+          "data/team-pool-v2/team-pool.json": "5b7b7189e6c01b56285386bf03dc5837c26c58c9a0065cd7c08283c15029f56b",
+          "data/training-v3/rentals.json": "651cfa7a3f05d8264fa2fd6f0e7faa951de59346f002171e148b8d1e13412000"
+        },
+        "harness_sha256": "ea287d10ad0de72f18d66205efdf47a97002397b09429fd88c93212fd5c0d0bb",
+        "build_fingerprint": "fnv1a64:ad55cd335cba12f8:m17e-solver-build-v3",
+        "a_config": "RmConfig { iterations: 27000, rule: Ucb, probe: 0.25, mix_actions: 3, c: 0.4, collapse_sleep_actions: false, root_revisit_interval: 0, canonical_claw_key: false, unseen_claw_root: false, horizon: 100, playout: Heavy { eps: 0.2, turns: 8, weights: EvalWeights { hp: 1.0, alive: 0.5, brn: 0.35, par: 0.35, slp: 0.42, frz: 0.56, psn: 0.25, tox: 0.35, boost: [0.15, 0.1, 0.15, 0.1, 0.15, 0.1, 0.1], threat: 0.5, pp: 0.2, scale: 1.5, couple_evasion: true, slp_time_scale: true, substitute: 0.5, race: 3.0, leaf_alpha: 1.0, exchange: 0.0, spikes: 1.5, confusion: 0.0, exchange_v2: false, residual_scale: 0.0 } }, threshold: 0.5, hp_buckets: 16, solve_sweeps: 2000, rollout_status: false, rollout_switch: false, rollout_perish: false, rollout_combo: true, rollout_capped_damage: false, rollout_residual: false, rollout_baton_pass: true, threshold_key: false, key_no_damage: false, mask_rules: MaskRules { destiny_bond_wait: true, residual_damage_wait: true, own_recovery_wait: true, priority_heal: true, sleep_talk_awake: true, immunity_ignores_switch_read: false, immunity_all_switchins: false, extended_noops: true }, endgame_rules: EndgameRules { fast_win: true, safe_win: true, comeback_loss: true, early_stop: false }, settlement: BlindSpotLeaf, ismcts_visible_tree: true, semantic_hp_thresholds: false, three_rank_pruning: false, marked_unlock_visits: 12 }",
+        "b_config": "RmConfig { iterations: 27000, rule: Ucb, probe: 0.25, mix_actions: 3, c: 0.4, collapse_sleep_actions: false, root_revisit_interval: 0, canonical_claw_key: false, unseen_claw_root: false, horizon: 100, playout: Heavy { eps: 0.2, turns: 8, weights: EvalWeights { hp: 1.0, alive: 0.5, brn: 0.35, par: 0.35, slp: 0.42, frz: 0.56, psn: 0.25, tox: 0.35, boost: [0.15, 0.1, 0.15, 0.1, 0.15, 0.1, 0.1], threat: 0.5, pp: 0.2, scale: 1.5, couple_evasion: true, slp_time_scale: true, substitute: 0.5, race: 3.0, leaf_alpha: 1.0, exchange: 0.0, spikes: 1.5, confusion: 0.0, exchange_v2: false, residual_scale: 0.0 } }, threshold: 0.5, hp_buckets: 16, solve_sweeps: 2000, rollout_status: false, rollout_switch: false, rollout_perish: false, rollout_combo: true, rollout_capped_damage: false, rollout_residual: false, rollout_baton_pass: true, threshold_key: false, key_no_damage: false, mask_rules: MaskRules { destiny_bond_wait: true, residual_damage_wait: true, own_recovery_wait: true, priority_heal: true, sleep_talk_awake: true, immunity_ignores_switch_read: false, immunity_all_switchins: false, extended_noops: true }, endgame_rules: EndgameRules { fast_win: true, safe_win: true, comeback_loss: true, early_stop: false }, settlement: BlindSpotLeaf, ismcts_visible_tree: false, semantic_hp_thresholds: false, three_rank_pruning: false, marked_unlock_visits: 12 }",
+        "avg_turns": 22.98,
+        "a_decisions": 3054,
+        "b_decisions": 3046,
+        "a_mean_ms": 309.78,
+        "b_mean_ms": 310.36,
+        "a_p95_ms": 448.98,
+        "b_p95_ms": 443.43,
+        "a_p99_ms": 537.55,
+        "b_p99_ms": 532.24,
+        "a_compiled_games": 128,
+        "b_compiled_games": 128,
+        "a_fallback_pairs": 0,
+        "b_fallback_pairs": 0,
+        "elapsed_s": 248.19,
+        "games_per_s": 0.52
+      },
+      "pair_score_histogram": {
+        "0.0": 18,
+        "0.5": 35,
+        "1.0": 11
+      },
+      "raw_records": "tmp/ismcts-only/catalog-27k.jsonl",
+      "raw_records_sha256": "8f443a4e39d88303e9d7cebcc41a4d503ed792ebf1cefcdeec4aa53b16f3d9e4",
+      "independent_scoring_and_ci_check": "passed"
+    },
+    "catalog-81k": {
+      "summary": {
+        "arm_a": "ismcts",
+        "arm_b": "legacy",
+        "battle_iters": 81000,
+        "preview_iters": 81000,
+        "c": 0.4,
+        "hp_buckets": 16,
+        "preview_mode": "compiled-shared",
+        "pool_mode": "catalog",
+        "pairs": 64,
+        "games": 128,
+        "wins": 63,
+        "losses": 65,
+        "ties": 0,
+        "capped": 0,
+        "score": 0.492188,
+        "se": 0.040904,
+        "ci95_pair_normal": [
+          0.4120156332897533,
+          0.5723593667102467
+        ],
+        "score_bounds": [
+          0.4921875,
+          0.4921875
+        ],
+        "score_convention": "win=1, terminal tie=0.5, loss=0; unresolved=0.5 midpoint with bounds",
+        "seed": 20261113,
+        "start_pair": 0,
+        "end_pair": 64,
+        "stride": 1,
+        "offset": 0,
+        "threads": 12,
+        "max_turns": 1001,
+        "inputs_sha256": {
+          "data/compiled-preview-v1.json": "6e7917ee7baf2e887e10654cb0b33b3ca71babc6cddc3a0489dadc4c97300642",
+          "data/belief-pool-v3/belief-pool.json": "50618a2a5a59f6cb2e652bce2146987923e88217b471ff0ecb845cc84be5fb5b",
+          "data/team-pool-v2/team-pool.json": "5b7b7189e6c01b56285386bf03dc5837c26c58c9a0065cd7c08283c15029f56b",
+          "data/training-v3/rentals.json": "651cfa7a3f05d8264fa2fd6f0e7faa951de59346f002171e148b8d1e13412000"
+        },
+        "harness_sha256": "0447d2ae67073696ca8dce854bb60a90c75437516110d9f4c621296408438e52",
+        "build_fingerprint": "fnv1a64:ad55cd335cba12f8:m17e-solver-build-v3",
+        "a_config": "RmConfig { iterations: 81000, rule: Ucb, probe: 0.25, mix_actions: 3, c: 0.4, collapse_sleep_actions: false, root_revisit_interval: 0, canonical_claw_key: false, unseen_claw_root: false, horizon: 100, playout: Heavy { eps: 0.2, turns: 8, weights: EvalWeights { hp: 1.0, alive: 0.5, brn: 0.35, par: 0.35, slp: 0.42, frz: 0.56, psn: 0.25, tox: 0.35, boost: [0.15, 0.1, 0.15, 0.1, 0.15, 0.1, 0.1], threat: 0.5, pp: 0.2, scale: 1.5, couple_evasion: true, slp_time_scale: true, substitute: 0.5, race: 3.0, leaf_alpha: 1.0, exchange: 0.0, spikes: 1.5, confusion: 0.0, exchange_v2: false, residual_scale: 0.0 } }, threshold: 0.5, hp_buckets: 16, solve_sweeps: 2000, rollout_status: false, rollout_switch: false, rollout_perish: false, rollout_combo: true, rollout_capped_damage: false, rollout_residual: false, rollout_baton_pass: true, threshold_key: false, key_no_damage: false, mask_rules: MaskRules { destiny_bond_wait: true, residual_damage_wait: true, own_recovery_wait: true, priority_heal: true, sleep_talk_awake: true, immunity_ignores_switch_read: false, immunity_all_switchins: false, extended_noops: true }, endgame_rules: EndgameRules { fast_win: true, safe_win: true, comeback_loss: true, early_stop: false }, settlement: BlindSpotLeaf, ismcts_visible_tree: true, semantic_hp_thresholds: false, three_rank_pruning: false, marked_unlock_visits: 12 }",
+        "b_config": "RmConfig { iterations: 81000, rule: Ucb, probe: 0.25, mix_actions: 3, c: 0.4, collapse_sleep_actions: false, root_revisit_interval: 0, canonical_claw_key: false, unseen_claw_root: false, horizon: 100, playout: Heavy { eps: 0.2, turns: 8, weights: EvalWeights { hp: 1.0, alive: 0.5, brn: 0.35, par: 0.35, slp: 0.42, frz: 0.56, psn: 0.25, tox: 0.35, boost: [0.15, 0.1, 0.15, 0.1, 0.15, 0.1, 0.1], threat: 0.5, pp: 0.2, scale: 1.5, couple_evasion: true, slp_time_scale: true, substitute: 0.5, race: 3.0, leaf_alpha: 1.0, exchange: 0.0, spikes: 1.5, confusion: 0.0, exchange_v2: false, residual_scale: 0.0 } }, threshold: 0.5, hp_buckets: 16, solve_sweeps: 2000, rollout_status: false, rollout_switch: false, rollout_perish: false, rollout_combo: true, rollout_capped_damage: false, rollout_residual: false, rollout_baton_pass: true, threshold_key: false, key_no_damage: false, mask_rules: MaskRules { destiny_bond_wait: true, residual_damage_wait: true, own_recovery_wait: true, priority_heal: true, sleep_talk_awake: true, immunity_ignores_switch_read: false, immunity_all_switchins: false, extended_noops: true }, endgame_rules: EndgameRules { fast_win: true, safe_win: true, comeback_loss: true, early_stop: false }, settlement: BlindSpotLeaf, ismcts_visible_tree: false, semantic_hp_thresholds: false, three_rank_pruning: false, marked_unlock_visits: 12 }",
+        "avg_turns": 22.18,
+        "a_decisions": 2953,
+        "b_decisions": 2960,
+        "a_mean_ms": 1162.83,
+        "b_mean_ms": 1187.81,
+        "a_p95_ms": 1782.17,
+        "b_p95_ms": 1816.19,
+        "a_p99_ms": 2088.22,
+        "b_p99_ms": 2054.42,
+        "a_compiled_games": 128,
+        "b_compiled_games": 128,
+        "a_fallback_pairs": 0,
+        "b_fallback_pairs": 0,
+        "elapsed_s": 673.67,
+        "games_per_s": 0.19
+      },
+      "pair_score_histogram": {
+        "0.0": 14,
+        "0.5": 37,
+        "1.0": 13
+      },
+      "raw_records": "tmp/ismcts-only/catalog-81k.jsonl",
+      "raw_records_sha256": "2915a96163bbe3f4bfb7b5a66aeed7ce9c05bd57e99346ccfea0da368eaddb1e",
+      "independent_scoring_and_ci_check": "passed"
+    },
+    "offpool-27k": {
+      "summary": {
+        "arm_a": "ismcts",
+        "arm_b": "legacy",
+        "battle_iters": 27000,
+        "preview_iters": 27000,
+        "c": 0.4,
+        "hp_buckets": 16,
+        "preview_mode": "compiled-shared",
+        "pool_mode": "offpool",
+        "pairs": 32,
+        "games": 64,
+        "wins": 33,
+        "losses": 31,
+        "ties": 0,
+        "capped": 0,
+        "score": 0.515625,
+        "se": 0.052577,
+        "ci95_pair_normal": [
+          0.41257480719133405,
+          0.6186751928086659
+        ],
+        "score_bounds": [
+          0.515625,
+          0.515625
+        ],
+        "score_convention": "win=1, terminal tie=0.5, loss=0; unresolved=0.5 midpoint with bounds",
+        "seed": 20261113,
+        "start_pair": 0,
+        "end_pair": 32,
+        "stride": 1,
+        "offset": 0,
+        "threads": 4,
+        "max_turns": 1001,
+        "inputs_sha256": {
+          "data/compiled-preview-v1.json": "6e7917ee7baf2e887e10654cb0b33b3ca71babc6cddc3a0489dadc4c97300642",
+          "data/belief-pool-v3/belief-pool.json": "50618a2a5a59f6cb2e652bce2146987923e88217b471ff0ecb845cc84be5fb5b",
+          "data/team-pool-v2/team-pool.json": "5b7b7189e6c01b56285386bf03dc5837c26c58c9a0065cd7c08283c15029f56b",
+          "data/training-v3/rentals.json": "651cfa7a3f05d8264fa2fd6f0e7faa951de59346f002171e148b8d1e13412000"
+        },
+        "harness_sha256": "0447d2ae67073696ca8dce854bb60a90c75437516110d9f4c621296408438e52",
+        "build_fingerprint": "fnv1a64:ad55cd335cba12f8:m17e-solver-build-v3",
+        "a_config": "RmConfig { iterations: 27000, rule: Ucb, probe: 0.25, mix_actions: 3, c: 0.4, collapse_sleep_actions: false, root_revisit_interval: 0, canonical_claw_key: false, unseen_claw_root: false, horizon: 100, playout: Heavy { eps: 0.2, turns: 8, weights: EvalWeights { hp: 1.0, alive: 0.5, brn: 0.35, par: 0.35, slp: 0.42, frz: 0.56, psn: 0.25, tox: 0.35, boost: [0.15, 0.1, 0.15, 0.1, 0.15, 0.1, 0.1], threat: 0.5, pp: 0.2, scale: 1.5, couple_evasion: true, slp_time_scale: true, substitute: 0.5, race: 3.0, leaf_alpha: 1.0, exchange: 0.0, spikes: 1.5, confusion: 0.0, exchange_v2: false, residual_scale: 0.0 } }, threshold: 0.5, hp_buckets: 16, solve_sweeps: 2000, rollout_status: false, rollout_switch: false, rollout_perish: false, rollout_combo: true, rollout_capped_damage: false, rollout_residual: false, rollout_baton_pass: true, threshold_key: false, key_no_damage: false, mask_rules: MaskRules { destiny_bond_wait: true, residual_damage_wait: true, own_recovery_wait: true, priority_heal: true, sleep_talk_awake: true, immunity_ignores_switch_read: false, immunity_all_switchins: false, extended_noops: true }, endgame_rules: EndgameRules { fast_win: true, safe_win: true, comeback_loss: true, early_stop: false }, settlement: BlindSpotLeaf, ismcts_visible_tree: true, semantic_hp_thresholds: false, three_rank_pruning: false, marked_unlock_visits: 12 }",
+        "b_config": "RmConfig { iterations: 27000, rule: Ucb, probe: 0.25, mix_actions: 3, c: 0.4, collapse_sleep_actions: false, root_revisit_interval: 0, canonical_claw_key: false, unseen_claw_root: false, horizon: 100, playout: Heavy { eps: 0.2, turns: 8, weights: EvalWeights { hp: 1.0, alive: 0.5, brn: 0.35, par: 0.35, slp: 0.42, frz: 0.56, psn: 0.25, tox: 0.35, boost: [0.15, 0.1, 0.15, 0.1, 0.15, 0.1, 0.1], threat: 0.5, pp: 0.2, scale: 1.5, couple_evasion: true, slp_time_scale: true, substitute: 0.5, race: 3.0, leaf_alpha: 1.0, exchange: 0.0, spikes: 1.5, confusion: 0.0, exchange_v2: false, residual_scale: 0.0 } }, threshold: 0.5, hp_buckets: 16, solve_sweeps: 2000, rollout_status: false, rollout_switch: false, rollout_perish: false, rollout_combo: true, rollout_capped_damage: false, rollout_residual: false, rollout_baton_pass: true, threshold_key: false, key_no_damage: false, mask_rules: MaskRules { destiny_bond_wait: true, residual_damage_wait: true, own_recovery_wait: true, priority_heal: true, sleep_talk_awake: true, immunity_ignores_switch_read: false, immunity_all_switchins: false, extended_noops: true }, endgame_rules: EndgameRules { fast_win: true, safe_win: true, comeback_loss: true, early_stop: false }, settlement: BlindSpotLeaf, ismcts_visible_tree: false, semantic_hp_thresholds: false, three_rank_pruning: false, marked_unlock_visits: 12 }",
+        "avg_turns": 13.69,
+        "a_decisions": 911,
+        "b_decisions": 913,
+        "a_mean_ms": 401.01,
+        "b_mean_ms": 407.88,
+        "a_p95_ms": 544.5,
+        "b_p95_ms": 577.23,
+        "a_p99_ms": 586.08,
+        "b_p99_ms": 619.89,
+        "a_compiled_games": 0,
+        "b_compiled_games": 0,
+        "a_fallback_pairs": 32,
+        "b_fallback_pairs": 32,
+        "elapsed_s": 209.25,
+        "games_per_s": 0.31
+      },
+      "pair_score_histogram": {
+        "0.0": 5,
+        "0.5": 21,
+        "1.0": 6
+      },
+      "raw_records": "tmp/ismcts-only/offpool-27k.jsonl",
+      "raw_records_sha256": "b22aa73a8173d0582c472be61b20d346e4a4e02b863adcc9818a0c12dd198c56",
+      "independent_scoring_and_ci_check": "passed"
+    }
+  }
+}
