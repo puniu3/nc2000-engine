@@ -86,6 +86,7 @@ export interface MonSpec {
   item_original?: ItemKnowledge;
   item_current?: ItemKnowledge;
   item_gained?: boolean;
+  excluded_items?: number;
 }
 
 export interface CondSpec {

@@ -55,7 +55,38 @@
 //! it can never false-filter the true team.
 
 use nc2000_engine::dex::{toid, Dex, ItemId, MoveId, SpeciesId};
-use nc2000_engine::state::{Battle, Gender};
+use nc2000_engine::state::{Battle, Gender, Status};
+
+pub const ITEM_LEFTOVERS: u16 = 1 << 0;
+pub const ITEM_MINT_BERRY: u16 = 1 << 1;
+pub const ITEM_MIRACLE_BERRY: u16 = 1 << 2;
+pub const ITEM_PRZCUREBERRY: u16 = 1 << 3;
+pub const ITEM_PSNCUREBERRY: u16 = 1 << 4;
+pub const ITEM_ICE_BERRY: u16 = 1 << 5;
+pub const ITEM_BURNT_BERRY: u16 = 1 << 6;
+pub const ITEM_BITTER_BERRY: u16 = 1 << 7;
+pub const ITEM_BERRY: u16 = 1 << 8;
+pub const ITEM_GOLD_BERRY: u16 = 1 << 9;
+pub const ITEM_BERRY_JUICE: u16 = 1 << 10;
+pub const ITEM_BERSERK_GENE: u16 = 1 << 11;
+
+pub fn item_exclusion_bit(item_key: &str) -> u16 {
+    match item_key {
+        "leftovers" => ITEM_LEFTOVERS,
+        "mintberry" => ITEM_MINT_BERRY,
+        "miracleberry" => ITEM_MIRACLE_BERRY,
+        "przcureberry" => ITEM_PRZCUREBERRY,
+        "psncureberry" => ITEM_PSNCUREBERRY,
+        "iceberry" => ITEM_ICE_BERRY,
+        "burntberry" => ITEM_BURNT_BERRY,
+        "bitterberry" => ITEM_BITTER_BERRY,
+        "berry" => ITEM_BERRY,
+        "goldberry" => ITEM_GOLD_BERRY,
+        "berryjuice" => ITEM_BERRY_JUICE,
+        "berserkgene" => ITEM_BERSERK_GENE,
+        _ => 0,
+    }
+}
 
 pub fn move_matches(dex: &Dex, slot: MoveId, revealed: MoveId) -> bool {
     slot == revealed
@@ -140,6 +171,9 @@ pub struct MonObs {
     pub revealed_moves: Vec<MoveId>,
     pub hp_type_mask: u16,
     pub item: ItemObs,
+    /// Bitmask of original held items deductively excluded by public
+    /// Gen 2 Stadium 2 timings (`ITEM_*` constants).
+    pub excluded_items: u16,
     /// The mon has switched in at least once (its pick is public).
     pub appeared: bool,
 }
@@ -183,6 +217,19 @@ pub struct Observer {
     /// The last line was a called move announcing its charge (`[from]` +
     /// `[still]`), awaiting the `-prepare` that confirms which move it is.
     pending_call: Option<(usize, MoveId)>,
+    /// Tracks `|split|p1`/`p2` in raw `battle.log` so `Observer::observe(&Battle)`
+    /// processes the exact same public stream as `PlayerChannel`.
+    split_state: Option<(usize, bool)>,
+    opp_status: Vec<Status>,
+    opp_hp: Vec<Option<(u32, u32)>>,
+    opp_active: Option<usize>,
+    opp_confused: bool,
+    opp_leftovers_healed: bool,
+    opp_safeguard: bool,
+    own_active_species: Option<SpeciesId>,
+    own_active_alive: bool,
+    own_type_modified: bool,
+    pending_hp: Option<(usize, SpeciesId)>,
     revision: u64,
 }
 
@@ -270,10 +317,41 @@ impl Observer {
                 revealed_moves: revealed,
                 hp_type_mask: m.hp_type_mask,
                 item: ItemObs::from_parts(item(&m.item_original)?, item(&m.item_current)?, m.item_gained),
+                excluded_items: m.excluded_items,
                 appeared: m.appeared,
             });
         }
-        Ok(Observer::from_mons(spec.side, mons))
+        let mut obs = Observer::from_mons(spec.side, mons);
+        if let Some(a) = spec.sides[spec.side].active {
+            if let Some(ms) = spec.sides[spec.side].mons.get(a) {
+                obs.own_active_species = dex.species.id(&toid(&ms.species));
+                obs.own_active_alive = !ms.fainted;
+            }
+        }
+        let opp = spec.foe();
+        if let Some(a) = spec.sides[opp].active {
+            if a < obs.mons.len() {
+                let ms = &spec.sides[opp].mons[a];
+                if !ms.fainted {
+                    obs.opp_active = Some(a);
+                }
+                obs.opp_confused = ms.volatiles.iter().any(|v| v.key == "confusion");
+            }
+        }
+        for (slot, ms) in spec.sides[opp].mons.iter().enumerate() {
+            if slot < obs.mons.len() {
+                obs.opp_hp[slot] = if ms.fainted {
+                    Some((0, 100))
+                } else if ms.hp_den > 0 {
+                    Some((ms.hp_num.max(0) as u32, ms.hp_den as u32))
+                } else {
+                    None
+                };
+                obs.opp_status[slot] = Status::from_str(&ms.status);
+            }
+        }
+        obs.opp_safeguard = spec.sides[opp].conditions.iter().any(|c| c.key == "safeguard");
+        Ok(obs)
     }
 
     /// M15 protocol mode: construct from preview-public facts parsed out of
@@ -295,6 +373,17 @@ impl Observer {
             called_charging: vec![None; n],
             called_locked: vec![None; n],
             pending_call: None,
+            split_state: None,
+            opp_status: vec![Status::None; n],
+            opp_hp: vec![None; n],
+            opp_active: None,
+            opp_confused: false,
+            opp_leftovers_healed: false,
+            opp_safeguard: false,
+            own_active_species: None,
+            own_active_alive: false,
+            own_type_modified: false,
+            pending_hp: None,
             revision: 0,
         }
     }
@@ -332,6 +421,7 @@ impl Observer {
                 revealed_moves: Vec::new(),
                 hp_type_mask: u16::MAX,
                 item: ItemObs::default(),
+                excluded_items: 0,
                 appeared: false,
             })
             .collect::<Vec<_>>();
@@ -347,6 +437,17 @@ impl Observer {
             called_charging: vec![None; n],
             called_locked: vec![None; n],
             pending_call: None,
+            split_state: None,
+            opp_status: vec![Status::None; n],
+            opp_hp: vec![None; n],
+            opp_active: None,
+            opp_confused: false,
+            opp_leftovers_healed: false,
+            opp_safeguard: false,
+            own_active_species: None,
+            own_active_alive: false,
+            own_type_modified: false,
+            pending_hp: None,
             revision: 0,
         }
     }
@@ -367,6 +468,38 @@ impl Observer {
     /// Bumped whenever new information arrives (belief sync trigger).
     pub fn revision(&self) -> u64 {
         self.revision
+    }
+
+    /// True if `item_id` is impossible for opponent slot `slot` given
+    /// revealed original item, preview item flag, Item Clause, and deductive
+    /// Gen 2 Stadium 2 exclusions (`excluded_items`).
+    pub fn is_item_excluded_for_slot(
+        dex: &Dex,
+        mons: &[MonObs],
+        slot: usize,
+        item_id: Option<ItemId>,
+    ) -> bool {
+        let Some(mo) = mons.get(slot) else { return false };
+        if let Some(known) = mo.item.original {
+            return known != item_id;
+        }
+        match item_id {
+            None => mo.preview_has_item,
+            Some(id) => {
+                if !mo.preview_has_item {
+                    return true;
+                }
+                if mons
+                    .iter()
+                    .enumerate()
+                    .any(|(j, other)| j != slot && other.item.original == Some(Some(id)))
+                {
+                    return true;
+                }
+                let bit = item_exclusion_bit(dex.items.key(id));
+                bit != 0 && (mo.excluded_items & bit) != 0
+            }
+        }
     }
 
     /// Ingest everything that became visible since the last call. Call at
@@ -428,12 +561,87 @@ impl Observer {
     // ------------------------------------------------------------ log scan
 
     fn scan_line(&mut self, line: &str, dex: &Dex) -> bool {
+        if let Some((owner, secret)) = self.split_state {
+            self.split_state = secret.then_some((owner, false));
+            if (owner == self.side) != secret {
+                return false;
+            }
+        }
         let Some(body) = line.strip_prefix('|') else { return false };
         let parts: Vec<&str> = body.split('|').collect();
         let cmd = parts.first().copied().unwrap_or("");
+        if cmd == "split" {
+            let p = parts.get(1).copied().unwrap_or("");
+            let owner = if p == "p1" { Some(0) } else if p == "p2" { Some(1) } else { None };
+            if let Some(o) = owner {
+                self.split_state = Some((o, true));
+            }
+            return false;
+        }
+
         // The charge announcement and its `-prepare` are adjacent; anything
         // in between means this was not a charging call after all.
         let pending = self.pending_call.take();
+
+        let mut dirty = false;
+        if let Some((hp_slot, def_sp)) = self.pending_hp {
+            let subj = parts.get(1).copied().unwrap_or("");
+            let own_hit = self.subject_is_own_side(subj);
+            let mut consume_hp = false;
+            let mut eff = None;
+            match cmd {
+                "-supereffective" if own_hit => {
+                    eff = Some(crate::hp_evidence::Effectiveness::SuperEffective);
+                    consume_hp = true;
+                }
+                "-resisted" if own_hit => {
+                    eff = Some(crate::hp_evidence::Effectiveness::Resisted);
+                    consume_hp = true;
+                }
+                "-immune" if own_hit && !parts.iter().any(|p| *p == "[ohko]") => {
+                    eff = Some(crate::hp_evidence::Effectiveness::Immune);
+                    consume_hp = true;
+                }
+                "-damage" if own_hit && !parts.iter().any(|p| p.starts_with("[from] ")) => {
+                    eff = Some(crate::hp_evidence::Effectiveness::Neutral);
+                    consume_hp = true;
+                }
+                "-activate"
+                    if own_hit
+                        && parts.get(2) == Some(&"Substitute")
+                        && parts.iter().any(|p| *p == "[damage]") =>
+                {
+                    eff = Some(crate::hp_evidence::Effectiveness::Neutral);
+                    consume_hp = true;
+                }
+                "-activate"
+                    if own_hit
+                        && matches!(parts.get(2).copied().unwrap_or(""), "Protect" | "Detect") =>
+                {
+                    consume_hp = true;
+                }
+                "-end"
+                    if own_hit
+                        && parts.get(2) == Some(&"Substitute")
+                        && !parts.iter().any(|p| p.starts_with("[from] ")) =>
+                {
+                    eff = Some(crate::hp_evidence::Effectiveness::Neutral);
+                    consume_hp = true;
+                }
+                "move" | "cant" | "switch" | "drag" | "faint" | "turn" | "upkeep" | "-miss"
+                | "-fail" => {
+                    consume_hp = true;
+                }
+                _ => {}
+            }
+            if let Some(effectiveness) = eff {
+                dirty |= self.narrow_hp_mask(dex, hp_slot, def_sp, effectiveness);
+            }
+            if consume_hp {
+                self.pending_hp = None;
+            }
+        }
+
         match cmd {
             "-prepare" => {
                 let subject = parts.get(1).copied().unwrap_or("");
@@ -444,140 +652,304 @@ impl Observer {
                         self.called_charging[m] = Some(id);
                     }
                 }
-                false
             }
-            "cant" | "-anim" => {
+            "-anim" => {
                 if let Some(m) = self.opp_subject(parts.get(1).copied().unwrap_or("")) {
                     self.called_charging[m] = None;
                 }
-                false
             }
-            "move" => self.scan_move(&parts, dex),
-            "switch" | "drag" | "faint" => {
-                // clear_volatile drops Transform/Mimic overlays on exit; a
-                // switch line's subject is the incoming mon, so clear all
-                // suppression for the side (only actives carry overlays).
-                if self.subject_is_opp_side(parts.get(1).copied().unwrap_or("")) {
+            "cant" => {
+                dirty |= self.check_on_update_exclusions();
+                let subj = parts.get(1).copied().unwrap_or("");
+                let reason = parts.get(2).copied().unwrap_or("");
+                if let Some(m) = self.opp_subject(subj) {
+                    self.called_charging[m] = None;
+                    if reason == "slp" {
+                        dirty |= self.exclude_items(m, ITEM_MINT_BERRY | ITEM_MIRACLE_BERRY);
+                    } else if reason == "par" || reason == "frz" {
+                        dirty |= self.exclude_items(m, ITEM_MIRACLE_BERRY);
+                    }
+                }
+            }
+            "move" => {
+                dirty |= self.scan_move(&parts, dex);
+            }
+            "turn" => {
+                self.opp_leftovers_healed = false;
+                dirty |= self.check_on_update_exclusions();
+            }
+            "upkeep" => {
+                if let Some(m) = self.opp_active {
+                    if let Some((num, den)) = self.opp_hp[m] {
+                        if num > 0 && den > 0 {
+                            if num < den && !self.opp_leftovers_healed {
+                                dirty |= self.exclude_items(m, ITEM_LEFTOVERS);
+                            }
+                            if (den == 100 && num * 2 < 100)
+                                || (den != 100 && (num + 1) * 2 <= den)
+                            {
+                                dirty |= self.exclude_items(
+                                    m,
+                                    ITEM_BERRY | ITEM_GOLD_BERRY | ITEM_BERRY_JUICE,
+                                );
+                            }
+                            if self.opp_status[m] == Status::Slp {
+                                dirty |=
+                                    self.exclude_items(m, ITEM_MINT_BERRY | ITEM_MIRACLE_BERRY);
+                            } else if self.opp_status[m] != Status::None || self.opp_confused {
+                                dirty |= self.exclude_items(m, ITEM_MIRACLE_BERRY);
+                            }
+                        }
+                    }
+                }
+                self.opp_leftovers_healed = false;
+            }
+            "switch" | "drag" => {
+                let subj = parts.get(1).copied().unwrap_or("");
+                let det = parts.get(2).copied().unwrap_or("");
+                let hp_s = parts.get(3).copied().unwrap_or("");
+                if self.subject_is_opp_side(subj) {
                     self.log_suppress.iter_mut().for_each(|s| *s = false);
-                    // Mimic's overwritten slot goes back to Mimic on exit
                     self.mimic_overlay.iter_mut().for_each(|o| *o = None);
-                    // a charge or multi-turn lock dies with the mon that was holding it
                     self.called_charging.iter_mut().for_each(|c| *c = None);
                     self.called_locked.iter_mut().for_each(|c| *c = None);
+                    self.opp_confused = false;
+                    self.opp_leftovers_healed = false;
+                    let slot = self.opp_subject(subj).or_else(|| self.opp_switch_slot(det, dex));
+                    self.opp_active = slot;
+                    if let Some(m) = slot {
+                        let (hp, st) = Self::parse_hp_status(hp_s);
+                        if let Some(pair) = hp {
+                            self.opp_hp[m] = Some(pair);
+                        }
+                        self.opp_status[m] = st;
+                    }
+                } else if self.subject_is_own_side(subj) {
+                    let sp_name = det.split(',').next().unwrap_or("");
+                    self.own_active_species = dex.species.id(&toid(sp_name));
+                    let (hp, _) = Self::parse_hp_status(hp_s);
+                    self.own_active_alive = hp.map_or(true, |(n, _)| n > 0);
+                    self.own_type_modified = false;
                 }
-                false
+            }
+            "faint" => {
+                let subj = parts.get(1).copied().unwrap_or("");
+                if self.subject_is_opp_side(subj) {
+                    self.log_suppress.iter_mut().for_each(|s| *s = false);
+                    self.mimic_overlay.iter_mut().for_each(|o| *o = None);
+                    self.called_charging.iter_mut().for_each(|c| *c = None);
+                    self.called_locked.iter_mut().for_each(|c| *c = None);
+                    self.opp_confused = false;
+                    if let Some(m) = self.opp_subject(subj).or(self.opp_active) {
+                        self.opp_hp[m] = Some((0, 100));
+                        self.opp_status[m] = Status::None;
+                    }
+                    self.opp_active = None;
+                } else if self.subject_is_own_side(subj) {
+                    self.own_active_alive = false;
+                    self.own_type_modified = false;
+                }
+            }
+            "-damage" => {
+                let subj = parts.get(1).copied().unwrap_or("");
+                let hp_s = parts.get(2).copied().unwrap_or("");
+                if let Some(m) = self.opp_subject(subj) {
+                    let (hp, st) = Self::parse_hp_status(hp_s);
+                    if let Some(pair) = hp {
+                        self.opp_hp[m] = Some(pair);
+                        if pair.0 == 0 {
+                            self.opp_status[m] = Status::None;
+                        } else if st != Status::None {
+                            self.opp_status[m] = st;
+                        }
+                    }
+                } else if self.subject_is_own_side(subj) {
+                    let (hp, _) = Self::parse_hp_status(hp_s);
+                    if hp.is_some_and(|(n, _)| n == 0) {
+                        self.own_active_alive = false;
+                    }
+                }
+            }
+            "-sethp" => {
+                for pair_idx in [1usize, 3usize] {
+                    if let (Some(subj), Some(hp_s)) = (parts.get(pair_idx), parts.get(pair_idx + 1)) {
+                        if let Some(m) = self.opp_subject(subj) {
+                            let (hp, _) = Self::parse_hp_status(hp_s);
+                            if let Some(p) = hp {
+                                self.opp_hp[m] = Some(p);
+                            }
+                        }
+                    }
+                }
+            }
+            "-status" => {
+                let subj = parts.get(1).copied().unwrap_or("");
+                let st_s = parts.get(2).copied().unwrap_or("");
+                if let Some(m) = self.opp_subject(subj) {
+                    self.opp_status[m] = Status::from_str(st_s);
+                }
+            }
+            "-curestatus" => {
+                let subj = parts.get(1).copied().unwrap_or("");
+                let st_s = parts.get(2).copied().unwrap_or("");
+                if let Some(m) = self.opp_subject(subj) {
+                    if st_s == "confusion" {
+                        if self.opp_active == Some(m) {
+                            self.opp_confused = false;
+                        }
+                    } else {
+                        self.opp_status[m] = Status::None;
+                    }
+                }
+            }
+            "-cureteam" => {
+                let subj = parts.get(1).copied().unwrap_or("");
+                if self.subject_is_opp_side(subj) {
+                    self.opp_status.iter_mut().for_each(|s| *s = Status::None);
+                }
+            }
+            "-start" => {
+                let subj = parts.get(1).copied().unwrap_or("");
+                let what = parts.get(2).copied().unwrap_or("");
+                if self.opp_subject(subj).is_some() && what == "confusion" {
+                    self.opp_confused = true;
+                }
+                if self.subject_is_own_side(subj)
+                    && (what == "typechange" || what.contains("Foresight"))
+                {
+                    self.own_type_modified = true;
+                }
+            }
+            "-end" => {
+                let subj = parts.get(1).copied().unwrap_or("");
+                let what = parts.get(2).copied().unwrap_or("");
+                if self.opp_subject(subj).is_some() && what == "confusion" {
+                    self.opp_confused = false;
+                }
+            }
+            "-sidestart" | "-sideend" => {
+                let side_s = parts.get(1).copied().unwrap_or("");
+                let cond = parts.get(2).copied().unwrap_or("");
+                let opp_prefix = if self.opp() == 0 { "p1" } else { "p2" };
+                if side_s.starts_with(opp_prefix) && cond.contains("Safeguard") {
+                    self.opp_safeguard = cmd == "-sidestart";
+                }
             }
             "-transform" => {
-                if let Some(m) = self.opp_subject(parts.get(1).copied().unwrap_or("")) {
+                let subj = parts.get(1).copied().unwrap_or("");
+                if let Some(m) = self.opp_subject(subj) {
                     self.log_suppress[m] = true;
                 }
-                false
+                if self.subject_is_own_side(subj) {
+                    self.own_type_modified = true;
+                }
             }
             "-activate" => {
-                let Some(m) = self.opp_subject(parts.get(1).copied().unwrap_or("")) else {
-                    return false;
-                };
-                let what = parts.get(2).copied().unwrap_or("");
-                if what == "move: Mimic" {
-                    // PS names the copied move on this line, so exactly one
-                    // slot becomes foreign. Suppressing the whole mon instead
-                    // would drop every later use of its other three slots --
-                    // the design's class-A example, "ignoring an already-
-                    // revealed move". Fall back to whole-mon suppression only
-                    // if the name does not resolve.
-                    match parts.get(3).and_then(|n| dex.moves.id(&toid(n))) {
-                        Some(copied) => self.mimic_overlay[m] = Some(copied),
-                        None => self.log_suppress[m] = true,
-                    }
-                    return false;
-                }
-                if let Some(item_name) = what.strip_prefix("item: ") {
-                    if let Some(id) = dex.items.id(&toid(item_name)) {
-                        return self.mons[m].item.revealed_held(id);
+                if let Some(m) = self.opp_subject(parts.get(1).copied().unwrap_or("")) {
+                    let what = parts.get(2).copied().unwrap_or("");
+                    if what == "move: Mimic" {
+                        match parts.get(3).and_then(|n| dex.moves.id(&toid(n))) {
+                            Some(copied) => self.mimic_overlay[m] = Some(copied),
+                            None => self.log_suppress[m] = true,
+                        }
+                    } else if what == "confusion" {
+                        dirty |= self.exclude_items(m, ITEM_MIRACLE_BERRY);
+                    } else if let Some(item_name) = what.strip_prefix("item: ") {
+                        if let Some(id) = dex.items.id(&toid(item_name)) {
+                            dirty |= self.mons[m].item.revealed_held(id);
+                        }
                     }
                 }
-                false
             }
             "-enditem" => {
-                let Some(m) = self.opp_subject(parts.get(1).copied().unwrap_or("")) else {
-                    return false;
-                };
-                match dex.items.id(&toid(parts.get(2).copied().unwrap_or(""))) {
-                    Some(id) => self.mons[m].item.lost(id),
-                    None => false,
+                if let Some(m) = self.opp_subject(parts.get(1).copied().unwrap_or("")) {
+                    if let Some(id) = dex.items.id(&toid(parts.get(2).copied().unwrap_or(""))) {
+                        dirty |= self.mons[m].item.lost(id);
+                    }
                 }
             }
             "-item" => {
                 let subject = parts.get(1).copied().unwrap_or("");
-                let Some(id) = dex.items.id(&toid(parts.get(2).copied().unwrap_or(""))) else {
-                    return false;
-                };
-                if let Some(m) = self.opp_subject(subject) {
-                    // opponent gained an item (their Thief stole ours)
-                    return self.mons[m].item.gained(id);
-                }
-                // our Thief stole theirs: `-item <us> <item> [from] move: Thief [of] <them>`
-                if parts.iter().any(|p| *p == "[from] move: Thief") {
-                    if let Some(of) = parts.iter().find_map(|p| p.strip_prefix("[of] ")) {
-                        if let Some(v) = self.opp_subject(of) {
-                            return self.mons[v].item.lost(id);
+                if let Some(id) = dex.items.id(&toid(parts.get(2).copied().unwrap_or(""))) {
+                    if let Some(m) = self.opp_subject(subject) {
+                        dirty |= self.mons[m].item.gained(id);
+                    } else if parts.iter().any(|p| *p == "[from] move: Thief") {
+                        if let Some(of) = parts.iter().find_map(|p| p.strip_prefix("[of] ")) {
+                            if let Some(v) = self.opp_subject(of) {
+                                dirty |= self.mons[v].item.lost(id);
+                            }
                         }
                     }
                 }
-                false
             }
             "-heal" => {
-                let Some(m) = self.opp_subject(parts.get(1).copied().unwrap_or("")) else {
-                    return false;
-                };
-                if let Some(item_name) =
-                    parts.iter().find_map(|p| p.strip_prefix("[from] item: "))
-                {
-                    if let Some(id) = dex.items.id(&toid(item_name)) {
-                        return self.mons[m].item.revealed_held(id);
+                if let Some(m) = self.opp_subject(parts.get(1).copied().unwrap_or("")) {
+                    let hp_s = parts.get(2).copied().unwrap_or("");
+                    let (hp, _) = Self::parse_hp_status(hp_s);
+                    if let Some(pair) = hp {
+                        self.opp_hp[m] = Some(pair);
+                    }
+                    if let Some(item_name) =
+                        parts.iter().find_map(|p| p.strip_prefix("[from] item: "))
+                    {
+                        if toid(item_name) == "leftovers" {
+                            self.opp_leftovers_healed = true;
+                        }
+                        if let Some(id) = dex.items.id(&toid(item_name)) {
+                            dirty |= self.mons[m].item.revealed_held(id);
+                        }
                     }
                 }
-                false
             }
-            _ => false,
+            _ => {}
         }
+        dirty
     }
 
     fn scan_move(&mut self, parts: &[&str], dex: &Dex) -> bool {
-        let Some(m) = self.opp_subject(parts.get(1).copied().unwrap_or("")) else {
-            return false;
+        let subj = parts.get(1).copied().unwrap_or("");
+        let is_pursuit_intercept = parts
+            .iter()
+            .any(|p| *p == "[from] Pursuit" || *p == "[from] move: Pursuit");
+        let mut dirty = false;
+        if !is_pursuit_intercept {
+            dirty |= self.check_on_update_exclusions();
+        }
+        let Some(m) = self.opp_subject(subj) else {
+            return dirty;
         };
-        if self.log_suppress[m] {
-            // Transform copy active: plain |move| lines (and even Sleep Talk
-            // calls) may name any move of the copied set.
-            return false;
-        }
-        let named = parts.get(2).copied().unwrap_or("");
-        let Some(id) = dex.moves.id(&toid(named)) else { return false };
-        if self.mimic_overlay[m] == Some(id) {
-            // the one slot Mimic overwrote. Sleep Talk selects from the
-            // CURRENT slots, so this must be checked before the `[from]`
-            // rules, not only for plain lines.
-            return false;
-        }
         let from = parts
             .iter()
             .find_map(|p| p.strip_prefix("[from] "))
             .map(|f| f.strip_prefix("move: ").unwrap_or(f));
+        if from.is_none() {
+            if self.opp_status[m] == Status::Slp {
+                dirty |= self.exclude_items(m, ITEM_MINT_BERRY | ITEM_MIRACLE_BERRY);
+            } else if self.opp_status[m] != Status::None || self.opp_confused {
+                dirty |= self.exclude_items(m, ITEM_MIRACLE_BERRY);
+            }
+        }
+        if self.log_suppress[m] {
+            // Transform copy active: plain |move| lines (and even Sleep Talk
+            // calls) may name any move of the copied set.
+            return dirty;
+        }
+        let named = parts.get(2).copied().unwrap_or("");
+        let Some(id) = dex.moves.id(&toid(named)) else { return dirty };
+        if self.opp_safeguard && matches!(dex.moves.key(id), "outrage" | "petaldance" | "thrash") {
+            self.opp_confused = false;
+        }
+        if self.mimic_overlay[m] == Some(id) {
+            // the one slot Mimic overwrote. Sleep Talk selects from the
+            // CURRENT slots, so this must be checked before the `[from]`
+            // rules, not only for plain lines.
+            return dirty;
+        }
         if let Some(from) = from {
             let from_id = dex.moves.id(&toid(from));
-            // `[from]` naming the executing move itself is not a call at all:
-            // Pursuit's interception of a switching target logs
-            // `|move|p2a: X|Pursuit|p1a: Y|[from] Pursuit`, and that is the mon
-            // publicly using its own slot. Sleep Talk is the other exception —
-            // it selects from the user's own set. Everything else (Metronome,
-            // Mirror Move) executes a FOREIGN move.
             let self_named = from_id.is_some_and(|f| move_matches(dex, id, f));
             let sleep_talk = toid(from) == "sleeptalk";
             if !self_named && !sleep_talk {
-                // A called TWO-TURN move announces its charge here and then
-                // releases on a plain `|move|` line that carries no `[from]`.
-                // Remember it so the release is not read as the mon's own.
                 if parts.iter().any(|p| *p == "[still]") {
                     self.pending_call = Some((m, id));
                 }
@@ -587,30 +959,137 @@ impl Observer {
                 ) {
                     self.called_locked[m] = Some(id);
                 }
-                return false;
+                return dirty;
             }
         }
         if from.is_none() && self.called_charging[m] == Some(id) {
             // the release of the charge a caller started: not a submitted slot
             self.called_charging[m] = None;
-            return false;
+            return dirty;
         }
         if from.is_none() && self.called_locked[m] == Some(id) {
             // continuation turn of a caller-initiated multi-turn lock
-            return false;
+            return dirty;
         }
         // synthetic non-set moves
         if matches!(dex.moves.key(id), "struggle" | "recharge") {
-            return false;
+            return dirty;
         }
         if from.is_none() {
             self.called_locked[m] = None;
         }
         if !self.mons[m].revealed_moves.contains(&id) {
             self.mons[m].revealed_moves.push(id);
-            return true;
+            dirty = true;
         }
-        false
+        if dex.moves.key(id) == "hiddenpower" {
+            let tgt = parts.get(3).copied().unwrap_or("");
+            if self.subject_is_own_side(tgt) && !self.own_type_modified {
+                if let Some(def_sp) = self.own_active_species {
+                    self.pending_hp = Some((m, def_sp));
+                }
+            }
+        }
+        dirty
+    }
+
+    fn exclude_items(&mut self, slot: usize, bits: u16) -> bool {
+        if bits == 0 {
+            return false;
+        }
+        let Some(mo) = self.mons.get_mut(slot) else { return false };
+        if !mo.preview_has_item
+            || mo.item.original.is_some()
+            || mo.item.current.is_some()
+            || mo.item.gained
+        {
+            return false;
+        }
+        let next = mo.excluded_items | bits;
+        if next != mo.excluded_items {
+            mo.excluded_items = next;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn check_on_update_exclusions(&mut self) -> bool {
+        if !self.own_active_alive {
+            return false;
+        }
+        let Some(m) = self.opp_active else { return false };
+        if !self.opp_hp.get(m).copied().flatten().map_or(true, |(n, _)| n > 0) {
+            return false;
+        }
+        let mut bits = ITEM_BERSERK_GENE;
+        match self.opp_status[m] {
+            Status::Par => bits |= ITEM_PRZCUREBERRY,
+            Status::Psn | Status::Tox => bits |= ITEM_PSNCUREBERRY,
+            Status::Brn => bits |= ITEM_ICE_BERRY,
+            Status::Frz => bits |= ITEM_BURNT_BERRY,
+            _ => {}
+        }
+        if self.opp_confused {
+            bits |= ITEM_BITTER_BERRY;
+        }
+        self.exclude_items(m, bits)
+    }
+
+    fn narrow_hp_mask(
+        &mut self,
+        dex: &Dex,
+        slot: usize,
+        def_sp: SpeciesId,
+        eff: crate::hp_evidence::Effectiveness,
+    ) -> bool {
+        let Some(mo) = self.mons.get_mut(slot) else { return false };
+        let def_types = dex.species_types(def_sp);
+        let eff_mask = crate::hp_evidence::types_with_effectiveness(dex, &def_types, eff);
+        let legal = crate::hp_evidence::possible_types(dex, mo.species, mo.gender);
+        let next = mo.hp_type_mask & eff_mask;
+        if next & legal == 0 {
+            return false;
+        }
+        if next != mo.hp_type_mask {
+            mo.hp_type_mask = next;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn parse_hp_status(s: &str) -> (Option<(u32, u32)>, Status) {
+        let s = s.trim();
+        if s == "0 fnt" || s.starts_with("0 ") {
+            return (Some((0, 100)), Status::None);
+        }
+        let mut iter = s.split_whitespace();
+        let hp = iter.next().and_then(|frac| {
+            let (a, b) = frac.split_once('/')?;
+            Some((a.parse::<u32>().ok()?, b.parse::<u32>().ok()?))
+        });
+        let st = iter.next().map(Status::from_str).unwrap_or(Status::None);
+        (hp, st)
+    }
+
+    fn opp_switch_slot(&self, details: &str, dex: &Dex) -> Option<usize> {
+        let mut segs = details.split(',').map(str::trim);
+        let sp = dex.species.id(&toid(segs.next().unwrap_or("")))?;
+        let mut level = 100u8;
+        let mut gender = Gender::N;
+        for seg in segs {
+            if let Some(lv) = seg.strip_prefix('L').and_then(|v| v.parse::<u8>().ok()) {
+                level = lv;
+            } else if seg == "M" {
+                gender = Gender::M;
+            } else if seg == "F" {
+                gender = Gender::F;
+            }
+        }
+        self.mons
+            .iter()
+            .position(|m| m.species == sp && m.level == level && m.gender == gender)
     }
 
     // -------------------------------------------------- subject resolution
@@ -640,6 +1119,11 @@ impl Observer {
         let b = s.as_bytes();
         b.len() >= 4 && b[0] == b'p' && b[1] == b'1' + self.opp() as u8
     }
+
+    fn subject_is_own_side(&self, s: &str) -> bool {
+        let b = s.as_bytes();
+        b.len() >= 4 && b[0] == b'p' && b[1] == b'1' + self.side as u8
+    }
 }
 
 #[cfg(test)]
@@ -657,6 +1141,7 @@ mod tests {
             revealed_moves: Vec::new(),
             hp_type_mask: u16::MAX,
             item: Default::default(),
+            excluded_items: 0,
             appeared: true,
         }];
         // side 0 observes side 1 (`p2a:` subjects).
@@ -672,14 +1157,131 @@ mod tests {
     }
 
     #[test]
-    fn hp_effectiveness_inference_is_disabled_by_default() {
+    fn live_hp_effectiveness_narrows_and_respects_transforms_and_calls() {
         let dex = load_dex();
         let mut obs = one_mon_observer(&dex, "Aerodactyl", "A");
-        for line in ["|switch|p1a: N|Snorlax, L50|100/100",
-            "|move|p2a: A|Hidden Power|p1a: N", "|-supereffective|p1a: N"] {
+        // SE against Snorlax (Normal) -> Fighting only
+        for line in [
+            "|switch|p1a: N|Snorlax, L50|100/100",
+            "|move|p2a: A|Hidden Power|p1a: N",
+            "|-supereffective|p1a: N",
+            "|-damage|p1a: N|62/100",
+        ] {
             obs.ingest_line(line, &dex);
         }
-        assert_eq!(obs.mons[0].hp_type_mask, u16::MAX);
+        let fight_bit = crate::hp_evidence::types_with_effectiveness(
+            &dex,
+            &dex.species_types(dex.species.id("snorlax").unwrap()),
+            crate::hp_evidence::Effectiveness::SuperEffective,
+        );
+        assert_eq!(obs.mons[0].hp_type_mask, fight_bit);
+
+        // Resisted + Immune via Substitute and Slept Sleep Talk
+        let mut obs2 = one_mon_observer(&dex, "Zapdos", "Z");
+        for line in [
+            "|switch|p1a: S|Skarmory, L50|100/100",
+            "|move|p2a: Z|Hidden Power|p1a: S|[from] Sleep Talk",
+            "|-activate|p1a: S|Substitute|[damage]",
+        ] {
+            obs2.ingest_line(line, &dex);
+        }
+        let neutral_skarm = crate::hp_evidence::types_with_effectiveness(
+            &dex,
+            &dex.species_types(dex.species.id("skarmory").unwrap()),
+            crate::hp_evidence::Effectiveness::Neutral,
+        );
+        assert_eq!(obs2.mons[0].hp_type_mask, neutral_skarm);
+
+        // Metronome-called Hidden Power or Transform/typechange own mon must NOT narrow
+        let mut obs3 = one_mon_observer(&dex, "Clefable", "C");
+        for line in [
+            "|switch|p1a: N|Snorlax, L50|100/100",
+            "|move|p2a: C|Hidden Power|p1a: N|[from] Metronome",
+            "|-supereffective|p1a: N",
+            "|-start|p1a: N|typechange|Ghost",
+            "|move|p2a: C|Hidden Power|p1a: N",
+            "|-resisted|p1a: N",
+        ] {
+            obs3.ingest_line(line, &dex);
+        }
+        assert_eq!(obs3.mons[0].hp_type_mask, u16::MAX);
+    }
+
+    #[test]
+    fn deductive_item_exclusions_track_timings_and_item_clause() {
+        let dex = load_dex();
+        let mons = vec![
+            MonObs {
+                species: dex.species.id("snorlax").unwrap(),
+                level: 50,
+                gender: Gender::M,
+                name: "Lax".into(),
+                preview_has_item: true,
+                revealed_moves: vec![],
+                hp_type_mask: u16::MAX,
+                item: Default::default(),
+                excluded_items: 0,
+                appeared: true,
+            },
+            MonObs {
+                species: dex.species.id("zapdos").unwrap(),
+                level: 50,
+                gender: Gender::N,
+                name: "Zap".into(),
+                preview_has_item: true,
+                revealed_moves: vec![],
+                hp_type_mask: u16::MAX,
+                item: Default::default(),
+                excluded_items: 0,
+                appeared: false,
+            },
+        ];
+        let mut obs = Observer::from_mons(0, mons);
+        // Before upkeep: 49/100 mid-turn must NOT exclude Berry / Leftovers yet.
+        for line in [
+            "|switch|p1a: Own|Raikou, L50|100/100",
+            "|switch|p2a: Lax|Snorlax, L50, M|100/100",
+            "|turn|1",
+            "|-damage|p2a: Lax|50/100",
+            "|upkeep",
+        ] {
+            obs.ingest_line(line, &dex);
+        }
+        // At 50/100 on upkeep without Leftovers heal: Leftovers & Berserk Gene excluded,
+        // heal berries NOT yet excluded!
+        assert!(Observer::is_item_excluded_for_slot(&dex, obs.mons(), 0, dex.items.id("leftovers")));
+        assert!(Observer::is_item_excluded_for_slot(&dex, obs.mons(), 0, dex.items.id("berserkgene")));
+        assert!(!Observer::is_item_excluded_for_slot(&dex, obs.mons(), 0, dex.items.id("goldberry")));
+        assert!(!Observer::is_item_excluded_for_slot(&dex, obs.mons(), 0, dex.items.id("berry")));
+
+        // Mid-turn 49/100 before upkeep still does not exclude berries; upkeep at 49/100 does!
+        obs.ingest_line("|-damage|p2a: Lax|49/100", &dex);
+        assert!(!Observer::is_item_excluded_for_slot(&dex, obs.mons(), 0, dex.items.id("goldberry")));
+        obs.ingest_line("|upkeep", &dex);
+        assert!(Observer::is_item_excluded_for_slot(&dex, obs.mons(), 0, dex.items.id("goldberry")));
+        assert!(Observer::is_item_excluded_for_slot(&dex, obs.mons(), 0, dex.items.id("berry")));
+        assert!(Observer::is_item_excluded_for_slot(&dex, obs.mons(), 0, dex.items.id("berryjuice")));
+
+        // Sleep + Sleep Talk excludes Mint Berry and Miracle Berry
+        for line in [
+            "|-status|p2a: Lax|slp",
+            "|turn|2",
+            "|move|p2a: Lax|Sleep Talk|p2a: Lax",
+        ] {
+            obs.ingest_line(line, &dex);
+        }
+        assert!(Observer::is_item_excluded_for_slot(&dex, obs.mons(), 0, dex.items.id("mintberry")));
+        assert!(Observer::is_item_excluded_for_slot(&dex, obs.mons(), 0, dex.items.id("miracleberry")));
+
+        // Heal Bell clears status so slot 1 switching in asleep after Heal Bell isn't penalized
+        obs.ingest_line("|-cureteam|p2a: Lax|[from] move: Heal Bell", &dex);
+        obs.ingest_line("|switch|p2a: Zap|Zapdos, L50|100/100", &dex);
+        obs.ingest_line("|turn|3", &dex);
+        assert!(!Observer::is_item_excluded_for_slot(&dex, obs.mons(), 1, dex.items.id("mintberry")));
+
+        // Item Clause: revealing Leftovers on slot 1 excludes Leftovers on slot 0 even if un-excluded
+        obs.ingest_line("|-heal|p2a: Zap|100/100|[from] item: Leftovers", &dex);
+        assert!(Observer::is_item_excluded_for_slot(&dex, obs.mons(), 0, dex.items.id("leftovers")));
     }
 
     /// A caller charging a two-turn move must not credit the victim move to

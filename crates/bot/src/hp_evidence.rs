@@ -1,8 +1,48 @@
-use nc2000_engine::dex::{Dex, SpeciesId};
+use nc2000_engine::dex::{Dex, SpeciesId, TypeList};
 use nc2000_engine::state::{Gender, Pokemon};
 
 use crate::observe::MonObs;
 use crate::rng::SplitMix64;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Effectiveness {
+    Immune,
+    Resisted,
+    Neutral,
+    SuperEffective,
+}
+
+pub(crate) fn types_with_effectiveness(
+    dex: &Dex,
+    defender_types: &TypeList,
+    eff: Effectiveness,
+) -> u16 {
+    if defender_types.iter().count() == 0 {
+        return u16::MAX;
+    }
+    let mut mask = 0u16;
+    for (i, &ty_name) in TYPES.iter().enumerate() {
+        let Some(att) = dex.type_id(ty_name) else {
+            continue;
+        };
+        let actual = if defender_types.iter().any(|def| dex.type_immune(att, def)) {
+            Effectiveness::Immune
+        } else {
+            let total_mod: i32 = defender_types.iter().map(|def| dex.eff(att, def)).sum();
+            if total_mod > 0 {
+                Effectiveness::SuperEffective
+            } else if total_mod < 0 {
+                Effectiveness::Resisted
+            } else {
+                Effectiveness::Neutral
+            }
+        };
+        if actual == eff {
+            mask |= 1u16 << i;
+        }
+    }
+    mask
+}
 
 pub(crate) const TYPES: [&str; 16] = [
     "Fighting", "Flying", "Poison", "Ground", "Rock", "Bug", "Ghost", "Steel", "Fire", "Water",
@@ -80,9 +120,36 @@ pub(crate) fn project(
     } else {
         0
     })?;
+    project_with_index(dex, p, mo.gender, index)
+}
+
+pub(crate) fn project_deterministic(
+    dex: &Dex,
+    p: &Pokemon,
+    gender: Gender,
+    mask: u16,
+) -> Option<Pokemon> {
+    if mask == 0 || mask == u16::MAX || consistent(dex, p, mask) || modeled_type(dex, p).is_none() {
+        return None;
+    }
+    let legal = mask & possible_types(dex, p.species, gender);
+    let eff_mask = if legal != 0 { legal } else { mask };
+    let index = eff_mask.trailing_zeros() as usize;
+    if index >= TYPES.len() {
+        return None;
+    }
+    project_with_index(dex, p, gender, index)
+}
+
+fn project_with_index(
+    dex: &Dex,
+    p: &Pokemon,
+    gender: Gender,
+    index: usize,
+) -> Option<Pokemon> {
     let mut result = p.clone();
     let atk = (0..16)
-        .filter(|a| a % 4 == index as i32 / 4 && gender_matches(dex, p, mo.gender, *a))
+        .filter(|a| a % 4 == index as i32 / 4 && gender_matches(dex, p, gender, *a))
         .min_by_key(|a| ((a - p.set_ivs[1] / 2).abs(), std::cmp::Reverse(*a)))?;
     let def = (p.set_ivs[2] / 2 & !3) | (index as i32 % 4);
     let spe = p.set_ivs[5] / 2;
@@ -162,6 +229,7 @@ mod tests {
                             preview_has_item: true,
                             revealed_moves: vec![dex.moves.id("hiddenpower").unwrap()],
                             hp_type_mask: 1 << index,
+                            excluded_items: 0,
                             item: ItemObs::default(),
                             appeared: true,
                         };
@@ -212,6 +280,7 @@ mod tests {
             preview_has_item: true,
             revealed_moves: vec![dex.moves.id("hiddenpower").unwrap()],
             hp_type_mask: u16::MAX,
+            excluded_items: 0,
             item: ItemObs::default(),
             appeared: true,
         };
@@ -230,5 +299,62 @@ mod tests {
             seen |= 1 << index;
         }
         assert_eq!(seen, obs.hp_type_mask);
+    }
+
+    #[test]
+    fn effectiveness_masks_match_gen2_typechart_and_deterministic_projection() {
+        let dex = Dex::from_json(include_str!("../../../data/gen2stadium2.json")).unwrap();
+        let snorlax_id = dex.species.id("snorlax").unwrap();
+        let skarm_id = dex.species.id("skarmory").unwrap();
+        let zapdos_id = dex.species.id("zapdos").unwrap();
+
+        let snorlax_types = dex.species_types(snorlax_id);
+        let ghost_bit = 1u16 << TYPES.iter().position(|t| *t == "Ghost").unwrap();
+        let fighting_bit = 1u16 << TYPES.iter().position(|t| *t == "Fighting").unwrap();
+        assert_eq!(
+            types_with_effectiveness(&dex, &snorlax_types, Effectiveness::Immune),
+            ghost_bit
+        );
+        assert_eq!(
+            types_with_effectiveness(&dex, &snorlax_types, Effectiveness::SuperEffective),
+            fighting_bit
+        );
+        assert_eq!(
+            types_with_effectiveness(&dex, &snorlax_types, Effectiveness::Neutral),
+            u16::MAX ^ ghost_bit ^ fighting_bit
+        );
+
+        let skarm_types = dex.species_types(skarm_id);
+        let ground_bit = 1u16 << TYPES.iter().position(|t| *t == "Ground").unwrap();
+        let poison_bit = 1u16 << TYPES.iter().position(|t| *t == "Poison").unwrap();
+        let fire_bit = 1u16 << TYPES.iter().position(|t| *t == "Fire").unwrap();
+        let electric_bit = 1u16 << TYPES.iter().position(|t| *t == "Electric").unwrap();
+        assert_eq!(
+            types_with_effectiveness(&dex, &skarm_types, Effectiveness::Immune),
+            ground_bit | poison_bit
+        );
+        assert_eq!(
+            types_with_effectiveness(&dex, &skarm_types, Effectiveness::SuperEffective),
+            fire_bit | electric_bit
+        );
+
+        let zapdos_types = dex.species_types(zapdos_id);
+        let ice_bit = 1u16 << TYPES.iter().position(|t| *t == "Ice").unwrap();
+        let rock_bit = 1u16 << TYPES.iter().position(|t| *t == "Rock").unwrap();
+        assert_eq!(
+            types_with_effectiveness(&dex, &zapdos_types, Effectiveness::SuperEffective),
+            ice_bit | rock_bit
+        );
+
+        // Deterministic projection picks lowest legal bit without RNG and keeps Hidden Power consistent.
+        let source = set("zapdos", "N", 50, [30; 6]); // Dark
+        let b = Battle::from_fixture(&dex, "1,2,3,4", &[source.clone()], &[source]).unwrap();
+        let p = &b.sides[0].roster[0];
+        let mask = fire_bit | ice_bit;
+        let det1 = project_deterministic(&dex, p, Gender::N, mask).unwrap();
+        let det2 = project_deterministic(&dex, p, Gender::N, mask).unwrap();
+        assert_eq!(det1.set_ivs, det2.set_ivs);
+        assert_eq!(modeled_type(&dex, &det1), Some(TYPES.iter().position(|t| *t == "Fire").unwrap()));
+        assert!(consistent(&dex, &det1, mask));
     }
 }

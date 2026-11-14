@@ -334,10 +334,14 @@ pub struct MonSpec {
     /// original item.
     #[serde(default)]
     pub item_gained: bool,
+    /// Deductive original-item exclusions bitmask (`observe::ITEM_*`).
+    #[serde(default, skip_serializing_if = "is_zero_u16")]
+    pub excluded_items: u16,
 }
 
 fn unknown_hp_types() -> u16 { u16::MAX }
 fn all_hp_types(mask: &u16) -> bool { *mask == u16::MAX }
+fn is_zero_u16(mask: &u16) -> bool { *mask == 0 }
 fn is_false(b: &bool) -> bool { !*b }
 
 fn full_hp() -> i32 {
@@ -389,6 +393,7 @@ impl Default for MonSpec {
             item_original: ItemKnowledge::unknown(),
             item_current: ItemKnowledge::unknown(),
             item_gained: false,
+            excluded_items: 0,
         }
     }
 }

@@ -314,6 +314,7 @@ impl ProtocolTracker {
                 revealed_moves: Vec::new(),
                 hp_type_mask: u16::MAX,
                 item: Default::default(),
+                excluded_items: 0,
                 appeared: m.appeared,
             })
             .collect()
@@ -4319,6 +4320,7 @@ impl ProtocolTracker {
             m.item_current =
                 ItemKnowledge::from_obs(mo.item.current.map(|x| x.map(|i| dex.items.key(i))));
             m.item_gained = mo.item.gained;
+            m.excluded_items = mo.excluded_items;
         }
         PositionSpec {
             schema: SCHEMA.to_string(),

@@ -1055,11 +1055,20 @@ impl Belief {
             let roster = self.build_fallback(dex, obs);
             self.draws = self.build_draws(dex, obs, &roster);
             self.loadout_draws = self.build_loadout_draws(dex, obs, &roster);
-            let mut rng = SplitMix64::new(0);
             self.fallback_visible = obs.mons().iter().any(|m| m.hp_type_mask != u16::MAX).then(|| {
-                roster.iter().zip(obs.mons()).map(|(p, mo)| {
-                    crate::hp_evidence::project(dex, p, mo, &mut rng).unwrap_or_else(|| p.clone())
-                }).collect()
+                roster
+                    .iter()
+                    .zip(obs.mons())
+                    .map(|(p, mo)| {
+                        crate::hp_evidence::project_deterministic(
+                            dex,
+                            p,
+                            mo.gender,
+                            mo.hp_type_mask,
+                        )
+                        .unwrap_or_else(|| p.clone())
+                    })
+                    .collect()
             });
             self.fallback = Some(roster);
         } else {
@@ -1221,10 +1230,11 @@ impl Belief {
         let draws: Vec<_> = obs
             .mons()
             .iter()
+            .enumerate()
             .zip(roster)
-            .map(|(mo, mon)| match self.fallback_policy {
+            .map(|((slot, mo), mon)| match self.fallback_policy {
                 FallbackPolicy::BayesianPointMass => self.early_perish_draw(dex, mo, mon),
-                FallbackPolicy::Bayesian => self.bayesian_loadout_draw(dex, mo, obs.mons(), mon),
+                FallbackPolicy::Bayesian => self.bayesian_loadout_draw(dex, mo, slot, obs.mons(), mon),
                 _ => None,
             })
             .collect();
@@ -1340,11 +1350,12 @@ impl Belief {
         let sets: Vec<PokemonSet> = obs
             .mons()
             .iter()
-            .map(|mo| match self.fallback_policy {
+            .enumerate()
+            .map(|(slot, mo)| match self.fallback_policy {
                 FallbackPolicy::BayesianPointMass | FallbackPolicy::Bayesian => {
-                    self.bayesian_fallback_set(dex, mo, obs.mons())
+                    self.bayesian_fallback_set(dex, mo, slot, obs.mons())
                 }
-                _ => self.fallback_set(dex, mo),
+                _ => self.fallback_set_at(dex, mo, slot, obs.mons()),
             })
             .collect();
         self.build_fallback_from_sets(dex, obs, &sets)
@@ -1505,10 +1516,69 @@ impl Belief {
         out
     }
 
+    fn resolve_non_excluded_item(
+        &self,
+        dex: &Dex,
+        obs_mons: &[MonObs],
+        slot: usize,
+        mo: &MonObs,
+        preferred: &str,
+        carriers: &[(&PokemonSet, f64)],
+    ) -> String {
+        if let Some(known) = mo.item.original {
+            return known.map(|id| dex.items.key(id).to_string()).unwrap_or_default();
+        }
+        if !mo.preview_has_item {
+            return String::new();
+        }
+        let allowed = |key: &str| -> Option<String> {
+            let id = dex.items.id(&toid(key))?;
+            (!crate::observe::Observer::is_item_excluded_for_slot(dex, obs_mons, slot, Some(id)))
+                .then(|| dex.items.key(id).to_string())
+        };
+        if !preferred.is_empty() {
+            if let Some(k) = allowed(preferred) {
+                return k;
+            }
+        }
+        let mut by_item: Vec<(u16, String, f64)> = Vec::new();
+        for &(s, w) in carriers {
+            let Some(id) = dex.items.id(&toid(&s.item)) else { continue };
+            if crate::observe::Observer::is_item_excluded_for_slot(dex, obs_mons, slot, Some(id)) {
+                continue;
+            }
+            match by_item.iter_mut().find(|(iid, _, _)| *iid == id.0) {
+                Some((_, _, sum)) => *sum += w,
+                None => by_item.push((id.0, dex.items.key(id).to_string(), w)),
+            }
+        }
+        by_item.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+        if let Some((_, k, _)) = by_item.into_iter().next() {
+            return k;
+        }
+        const ITEM_FALLBACK_ORDER: &[&str] = &[
+            "leftovers", "miracleberry", "mintberry", "goldberry", "przcureberry", "psncureberry",
+            "iceberry", "burntberry", "bitterberry", "berry", "scopelens", "quickclaw",
+            "charcoal", "magnet", "mysticwater", "nevermeltice", "softsand", "hardstone",
+            "miracleseed", "sharpbeak", "pinkbow", "polkadotbow", "twistedspoon", "blackbelt",
+            "blackglasses", "poisonbarb", "silverpowder", "spelltag", "dragonfang",
+        ];
+        for cand in ITEM_FALLBACK_ORDER {
+            if let Some(k) = allowed(cand) {
+                return k;
+            }
+        }
+        if let Some(k) = allowed(preferred) {
+            return k;
+        }
+        preferred.to_string()
+    }
+
     fn bayesian_fallback_set(
         &self,
         dex: &Dex,
         mo: &MonObs,
+        slot: usize,
         obs_mons: &[MonObs],
     ) -> PokemonSet {
         let carriers = self.bayesian_prior_carriers(dex, mo, obs_mons);
@@ -1521,9 +1591,13 @@ impl Belief {
                     .any(|m| move_matches(dex, m, revealed))
             })
         };
-        let matches_item = |s: &PokemonSet| match mo.item.original {
-            Some(item) => dex.items.id(&toid(&s.item)) == item,
-            None => true,
+        let matches_item = |s: &PokemonSet| {
+            let item = dex.items.id(&toid(&s.item));
+            item.is_some() == mo.preview_has_item
+                && match mo.item.original {
+                    Some(known) => known == item,
+                    None => true,
+                }
         };
 
         let mut moves: Vec<String> = mo
@@ -1801,12 +1875,7 @@ impl Belief {
         moves.truncate(4);
         set.moves = moves;
         let pool_item = std::mem::take(&mut set.item);
-        set.item = match mo.item.original {
-            Some(Some(x)) => dex.items.key(x).to_string(),
-            Some(None) => String::new(),
-            None if mo.preview_has_item => pool_item,
-            None => String::new(),
-        };
+        set.item = self.resolve_non_excluded_item(dex, obs_mons, slot, mo, &pool_item, &carriers);
         set
     }
 
@@ -1814,6 +1883,7 @@ impl Belief {
         &self,
         dex: &Dex,
         mo: &MonObs,
+        slot: usize,
         obs_mons: &[MonObs],
         fallback_mon: &Pokemon,
     ) -> Option<LoadoutDraw> {
@@ -1830,23 +1900,8 @@ impl Belief {
             item.is_some() == mo.preview_has_item
                 && mo.item.original.is_none_or(|known| known == item)
         };
-        let resolve_item = |source_item: &str, use_strict: bool| -> String {
-            if use_strict {
-                source_item.to_string()
-            } else {
-                match mo.item.original {
-                    Some(Some(x)) => dex.items.key(x).to_string(),
-                    Some(None) => String::new(),
-                    None if mo.preview_has_item => {
-                        if dex.items.id(&toid(source_item)).is_some() {
-                            source_item.to_string()
-                        } else {
-                            "leftovers".to_string()
-                        }
-                    }
-                    None => String::new(),
-                }
-            }
+        let resolve_item = |source_item: &str, _use_strict: bool| -> String {
+            self.resolve_non_excluded_item(dex, obs_mons, slot, mo, source_item, &carriers)
         };
         let move_sig = |p: &Pokemon| {
             let mut mvs: Vec<u16> = p.base_move_slots.iter().map(|s| s.id.0).collect();
@@ -2273,11 +2328,15 @@ impl Belief {
     }
 
     fn fallback_set(&self, dex: &Dex, mo: &MonObs) -> PokemonSet {
+        self.fallback_set_at(dex, mo, 0, std::slice::from_ref(mo))
+    }
+
+    fn fallback_set_at(&self, dex: &Dex, mo: &MonObs, slot: usize, obs_mons: &[MonObs]) -> PokemonSet {
         if matches!(
             self.fallback_policy,
             FallbackPolicy::BayesianPointMass | FallbackPolicy::Bayesian
         ) {
-            return self.bayesian_fallback_set(dex, mo, std::slice::from_ref(mo));
+            return self.bayesian_fallback_set(dex, mo, slot, obs_mons);
         }
         let pool_set = self.pool_set_for(dex, mo);
         // A separate prior, not a pool candidate: it can fill hidden fields
@@ -2540,14 +2599,13 @@ fn build_refs(dex: &Dex, sets: &[PokemonSet], mons: &[MonObs]) -> Option<Vec<Pok
 }
 
 fn consistent(dex: &Dex, refs: &[Pokemon], mons: &[MonObs]) -> bool {
-    refs.iter().zip(mons).all(|(r, mo)| {
-        crate::hp_evidence::consistent(dex, r, mo.hp_type_mask) && mo.revealed_moves
-            .iter()
-            .all(|m| r.base_move_slots.iter().any(|s| move_matches(dex, s.id, *m)))
-            && match mo.item.original {
-                Some(orig) => r.item == orig,
-                None => true,
-            }
+    refs.iter().zip(mons).enumerate().all(|(slot, (r, mo))| {
+        crate::hp_evidence::consistent(dex, r, mo.hp_type_mask)
+            && !crate::observe::Observer::is_item_excluded_for_slot(dex, mons, slot, r.item)
+            && mo
+                .revealed_moves
+                .iter()
+                .all(|m| r.base_move_slots.iter().any(|s| move_matches(dex, s.id, *m)))
     })
 }
 
@@ -2832,6 +2890,7 @@ mod fallback_tests {
             hp_type_mask: u16::MAX,
             revealed_moves: revealed.iter().map(|m| dex.moves.id(m).unwrap()).collect(),
             item: ItemObs::default(),
+            excluded_items: 0,
             appeared: false,
         }
     }

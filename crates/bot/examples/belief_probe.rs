@@ -315,6 +315,23 @@ fn pad_to_six(sets: &[PokemonSet]) -> Vec<PokemonSet> {
     out
 }
 
+fn check_item_masks(
+    dex: &Dex,
+    obs: &Observer,
+    true_orig_items: &[Option<nc2000_engine::dex::ItemId>],
+) -> Vec<(usize, String, u16)> {
+    let mut errs = Vec::new();
+    for (slot, &true_item) in true_orig_items.iter().enumerate() {
+        if Observer::is_item_excluded_for_slot(dex, obs.mons(), slot, true_item) {
+            let item_name = true_item
+                .map(|id| dex.items.key(id).to_string())
+                .unwrap_or_else(|| "none".to_string());
+            errs.push((slot, item_name, obs.mons()[slot].excluded_items));
+        }
+    }
+    errs
+}
+
 fn check_hp_masks(
     dex: &Dex,
     battle: &Battle,
@@ -346,16 +363,18 @@ fn run_simulated_audit(
     offpool: &[TeamEntry],
     seed: u64,
     out_lines: &mut Vec<String>,
-) -> (usize, usize, usize, usize) {
+) -> (usize, usize, usize, usize, usize) {
     let hp_id = dex.moves.id("hiddenpower").unwrap();
     let mut rng = SplitMix64::new(seed ^ 0xA0D1_7001);
     let mut sim_games = 0usize;
     let mut sim_decisions = 0usize;
     let mut in_pool_drops = 0usize;
     let mut hp_false_exclusions = 0usize;
+    let mut item_false_exclusions = 0usize;
 
-    // Include explicit Stadium-2 edge-case rosters covering Leftovers + Leech Seed/Sandstorm/Curse,
-    // Mint/Miracle Berry before move vs upkeep, immediate cure berries, Thief, Hidden Power, and Berserk Gene.
+    // Explicit Stadium-2 edge-case rosters covering Leftovers + Leech Seed/Sandstorm/Curse,
+    // Gold Berry / Berry / Berry Juice, Berserk Gene, Heal Bell, Mint/Miracle Berry,
+    // immediate cure berries, Thief, Hidden Power into Substitute.
     let edge_p1 = pad_to_six(&[
         mk_set("Snorlax", "Leftovers", &["Sleep Talk", "Rest", "Body Slam", "Curse"], 50),
         mk_set("Zapdos", "Miracle Berry", &["Thunder", "Hidden Power Ice", "Rest", "Sleep Talk"], 55),
@@ -366,9 +385,20 @@ fn run_simulated_audit(
         mk_set("Misdreavus", "Miracle Berry", &["Mean Look", "Perish Song", "Confuse Ray", "Thief"], 50),
         mk_set("Gengar", "Przcureberry", &["Thunderbolt", "Hypnosis", "Curse", "Nightmare"], 50),
     ]);
+    let edge2_p1 = pad_to_six(&[
+        mk_set("Miltank", "Gold Berry", &["Body Slam", "Heal Bell", "Milk Drink", "Growl"], 50),
+        mk_set("Tauros", "Berserk Gene", &["Double-Edge", "Earthquake", "Hidden Power Electric", "Rest"], 55),
+        mk_set("Marowak", "Berry Juice", &["Earthquake", "Rock Slide", "Substitute", "Swords Dance"], 50),
+    ]);
+    let edge2_p2 = pad_to_six(&[
+        mk_set("Raikou", "Berry", &["Thunderbolt", "Hidden Power Water", "Crunch", "Substitute"], 55),
+        mk_set("Meganium", "Bitter Berry", &["Razor Leaf", "Reflect", "Synthesis", "Body Slam"], 50),
+        mk_set("Jolteon", "Burnt Berry", &["Thunderbolt", "Hidden Power Ice", "Baton Pass", "Substitute"], 50),
+    ]);
 
     let mut fixtures: Vec<(&str, bool, &[PokemonSet], &[PokemonSet])> = Vec::new();
     fixtures.push(("edge-stadium2-timings", false, &edge_p1, &edge_p2));
+    fixtures.push(("edge-berries-gene-sub", false, &edge2_p1, &edge2_p2));
     for i in 0..8 {
         let p1 = &prior.teams[(i * 29) % prior.teams.len()].sets;
         let p2 = &prior.teams[(i * 43 + 7) % prior.teams.len()].sets;
@@ -396,6 +426,8 @@ fn run_simulated_audit(
             }
             m
         });
+        let true_orig_items: [Vec<Option<nc2000_engine::dex::ItemId>>; 2] =
+            [0, 1].map(|s| battle.sides[s].roster.iter().map(|r| r.item).collect());
 
         let mut agents = [MaxDamageAgent::conformant(), MaxDamageAgent::conformant()];
         let mut channels = [PlayerChannel::new(0), PlayerChannel::new(1)];
@@ -443,6 +475,16 @@ fn run_simulated_audit(
                             .to_string(),
                     );
                 }
+                let item_errs = check_item_masks(dex, obs, &true_orig_items[1 - s]);
+                if !item_errs.is_empty() {
+                    item_false_exclusions += item_errs.len();
+                    for (slot, item_name, mask) in item_errs {
+                        out_lines.push(
+                            json!({"kind": "item_false_excl", "tag": tag, "side": s, "turn": battle.turn, "slot": slot, "item": item_name, "mask": mask})
+                                .to_string(),
+                        );
+                    }
+                }
                 picks[s] = Some(agents[s].choose(&battle, dex, s, &cs));
             }
             if picks == [None, None] {
@@ -454,7 +496,95 @@ fn run_simulated_audit(
         }
     }
 
-    (sim_games, sim_decisions, in_pool_drops, hp_false_exclusions)
+    (
+        sim_games,
+        sim_decisions,
+        in_pool_drops,
+        hp_false_exclusions,
+        item_false_exclusions,
+    )
+}
+
+fn corpus_revealed_original_items(
+    dex: &Dex,
+    lines: &[String],
+) -> HashMap<(usize, String), nc2000_engine::dex::ItemId> {
+    let mut thief_gained: HashSet<(usize, String)> = HashSet::new();
+    let mut orig: HashMap<(usize, String), nc2000_engine::dex::ItemId> = HashMap::new();
+    let parse_subj = |s: &str| -> Option<(usize, String)> {
+        let b = s.as_bytes();
+        if b.len() < 4 || b[0] != b'p' || (b[1] != b'1' && b[1] != b'2') {
+            return None;
+        }
+        let side = (b[1] - b'1') as usize;
+        let rest = &s[2..];
+        let rest = rest.strip_prefix(|c: char| c.is_ascii_lowercase()).unwrap_or(rest);
+        let name = rest.strip_prefix(": ")?;
+        Some((side, name.to_string()))
+    };
+    for line in lines {
+        let Some(body) = line.strip_prefix('|') else { continue };
+        let parts: Vec<&str> = body.split('|').collect();
+        let cmd = parts.first().copied().unwrap_or("");
+        match cmd {
+            "-item" => {
+                if let Some(key) = parse_subj(parts.get(1).copied().unwrap_or("")) {
+                    if parts.iter().any(|p| p.contains("Thief")) {
+                        thief_gained.insert(key);
+                    }
+                    if let Some(of) = parts.iter().find_map(|p| p.strip_prefix("[of] ")) {
+                        if parts.iter().any(|p| *p == "[from] move: Thief") {
+                            if let (Some(vkey), Some(id)) = (
+                                parse_subj(of),
+                                dex.items.id(&toid(parts.get(2).copied().unwrap_or(""))),
+                            ) {
+                                if !thief_gained.contains(&vkey) {
+                                    orig.entry(vkey).or_insert(id);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            "-heal" => {
+                if let Some(key) = parse_subj(parts.get(1).copied().unwrap_or("")) {
+                    if let Some(item_name) =
+                        parts.iter().find_map(|p| p.strip_prefix("[from] item: "))
+                    {
+                        if let Some(id) = dex.items.id(&toid(item_name)) {
+                            if !thief_gained.contains(&key) {
+                                orig.entry(key).or_insert(id);
+                            }
+                        }
+                    }
+                }
+            }
+            "-activate" => {
+                if let Some(key) = parse_subj(parts.get(1).copied().unwrap_or("")) {
+                    if let Some(item_name) =
+                        parts.get(2).copied().unwrap_or("").strip_prefix("item: ")
+                    {
+                        if let Some(id) = dex.items.id(&toid(item_name)) {
+                            if !thief_gained.contains(&key) {
+                                orig.entry(key).or_insert(id);
+                            }
+                        }
+                    }
+                }
+            }
+            "-enditem" => {
+                if let Some(key) = parse_subj(parts.get(1).copied().unwrap_or("")) {
+                    if let Some(id) = dex.items.id(&toid(parts.get(2).copied().unwrap_or(""))) {
+                        if !thief_gained.contains(&key) {
+                            orig.entry(key).or_insert(id);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    orig
 }
 
 fn run_spectator_corpus_audit(
@@ -464,9 +594,9 @@ fn run_spectator_corpus_audit(
     corpus_dir: &Path,
     max_battles: usize,
     seed: u64,
-) -> (usize, usize, usize, f64, usize, usize) {
+) -> (usize, usize, usize, f64, usize, usize, usize) {
     if !corpus_dir.exists() {
-        return (0, 0, 0, 0.0, 0, 0);
+        return (0, 0, 0, 0.0, 0, 0, 0);
     }
     let files = corpus_files(corpus_dir);
     let n = files.len().min(max_battles);
@@ -476,10 +606,12 @@ fn run_spectator_corpus_audit(
     let mut alive_sum = 0usize;
     let mut recon_skipped = 0usize;
     let mut corpus_hp_false_exclusions = 0usize;
+    let mut corpus_item_false_exclusions = 0usize;
     let hp_id = dex.moves.id("hiddenpower").unwrap();
 
     for (bi, file) in files.into_iter().take(n).enumerate() {
         let cb = load_battle(&file);
+        let revealed_orig = corpus_revealed_original_items(dex, &cb.lines);
         battles += 1;
         // Sample up to 6 spread decisions per battle for full 570-battle speed
         let total_d = cb.decisions.len();
@@ -509,10 +641,18 @@ fn run_spectator_corpus_audit(
                 alive_sum += b.candidate_count();
             }
             if let (Some(obs), Some(battle)) = (rec.agent.observer(), rec.agent.battle()) {
-                for (mo, p) in obs.mons().iter().zip(&battle.sides[obs.opp()].roster) {
+                let opp = obs.opp();
+                for (slot, (mo, p)) in obs.mons().iter().zip(&battle.sides[opp].roster).enumerate() {
+                    if let Some(&true_orig) = revealed_orig.get(&(opp, mo.name.clone())) {
+                        if !mo.name.is_empty()
+                            && obs.mons().iter().filter(|other| other.name == mo.name).count() == 1
+                            && Observer::is_item_excluded_for_slot(dex, obs.mons(), slot, Some(true_orig))
+                        {
+                            corpus_item_false_exclusions += 1;
+                        }
+                    }
                     if mo.revealed_moves.iter().any(|&m| move_matches(dex, hp_id, m)) {
                         if let Some(bit) = hidden_power_mask_bit(dex, p.base_hp_type) {
-                            // Spectator log ground truth: only validate when mask isn't vacuously 0
                             if mo.hp_type_mask == 0 && bit != 0 {
                                 corpus_hp_false_exclusions += 1;
                             }
@@ -534,6 +674,7 @@ fn run_spectator_corpus_audit(
         mean_alive,
         recon_skipped,
         corpus_hp_false_exclusions,
+        corpus_item_false_exclusions,
     )
 }
 
@@ -542,8 +683,13 @@ fn mode_corpus_audit(cli: &Cli, root: &Path) -> Value {
     let prior = load_meta_pool(&root.join("data/belief-pool-v3/belief-pool.json"));
     let offpool = load_offpool_teams(root, &dex, &prior, cli.mutations, cli.seed);
     let mut detail_lines = Vec::new();
-    let (sim_games, sim_decisions, in_pool_drops, hp_false_exclusions) =
-        run_simulated_audit(&dex, &prior, &offpool, cli.seed, &mut detail_lines);
+    let (
+        sim_games,
+        sim_decisions,
+        in_pool_drops,
+        hp_false_exclusions,
+        item_false_exclusions,
+    ) = run_simulated_audit(&dex, &prior, &offpool, cli.seed, &mut detail_lines);
 
     let (
         corpus_battles,
@@ -552,6 +698,7 @@ fn mode_corpus_audit(cli: &Cli, root: &Path) -> Value {
         corpus_mean_alive,
         corpus_skipped,
         corpus_hp_false_excl,
+        corpus_item_false_excl,
     ) = if cli.corpus_dir.exists() {
         let src = load_sources(&dex, root);
         run_spectator_corpus_audit(
@@ -563,7 +710,7 @@ fn mode_corpus_audit(cli: &Cli, root: &Path) -> Value {
             cli.seed,
         )
     } else {
-        (0, 0, 0, 0.0, 0, 0)
+        (0, 0, 0, 0.0, 0, 0, 0)
     };
 
     if let Some(path) = &cli.out_path {
@@ -585,6 +732,7 @@ fn mode_corpus_audit(cli: &Cli, root: &Path) -> Value {
         "sim_decisions": sim_decisions,
         "in_pool_drops": in_pool_drops,
         "hp_false_exclusions": hp_false_exclusions,
+        "item_false_exclusions": item_false_exclusions,
         "corpus_battles": corpus_battles,
         "corpus_decisions": corpus_decisions,
         "corpus_skipped": corpus_skipped,
@@ -592,6 +740,7 @@ fn mode_corpus_audit(cli: &Cli, root: &Path) -> Value {
         "corpus_fallback_rate": (fb_rate * 1e4).round() / 1e4,
         "corpus_mean_alive": (corpus_mean_alive * 100.0).round() / 100.0,
         "corpus_hp_false_exclusions": corpus_hp_false_excl,
+        "corpus_item_false_exclusions": corpus_item_false_excl,
     })
 }
 
