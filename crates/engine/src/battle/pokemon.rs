@@ -412,7 +412,7 @@ impl Battle {
         }
 
         if self.poke(id).has_volatile(cond) {
-            if !dex.cond(cond).has_callback("onRestart") {
+            if !dex.cond(cond).has_on_restart {
                 return RV::False;
             }
             return self.single_event(
@@ -470,12 +470,9 @@ impl Battle {
         let state = self.init_effect_state(state, target_active);
         self.poke_mut(id).volatiles.push((cond, state));
         self.refresh_poke_mask(dex, id);
-        if dex.cond(cond).has_callback("durationCallback") {
-            let dur = super::conditions::duration_callback(self, dex, status, Some(id), source, source_effect);
-            if let Some(d) = dur {
-                if let Some(vs) = self.poke_mut(id).volatile_mut(cond) {
-                    vs.duration = Some(d);
-                }
+        if let Some(d) = super::conditions::eval_duration_cb(&mut self.prng, dex.cond(cond).duration_cb) {
+            if let Some(vs) = self.poke_mut(id).volatile_mut(cond) {
+                vs.duration = Some(d);
             }
         }
         let started = self.single_event(
@@ -696,9 +693,9 @@ impl Battle {
 
     /// pokemon.moveUsed (gen2 rules).
     pub fn move_used(&mut self, dex: &Dex, id: PokeId, move_id: MoveId, target_loc: Option<i8>) {
-        let key = dex.moves.key(move_id);
+        let calls_other = dex.move_static(move_id).calls_other_move;
         let p = self.poke_mut(id);
-        if matches!(key, "metronome" | "mimic" | "mirrormove" | "sketch" | "sleeptalk" | "transform") {
+        if calls_other {
             p.last_move = None;
             p.last_move_encore = None;
         } else {

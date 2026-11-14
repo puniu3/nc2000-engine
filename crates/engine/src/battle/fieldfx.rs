@@ -76,12 +76,8 @@ impl Battle {
         }
         let state = self.init_effect_state(state, true);
         self.field.weather_state = state;
-        if dex.cond(cond).has_callback("durationCallback") {
-            let dur =
-                super::conditions::duration_callback(self, dex, status, source, source, source_effect);
-            if let Some(d) = dur {
-                self.field.weather_state.duration = Some(d);
-            }
+        if let Some(d) = super::conditions::eval_duration_cb(&mut self.prng, dex.cond(cond).duration_cb) {
+            self.field.weather_state.duration = Some(d);
         }
         let started = self.single_event(
             dex,
@@ -134,7 +130,7 @@ impl Battle {
     ) -> RV {
         let cond = dex.conds_id(status).unwrap_or_else(|| panic!("unknown pseudo weather {status}"));
         if self.field.has_pseudo_weather(cond) {
-            if !dex.cond(cond).has_callback("onFieldRestart") {
+            if !dex.cond(cond).has_on_field_restart {
                 return RV::False;
             }
             return self.single_event(
@@ -159,13 +155,9 @@ impl Battle {
         let state = self.init_effect_state(state, true);
         self.field.pseudo_weather.push((cond, state));
         self.refresh_battle_mask(dex);
-        if dex.cond(cond).has_callback("durationCallback") {
-            let dur =
-                super::conditions::duration_callback(self, dex, status, source, source, source_effect);
-            if let Some(d) = dur {
-                if let Some(st) = self.state_at_mut(StateLoc::PseudoWeather(cond)) {
-                    st.duration = Some(d);
-                }
+        if let Some(d) = super::conditions::eval_duration_cb(&mut self.prng, dex.cond(cond).duration_cb) {
+            if let Some(st) = self.state_at_mut(StateLoc::PseudoWeather(cond)) {
+                st.duration = Some(d);
             }
         }
         let started = self.single_event(
@@ -222,7 +214,7 @@ impl Battle {
         let source = source.expect("setting sidecond without a source");
 
         if self.sides[side_n as usize].has_side_condition(cond) {
-            if !dex.cond(cond).has_callback("onSideRestart") {
+            if !dex.cond(cond).has_on_side_restart {
                 return RV::False;
             }
             return self.single_event(
@@ -245,19 +237,9 @@ impl Battle {
         let state = self.init_effect_state(state, true);
         self.sides[side_n as usize].side_conditions.push((cond, state));
         self.refresh_side_mask(dex, side_n);
-        if dex.cond(cond).has_callback("durationCallback") {
-            let dur = super::conditions::duration_callback(
-                self,
-                dex,
-                status,
-                self.active_id(side_n as usize),
-                Some(source),
-                source_effect,
-            );
-            if let Some(d) = dur {
-                if let Some(st) = self.state_at_mut(StateLoc::SideCond(side_n, cond)) {
-                    st.duration = Some(d);
-                }
+        if let Some(d) = super::conditions::eval_duration_cb(&mut self.prng, dex.cond(cond).duration_cb) {
+            if let Some(st) = self.state_at_mut(StateLoc::SideCond(side_n, cond)) {
+                st.duration = Some(d);
             }
         }
         let started = self.single_event(
@@ -300,7 +282,7 @@ impl Battle {
         let cond = dex.conds_id(status).unwrap_or_else(|| panic!("unknown slot condition {status}"));
         let side_n = target.side;
         if self.sides[side_n as usize].slot_conditions.iter().any(|(k, _)| *k == cond) {
-            if !dex.cond(cond).has_callback("onRestart") {
+            if !dex.cond(cond).has_on_restart {
                 return RV::False;
             }
             return self.single_event(

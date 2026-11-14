@@ -49,11 +49,13 @@ struct CachedBenchMon {
     status: u8,
     species: u16,
     hp: i32,
+    speed: i32,
     previously_switched_in: i32,
     status_effect_order: u32,
     item: Option<crate::dex::ItemId>,
     last_item: Option<crate::dex::ItemId>,
     step: PolyStep,
+    type_step: PolyStep,
 }
 
 /// Precomputed per-world polynomial hash steps and compact roster metadata
@@ -72,6 +74,77 @@ pub struct BattleSearchCache {
 }
 
 impl BattleSearchCache {
+    fn build_side_steps(
+        side: &Side,
+        hp_buckets: Option<i64>,
+        omit_damage_bookkeeping: bool,
+    ) -> ([CachedMonPrefix; 6], [CachedBenchMon; 6]) {
+        let mut prefixes = [CachedMonPrefix::default(); 6];
+        let mut benches = [CachedBenchMon::default(); 6];
+        for (slot, p) in side.roster.iter().take(6).enumerate() {
+            if !p.transformed {
+                let mut rec_a = PolyRecorder::new();
+                p.hash_static_prefix_a(&mut rec_a);
+                let mut rec_m = PolyRecorder::new();
+                p.base_move_slots.hash_state(&mut rec_m);
+                let mut rec_b = PolyRecorder::new();
+                p.hash_static_prefix_b(&mut rec_b);
+                let step_a = rec_a.step();
+                let step_b = rec_b.step();
+                let full_step = step_a.then(rec_m.step()).then(step_b);
+                #[cfg(debug_assertions)]
+                {
+                    let mut rec_full = PolyRecorder::new();
+                    p.hash_static_prefix_full(&mut rec_full);
+                    debug_assert_eq!(
+                        (full_step.mul, full_step.add),
+                        (rec_full.step().mul, rec_full.step().add)
+                    );
+                }
+                prefixes[slot] = CachedMonPrefix {
+                    valid: true,
+                    species: p.species.0,
+                    hp_type: p.hp_type.0,
+                    hp_power: p.hp_power,
+                    stored_stats: p.stored_stats,
+                    maxhp: p.maxhp,
+                    init_base_moves: p.base_move_slots,
+                    full_step,
+                    step_a,
+                    step_b,
+                };
+            }
+            if !p.is_started && !p.is_active && !p.transformed && p.volatiles.is_empty() {
+                let mut rec_u = PolyRecorder::new();
+                p.hash_state_with_options(&mut rec_u, hp_buckets, omit_damage_bookkeeping);
+                let step = rec_u.step();
+                let type_step = if hp_buckets.is_none() && !omit_damage_bookkeeping {
+                    step
+                } else {
+                    let mut rec_t = PolyRecorder::new();
+                    p.hash_state_with_options(&mut rec_t, None, false);
+                    rec_t.step()
+                };
+                benches[slot] = CachedBenchMon {
+                    valid: true,
+                    fainted: p.fainted,
+                    position: p.position,
+                    status: p.status as u8,
+                    species: p.species.0,
+                    hp: p.hp,
+                    speed: p.speed,
+                    previously_switched_in: p.previously_switched_in,
+                    status_effect_order: p.status_state.effect_order,
+                    item: p.item,
+                    last_item: p.last_item,
+                    step,
+                    type_step,
+                };
+            }
+        }
+        (prefixes, benches)
+    }
+
     pub fn new(
         battle: &Battle,
         dex: &Dex,
@@ -105,57 +178,80 @@ impl BattleSearchCache {
             })
         });
 
-        let mut prefix_steps = [[CachedMonPrefix::default(); 6]; 2];
-        let mut bench_steps = [[CachedBenchMon::default(); 6]; 2];
-
-        for s in 0..2 {
-            for (slot, p) in battle.sides[s].roster.iter().take(6).enumerate() {
-                if !p.transformed {
-                    let mut rec_full = PolyRecorder::new();
-                    p.hash_static_prefix_full(&mut rec_full);
-                    let mut rec_a = PolyRecorder::new();
-                    p.hash_static_prefix_a(&mut rec_a);
-                    let mut rec_b = PolyRecorder::new();
-                    p.hash_static_prefix_b(&mut rec_b);
-                    prefix_steps[s][slot] = CachedMonPrefix {
-                        valid: true,
-                        species: p.species.0,
-                        hp_type: p.hp_type.0,
-                        hp_power: p.hp_power,
-                        stored_stats: p.stored_stats,
-                        maxhp: p.maxhp,
-                        init_base_moves: p.base_move_slots,
-                        full_step: rec_full.step(),
-                        step_a: rec_a.step(),
-                        step_b: rec_b.step(),
-                    };
-                }
-                if selected
-                    && !p.is_started
-                    && !p.is_active
-                    && !p.transformed
-                    && p.volatiles.is_empty()
-                {
-                    let mut rec_u = PolyRecorder::new();
-                    p.hash_state_with_options(&mut rec_u, hp_buckets, omit_damage_bookkeeping);
-                    bench_steps[s][slot] = CachedBenchMon {
-                        valid: true,
-                        fainted: p.fainted,
-                        position: p.position,
-                        status: p.status as u8,
-                        species: p.species.0,
-                        hp: p.hp,
-                        previously_switched_in: p.previously_switched_in,
-                        status_effect_order: p.status_state.effect_order,
-                        item: p.item,
-                        last_item: p.last_item,
-                        step: rec_u.step(),
-                    };
-                }
-            }
-        }
+        let (p0, b0) = Self::build_side_steps(&battle.sides[0], hp_buckets, omit_damage_bookkeeping);
+        let (p1, b1) = Self::build_side_steps(&battle.sides[1], hp_buckets, omit_damage_bookkeeping);
 
         let roster_compact = crate::compact::RosterCompactCache::from_battle(battle, dex);
+        Self {
+            hp_buckets,
+            omit_damage_bookkeeping,
+            selected,
+            picked_mask,
+            any_quick_claw,
+            prefix_steps: [p0, p1],
+            bench_steps: [b0, b1],
+            roster_compact,
+        }
+    }
+
+    pub fn new_with_own_side_template(
+        battle: &Battle,
+        dex: &Dex,
+        hp_buckets: Option<i64>,
+        omit_damage_bookkeeping: bool,
+        own_side: usize,
+        template: &Self,
+    ) -> Self {
+        let selected = battle.started
+            && battle.turn > 0
+            && battle.request_state != RequestState::TeamPreview
+            && !battle
+                .queue
+                .iter()
+                .any(|action| matches!(action.choice, ActionKind::Team { .. } | ActionKind::Start));
+        if own_side >= 2
+            || template.selected != selected
+            || template.hp_buckets != hp_buckets
+            || template.omit_damage_bookkeeping != omit_damage_bookkeeping
+        {
+            return Self::new(battle, dex, hp_buckets, omit_damage_bookkeeping);
+        }
+        let mut picked_mask = [0u8; 2];
+        for s in 0..2 {
+            if selected {
+                for &slot in &battle.sides[s].party {
+                    if slot < 8 {
+                        picked_mask[s] |= 1u8 << slot;
+                    }
+                }
+            } else {
+                picked_mask[s] = 0xFF;
+            }
+        }
+        let any_quick_claw = dex.known_items.quickclaw.is_some_and(|qc| {
+            battle.sides.iter().enumerate().any(|(s, side)| {
+                side.roster.iter().enumerate().any(|(slot, p)| {
+                    p.item == Some(qc) && (!selected || (picked_mask[s] & (1u8 << slot.min(7))) != 0)
+                })
+            })
+        });
+
+        let mut prefix_steps = [Default::default(), Default::default()];
+        let mut bench_steps = [Default::default(), Default::default()];
+        prefix_steps[own_side] = template.prefix_steps[own_side];
+        bench_steps[own_side] = template.bench_steps[own_side];
+        let other = 1 - own_side;
+        let (po, bo) =
+            Self::build_side_steps(&battle.sides[other], hp_buckets, omit_damage_bookkeeping);
+        prefix_steps[other] = po;
+        bench_steps[other] = bo;
+
+        let roster_compact = crate::compact::RosterCompactCache::from_battle_with_side_template(
+            battle,
+            dex,
+            own_side,
+            &template.roster_compact,
+        );
         Self {
             hp_buckets,
             omit_damage_bookkeeping,
@@ -326,7 +422,14 @@ impl Battle {
         };
         use std::hash::Hasher;
         let mut h = crate::fxhash::SearchHasher::default();
-        self.state_hash_into_cached(&mut h, hp_buckets, omit_damage_bookkeeping, omit_qc, cache);
+        self.state_hash_into_cached(
+            &mut h,
+            hp_buckets,
+            omit_damage_bookkeeping,
+            omit_qc,
+            cache,
+            false,
+        );
         let out = h.finish();
         if cfg!(debug_assertions) {
             let expected = if canonical_claw {
@@ -344,6 +447,16 @@ impl Battle {
         let mut h = crate::fxhash::SearchHasher::default();
         self.state_hash_into(&mut h, None, false, true);
         h.finish()
+    }
+
+    #[inline]
+    pub fn type_key_with_cache(&self, cache: &BattleSearchCache) -> u64 {
+        use std::hash::Hasher;
+        let mut h = crate::fxhash::SearchHasher::default();
+        self.state_hash_into_cached(&mut h, None, false, true, cache, true);
+        let out = h.finish();
+        debug_assert_eq!(out, self.type_key(), "BattleSearchCache type_key mismatch");
+        out
     }
 
     /// Two-independent-hash fingerprint (FxHash ‖ SipHash) for
@@ -409,7 +522,10 @@ impl Battle {
             p.base_move_slots
                 .iter()
                 .chain(p.move_slots.iter())
-                .any(|slot| matches!(dex.moves.key(slot.id), "counter" | "mirrorcoat"))
+                .any(|slot| matches!(
+                    dex.move_static(slot.id).damage_cb,
+                    crate::dex::DamageCbKind::Counter | crate::dex::DamageCbKind::MirrorCoat
+                ))
         })
     }
 
@@ -506,6 +622,7 @@ impl Battle {
         omit_damage_bookkeeping: bool,
         omit_quick_claw_roll: bool,
         cache: &BattleSearchCache,
+        use_type_step: bool,
     ) {
         use std::hash::Hash;
         let Battle {
@@ -586,11 +703,12 @@ impl Battle {
                         && p.status_state.effect_order == u.status_effect_order
                         && p.species.0 == u.species
                         && p.hp == u.hp
+                        && p.speed == u.speed
                         && p.item == u.item
                         && p.last_item == u.last_item
                         && p.volatiles.is_empty()
                     {
-                        h.apply_step(u.step);
+                        h.apply_step(if use_type_step { u.type_step } else { u.step });
                         continue;
                     }
                     let pr = &cache.prefix_steps[side_i][slot];
@@ -847,5 +965,132 @@ impl Battle {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::battle::PokemonSet;
+    use crate::dex::{Dex, MoveId};
+
+    fn test_dex() -> Dex {
+        let json = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/gen2stadium2.json"
+        ))
+        .expect("read gen2stadium2.json");
+        Dex::from_json(&json).expect("parse gen2stadium2.json")
+    }
+
+    fn test_mon(species: &str, moves: &[&str]) -> PokemonSet {
+        serde_json::from_value(serde_json::json!({
+            "name": species,
+            "species": species,
+            "item": "",
+            "ability": "No Ability",
+            "moves": moves,
+            "level": 50,
+            "evs": {"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},
+            "ivs": {"hp":30,"atk":30,"def":30,"spa":30,"spd":30,"spe":30},
+            "happiness": 255
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn search_cache_pp_used_and_disabled_parity() {
+        let dex = test_dex();
+        let p1 = vec![
+            test_mon("Snorlax", &["Body Slam", "Earthquake", "Rest", "Sleep Talk"]),
+            test_mon("Zapdos", &["Thunderbolt", "Hidden Power Ice", "Rest", "Sleep Talk"]),
+            test_mon("Raikou", &["Thunderbolt", "Crunch", "Rest", "Sleep Talk"]),
+        ];
+        let p2 = vec![
+            test_mon("Cloyster", &["Surf", "Ice Beam", "Spikes", "Explosion"]),
+            test_mon("Exeggutor", &["Psychic", "Giga Drain", "Sleep Powder", "Explosion"]),
+            test_mon("Gengar", &["Thunderbolt", "Ice Punch", "Hypnosis", "Explosion"]),
+        ];
+        let mut b = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
+        let _ = b.apply_choices(
+            &dex,
+            [
+                Some(SearchChoice::Team([1, 2, 3])),
+                Some(SearchChoice::Team([1, 2, 3])),
+            ],
+        );
+        let cache = BattleSearchCache::new(&b, &dex, Some(16), true);
+
+        let body_slam = dex.moves.id("bodyslam").unwrap();
+        let pid = PokeId { side: 0, slot: 0 };
+        b.deduct_pp(pid, body_slam, 1);
+        assert_eq!(
+            b.search_key_with_cache(&dex, Some(16), true, true, &cache),
+            b.search_key_canonical_claw(&dex, Some(16), true)
+        );
+
+        let pp_before = b.poke(pid).base_move_slots[0].pp;
+        b.deduct_pp(pid, body_slam, pp_before);
+        assert_eq!(
+            b.search_key_with_cache(&dex, Some(16), true, true, &cache),
+            b.search_key_canonical_claw(&dex, Some(16), true)
+        );
+
+        b.poke_mut(pid).base_move_slots[1].disabled = true;
+        assert_eq!(
+            b.search_key_with_cache(&dex, Some(16), true, false, &cache),
+            b.search_key(Some(16), true)
+        );
+
+        b.poke_mut(pid).base_move_slots[2].id = MoveId(1);
+        assert_eq!(
+            b.search_key_with_cache(&dex, Some(16), true, true, &cache),
+            b.search_key_canonical_claw(&dex, Some(16), true)
+        );
+    }
+
+    #[test]
+    fn search_cache_team_preview_quick_claw_and_own_side_template_parity() {
+        let dex = test_dex();
+        let mut p1_lead = test_mon("Snorlax", &["Body Slam", "Earthquake", "Rest", "Sleep Talk"]);
+        p1_lead.item = "Quick Claw".into();
+        let p1 = vec![
+            p1_lead,
+            test_mon("Zapdos", &["Thunderbolt", "Hidden Power Ice", "Rest", "Sleep Talk"]),
+            test_mon("Raikou", &["Thunderbolt", "Crunch", "Rest", "Sleep Talk"]),
+        ];
+        let p2 = vec![
+            test_mon("Cloyster", &["Surf", "Ice Beam", "Spikes", "Explosion"]),
+            test_mon("Exeggutor", &["Psychic", "Giga Drain", "Sleep Powder", "Explosion"]),
+            test_mon("Gengar", &["Thunderbolt", "Ice Punch", "Hypnosis", "Explosion"]),
+        ];
+        let mut base = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
+        let base_cache = BattleSearchCache::new(&base, &dex, Some(16), true);
+        assert!(!base_cache.selected);
+        assert_eq!(base.type_key_with_cache(&base_cache), base.type_key());
+        assert_eq!(
+            base.search_key_with_cache(&dex, Some(16), true, true, &base_cache),
+            base.search_key_canonical_claw(&dex, Some(16), true)
+        );
+
+        let mut det = base.clone();
+        det.sides[1].roster[0].item = dex.items.id("quickclaw");
+        det.quick_claw_roll = true;
+        det.update_all_speeds(&dex);
+        let det_cache =
+            BattleSearchCache::new_with_own_side_template(&det, &dex, Some(16), true, 0, &base_cache);
+        assert_eq!(det.type_key_with_cache(&det_cache), det.type_key());
+        assert_eq!(
+            det.search_key_with_cache(&dex, Some(16), true, true, &det_cache),
+            det.search_key_canonical_claw(&dex, Some(16), true)
+        );
+        // Applying a fresh base-level speed mutation against base_cache still keeps parity
+        base.quick_claw_roll = true;
+        base.update_all_speeds(&dex);
+        assert_eq!(base.type_key_with_cache(&base_cache), base.type_key());
+        assert_eq!(
+            base.search_key_with_cache(&dex, Some(16), true, true, &base_cache),
+            base.search_key_canonical_claw(&dex, Some(16), true)
+        );
     }
 }

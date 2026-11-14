@@ -224,24 +224,28 @@ impl Battle {
         self.each_event(dex, &ev::Update, None);
     }
 
+    #[cold]
+    fn unported_before_turn(dex: &Dex, move_id: crate::dex::MoveId) -> ! {
+        panic!("unported beforeTurnCallback: {}", dex.moves.key(move_id));
+    }
+
     /// beforeTurnCallback dispatch (pursuit).
     pub fn before_turn_callback(&mut self, dex: &Dex, move_id: crate::dex::MoveId, pokemon: PokeId, target: PokeId) {
-        match dex.moves.key(move_id) {
-            "pursuit" => {
-                self.add_volatile(
-                    dex,
-                    pokemon,
-                    "pursuit",
-                    Some(pokemon),
-                    super::EffectHandle::MoveEff(move_id),
-                );
-                let loc: i64 = if target.side == pokemon.side { -1 } else { 1 };
-                let pu = crate::cond_id!(dex, "pursuit").unwrap();
-                if let Some(vs) = self.poke_mut(pokemon).volatile_mut(pu) {
-                    vs.set_int(crate::state::DK::TargetLoc, loc);
-                }
+        if dex.move_static(move_id).is_pursuit {
+            self.add_volatile(
+                dex,
+                pokemon,
+                "pursuit",
+                Some(pokemon),
+                super::EffectHandle::MoveEff(move_id),
+            );
+            let loc: i64 = if target.side == pokemon.side { -1 } else { 1 };
+            let pu = crate::cond_id!(dex, "pursuit").unwrap();
+            if let Some(vs) = self.poke_mut(pokemon).volatile_mut(pu) {
+                vs.set_int(crate::state::DK::TargetLoc, loc);
             }
-            other => panic!("unported beforeTurnCallback: {other}"),
+        } else {
+            Self::unported_before_turn(dex, move_id);
         }
     }
 

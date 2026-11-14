@@ -148,14 +148,337 @@ pub struct KnownItems {
     pub quickclaw: Option<ItemId>,
 }
 
-/// Species ids referenced by the stat hot path.
+/// Species ids referenced by the stat / item hot path.
 #[derive(Clone, Copy, Debug)]
 pub struct KnownSpecies {
     pub cubone: Option<SpeciesId>,
     pub marowak: Option<SpeciesId>,
     pub pikachu: Option<SpeciesId>,
     pub ditto: Option<SpeciesId>,
+    pub farfetchd: Option<SpeciesId>,
+    pub chansey: Option<SpeciesId>,
 }
+
+/// Precomputed `durationCallback` behavior for a condition entry.
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DurationCbKind {
+    #[default]
+    None = 0,
+    Rand3To6,
+    Rand2To4,
+    Rand3To5,
+    Rand2To6,
+    Rand3To7,
+    Const5,
+}
+
+/// Precomputed `damageCallback` behavior for a move entry.
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DamageCbKind {
+    #[default]
+    None = 0,
+    Counter,
+    MirrorCoat,
+    Psywave,
+    SuperFang,
+}
+
+/// Precomputed `basePowerCallback` behavior for a move entry.
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BasePowerCbKind {
+    #[default]
+    None = 0,
+    FlailReversal,
+    Frustration,
+    Return,
+    TripleKick,
+    Pursuit,
+    BeatUp,
+    HiddenPower,
+    FuryCutter,
+    Rollout,
+}
+
+/// Precomputed `beforeMoveCallback` behavior for a move entry.
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BeforeMoveCbKind {
+    #[default]
+    None = 0,
+    Bide,
+}
+
+/// Dense integer opcode for condition callback dispatch (`Cb` <= 255).
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CondCbOp {
+    #[default]
+    Unported = 0,
+    Noop,
+    BrnStart,
+    BrnAfterMoveSelf,
+    BrnSwitchIn,
+    ParStart,
+    ParBeforeMove,
+    ParSwitchIn,
+    SlpStart,
+    SlpBeforeMove,
+    FrzStart,
+    FrzBeforeMove,
+    FrzAfterMoveSecondary,
+    FrzAfterMoveSecondarySelf,
+    FrzResidual,
+    PsnStart,
+    PsnAfterMoveSelf,
+    ToxStart,
+    ToxAfterMoveSelf,
+    ToxSwitchIn,
+    ToxAfterSwitchInSelf,
+    ConfusionStart,
+    ConfusionEnd,
+    ConfusionBeforeMove,
+    FlinchBeforeMove,
+    PartiallyTrappedStart,
+    PartiallyTrappedResidual,
+    PartiallyTrappedEnd,
+    PartiallyTrappedTrapPokemon,
+    ResidualDmgStart,
+    ResidualDmgAfterMoveSelf,
+    MustRechargeBeforeMove,
+    MustRechargeStart,
+    MustRechargeLockMove,
+    TrappedTrapPokemon,
+    TrappedStart,
+    RainDanceFieldStart,
+    RainDanceFieldResidual,
+    RainDanceFieldEnd,
+    SunnyDayFieldStart,
+    SunnyDayFieldResidual,
+    SunnyDayFieldEnd,
+    SunnyDayImmunity,
+    SandstormFieldStart,
+    SandstormFieldResidual,
+    SandstormWeather,
+    SandstormFieldEnd,
+    SleepClauseModSetStatus,
+    FreezeClauseModSetStatus,
+    LightScreenSideStart,
+    ReflectSideStart,
+    LightScreenSideEnd,
+    ReflectSideEnd,
+    SafeguardSideStart,
+    SafeguardSideEnd,
+    SafeguardSetStatus,
+    SafeguardTryAddVolatile,
+    SpikesSideStart,
+    SpikesEntryHazard,
+    LeechSeedStart,
+    LeechSeedAfterMoveSelf,
+    NightmareStart,
+    NightmareAfterMoveSelf,
+    CurseStart,
+    CurseAfterMoveSelf,
+    ForesightStart,
+    ForesightNegateImmunity,
+    LockOnSourceAccuracy,
+    DestinyBondStart,
+    DestinyBondFaint,
+    DestinyBondBeforeMove,
+    DestinyBondMoveAborted,
+    DestinyBondFoeAfterMoveSelf,
+    DestinyBondFoeSwitchOut,
+    PerishSongResidual,
+    PerishSongEnd,
+    EncoreStart,
+    EncoreOverrideAction,
+    EncoreResidual,
+    EncoreEnd,
+    EncoreDisableMove,
+    DisableStart,
+    DisableEnd,
+    DisableBeforeMove,
+    DisableDisableMove,
+    MistStart,
+    MistTryBoost,
+    SubstituteStart,
+    SubstituteEnd,
+    SubstituteTryPrimaryHit,
+    BideStart,
+    BideDamage,
+    BideBeforeMove,
+    BideMoveAborted,
+    BideEnd,
+    BideSemiLockMove,
+    RageStart,
+    RageHit,
+    RageBeforeMove,
+    RolloutStart,
+    RolloutResidual,
+    RolloutLockMove,
+    FuryCutterStart,
+    FuryCutterRestart,
+    DefenseCurlMinimizeRestart,
+    MinimizeSourceModifyDamage,
+    AttractStart,
+    AttractUpdate,
+    AttractBeforeMove,
+    AttractEnd,
+    FocusEnergyStart,
+    FocusEnergyModifyCritRatio,
+    ProtectStart,
+    ProtectTryHit,
+    EndureStart,
+    EndureDamage,
+    StallStart,
+    StallMove,
+    StallRestart,
+    TwoTurnMoveStart,
+    TwoTurnMoveEnd,
+    TwoTurnMoveLockMove,
+    TwoTurnMoveAborted,
+    DigImmunity,
+    DigInvulnerability,
+    FlyInvulnerability,
+    DigSourceBasePower,
+    FlySourceBasePower,
+    LockedMoveStart,
+    LockedMoveResidual,
+    LockedMoveEnd,
+    LockedMoveLockMove,
+    LockedMoveAborted,
+    PursuitFoeBeforeSwitchOut,
+    FutureMoveStart,
+    FutureMoveResidual,
+    FutureMoveEnd,
+}
+
+/// Dense integer opcode for item callback dispatch (`Cb` <= 255).
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ItemCbOp {
+    #[default]
+    Unported = 0,
+    TypeBoostModifyDamage,
+    ScopeLensCrit,
+    StickCrit,
+    LuckyPunchCrit,
+    BrightPowderAccuracy,
+    FocusBandDamage,
+    KingsRockModifyMove,
+    LeftoversResidual,
+    BerryJuiceResidual,
+    BerryResidual,
+    BerryTryEat,
+    GoldBerryTryEat,
+    BerryEat,
+    GoldBerryEat,
+    BitterBerryUpdate,
+    BitterBerryEat,
+    BurntBerryUpdate,
+    IceBerryUpdate,
+    PrzCureBerryUpdate,
+    PsnCureBerryUpdate,
+    MintBerryCheck,
+    BurntBerryEat,
+    IceBerryEat,
+    MintBerryEat,
+    PrzCureBerryEat,
+    PsnCureBerryEat,
+    MiracleBerryCheck,
+    MiracleBerryEat,
+    MysteryBerryUpdate,
+    MysteryBerryEat,
+    MailTakeItem,
+    BerserkGeneUpdate,
+}
+
+/// Dense integer opcode for move callback dispatch (`Cb` <= 255).
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MoveCbOp {
+    #[default]
+    Unported = 0,
+    StruggleModifyMove,
+    ThunderModifyMove,
+    HiddenPowerModifyMove,
+    CurseModifyMove,
+    MagnitudeModifyMove,
+    PresentModifyMove,
+    BeatUpModifyMove,
+    RolloutModifyMove,
+    MagnitudeUseMoveMessage,
+    ChargeTryMove,
+    SkullBashTryMove,
+    SolarBeamTryMove,
+    ChargePrepareHit,
+    ProtectDetectEndurePrepareHit,
+    DestinyPerishPrepareHit,
+    RestTry,
+    SleepTalkSnoreTry,
+    NoopTry,
+    FalseTry,
+    FutureSightTry,
+    SubstituteTryHit,
+    CurseTryHit,
+    DisableTryHit,
+    ForesightTryHit,
+    LockOnTryHit,
+    RoarTryHit,
+    SplashTryHit,
+    SwaggerTryHit,
+    SleepTalkTryHit,
+    AttractTryImmunity,
+    DreamEaterTryImmunity,
+    LeechSeedTryImmunity,
+    HighJumpKickMoveFail,
+    OutrageMoveFail,
+    FalseSwipeDamage,
+    HazeHitField,
+    PerishSongHitField,
+    SubstituteHit,
+    BellyDrumHit,
+    ConversionHit,
+    Conversion2Hit,
+    ProtectDetectEndureHit,
+    HealBellHit,
+    LockOnHit,
+    MeanLookHit,
+    MetronomeHit,
+    MimicHit,
+    MirrorMoveHit,
+    MoonlightHit,
+    PainSplitHit,
+    PayDayHit,
+    PsychUpHit,
+    RestHit,
+    SketchHit,
+    SleepTalkHit,
+    SpiteHit,
+    TransformHit,
+    TriAttackHit,
+    BatonPassHit,
+    FuryCutterHit,
+    CurseHit,
+    ThiefSecondaryOnHit,
+    TriAttackSecondaryOnHit,
+    RapidSpinSelfOnHit,
+    BatonPassSelfOnHit,
+    RapidSpinAfterHit,
+    RolloutAfterMove,
+}
+
+fn default_item_cb_ops() -> [ItemCbOp; 256] {
+    [ItemCbOp::Unported; 256]
+}
+
+const _: () = {
+    assert!(std::mem::size_of::<CondCbOp>() == 1);
+    assert!(std::mem::size_of::<ItemCbOp>() == 1);
+    assert!(std::mem::size_of::<MoveCbOp>() == 1);
+};
 
 /// Hot callback ids resolved once at load (literal-name checks in the battle
 /// code go through these instead of hashing the string every time).
@@ -284,6 +607,12 @@ pub struct ItemData {
     /// Per-callback Order/Priority/SubOrder numbers (filled at load).
     #[serde(skip)]
     pub cb_nums: Vec<(Cb, CbNums)>,
+    /// Precomputed 1.1x type boost target (if this is a Gen 2 type-boost item).
+    #[serde(skip)]
+    pub type_boost: Option<TypeId>,
+    /// Direct jump-table op indexed by `Cb.0`.
+    #[serde(skip, default = "default_item_cb_ops")]
+    pub cb_ops: [ItemCbOp; 256],
 }
 
 impl ItemData {
@@ -634,6 +963,17 @@ pub struct MoveStatic {
     pub cb_mask: CbMask,
     /// Condition block data (for moves that define one), kept raw.
     pub condition: Option<Value>,
+    /// Direct jump-table ops indexed by `Cb.0`.
+    pub cb_ops: [MoveCbOp; 256],
+    pub secondary_on_hit_op: MoveCbOp,
+    pub self_on_hit_op: MoveCbOp,
+    pub damage_cb: DamageCbKind,
+    pub base_power_cb: BasePowerCbKind,
+    pub before_move_cb: BeforeMoveCbKind,
+    pub kingsrock: bool,
+    pub calls_other_move: bool,
+    pub is_pursuit: bool,
+    pub is_solarbeam: bool,
 }
 
 /// Intern a short string once, globally (move targets, flag names).
@@ -761,6 +1101,16 @@ impl MoveStatic {
             callbacks: d.callbacks.clone(),
             cb_mask: CbMask::EMPTY,
             condition: d.condition.clone(),
+            cb_ops: [MoveCbOp::Unported; 256],
+            secondary_on_hit_op: MoveCbOp::Unported,
+            self_on_hit_op: MoveCbOp::Unported,
+            damage_cb: DamageCbKind::None,
+            base_power_cb: BasePowerCbKind::None,
+            before_move_cb: BeforeMoveCbKind::None,
+            kingsrock: false,
+            calls_other_move: false,
+            is_pursuit: false,
+            is_solarbeam: false,
         }
     }
 
@@ -802,6 +1152,13 @@ pub struct CondEntry {
     pub mask: CbMask,
     /// Precomputed per-callback Order/Priority/SubOrder (from `nums`).
     pub cb_nums: Vec<(Cb, CbNums)>,
+    /// Direct jump-table ops indexed by `Cb.0`.
+    pub cb_ops: [CondCbOp; 256],
+    pub duration_cb: DurationCbKind,
+    pub has_on_restart: bool,
+    pub has_on_field_restart: bool,
+    pub has_on_side_restart: bool,
+    pub is_permanent_rule: bool,
 }
 
 impl CondEntry {
@@ -859,6 +1216,8 @@ pub struct Dex {
     pub known_items: KnownItems,
     pub known_species: KnownSpecies,
     pub known_types: KnownTypes,
+    /// Bitmask over `TypeId.0` for Gen 2 special-split types.
+    pub special_type_mask: u32,
     /// Display names of interned types ("Fire", ..., "???"), TypeId order.
     pub type_names: Vec<String>,
     /// Keys: both display ("Fire") and toid ("fire") forms.
@@ -947,6 +1306,14 @@ impl Dex {
         }
         let status_imm: crate::fxhash::FxHashMap<String, Box<[bool]>> =
             status_imm.into_iter().map(|(k, v)| (k, v.into_boxed_slice())).collect();
+        let mut special_type_mask = 0u32;
+        for name in ["Fire", "Water", "Grass", "Ice", "Electric", "Dark", "Psychic", "Dragon"] {
+            if let Some(&i) = type_index.get(name) {
+                if (i as u32) < 32 {
+                    special_type_mask |= 1u32 << i;
+                }
+            }
+        }
         let known_types = KnownTypes {
             unknown: tid("???"),
             normal: tid("Normal"),
@@ -997,6 +1364,12 @@ impl Dex {
                     nums: handler_nums(&c.extra),
                     mask: CbMask::EMPTY,
                     cb_nums: Vec::new(),
+                    cb_ops: [CondCbOp::Unported; 256],
+                    duration_cb: DurationCbKind::None,
+                    has_on_restart: false,
+                    has_on_field_restart: false,
+                    has_on_side_restart: false,
+                    is_permanent_rule: false,
                 },
             );
         }
@@ -1039,6 +1412,12 @@ impl Dex {
                     nums: handler_nums(&cond_map),
                     mask: CbMask::EMPTY,
                     cb_nums: Vec::new(),
+                    cb_ops: [CondCbOp::Unported; 256],
+                    duration_cb: DurationCbKind::None,
+                    has_on_restart: false,
+                    has_on_field_restart: false,
+                    has_on_side_restart: false,
+                    is_permanent_rule: false,
                 },
             );
         }
@@ -1061,6 +1440,12 @@ impl Dex {
                     nums: BTreeMap::new(),
                     mask: CbMask::EMPTY,
                     cb_nums: Vec::new(),
+                    cb_ops: [CondCbOp::Unported; 256],
+                    duration_cb: DurationCbKind::None,
+                    has_on_restart: false,
+                    has_on_field_restart: false,
+                    has_on_side_restart: false,
+                    is_permanent_rule: true,
                 },
             );
         }
@@ -1085,6 +1470,12 @@ impl Dex {
                 nums: BTreeMap::new(),
                 mask: CbMask::EMPTY,
                 cb_nums: Vec::new(),
+                cb_ops: [CondCbOp::Unported; 256],
+                duration_cb: DurationCbKind::None,
+                has_on_restart: false,
+                has_on_field_restart: false,
+                has_on_side_restart: false,
+                is_permanent_rule: false,
             });
         }
 
@@ -1198,8 +1589,16 @@ impl Dex {
                     _ => slot.sub_order = Some(n),
                 }
             }
+            e.has_on_restart = e.callbacks.iter().any(|c| c == "onRestart");
+            e.has_on_field_restart = e.callbacks.iter().any(|c| c == "onFieldRestart");
+            e.has_on_side_restart = e.callbacks.iter().any(|c| c == "onSideRestart");
+            e.duration_cb = classify_duration_cb(key);
+            for (idx, cb_name) in cb_names.iter().enumerate() {
+                e.cb_ops[idx] = classify_cond_cb(key, cb_name);
+            }
         }
-        for item in items.values.iter_mut() {
+        for (idx_item, item) in items.values.iter_mut().enumerate() {
+            let item_key = &items.keys[idx_item];
             for c in &item.callbacks {
                 item.mask.set(lookup(c));
             }
@@ -1227,13 +1626,33 @@ impl Dex {
                 }
             }
             item.cb_nums = cb_nums;
+            item.type_boost = item_type_boost_name(item_key).and_then(|tn| type_index.get(tn).map(|&i| TypeId(i)));
+            for (idx, cb_name) in cb_names.iter().enumerate() {
+                item.cb_ops[idx] = classify_item_cb(item_key, cb_name, item.type_boost);
+            }
         }
-        for ms in moves_static.iter_mut() {
+        for (idx_mv, ms) in moves_static.iter_mut().enumerate() {
+            let move_key = &moves.keys[idx_mv];
             for c in &ms.callbacks {
                 if !c.contains('.') {
                     ms.cb_mask.set(lookup(c));
                 }
             }
+            for (idx, cb_name) in cb_names.iter().enumerate() {
+                ms.cb_ops[idx] = classify_move_cb(move_key, cb_name);
+            }
+            ms.secondary_on_hit_op = classify_move_cb(move_key, "secondary.onHit");
+            ms.self_on_hit_op = classify_move_cb(move_key, "self.onHit");
+            ms.damage_cb = classify_damage_cb(move_key);
+            ms.base_power_cb = classify_base_power_cb(move_key);
+            ms.before_move_cb = classify_before_move_cb(move_key);
+            ms.kingsrock = KINGSROCK_MOVES_TABLE.contains(&move_key.as_str());
+            ms.calls_other_move = matches!(
+                move_key.as_str(),
+                "metronome" | "mimic" | "mirrormove" | "sketch" | "sleeptalk" | "transform"
+            );
+            ms.is_pursuit = move_key == "pursuit";
+            ms.is_solarbeam = move_key == "solarbeam";
         }
 
         let mut possible_mask = CbMask::EMPTY;
@@ -1290,6 +1709,8 @@ impl Dex {
             marowak: species.id("marowak"),
             pikachu: species.id("pikachu"),
             ditto: species.id("ditto"),
+            farfetchd: species.id("farfetchd"),
+            chansey: species.id("chansey"),
         };
 
         Ok(Dex {
@@ -1310,6 +1731,7 @@ impl Dex {
             known_items,
             known_species,
             known_types,
+            special_type_mask,
             type_names,
             type_index,
             eff_matrix,
@@ -1424,5 +1846,364 @@ impl Dex {
             2 => -1,
             _ => 0,
         }
+    }
+}
+
+fn classify_duration_cb(cond: &str) -> DurationCbKind {
+    match cond {
+        "partiallytrapped" => DurationCbKind::Rand3To6,
+        "lockedmove" => DurationCbKind::Rand2To4,
+        "bide" => DurationCbKind::Rand3To5,
+        "disable" => DurationCbKind::Rand2To6,
+        "encore" => DurationCbKind::Rand3To7,
+        "safeguard" | "raindance" | "sunnyday" | "sandstorm" => DurationCbKind::Const5,
+        _ => DurationCbKind::None,
+    }
+}
+
+fn classify_damage_cb(mv: &str) -> DamageCbKind {
+    match mv {
+        "counter" => DamageCbKind::Counter,
+        "mirrorcoat" => DamageCbKind::MirrorCoat,
+        "psywave" => DamageCbKind::Psywave,
+        "superfang" => DamageCbKind::SuperFang,
+        _ => DamageCbKind::None,
+    }
+}
+
+fn classify_base_power_cb(mv: &str) -> BasePowerCbKind {
+    match mv {
+        "flail" | "reversal" => BasePowerCbKind::FlailReversal,
+        "frustration" => BasePowerCbKind::Frustration,
+        "return" => BasePowerCbKind::Return,
+        "triplekick" => BasePowerCbKind::TripleKick,
+        "pursuit" => BasePowerCbKind::Pursuit,
+        "beatup" => BasePowerCbKind::BeatUp,
+        "hiddenpower" => BasePowerCbKind::HiddenPower,
+        "furycutter" => BasePowerCbKind::FuryCutter,
+        "rollout" => BasePowerCbKind::Rollout,
+        _ => BasePowerCbKind::None,
+    }
+}
+
+fn classify_before_move_cb(mv: &str) -> BeforeMoveCbKind {
+    match mv {
+        "bide" => BeforeMoveCbKind::Bide,
+        _ => BeforeMoveCbKind::None,
+    }
+}
+
+fn item_type_boost_name(key: &str) -> Option<&'static str> {
+    Some(match key {
+        "blackbelt" => "Fighting",
+        "blackglasses" => "Dark",
+        "charcoal" => "Fire",
+        "dragonfang" => "Dragon",
+        "hardstone" => "Rock",
+        "magnet" => "Electric",
+        "metalcoat" => "Steel",
+        "miracleseed" => "Grass",
+        "mysticwater" => "Water",
+        "nevermeltice" => "Ice",
+        "pinkbow" => "Normal",
+        "poisonbarb" => "Poison",
+        "polkadotbow" => "Normal",
+        "sharpbeak" => "Flying",
+        "silverpowder" => "Bug",
+        "softsand" => "Ground",
+        "spelltag" => "Ghost",
+        "twistedspoon" => "Psychic",
+        _ => return None,
+    })
+}
+
+const KINGSROCK_MOVES_TABLE: [&str; 91] = [
+    "absorb", "aeroblast", "barrage", "beatup", "bide", "bonerush", "bonemerang", "cometpunch",
+    "counter", "crabhammer", "crosschop", "cut", "dig", "doublekick", "doubleslap", "doubleedge",
+    "dragonrage", "drillpeck", "eggbomb", "explosion", "extremespeed", "falseswipe", "feintattack",
+    "flail", "fly", "frustration", "furyattack", "furycutter", "furyswipes", "gigadrain",
+    "hiddenpower", "highjumpkick", "hornattack", "hydropump", "jumpkick", "karatechop",
+    "leechlife", "machpunch", "magnitude", "megadrain", "megakick", "megapunch", "megahorn",
+    "mirrorcoat", "nightshade", "outrage", "payday", "peck", "petaldance", "pinmissile", "pound",
+    "present", "pursuit", "psywave", "quickattack", "rage", "rapidspin", "razorleaf", "razorwind",
+    "return", "reversal", "rockthrow", "rollout", "scratch", "seismictoss", "selfdestruct",
+    "skullbash", "skyattack", "slam", "slash", "snore", "solarbeam", "sonicboom", "spikecannon",
+    "strength", "struggle", "submission", "superfang", "surf", "swift", "tackle", "takedown",
+    "thief", "thrash", "triplekick", "twineedle", "visegrip", "vinewhip", "watergun", "waterfall",
+    "wingattack",
+];
+
+fn classify_cond_cb(cond: &str, cb: &str) -> CondCbOp {
+    match (cond, cb) {
+        ("trapper" | "brnattackdrop" | "parspeeddrop" | "leppaberry", _) => CondCbOp::Noop,
+        ("stadiumsleepclause", "onSetStatus") => CondCbOp::Noop,
+        ("brn", "onStart") => CondCbOp::BrnStart,
+        ("brn", "onAfterMoveSelf") | ("brn", "onAfterSwitchInSelf") => CondCbOp::BrnAfterMoveSelf,
+        ("brn", "onSwitchIn") => CondCbOp::BrnSwitchIn,
+        ("par", "onStart") => CondCbOp::ParStart,
+        ("par", "onBeforeMove") => CondCbOp::ParBeforeMove,
+        ("par", "onSwitchIn") => CondCbOp::ParSwitchIn,
+        ("slp", "onStart") => CondCbOp::SlpStart,
+        ("slp", "onBeforeMove") => CondCbOp::SlpBeforeMove,
+        ("frz", "onStart") => CondCbOp::FrzStart,
+        ("frz", "onBeforeMove") => CondCbOp::FrzBeforeMove,
+        ("frz", "onAfterMoveSecondary") => CondCbOp::FrzAfterMoveSecondary,
+        ("frz", "onAfterMoveSecondarySelf") => CondCbOp::FrzAfterMoveSecondarySelf,
+        ("frz", "onResidual") => CondCbOp::FrzResidual,
+        ("psn", "onStart") => CondCbOp::PsnStart,
+        ("psn", "onAfterMoveSelf") | ("psn", "onAfterSwitchInSelf") => CondCbOp::PsnAfterMoveSelf,
+        ("tox", "onStart") => CondCbOp::ToxStart,
+        ("tox", "onAfterMoveSelf") => CondCbOp::ToxAfterMoveSelf,
+        ("tox", "onSwitchIn") => CondCbOp::ToxSwitchIn,
+        ("tox", "onAfterSwitchInSelf") => CondCbOp::ToxAfterSwitchInSelf,
+        ("confusion", "onStart") => CondCbOp::ConfusionStart,
+        ("confusion", "onEnd") => CondCbOp::ConfusionEnd,
+        ("confusion", "onBeforeMove") => CondCbOp::ConfusionBeforeMove,
+        ("flinch", "onBeforeMove") => CondCbOp::FlinchBeforeMove,
+        ("partiallytrapped", "onStart") => CondCbOp::PartiallyTrappedStart,
+        ("partiallytrapped", "onResidual") => CondCbOp::PartiallyTrappedResidual,
+        ("partiallytrapped", "onEnd") => CondCbOp::PartiallyTrappedEnd,
+        ("partiallytrapped", "onTrapPokemon") => CondCbOp::PartiallyTrappedTrapPokemon,
+        ("residualdmg", "onStart") => CondCbOp::ResidualDmgStart,
+        ("residualdmg", "onAfterMoveSelf") | ("residualdmg", "onAfterSwitchInSelf") => {
+            CondCbOp::ResidualDmgAfterMoveSelf
+        }
+        ("mustrecharge", "onBeforeMove") => CondCbOp::MustRechargeBeforeMove,
+        ("mustrecharge", "onStart") => CondCbOp::MustRechargeStart,
+        ("mustrecharge", "onLockMove") => CondCbOp::MustRechargeLockMove,
+        ("trapped", "onTrapPokemon") => CondCbOp::TrappedTrapPokemon,
+        ("trapped", "onStart") => CondCbOp::TrappedStart,
+        ("raindance", "onFieldStart") => CondCbOp::RainDanceFieldStart,
+        ("raindance", "onFieldResidual") => CondCbOp::RainDanceFieldResidual,
+        ("raindance", "onFieldEnd") => CondCbOp::RainDanceFieldEnd,
+        ("sunnyday", "onFieldStart") => CondCbOp::SunnyDayFieldStart,
+        ("sunnyday", "onFieldResidual") => CondCbOp::SunnyDayFieldResidual,
+        ("sunnyday", "onFieldEnd") => CondCbOp::SunnyDayFieldEnd,
+        ("sunnyday", "onImmunity") => CondCbOp::SunnyDayImmunity,
+        ("sandstorm", "onFieldStart") => CondCbOp::SandstormFieldStart,
+        ("sandstorm", "onFieldResidual") => CondCbOp::SandstormFieldResidual,
+        ("sandstorm", "onWeather") => CondCbOp::SandstormWeather,
+        ("sandstorm", "onFieldEnd") => CondCbOp::SandstormFieldEnd,
+        ("sleepclausemod", "onSetStatus") => CondCbOp::SleepClauseModSetStatus,
+        ("freezeclausemod", "onSetStatus") => CondCbOp::FreezeClauseModSetStatus,
+        ("lightscreen", "onSideStart") => CondCbOp::LightScreenSideStart,
+        ("reflect", "onSideStart") => CondCbOp::ReflectSideStart,
+        ("lightscreen", "onSideEnd") => CondCbOp::LightScreenSideEnd,
+        ("reflect", "onSideEnd") => CondCbOp::ReflectSideEnd,
+        ("safeguard", "onSideStart") => CondCbOp::SafeguardSideStart,
+        ("safeguard", "onSideEnd") => CondCbOp::SafeguardSideEnd,
+        ("safeguard", "onSetStatus") => CondCbOp::SafeguardSetStatus,
+        ("safeguard", "onTryAddVolatile") => CondCbOp::SafeguardTryAddVolatile,
+        ("spikes", "onSideStart") => CondCbOp::SpikesSideStart,
+        ("spikes", "onEntryHazard") => CondCbOp::SpikesEntryHazard,
+        ("leechseed", "onStart") => CondCbOp::LeechSeedStart,
+        ("leechseed", "onAfterMoveSelf") => CondCbOp::LeechSeedAfterMoveSelf,
+        ("nightmare", "onStart") => CondCbOp::NightmareStart,
+        ("nightmare", "onAfterMoveSelf") => CondCbOp::NightmareAfterMoveSelf,
+        ("curse", "onStart") => CondCbOp::CurseStart,
+        ("curse", "onAfterMoveSelf") => CondCbOp::CurseAfterMoveSelf,
+        ("foresight", "onStart") => CondCbOp::ForesightStart,
+        ("foresight", "onNegateImmunity") => CondCbOp::ForesightNegateImmunity,
+        ("lockon", "onSourceAccuracy") => CondCbOp::LockOnSourceAccuracy,
+        ("destinybond", "onStart") => CondCbOp::DestinyBondStart,
+        ("destinybond", "onFaint") => CondCbOp::DestinyBondFaint,
+        ("destinybond", "onBeforeMove") => CondCbOp::DestinyBondBeforeMove,
+        ("destinybond", "onMoveAborted") => CondCbOp::DestinyBondMoveAborted,
+        ("destinybond", "onFoeAfterMoveSelf") => CondCbOp::DestinyBondFoeAfterMoveSelf,
+        ("destinybond", "onFoeSwitchOut") => CondCbOp::DestinyBondFoeSwitchOut,
+        ("perishsong", "onResidual") => CondCbOp::PerishSongResidual,
+        ("perishsong", "onEnd") => CondCbOp::PerishSongEnd,
+        ("encore", "onStart") => CondCbOp::EncoreStart,
+        ("encore", "onOverrideAction") => CondCbOp::EncoreOverrideAction,
+        ("encore", "onResidual") => CondCbOp::EncoreResidual,
+        ("encore", "onEnd") => CondCbOp::EncoreEnd,
+        ("encore", "onDisableMove") => CondCbOp::EncoreDisableMove,
+        ("disable", "onStart") => CondCbOp::DisableStart,
+        ("disable", "onEnd") => CondCbOp::DisableEnd,
+        ("disable", "onBeforeMove") => CondCbOp::DisableBeforeMove,
+        ("disable", "onDisableMove") => CondCbOp::DisableDisableMove,
+        ("mist", "onStart") => CondCbOp::MistStart,
+        ("mist", "onTryBoost") => CondCbOp::MistTryBoost,
+        ("substitute", "onStart") => CondCbOp::SubstituteStart,
+        ("substitute", "onEnd") => CondCbOp::SubstituteEnd,
+        ("substitute", "onTryPrimaryHit") => CondCbOp::SubstituteTryPrimaryHit,
+        ("bide", "onStart") => CondCbOp::BideStart,
+        ("bide", "onDamage") => CondCbOp::BideDamage,
+        ("bide", "onBeforeMove") => CondCbOp::BideBeforeMove,
+        ("bide", "onMoveAborted") => CondCbOp::BideMoveAborted,
+        ("bide", "onEnd") => CondCbOp::BideEnd,
+        ("bide", "onSemiLockMove") => CondCbOp::BideSemiLockMove,
+        ("rage", "onStart") => CondCbOp::RageStart,
+        ("rage", "onHit") => CondCbOp::RageHit,
+        ("rage", "onBeforeMove") => CondCbOp::RageBeforeMove,
+        ("rollout", "onStart") => CondCbOp::RolloutStart,
+        ("rollout", "onResidual") => CondCbOp::RolloutResidual,
+        ("rollout", "onLockMove") => CondCbOp::RolloutLockMove,
+        ("furycutter", "onStart") => CondCbOp::FuryCutterStart,
+        ("furycutter", "onRestart") => CondCbOp::FuryCutterRestart,
+        ("defensecurl", "onRestart") | ("minimize", "onRestart") => {
+            CondCbOp::DefenseCurlMinimizeRestart
+        }
+        ("minimize", "onSourceModifyDamage") => CondCbOp::MinimizeSourceModifyDamage,
+        ("attract", "onStart") => CondCbOp::AttractStart,
+        ("attract", "onUpdate") => CondCbOp::AttractUpdate,
+        ("attract", "onBeforeMove") => CondCbOp::AttractBeforeMove,
+        ("attract", "onEnd") => CondCbOp::AttractEnd,
+        ("focusenergy", "onStart") => CondCbOp::FocusEnergyStart,
+        ("focusenergy", "onModifyCritRatio") => CondCbOp::FocusEnergyModifyCritRatio,
+        ("protect", "onStart") => CondCbOp::ProtectStart,
+        ("protect", "onTryHit") => CondCbOp::ProtectTryHit,
+        ("endure", "onStart") => CondCbOp::EndureStart,
+        ("endure", "onDamage") => CondCbOp::EndureDamage,
+        ("stall", "onStart") => CondCbOp::StallStart,
+        ("stall", "onStallMove") => CondCbOp::StallMove,
+        ("stall", "onRestart") => CondCbOp::StallRestart,
+        ("twoturnmove", "onStart") => CondCbOp::TwoTurnMoveStart,
+        ("twoturnmove", "onEnd") => CondCbOp::TwoTurnMoveEnd,
+        ("twoturnmove", "onLockMove") => CondCbOp::TwoTurnMoveLockMove,
+        ("twoturnmove", "onMoveAborted") => CondCbOp::TwoTurnMoveAborted,
+        ("dig", "onImmunity") => CondCbOp::DigImmunity,
+        ("dig", "onInvulnerability") => CondCbOp::DigInvulnerability,
+        ("fly", "onInvulnerability") => CondCbOp::FlyInvulnerability,
+        ("dig", "onSourceBasePower") => CondCbOp::DigSourceBasePower,
+        ("fly", "onSourceBasePower") => CondCbOp::FlySourceBasePower,
+        ("lockedmove", "onStart") => CondCbOp::LockedMoveStart,
+        ("lockedmove", "onResidual") => CondCbOp::LockedMoveResidual,
+        ("lockedmove", "onEnd") => CondCbOp::LockedMoveEnd,
+        ("lockedmove", "onLockMove") => CondCbOp::LockedMoveLockMove,
+        ("lockedmove", "onMoveAborted") => CondCbOp::LockedMoveAborted,
+        ("pursuit", "onFoeBeforeSwitchOut") => CondCbOp::PursuitFoeBeforeSwitchOut,
+        ("futuremove", "onStart") => CondCbOp::FutureMoveStart,
+        ("futuremove", "onResidual") => CondCbOp::FutureMoveResidual,
+        ("futuremove", "onEnd") => CondCbOp::FutureMoveEnd,
+        _ => CondCbOp::Unported,
+    }
+}
+
+fn classify_item_cb(key: &str, cb: &str, type_boost: Option<TypeId>) -> ItemCbOp {
+    if type_boost.is_some() && cb == "onModifyDamage" {
+        return ItemCbOp::TypeBoostModifyDamage;
+    }
+    match (key, cb) {
+        ("scopelens", "onModifyCritRatio") => ItemCbOp::ScopeLensCrit,
+        ("stick", "onModifyCritRatio") => ItemCbOp::StickCrit,
+        ("luckypunch", "onModifyCritRatio") => ItemCbOp::LuckyPunchCrit,
+        ("brightpowder", "onModifyAccuracy") => ItemCbOp::BrightPowderAccuracy,
+        ("focusband", "onDamage") => ItemCbOp::FocusBandDamage,
+        ("kingsrock", "onModifyMove") => ItemCbOp::KingsRockModifyMove,
+        ("leftovers", "onResidual") => ItemCbOp::LeftoversResidual,
+        ("berryjuice", "onResidual") => ItemCbOp::BerryJuiceResidual,
+        ("berry", "onResidual") | ("goldberry", "onResidual") => ItemCbOp::BerryResidual,
+        ("berry", "onTryEatItem") => ItemCbOp::BerryTryEat,
+        ("goldberry", "onTryEatItem") => ItemCbOp::GoldBerryTryEat,
+        ("berry", "onEat") => ItemCbOp::BerryEat,
+        ("goldberry", "onEat") => ItemCbOp::GoldBerryEat,
+        ("bitterberry", "onUpdate") => ItemCbOp::BitterBerryUpdate,
+        ("bitterberry", "onEat") => ItemCbOp::BitterBerryEat,
+        ("burntberry", "onUpdate") => ItemCbOp::BurntBerryUpdate,
+        ("iceberry", "onUpdate") => ItemCbOp::IceBerryUpdate,
+        ("przcureberry", "onUpdate") => ItemCbOp::PrzCureBerryUpdate,
+        ("psncureberry", "onUpdate") => ItemCbOp::PsnCureBerryUpdate,
+        ("mintberry", "onBeforeMove") | ("mintberry", "onResidual") => ItemCbOp::MintBerryCheck,
+        ("burntberry", "onEat") => ItemCbOp::BurntBerryEat,
+        ("iceberry", "onEat") => ItemCbOp::IceBerryEat,
+        ("mintberry", "onEat") => ItemCbOp::MintBerryEat,
+        ("przcureberry", "onEat") => ItemCbOp::PrzCureBerryEat,
+        ("psncureberry", "onEat") => ItemCbOp::PsnCureBerryEat,
+        ("miracleberry", "onBeforeMove") | ("miracleberry", "onResidual") => ItemCbOp::MiracleBerryCheck,
+        ("miracleberry", "onEat") => ItemCbOp::MiracleBerryEat,
+        ("mysteryberry", "onUpdate") => ItemCbOp::MysteryBerryUpdate,
+        ("mysteryberry", "onEat") => ItemCbOp::MysteryBerryEat,
+        ("mail", "onTakeItem") => ItemCbOp::MailTakeItem,
+        ("berserkgene", "onUpdate") => ItemCbOp::BerserkGeneUpdate,
+        _ => ItemCbOp::Unported,
+    }
+}
+
+fn classify_move_cb(key: &str, cb: &str) -> MoveCbOp {
+    match (key, cb) {
+        ("struggle", "onModifyMove") => MoveCbOp::StruggleModifyMove,
+        ("thunder", "onModifyMove") => MoveCbOp::ThunderModifyMove,
+        ("hiddenpower", "onModifyMove") => MoveCbOp::HiddenPowerModifyMove,
+        ("curse", "onModifyMove") => MoveCbOp::CurseModifyMove,
+        ("magnitude", "onModifyMove") => MoveCbOp::MagnitudeModifyMove,
+        ("present", "onModifyMove") => MoveCbOp::PresentModifyMove,
+        ("beatup", "onModifyMove") => MoveCbOp::BeatUpModifyMove,
+        ("rollout", "onModifyMove") => MoveCbOp::RolloutModifyMove,
+        ("magnitude", "onUseMoveMessage") => MoveCbOp::MagnitudeUseMoveMessage,
+        ("dig", "onTryMove") | ("fly", "onTryMove") | ("razorwind", "onTryMove")
+        | ("skyattack", "onTryMove") => MoveCbOp::ChargeTryMove,
+        ("skullbash", "onTryMove") => MoveCbOp::SkullBashTryMove,
+        ("solarbeam", "onTryMove") => MoveCbOp::SolarBeamTryMove,
+        ("dig", "onPrepareHit") | ("fly", "onPrepareHit") | ("razorwind", "onPrepareHit")
+        | ("skullbash", "onPrepareHit") | ("skyattack", "onPrepareHit")
+        | ("solarbeam", "onPrepareHit") => MoveCbOp::ChargePrepareHit,
+        ("protect", "onPrepareHit") | ("detect", "onPrepareHit") | ("endure", "onPrepareHit") => {
+            MoveCbOp::ProtectDetectEndurePrepareHit
+        }
+        ("destinybond", "onPrepareHit") | ("perishsong", "onPrepareHit") => {
+            MoveCbOp::DestinyPerishPrepareHit
+        }
+        ("rest", "onTry") => MoveCbOp::RestTry,
+        ("sleeptalk", "onTry") | ("snore", "onTry") => MoveCbOp::SleepTalkSnoreTry,
+        ("splash", "onTry") => MoveCbOp::NoopTry,
+        ("teleport", "onTry") => MoveCbOp::FalseTry,
+        ("futuresight", "onTry") => MoveCbOp::FutureSightTry,
+        ("substitute", "onTryHit") => MoveCbOp::SubstituteTryHit,
+        ("curse", "onTryHit") => MoveCbOp::CurseTryHit,
+        ("disable", "onTryHit") => MoveCbOp::DisableTryHit,
+        ("foresight", "onTryHit") => MoveCbOp::ForesightTryHit,
+        ("lockon", "onTryHit") | ("mindreader", "onTryHit") => MoveCbOp::LockOnTryHit,
+        ("roar", "onTryHit") | ("whirlwind", "onTryHit") => MoveCbOp::RoarTryHit,
+        ("splash", "onTryHit") => MoveCbOp::SplashTryHit,
+        ("swagger", "onTryHit") => MoveCbOp::SwaggerTryHit,
+        ("sleeptalk", "onTryHit") => MoveCbOp::SleepTalkTryHit,
+        ("attract", "onTryImmunity") => MoveCbOp::AttractTryImmunity,
+        ("dreameater", "onTryImmunity") => MoveCbOp::DreamEaterTryImmunity,
+        ("leechseed", "onTryImmunity") => MoveCbOp::LeechSeedTryImmunity,
+        ("highjumpkick", "onMoveFail") | ("jumpkick", "onMoveFail") => {
+            MoveCbOp::HighJumpKickMoveFail
+        }
+        ("outrage", "onMoveFail") | ("petaldance", "onMoveFail") | ("thrash", "onMoveFail") => {
+            MoveCbOp::OutrageMoveFail
+        }
+        ("falseswipe", "onDamage") => MoveCbOp::FalseSwipeDamage,
+        ("haze", "onHitField") => MoveCbOp::HazeHitField,
+        ("perishsong", "onHitField") => MoveCbOp::PerishSongHitField,
+        ("substitute", "onHit") => MoveCbOp::SubstituteHit,
+        ("bellydrum", "onHit") => MoveCbOp::BellyDrumHit,
+        ("conversion", "onHit") => MoveCbOp::ConversionHit,
+        ("conversion2", "onHit") => MoveCbOp::Conversion2Hit,
+        ("detect", "onHit") | ("protect", "onHit") | ("endure", "onHit") => {
+            MoveCbOp::ProtectDetectEndureHit
+        }
+        ("healbell", "onHit") => MoveCbOp::HealBellHit,
+        ("lockon", "onHit") | ("mindreader", "onHit") => MoveCbOp::LockOnHit,
+        ("meanlook", "onHit") | ("spiderweb", "onHit") => MoveCbOp::MeanLookHit,
+        ("metronome", "onHit") => MoveCbOp::MetronomeHit,
+        ("mimic", "onHit") => MoveCbOp::MimicHit,
+        ("mirrormove", "onHit") => MoveCbOp::MirrorMoveHit,
+        ("moonlight", "onHit") | ("morningsun", "onHit") | ("synthesis", "onHit") => {
+            MoveCbOp::MoonlightHit
+        }
+        ("painsplit", "onHit") => MoveCbOp::PainSplitHit,
+        ("payday", "onHit") => MoveCbOp::PayDayHit,
+        ("psychup", "onHit") => MoveCbOp::PsychUpHit,
+        ("rest", "onHit") => MoveCbOp::RestHit,
+        ("sketch", "onHit") => MoveCbOp::SketchHit,
+        ("sleeptalk", "onHit") => MoveCbOp::SleepTalkHit,
+        ("spite", "onHit") => MoveCbOp::SpiteHit,
+        ("transform", "onHit") => MoveCbOp::TransformHit,
+        ("triattack", "onHit") => MoveCbOp::TriAttackHit,
+        ("batonpass", "onHit") => MoveCbOp::BatonPassHit,
+        ("furycutter", "onHit") => MoveCbOp::FuryCutterHit,
+        ("curse", "onHit") => MoveCbOp::CurseHit,
+        ("thief", "secondary.onHit") => MoveCbOp::ThiefSecondaryOnHit,
+        ("triattack", "secondary.onHit") => MoveCbOp::TriAttackSecondaryOnHit,
+        ("rapidspin", "self.onHit") => MoveCbOp::RapidSpinSelfOnHit,
+        ("batonpass", "self.onHit") => MoveCbOp::BatonPassSelfOnHit,
+        ("rapidspin", "onAfterHit") => MoveCbOp::RapidSpinAfterHit,
+        ("rollout", "onAfterMove") => MoveCbOp::RolloutAfterMove,
+        _ => MoveCbOp::Unported,
     }
 }

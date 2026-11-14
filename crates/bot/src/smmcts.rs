@@ -1170,6 +1170,29 @@ pub(crate) fn build_search_cache(
     nc2000_engine::battle::BattleSearchCache::new(b, dex, buckets, omit_damage)
 }
 
+#[inline]
+pub(crate) fn build_search_cache_with_template(
+    cfg: &RmConfig,
+    dex: &Dex,
+    b: &Battle,
+    own_side: usize,
+    template: &nc2000_engine::battle::BattleSearchCache,
+) -> nc2000_engine::battle::BattleSearchCache {
+    let (buckets, omit_damage) = if cfg.hp_buckets <= 0 {
+        (None, false)
+    } else {
+        (Some(cfg.hp_buckets), cfg.key_no_damage)
+    };
+    nc2000_engine::battle::BattleSearchCache::new_with_own_side_template(
+        b,
+        dex,
+        buckets,
+        omit_damage,
+        own_side,
+        template,
+    )
+}
+
 /// Public shim so the `key_shape` probe can hash a state the way the search
 /// does without exposing the descent internals.
 #[inline]

@@ -489,6 +489,7 @@ pub struct BlindSearch {
     decision_seed: u64,
     /// Search resets omit the observer's protocol log.
     base: Battle,
+    base_cache: nc2000_engine::battle::BattleSearchCache,
     scratch: Option<Box<Battle>>,
     scratch_world_id: u64,
     next_world_id: u64,
@@ -598,12 +599,14 @@ impl BlindSearch {
             })
             .collect();
         let endgame = crate::smmcts::EndgameRootStats::new(&base, dex, side, &my_acts);
+        let base_cache = crate::smmcts::build_search_cache(&cfg, dex, &base);
         let decision_seed = rng.0 ^ 0xa24baed4963ee407;
         BlindSearch {
             cfg,
             rng,
             decision_seed,
             base,
+            base_cache,
             scratch: None,
             scratch_world_id: 0,
             next_world_id: 1,
@@ -669,7 +672,10 @@ impl BlindSearch {
                 return (root, ti);
             }
         }
-        let type_key = root_type_key(sim);
+        let type_key = match cache {
+            Some(c) => sim.type_key_with_cache(c),
+            None => root_type_key(sim),
+        };
         let opp = 1 - self.side;
         let reply_acts = self.nodes[root].acts[opp].to_vec();
         let replies = reply_acts.len();
@@ -854,7 +860,13 @@ impl BlindSearch {
                 let opp = 1 - self.side;
                 let can_cache = self.rng.0 == rng_probe.0
                     && sim.sides[opp].party.as_slice() == &party_key[..party_len];
-                let cache = Arc::new(crate::smmcts::build_search_cache(&self.cfg, dex, &sim));
+                let cache = Arc::new(crate::smmcts::build_search_cache_with_template(
+                    &self.cfg,
+                    dex,
+                    &sim,
+                    self.side,
+                    &self.base_cache,
+                ));
                 let world_id = self.next_world_id;
                 self.next_world_id += 1;
                 self.scratch_world_id = world_id;
@@ -890,7 +902,13 @@ impl BlindSearch {
         if self.cfg.unseen_claw_root && sim.is_idle_move_request() {
             sim.update_all_speeds(dex);
         }
-        let cache = Arc::new(crate::smmcts::build_search_cache(&self.cfg, dex, &sim));
+        let cache = Arc::new(crate::smmcts::build_search_cache_with_template(
+            &self.cfg,
+            dex,
+            &sim,
+            self.side,
+            &self.base_cache,
+        ));
         let world_id = self.next_world_id;
         self.next_world_id += 1;
         self.scratch_world_id = world_id;

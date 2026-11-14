@@ -1,102 +1,98 @@
 //! Ported item callbacks (all 38 gen2stadium2 NC2000 items — see
 //! reference/merged-items.txt).
 
-use crate::dex::{Dex, HitEffect, ItemId};
+use crate::dex::{Cb, Dex, HitEffect, ItemCbOp, ItemId};
 use crate::state::*;
 
 use super::dmg::HealEffect;
 use super::events::{ev, EvTarget};
 use super::{EffectHandle, RV};
 
-/// The 1.1x type-boost items.
-fn type_boost(item_key: &str) -> Option<&'static str> {
-    Some(match item_key {
-        "blackbelt" => "Fighting",
-        "blackglasses" => "Dark",
-        "charcoal" => "Fire",
-        "dragonfang" => "Dragon",
-        "hardstone" => "Rock",
-        "magnet" => "Electric",
-        "metalcoat" => "Steel",
-        "miracleseed" => "Grass",
-        "mysticwater" => "Water",
-        "nevermeltice" => "Ice",
-        "pinkbow" => "Normal",
-        "poisonbarb" => "Poison",
-        "polkadotbow" => "Normal",
-        "sharpbeak" => "Flying",
-        "silverpowder" => "Bug",
-        "softsand" => "Ground",
-        "spelltag" => "Ghost",
-        "twistedspoon" => "Psychic",
-        _ => return None,
-    })
+#[cold]
+fn unported_item_cb(dex: &Dex, item: ItemId, cb: Cb) -> ! {
+    panic!("unported item callback: {} {}", dex.items.key(item), dex.cb_key(cb));
 }
 
-const KINGSROCK_MOVES: [&str; 91] = [
-    "absorb", "aeroblast", "barrage", "beatup", "bide", "bonerush", "bonemerang", "cometpunch",
-    "counter", "crabhammer", "crosschop", "cut", "dig", "doublekick", "doubleslap", "doubleedge",
-    "dragonrage", "drillpeck", "eggbomb", "explosion", "extremespeed", "falseswipe", "feintattack",
-    "flail", "fly", "frustration", "furyattack", "furycutter", "furyswipes", "gigadrain",
-    "hiddenpower", "highjumpkick", "hornattack", "hydropump", "jumpkick", "karatechop",
-    "leechlife", "machpunch", "magnitude", "megadrain", "megakick", "megapunch", "megahorn",
-    "mirrorcoat", "nightshade", "outrage", "payday", "peck", "petaldance", "pinmissile", "pound",
-    "present", "pursuit", "psywave", "quickattack", "rage", "rapidspin", "razorleaf", "razorwind",
-    "return", "reversal", "rockthrow", "rollout", "scratch", "seismictoss", "selfdestruct",
-    "skullbash", "skyattack", "slam", "slash", "snore", "solarbeam", "sonicboom", "spikecannon",
-    "strength", "struggle", "submission", "superfang", "surf", "swift", "tackle", "takedown",
-    "thief", "thrash", "triplekick", "twineedle", "visegrip", "vinewhip", "watergun", "waterfall",
-    "wingattack",
-];
+#[inline]
+fn heal_berry_try_eat(b: &mut Battle, dex: &Dex, item: ItemId, target: PokeId, amount: f64) -> RV {
+    let ok = b
+        .run_event(
+            dex,
+            &ev::TryHeal,
+            EvTarget::Poke(target),
+            None,
+            EffectHandle::Item(item),
+            Some(RV::Num(amount)),
+            false,
+            false,
+        )
+        .truthy();
+    if !ok { RV::False } else { RV::Undef }
+}
+
+#[inline]
+fn status_berry_update(b: &mut Battle, dex: &Dex, target: PokeId, pred: impl FnOnce(Status) -> bool) -> RV {
+    if pred(b.poke(target).status) {
+        b.eat_item(dex, target, false, None, EffectHandle::None);
+    }
+    RV::Undef
+}
+
+#[inline]
+fn status_berry_eat(b: &mut Battle, dex: &Dex, target: PokeId, pred: impl FnOnce(Status) -> bool) -> RV {
+    if pred(b.poke(target).status) {
+        b.cure_status(dex, target, false);
+    }
+    RV::Undef
+}
 
 #[allow(clippy::too_many_arguments)]
 pub fn dispatch_item(
     b: &mut Battle,
     dex: &Dex,
     item: ItemId,
-    cb: &str,
+    cb: Cb,
     target: EvTarget,
     source: Option<PokeId>,
     source_effect: EffectHandle,
     relay: RV,
 ) -> RV {
-    let key = dex.items.key(item);
     let tpoke = target.poke();
     let _ = source;
 
-    // 1.1x type-boost items
-    if let (Some(ty), "onModifyDamage") = (type_boost(key), cb) {
-        let move_type = b.active_move.as_ref().map(|m| m.move_type);
-        if move_type.is_some() && move_type == dex.type_id(ty) {
-            return RV::Num(relay.as_num() * 1.1);
+    match dex.items.get(item).cb_ops[cb.0 as usize] {
+        ItemCbOp::TypeBoostModifyDamage => {
+            if let Some(ty) = dex.items.get(item).type_boost {
+                let move_type = b.active_move.as_ref().map(|m| m.move_type);
+                if move_type == Some(ty) {
+                    return RV::Num(relay.as_num() * 1.1);
+                }
+            }
+            RV::Undef
         }
-        return RV::Undef;
-    }
-
-    match (key, cb) {
         // ------------------------------------------------------- crit items
-        ("scopelens", "onModifyCritRatio") => RV::Num(relay.as_num() + 1.0),
-        ("stick", "onModifyCritRatio") => {
+        ItemCbOp::ScopeLensCrit => RV::Num(relay.as_num() + 1.0),
+        ItemCbOp::StickCrit => {
             let user = tpoke.unwrap();
-            if dex.species.key(b.poke(user).species) == "farfetchd" {
+            if Some(b.poke(user).species) == dex.known_species.farfetchd {
                 return RV::Num(3.0);
             }
             RV::Undef
         }
-        ("luckypunch", "onModifyCritRatio") => {
+        ItemCbOp::LuckyPunchCrit => {
             let user = tpoke.unwrap();
-            if dex.species.get(b.poke(user).species).name == "Chansey" {
+            if Some(b.poke(user).species) == dex.known_species.chansey {
                 return RV::Num(3.0);
             }
             RV::Undef
         }
         // ---------------------------------------------------- brightpowder
-        ("brightpowder", "onModifyAccuracy") => match relay {
+        ItemCbOp::BrightPowderAccuracy => match relay {
             RV::Num(acc) => RV::Num(acc - 20.0),
             _ => RV::Undef,
         },
         // ------------------------------------------------------- focusband
-        ("focusband", "onDamage") => {
+        ItemCbOp::FocusBandDamage => {
             let t = tpoke.unwrap();
             let damage = relay.as_num();
             let is_move = matches!(source_effect, EffectHandle::MoveEff(_));
@@ -108,14 +104,13 @@ pub fn dispatch_item(
             RV::Undef
         }
         // ------------------------------------------------------- kingsrock
-        ("kingsrock", "onModifyMove") => {
-            let move_key = b
+        ItemCbOp::KingsRockModifyMove => {
+            let has_kr = b
                 .active_move
                 .as_ref()
                 .and_then(|m| m.id)
-                .map(|m| dex.moves.key(m))
-                .unwrap_or("");
-            if KINGSROCK_MOVES.contains(&move_key) {
+                .is_some_and(|m| dex.move_static(m).kingsrock);
+            if has_kr {
                 if let Some(am) = b.active_move.as_mut() {
                     am.secondaries.push(HitEffect {
                         chance: Some(12),
@@ -128,14 +123,14 @@ pub fn dispatch_item(
             RV::Undef
         }
         // ------------------------------------------------------- leftovers
-        ("leftovers", "onResidual") => {
+        ItemCbOp::LeftoversResidual => {
             let t = tpoke.unwrap();
             let amount = b.poke(t).base_maxhp as f64 / 16.0;
             b.heal(dex, amount, None, None, HealEffect::Effect(EffectHandle::None));
             RV::Undef
         }
         // ------------------------------------------------------ berryjuice
-        ("berryjuice", "onResidual") => {
+        ItemCbOp::BerryJuiceResidual => {
             let t = tpoke.unwrap();
             if b.poke(t).hp as f64 <= b.poke(t).maxhp as f64 / 2.0 {
                 let ok = b
@@ -157,92 +152,53 @@ pub fn dispatch_item(
             RV::Undef
         }
         // ---------------------------------------------------- heal berries
-        ("berry", "onResidual") | ("goldberry", "onResidual") => {
+        ItemCbOp::BerryResidual => {
             let t = tpoke.unwrap();
             if b.poke(t).hp as f64 <= b.poke(t).maxhp as f64 / 2.0 {
                 b.eat_item(dex, t, false, None, EffectHandle::None);
             }
             RV::Undef
         }
-        ("berry", "onTryEatItem") | ("goldberry", "onTryEatItem") => {
-            let t = tpoke.unwrap();
-            let amount = if key == "berry" { 10.0 } else { 30.0 };
-            let ok = b
-                .run_event(
-                    dex,
-                    &ev::TryHeal,
-                    EvTarget::Poke(t),
-                    None,
-                    EffectHandle::Item(item),
-                    Some(RV::Num(amount)),
-                    false,
-                    false,
-                )
-                .truthy();
-            if !ok {
-                return RV::False;
-            }
+        ItemCbOp::BerryTryEat => heal_berry_try_eat(b, dex, item, tpoke.unwrap(), 10.0),
+        ItemCbOp::GoldBerryTryEat => heal_berry_try_eat(b, dex, item, tpoke.unwrap(), 30.0),
+        ItemCbOp::BerryEat => {
+            b.heal(dex, 10.0, None, None, HealEffect::Effect(EffectHandle::None));
             RV::Undef
         }
-        ("berry", "onEat") | ("goldberry", "onEat") => {
-            let amount = if key == "berry" { 10.0 } else { 30.0 };
-            b.heal(dex, amount, None, None, HealEffect::Effect(EffectHandle::None));
+        ItemCbOp::GoldBerryEat => {
+            b.heal(dex, 30.0, None, None, HealEffect::Effect(EffectHandle::None));
             RV::Undef
         }
         // -------------------------------------------------- status berries
-        ("bitterberry", "onUpdate") => {
+        ItemCbOp::BitterBerryUpdate => {
             let t = tpoke.unwrap();
             if crate::cond_id!(dex, "confusion").map(|c| b.poke(t).has_volatile(c)).unwrap_or(false) {
                 b.eat_item(dex, t, false, None, EffectHandle::None);
             }
             RV::Undef
         }
-        ("bitterberry", "onEat") => {
+        ItemCbOp::BitterBerryEat => {
             let t = tpoke.unwrap();
             b.remove_volatile(dex, t, "confusion");
             RV::Undef
         }
-        ("burntberry", "onUpdate") | ("iceberry", "onUpdate")
-        | ("przcureberry", "onUpdate") | ("psncureberry", "onUpdate") => {
-            let t = tpoke.unwrap();
-            let status = b.poke(t).status;
-            let fire = match key {
-                "burntberry" => status == Status::Frz,
-                "iceberry" => status == Status::Brn,
-                "przcureberry" => status == Status::Par,
-                _ => status == Status::Psn || status == Status::Tox,
-            };
-            if fire {
-                b.eat_item(dex, t, false, None, EffectHandle::None);
-            }
-            RV::Undef
+        ItemCbOp::BurntBerryUpdate => status_berry_update(b, dex, tpoke.unwrap(), |s| s == Status::Frz),
+        ItemCbOp::IceBerryUpdate => status_berry_update(b, dex, tpoke.unwrap(), |s| s == Status::Brn),
+        ItemCbOp::PrzCureBerryUpdate => status_berry_update(b, dex, tpoke.unwrap(), |s| s == Status::Par),
+        ItemCbOp::PsnCureBerryUpdate => {
+            status_berry_update(b, dex, tpoke.unwrap(), |s| s == Status::Psn || s == Status::Tox)
         }
         // gen2stadium2nc2000: Mint/Miracle Berry trigger onBeforeMove
         // (priority 11, before the sleep check) + onResidual, not onUpdate.
-        ("mintberry", "onBeforeMove") | ("mintberry", "onResidual") => {
-            let t = tpoke.unwrap();
-            if b.poke(t).status == Status::Slp {
-                b.eat_item(dex, t, false, None, EffectHandle::None);
-            }
-            RV::Undef
+        ItemCbOp::MintBerryCheck => status_berry_update(b, dex, tpoke.unwrap(), |s| s == Status::Slp),
+        ItemCbOp::BurntBerryEat => status_berry_eat(b, dex, tpoke.unwrap(), |s| s == Status::Frz),
+        ItemCbOp::IceBerryEat => status_berry_eat(b, dex, tpoke.unwrap(), |s| s == Status::Brn),
+        ItemCbOp::MintBerryEat => status_berry_eat(b, dex, tpoke.unwrap(), |s| s == Status::Slp),
+        ItemCbOp::PrzCureBerryEat => status_berry_eat(b, dex, tpoke.unwrap(), |s| s == Status::Par),
+        ItemCbOp::PsnCureBerryEat => {
+            status_berry_eat(b, dex, tpoke.unwrap(), |s| s == Status::Psn || s == Status::Tox)
         }
-        ("burntberry", "onEat") | ("iceberry", "onEat") | ("mintberry", "onEat")
-        | ("przcureberry", "onEat") | ("psncureberry", "onEat") => {
-            let t = tpoke.unwrap();
-            let status = b.poke(t).status;
-            let fire = match key {
-                "burntberry" => status == Status::Frz,
-                "iceberry" => status == Status::Brn,
-                "mintberry" => status == Status::Slp,
-                "przcureberry" => status == Status::Par,
-                _ => status == Status::Psn || status == Status::Tox,
-            };
-            if fire {
-                b.cure_status(dex, t, false);
-            }
-            RV::Undef
-        }
-        ("miracleberry", "onBeforeMove") | ("miracleberry", "onResidual") => {
+        ItemCbOp::MiracleBerryCheck => {
             let t = tpoke.unwrap();
             let has_conf =
                 crate::cond_id!(dex, "confusion").map(|c| b.poke(t).has_volatile(c)).unwrap_or(false);
@@ -251,14 +207,14 @@ pub fn dispatch_item(
             }
             RV::Undef
         }
-        ("miracleberry", "onEat") => {
+        ItemCbOp::MiracleBerryEat => {
             let t = tpoke.unwrap();
             b.cure_status(dex, t, false);
             b.remove_volatile(dex, t, "confusion");
             RV::Undef
         }
         // ---------------------------------------------------- mysteryberry
-        ("mysteryberry", "onUpdate") => {
+        ItemCbOp::MysteryBerryUpdate => {
             let t = tpoke.unwrap();
             if b.poke(t).hp <= 0 {
                 return RV::Undef;
@@ -278,7 +234,7 @@ pub fn dispatch_item(
             }
             RV::Undef
         }
-        ("mysteryberry", "onEat") => {
+        ItemCbOp::MysteryBerryEat => {
             let t = tpoke.unwrap();
             let lb = crate::cond_id!(dex, "leppaberry").unwrap();
             let slot_idx = if b.poke(t).has_volatile(lb) {
@@ -322,7 +278,7 @@ pub fn dispatch_item(
             RV::Undef
         }
         // ------------------------------------------------------------ mail
-        ("mail", "onTakeItem") => {
+        ItemCbOp::MailTakeItem => {
             let Some(am) = b.active_move.as_ref() else { return RV::False };
             let move_key = am.id.map(|m| dex.moves.key(m)).unwrap_or("");
             if !matches!(move_key, "knockoff" | "thief" | "covet") {
@@ -331,13 +287,13 @@ pub fn dispatch_item(
             RV::Undef
         }
         // ----------------------------------------------------- berserkgene
-        ("berserkgene", "onUpdate") => {
+        ItemCbOp::BerserkGeneUpdate => {
             let t = tpoke.unwrap();
             if b.use_item(dex, t, None, EffectHandle::None) {
                 b.add_volatile(dex, t, "confusion", None, EffectHandle::None);
             }
             RV::Undef
         }
-        _ => panic!("unported item callback: {key} {cb}"),
+        ItemCbOp::Unported => unported_item_cb(dex, item, cb),
     }
 }

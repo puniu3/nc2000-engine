@@ -60,6 +60,7 @@ pub struct EvCbs {
     pub on_field: Cb,
     pub on_side: Cb,
     pub mask: crate::dex::CbMask,
+    pub field_mask: crate::dex::CbMask,
     /// PS-composed singleEvent ids for Side/Field holders in fieldEvent.
     pub side_name: &'static str,
     pub field_name: &'static str,
@@ -67,6 +68,7 @@ pub struct EvCbs {
     /// (A runEvent with zero handlers is side-effect-free in PS too — it
     /// consumes no PRNG and returns the relay unchanged.)
     pub possible: bool,
+    pub field_possible: bool,
     /// findEventHandlers runs the ally/foe/source prefix dance.
     pub prefixed: bool,
     /// runEvent sorts by compareLeftToRightOrder for this event.
@@ -91,10 +93,18 @@ impl Ev {
         let on_any = get("onAny");
         let on_foe = get("onFoe");
         let on_source = get("onSource");
+        let on_field = get("onField");
+        let on_side = get("onSide");
         let mut mask = crate::dex::CbMask::EMPTY;
         for c in [on, on_ally, on_any, on_foe, on_source] {
             if c.exists() {
                 mask.set(c);
+            }
+        }
+        let mut field_mask = crate::dex::CbMask::EMPTY;
+        for c in [on, on_field, on_side] {
+            if c.exists() {
+                field_mask.set(c);
             }
         }
         EvCbs {
@@ -103,12 +113,14 @@ impl Ev {
             on_any,
             on_foe,
             on_source,
-            on_field: get("onField"),
-            on_side: get("onSide"),
+            on_field,
+            on_side,
             mask,
+            field_mask,
             side_name: Box::leak(format!("Side{name}").into_boxed_str()),
             field_name: Box::leak(format!("Field{name}").into_boxed_str()),
             possible: dex.possible_mask.intersects(&mask),
+            field_possible: dex.possible_mask.intersects(&field_mask),
             prefixed: (on_ally.exists()
                 || on_any.exists()
                 || on_foe.exists()
@@ -461,8 +473,8 @@ impl Battle {
     }
 
     /// resolvePriority: fill sort metadata for a listener.
-    fn resolve_priority(&self, dex: &Dex, mut h: Listener, cb: Cb) -> Listener {
-        h.cb = cb;
+    fn fill_priority(&self, dex: &Dex, h: &mut Listener) {
+        let cb = h.cb;
         if let EffectHandle::Cond(c) = h.effect {
             let n = dex.cond(c).cb_num(cb);
             h.order = n.order.map(|v| v as i64);
@@ -505,7 +517,6 @@ impl Battle {
                 h.speed -= idx / 2.0;
             }
         }
-        h
     }
 
     /// findPokemonEventHandlers: status → volatiles → (ability) → item →
@@ -540,24 +551,20 @@ impl Battle {
                 let has_cb = dex.cond(c).mask.has(cb);
                 let dur = p.status_state.duration.is_some();
                 if has_cb || (get_key_duration && dur) {
-                    handlers.push(self.resolve_priority(
-                        dex,
-                        Listener {
-                            effect: EffectHandle::Cond(c),
-                            has_callback: has_cb,
-                            state: StateLoc::Status(pokemon),
-                            holder: Holder::Poke(pokemon),
-                            end_kind: EndKind::ClearStatus,
-                            order: None,
-                            priority: 0.0,
-                            sub_order: 0.0,
-                            speed: 0.0,
-                            effect_order: 0.0,
-                            state_token: p.status_state.effect_order,
-                            cb: Cb::NONE,
-                        },
+                    handlers.push(Listener {
+                        effect: EffectHandle::Cond(c),
+                        has_callback: has_cb,
+                        state: StateLoc::Status(pokemon),
+                        holder: Holder::Poke(pokemon),
+                        end_kind: EndKind::ClearStatus,
+                        order: None,
+                        priority: 0.0,
+                        sub_order: 0.0,
+                        speed: 0.0,
+                        effect_order: 0.0,
+                        state_token: p.status_state.effect_order,
                         cb,
-                    ));
+                    });
                 }
             }
         }
@@ -565,24 +572,20 @@ impl Battle {
         for (c, state) in &p.volatiles {
             let has_cb = dex.cond(*c).mask.has(cb);
             if has_cb || (get_key_duration && state.duration.is_some()) {
-                handlers.push(self.resolve_priority(
-                    dex,
-                    Listener {
-                        effect: EffectHandle::Cond(*c),
-                        has_callback: has_cb,
-                        state: StateLoc::Volatile(pokemon, *c),
-                        holder: Holder::Poke(pokemon),
-                        end_kind: EndKind::RemoveVolatile,
-                        order: None,
-                        priority: 0.0,
-                        sub_order: 0.0,
-                        speed: 0.0,
-                        effect_order: 0.0,
-                        state_token: state.effect_order,
-                        cb: Cb::NONE,
-                    },
+                handlers.push(Listener {
+                    effect: EffectHandle::Cond(*c),
+                    has_callback: has_cb,
+                    state: StateLoc::Volatile(pokemon, *c),
+                    holder: Holder::Poke(pokemon),
+                    end_kind: EndKind::RemoveVolatile,
+                    order: None,
+                    priority: 0.0,
+                    sub_order: 0.0,
+                    speed: 0.0,
+                    effect_order: 0.0,
+                    state_token: state.effect_order,
                     cb,
-                ));
+                });
             }
         }
         // ability: 'No Ability' has no handlers — skip.
@@ -590,24 +593,20 @@ impl Battle {
         if let Some(item) = p.item {
             let has_cb = dex.items.get(item).mask.has(cb);
             if has_cb || (get_key_duration && p.item_state.duration.is_some()) {
-                handlers.push(self.resolve_priority(
-                    dex,
-                    Listener {
-                        effect: EffectHandle::Item(item),
-                        has_callback: has_cb,
-                        state: StateLoc::None,
-                        holder: Holder::Poke(pokemon),
-                        end_kind: EndKind::None,
-                        order: None,
-                        priority: 0.0,
-                        sub_order: 0.0,
-                        speed: 0.0,
-                        effect_order: 0.0,
-                        state_token: p.item_state.effect_order,
-                        cb: Cb::NONE,
-                    },
+                handlers.push(Listener {
+                    effect: EffectHandle::Item(item),
+                    has_callback: has_cb,
+                    state: StateLoc::None,
+                    holder: Holder::Poke(pokemon),
+                    end_kind: EndKind::None,
+                    order: None,
+                    priority: 0.0,
+                    sub_order: 0.0,
+                    speed: 0.0,
+                    effect_order: 0.0,
+                    state_token: p.item_state.effect_order,
                     cb,
-                ));
+                });
             }
         }
         // species: no runtime species conditions in gen2.
@@ -617,24 +616,20 @@ impl Battle {
             for (c, state) in &side.slot_conditions {
                 let has_cb = dex.cond(*c).mask.has(cb);
                 if has_cb || (get_key_duration && state.duration.is_some()) {
-                    handlers.push(self.resolve_priority(
-                        dex,
-                        Listener {
-                            effect: EffectHandle::Cond(*c),
-                            has_callback: has_cb,
-                            state: StateLoc::SlotCond(pokemon.side, 0, *c),
-                            holder: Holder::Poke(pokemon),
-                            end_kind: EndKind::None,
-                            order: None,
-                            priority: 0.0,
-                            sub_order: 0.0,
-                            speed: 0.0,
-                            effect_order: 0.0,
-                            state_token: state.effect_order,
-                            cb: Cb::NONE,
-                        },
+                    handlers.push(Listener {
+                        effect: EffectHandle::Cond(*c),
+                        has_callback: has_cb,
+                        state: StateLoc::SlotCond(pokemon.side, 0, *c),
+                        holder: Holder::Poke(pokemon),
+                        end_kind: EndKind::None,
+                        order: None,
+                        priority: 0.0,
+                        sub_order: 0.0,
+                        speed: 0.0,
+                        effect_order: 0.0,
+                        state_token: state.effect_order,
                         cb,
-                    ));
+                    });
                 }
             }
         }
@@ -663,27 +658,23 @@ impl Battle {
         for (c, state) in &self.sides[side_n as usize].side_conditions {
             let has_cb = dex.cond(*c).mask.has(cb);
             if has_cb || (get_key_duration && state.duration.is_some()) {
-                handlers.push(self.resolve_priority(
-                    dex,
-                    Listener {
-                        effect: EffectHandle::Cond(*c),
-                        has_callback: has_cb,
-                        state: StateLoc::SideCond(side_n, *c),
-                        holder: match custom_holder {
-                            Some(p) => Holder::Poke(p),
-                            None => Holder::Side(side_n),
-                        },
-                        end_kind: if custom_holder.is_some() { EndKind::None } else { EndKind::RemoveSideCond },
-                        order: None,
-                        priority: 0.0,
-                        sub_order: 0.0,
-                        speed: 0.0,
-                        effect_order: 0.0,
-                        state_token: state.effect_order,
-                        cb: Cb::NONE,
+                handlers.push(Listener {
+                    effect: EffectHandle::Cond(*c),
+                    has_callback: has_cb,
+                    state: StateLoc::SideCond(side_n, *c),
+                    holder: match custom_holder {
+                        Some(p) => Holder::Poke(p),
+                        None => Holder::Side(side_n),
                     },
+                    end_kind: if custom_holder.is_some() { EndKind::None } else { EndKind::RemoveSideCond },
+                    order: None,
+                    priority: 0.0,
+                    sub_order: 0.0,
+                    speed: 0.0,
+                    effect_order: 0.0,
+                    state_token: state.effect_order,
                     cb,
-                ));
+                });
             }
         }
     }
@@ -701,56 +692,52 @@ impl Battle {
         }
         if get_key_duration || cb == dex.known.on_set_status || self.field.pseudo_weather.len() > 3 {
             for (c, state) in &self.field.pseudo_weather {
-                let has_cb = dex.cond(*c).mask.has(cb);
+                let ce = dex.cond(*c);
+                if ce.is_permanent_rule && cb != dex.known.on_set_status && state.duration.is_none() {
+                    continue;
+                }
+                let has_cb = ce.mask.has(cb);
                 if has_cb || (get_key_duration && state.duration.is_some()) {
-                    handlers.push(self.resolve_priority(
-                        dex,
-                        Listener {
-                            effect: EffectHandle::Cond(*c),
-                            has_callback: has_cb,
-                            state: StateLoc::PseudoWeather(*c),
-                            holder: match custom_holder {
-                                Some(p) => Holder::Poke(p),
-                                None => Holder::Field,
-                            },
-                            end_kind: if custom_holder.is_some() { EndKind::None } else { EndKind::RemovePseudoWeather },
-                            order: None,
-                            priority: 0.0,
-                            sub_order: 0.0,
-                            speed: 0.0,
-                            effect_order: 0.0,
-                            state_token: state.effect_order,
-                            cb: Cb::NONE,
+                    handlers.push(Listener {
+                        effect: EffectHandle::Cond(*c),
+                        has_callback: has_cb,
+                        state: StateLoc::PseudoWeather(*c),
+                        holder: match custom_holder {
+                            Some(p) => Holder::Poke(p),
+                            None => Holder::Field,
                         },
+                        end_kind: if custom_holder.is_some() { EndKind::None } else { EndKind::RemovePseudoWeather },
+                        order: None,
+                        priority: 0.0,
+                        sub_order: 0.0,
+                        speed: 0.0,
+                        effect_order: 0.0,
+                        state_token: state.effect_order,
                         cb,
-                    ));
+                    });
                 }
             }
         }
         if let Some(w) = self.field.weather {
             let has_cb = dex.cond(w).mask.has(cb);
             if has_cb || (get_key_duration && self.field.weather_state.duration.is_some()) {
-                handlers.push(self.resolve_priority(
-                    dex,
-                    Listener {
-                        effect: EffectHandle::Cond(w),
-                        has_callback: has_cb,
-                        state: StateLoc::Weather,
-                        holder: match custom_holder {
-                            Some(p) => Holder::Poke(p),
-                            None => Holder::Field,
-                        },
-                        end_kind: if custom_holder.is_some() { EndKind::None } else { EndKind::ClearWeather },
-                        order: None,
-                        priority: 0.0,
-                        sub_order: 0.0,
-                        speed: 0.0,
-                        effect_order: 0.0,
-                        state_token: self.field.weather_state.effect_order,
-                        cb: Cb::NONE,
+                handlers.push(Listener {
+                    effect: EffectHandle::Cond(w),
+                    has_callback: has_cb,
+                    state: StateLoc::Weather,
+                    holder: match custom_holder {
+                        Some(p) => Holder::Poke(p),
+                        None => Holder::Field,
                     },
+                    end_kind: if custom_holder.is_some() { EndKind::None } else { EndKind::ClearWeather },
+                    order: None,
+                    priority: 0.0,
+                    sub_order: 0.0,
+                    speed: 0.0,
+                    effect_order: 0.0,
+                    state_token: self.field.weather_state.effect_order,
                     cb,
-                ));
+                });
             }
         }
         // terrain: none in gen2.
@@ -1028,28 +1015,24 @@ impl Battle {
                 _ => false,
             };
             if has_cb {
-                let l = self.resolve_priority(
-                    dex,
-                    Listener {
-                        effect: source_effect,
-                        has_callback: true,
-                        state: StateLoc::None,
-                        holder: match target {
-                            EvTarget::Poke(p) => Holder::Poke(p),
-                            EvTarget::Side(s) => Holder::Side(s),
-                            EvTarget::Battle => Holder::Battle,
-                        },
-                        end_kind: EndKind::None,
-                        order: None,
-                        priority: 0.0,
-                        sub_order: 0.0,
-                        speed: 0.0,
-                        effect_order: 0.0,
-                        state_token: 0,
-                        cb: Cb::NONE,
+                let l = Listener {
+                    effect: source_effect,
+                    has_callback: true,
+                    state: StateLoc::None,
+                    holder: match target {
+                        EvTarget::Poke(p) => Holder::Poke(p),
+                        EvTarget::Side(s) => Holder::Side(s),
+                        EvTarget::Battle => Holder::Battle,
                     },
-                    cbs.on,
-                );
+                    end_kind: EndKind::None,
+                    order: None,
+                    priority: 0.0,
+                    sub_order: 0.0,
+                    speed: 0.0,
+                    effect_order: 0.0,
+                    state_token: 0,
+                    cb: cbs.on,
+                };
                 handlers.insert(0, l);
             }
         }
@@ -1060,6 +1043,9 @@ impl Battle {
         }
 
         if handlers.len() > 1 {
+            for h in &mut handlers {
+                self.fill_priority(dex, h);
+            }
             if cbs.ltr {
                 // stable sort by compareLeftToRightOrder
                 handlers.sort_by(|a, b| {
@@ -1177,6 +1163,9 @@ impl Battle {
     pub fn field_event(&mut self, dex: &Dex, ev: &'static Ev, targets: Option<&[PokeId]>) {
         let cbs = ev.cbs(dex);
         let get_key = ev.name == "Residual";
+        if !get_key && (!cbs.field_possible || !self.battle_mask.intersects(&cbs.field_mask)) {
+            return;
+        }
         let mut handlers = self.take_scratch();
         self.find_field_event_handlers(dex, cbs.on_field, get_key, None, &mut handlers);
         for side_n in 0..2u8 {
@@ -1193,7 +1182,16 @@ impl Battle {
                 // battle handlers: none.
             }
         }
-        self.speed_sort(&mut handlers, compare_priority);
+        if handlers.is_empty() {
+            self.put_scratch(handlers);
+            return;
+        }
+        if handlers.len() > 1 {
+            for h in &mut handlers {
+                self.fill_priority(dex, h);
+            }
+            self.speed_sort(&mut handlers, compare_priority);
+        }
         let mut idx = 0;
         while idx < handlers.len() {
             let handler = handlers[idx].clone();

@@ -120,6 +120,16 @@ pub struct PolyStep {
     pub add: u64,
 }
 
+impl PolyStep {
+    #[inline(always)]
+    pub const fn then(self, next: Self) -> Self {
+        Self {
+            mul: self.mul.wrapping_mul(next.mul),
+            add: self.add.wrapping_mul(next.mul).wrapping_add(next.add),
+        }
+    }
+}
+
 impl Default for PolyStep {
     #[inline(always)]
     fn default() -> Self {

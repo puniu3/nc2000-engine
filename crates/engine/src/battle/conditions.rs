@@ -1,18 +1,9 @@
-//! Ported condition callbacks (merged gen2stadium2 semantics — see
-//! reference/merged-conditions.txt, dumped from the live PS dex).
-//!
-//! Dispatch is by (condition id, callback name). Anything not ported panics
-//! loudly so the conformance harness reports exactly what is missing.
-
-use crate::dex::{Cb, Dex, MoveId};
+use crate::dex::{Cb, CondCbOp, CondId, Dex, DurationCbKind, MoveId};
 use crate::state::*;
 
 use super::events::{ev, EvTarget};
 use super::{EffectHandle, RV};
 
-/// Markers for callbacks implemented in code but absent from the data's
-/// callback lists. PS allows non-function callbacks (constants); the export
-/// tool only records function-valued ones, so constants are listed here.
 pub fn has_builtin(cond: &str, callback: &str) -> bool {
     matches!(
         (cond, callback),
@@ -20,30 +11,22 @@ pub fn has_builtin(cond: &str, callback: &str) -> bool {
     )
 }
 
-/// durationCallback for conditions that define one. Returns None if the
-/// condition has no durationCallback.
-pub fn duration_callback(
-    b: &mut Battle,
-    dex: &Dex,
-    cond: &str,
-    _target: Option<PokeId>,
-    _source: Option<PokeId>,
-    _source_effect: EffectHandle,
-) -> Option<i32> {
-    let _ = dex;
-    match cond {
-        // gen2 partiallytrapped: random(3,6)
-        "partiallytrapped" => Some(b.prng.random_range(3, 6) as i32),
-        // gen2 lockedmove: random(2,4)
-        "lockedmove" => Some(b.prng.random_range(2, 4) as i32),
-        "bide" => Some(b.prng.random_range(3, 5) as i32),
-        "disable" => Some(b.prng.random_range(2, 6) as i32),
-        "encore" => Some(b.prng.random_range(3, 7) as i32),
-        "safeguard" => Some(5),
-        // weathers: 5 unless rock items (not in NC2000's item pool)
-        "raindance" | "sunnyday" | "sandstorm" => Some(5),
-        _ => None,
+#[inline]
+pub fn eval_duration_cb(prng: &mut crate::prng::BattleRng, kind: DurationCbKind) -> Option<i32> {
+    match kind {
+        DurationCbKind::None => None,
+        DurationCbKind::Rand3To6 => Some(prng.random_range(3, 6) as i32),
+        DurationCbKind::Rand2To4 => Some(prng.random_range(2, 4) as i32),
+        DurationCbKind::Rand3To5 => Some(prng.random_range(3, 5) as i32),
+        DurationCbKind::Rand2To6 => Some(prng.random_range(2, 6) as i32),
+        DurationCbKind::Rand3To7 => Some(prng.random_range(3, 7) as i32),
+        DurationCbKind::Const5 => Some(5),
     }
+}
+
+#[cold]
+fn unported_cond_cb(dex: &Dex, cond: CondId, cb: Cb) -> ! {
+    panic!("unported condition callback: {} {}", dex.conds_key(cond), dex.cb_key(cb))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -59,25 +42,16 @@ pub fn dispatch(
     relay: RV,
     _has_relay: bool,
 ) -> RV {
-    let callback_name = dex.cb_key(cb);
     match effect {
         EffectHandle::Cond(c) => {
-            let key = dex.conds_key(c);
-            dispatch_cond(b, dex, key, callback_name, state, target, source, source_effect, relay)
+            dispatch_cond(b, dex, c, cb, state, target, source, source_effect, relay)
         }
         EffectHandle::MoveEff(m) => {
-            super::moveexec::dispatch_move_callback(b, dex, m, callback_name, target, source, relay)
+            super::moveexec::dispatch_move_callback(b, dex, m, cb, target, source, relay)
         }
-        EffectHandle::Item(i) => super::items::dispatch_item(
-            b,
-            dex,
-            i,
-            callback_name,
-            target,
-            source,
-            source_effect,
-            relay,
-        ),
+        EffectHandle::Item(i) => {
+            super::items::dispatch_item(b, dex, i, cb, target, source, source_effect, relay)
+        }
         _ => RV::Undef,
     }
 }
@@ -86,8 +60,8 @@ pub fn dispatch(
 fn dispatch_cond(
     b: &mut Battle,
     dex: &Dex,
-    cond: &str,
-    cb: &str,
+    cond: CondId,
+    cb: Cb,
     state: StateLoc,
     target: EvTarget,
     source: Option<PokeId>,
@@ -95,33 +69,33 @@ fn dispatch_cond(
     relay: RV,
 ) -> RV {
     let tpoke = target.poke();
-    match (cond, cb) {
+    match dex.cond(cond).cb_ops[cb.0 as usize] {
         // ------------------------------------------------------------- brn
-        ("brn", "onStart") => {
+        CondCbOp::BrnStart => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             b.add(&["-status", &ts, "brn"]);
             b.add_volatile(dex, t, "brnattackdrop", None, EffectHandle::None);
             RV::Undef
         }
-        ("brn", "onAfterMoveSelf") | ("brn", "onAfterSwitchInSelf") => {
+        CondCbOp::BrnAfterMoveSelf => {
             residualdmg(b, dex, tpoke.unwrap());
             RV::Undef
         }
-        ("brn", "onSwitchIn") => {
+        CondCbOp::BrnSwitchIn => {
             let t = tpoke.unwrap();
             b.add_volatile(dex, t, "brnattackdrop", None, EffectHandle::None);
             RV::Undef
         }
         // ------------------------------------------------------------- par
-        ("par", "onStart") => {
+        CondCbOp::ParStart => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             b.add(&["-status", &ts, "par"]);
             b.add_volatile(dex, t, "parspeeddrop", None, EffectHandle::None);
             RV::Undef
         }
-        ("par", "onBeforeMove") => {
+        CondCbOp::ParBeforeMove => {
             let t = tpoke.unwrap();
             if b.prng.random_chance(1, 4) {
                 let ts = b.poke_str(t);
@@ -130,13 +104,13 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("par", "onSwitchIn") => {
+        CondCbOp::ParSwitchIn => {
             let t = tpoke.unwrap();
             b.add_volatile(dex, t, "parspeeddrop", None, EffectHandle::None);
             RV::Undef
         }
         // ------------------------------------------------------------- slp
-        ("slp", "onStart") => {
+        CondCbOp::SlpStart => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             if let EffectHandle::MoveEff(m) = source_effect {
@@ -156,7 +130,7 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("slp", "onBeforeMove") => {
+        CondCbOp::SlpBeforeMove => {
             let t = tpoke.unwrap();
             let loc = StateLoc::Status(t);
             let time = b.state_at(loc).map(|s| s.get_int(crate::state::DK::Time)).unwrap_or(0) - 1;
@@ -180,13 +154,13 @@ fn dispatch_cond(
             RV::False
         }
         // ------------------------------------------------------------- frz
-        ("frz", "onStart") => {
+        CondCbOp::FrzStart => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             b.add(&["-status", &ts, "frz"]);
             RV::Undef
         }
-        ("frz", "onBeforeMove") => {
+        CondCbOp::FrzBeforeMove => {
             let t = tpoke.unwrap();
             let defrost = b.active_move.as_ref().map(|m| m.has_flag(dex, "defrost")).unwrap_or(false);
             if defrost {
@@ -196,7 +170,7 @@ fn dispatch_cond(
             b.add(&["cant", &ts, "frz"]);
             RV::False
         }
-        ("frz", "onAfterMoveSecondary") => {
+        CondCbOp::FrzAfterMoveSecondary => {
             // (move.secondary?.status === 'brn' || move.statusRoll === 'brn') → cure
             // statusRoll is tri attack's dynamically rolled status.
             let t = tpoke.unwrap();
@@ -215,7 +189,7 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("frz", "onAfterMoveSecondarySelf") => {
+        CondCbOp::FrzAfterMoveSecondarySelf => {
             let t = tpoke.unwrap();
             let defrost = b.active_move.as_ref().map(|m| m.has_flag(dex, "defrost")).unwrap_or(false);
             if defrost {
@@ -223,7 +197,7 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("frz", "onResidual") => {
+        CondCbOp::FrzResidual => {
             let t = tpoke.unwrap();
             if b.prng.random_chance(25, 256) {
                 b.cure_status(dex, t, false);
@@ -231,18 +205,18 @@ fn dispatch_cond(
             RV::Undef
         }
         // ------------------------------------------------------------- psn
-        ("psn", "onStart") => {
+        CondCbOp::PsnStart => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             b.add(&["-status", &ts, "psn"]);
             RV::Undef
         }
-        ("psn", "onAfterMoveSelf") | ("psn", "onAfterSwitchInSelf") => {
+        CondCbOp::PsnAfterMoveSelf => {
             residualdmg(b, dex, tpoke.unwrap());
             RV::Undef
         }
         // ------------------------------------------------------------- tox
-        ("tox", "onStart") => {
+        CondCbOp::ToxStart => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             b.add(&["-status", &ts, "tox"]);
@@ -255,7 +229,7 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("tox", "onAfterMoveSelf") => {
+        CondCbOp::ToxAfterMoveSelf => {
             let t = tpoke.unwrap();
             let rd = crate::cond_id!(dex, "residualdmg").unwrap();
             let counter = b.poke(t).volatile(rd).map(|v| v.get_int(crate::state::DK::Counter)).unwrap_or(0);
@@ -265,7 +239,7 @@ fn dispatch_cond(
             b.damage(dex, dmg, Some(t), Some(t), DamageEffect::Effect(eff), false);
             RV::Undef
         }
-        ("tox", "onSwitchIn") => {
+        CondCbOp::ToxSwitchIn => {
             let t = tpoke.unwrap();
             b.poke_mut(t).status = Status::Psn;
             b.refresh_poke_mask(dex, t);
@@ -273,7 +247,7 @@ fn dispatch_cond(
             b.add(&["-status", &ts, "psn", "[silent]"]);
             RV::Undef
         }
-        ("tox", "onAfterSwitchInSelf") => {
+        CondCbOp::ToxAfterSwitchInSelf => {
             let t = tpoke.unwrap();
             let maxhp = b.poke(t).maxhp as f64;
             let dmg = super::clamp_int_range((maxhp / 16.0).floor(), Some(1.0), None);
@@ -283,7 +257,7 @@ fn dispatch_cond(
             RV::Undef
         }
         // ------------------------------------------------------- confusion
-        ("confusion", "onStart") => {
+        CondCbOp::ConfusionStart => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             let from_locked = matches!(
@@ -301,13 +275,13 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("confusion", "onEnd") => {
+        CondCbOp::ConfusionEnd => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             b.add(&["-end", &ts, "confusion"]);
             RV::Undef
         }
-        ("confusion", "onBeforeMove") => {
+        CondCbOp::ConfusionBeforeMove => {
             let t = tpoke.unwrap();
             let cid = crate::cond_id!(dex, "confusion").unwrap();
             let time = b.poke(t).volatile(cid).map(|v| v.get_int(crate::state::DK::Time)).unwrap_or(0) - 1;
@@ -346,7 +320,7 @@ fn dispatch_cond(
             RV::False
         }
         // ---------------------------------------------------------- flinch
-        ("flinch", "onBeforeMove") => {
+        CondCbOp::FlinchBeforeMove => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             b.add(&["cant", &ts, "flinch"]);
@@ -354,7 +328,7 @@ fn dispatch_cond(
             RV::False
         }
         // ------------------------------------------------ partiallytrapped
-        ("partiallytrapped", "onStart") => {
+        CondCbOp::PartiallyTrappedStart => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             let src_move_name = b
@@ -371,7 +345,7 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("partiallytrapped", "onResidual") => {
+        CondCbOp::PartiallyTrappedResidual => {
             let t = tpoke.unwrap();
             let (trapper, divisor, src_move) = {
                 let st = b.state_at(state).unwrap();
@@ -398,7 +372,7 @@ fn dispatch_cond(
             b.damage(dex, dmg, Some(t), None, DamageEffect::Effect(eff), false);
             RV::Undef
         }
-        ("partiallytrapped", "onEnd") => {
+        CondCbOp::PartiallyTrappedEnd => {
             let t = tpoke.unwrap();
             let src_move = b.state_at(state).and_then(|s| s.source_effect);
             let ts = b.poke_str(t);
@@ -406,7 +380,7 @@ fn dispatch_cond(
             b.add(&["-end", &ts, &name, "[partiallytrapped]"]);
             RV::Undef
         }
-        ("partiallytrapped", "onTrapPokemon") => {
+        CondCbOp::PartiallyTrappedTrapPokemon => {
             let t = tpoke.unwrap();
             let source_active = b
                 .state_at(state)
@@ -419,7 +393,7 @@ fn dispatch_cond(
             RV::Undef
         }
         // ----------------------------------------------------- residualdmg
-        ("residualdmg", "onStart") => {
+        CondCbOp::ResidualDmgStart => {
             let t = tpoke.unwrap();
             let cid = crate::cond_id!(dex, "residualdmg").unwrap();
             if let Some(vs) = b.poke_mut(t).volatile_mut(cid) {
@@ -427,7 +401,7 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("residualdmg", "onAfterMoveSelf") | ("residualdmg", "onAfterSwitchInSelf") => {
+        CondCbOp::ResidualDmgAfterMoveSelf => {
             let t = tpoke.unwrap();
             if matches!(b.poke(t).status, Status::Brn | Status::Psn | Status::Tox) {
                 let cid = crate::cond_id!(dex, "residualdmg").unwrap();
@@ -439,7 +413,7 @@ fn dispatch_cond(
             RV::Undef
         }
         // ---------------------------------------------------- mustrecharge
-        ("mustrecharge", "onBeforeMove") => {
+        CondCbOp::MustRechargeBeforeMove => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             b.add(&["cant", &ts, "recharge"]);
@@ -447,53 +421,53 @@ fn dispatch_cond(
             b.remove_volatile(dex, t, "truant");
             RV::Null
         }
-        ("mustrecharge", "onStart") => {
+        CondCbOp::MustRechargeStart => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             b.add(&["-mustrecharge", &ts]);
             RV::Undef
         }
-        ("mustrecharge", "onLockMove") => RV::Str("recharge"),
+        CondCbOp::MustRechargeLockMove => RV::Str("recharge"),
         // --------------------------------------------------------- trapped
-        ("trapped", "onTrapPokemon") => {
+        CondCbOp::TrappedTrapPokemon => {
             let t = tpoke.unwrap();
             b.try_trap(dex, t);
             RV::Undef
         }
-        ("trapped", "onStart") => {
+        CondCbOp::TrappedStart => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             b.add(&["-activate", &ts, "trapped"]);
             RV::Undef
         }
         // -------------------------------------------------------- weathers
-        ("raindance", "onFieldStart") => {
+        CondCbOp::RainDanceFieldStart => {
             b.add(&["-weather", "RainDance"]);
             RV::Undef
         }
-        ("raindance", "onFieldResidual") => {
+        CondCbOp::RainDanceFieldResidual => {
             b.add(&["-weather", "RainDance", "[upkeep]"]);
             b.each_event(dex, &ev::Weather, None);
             RV::Undef
         }
-        ("raindance", "onFieldEnd") => {
+        CondCbOp::RainDanceFieldEnd => {
             b.add(&["-weather", "none"]);
             RV::Undef
         }
-        ("sunnyday", "onFieldStart") => {
+        CondCbOp::SunnyDayFieldStart => {
             b.add(&["-weather", "SunnyDay"]);
             RV::Undef
         }
-        ("sunnyday", "onFieldResidual") => {
+        CondCbOp::SunnyDayFieldResidual => {
             b.add(&["-weather", "SunnyDay", "[upkeep]"]);
             b.each_event(dex, &ev::Weather, None);
             RV::Undef
         }
-        ("sunnyday", "onFieldEnd") => {
+        CondCbOp::SunnyDayFieldEnd => {
             b.add(&["-weather", "none"]);
             RV::Undef
         }
-        ("sunnyday", "onImmunity") => {
+        CondCbOp::SunnyDayImmunity => {
             // onImmunity(type, pokemon): frz → false (can't freeze in sun)
             let t = tpoke.unwrap();
             if b.effective_weather(t) != crate::cond_id!(dex, "sunnyday") {
@@ -504,18 +478,18 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("sandstorm", "onFieldStart") => {
+        CondCbOp::SandstormFieldStart => {
             b.add(&["-weather", "Sandstorm"]);
             RV::Undef
         }
-        ("sandstorm", "onFieldResidual") => {
+        CondCbOp::SandstormFieldResidual => {
             b.add(&["-weather", "Sandstorm", "[upkeep]"]);
             if b.field.weather.is_some() && b.field.weather == crate::cond_id!(dex, "sandstorm") {
                 b.each_event(dex, &ev::Weather, None);
             }
             RV::Undef
         }
-        ("sandstorm", "onWeather") => {
+        CondCbOp::SandstormWeather => {
             // gen2: this.damage(target.baseMaxhp / 8)
             let t = tpoke.unwrap();
             let dmg = b.poke(t).base_maxhp as f64 / 8.0;
@@ -523,14 +497,13 @@ fn dispatch_cond(
             b.damage(dex, dmg, Some(t), None, DamageEffect::Effect(eff), false);
             RV::Undef
         }
-        ("sandstorm", "onFieldEnd") => {
+        CondCbOp::SandstormFieldEnd => {
             b.add(&["-weather", "none"]);
             RV::Undef
         }
         // ----------------------------------------------------------- rules
         // SetStatus listener order is part of the PS PRNG contract; set_status adjudicates after Start.
-        ("stadiumsleepclause", "onSetStatus") => RV::Undef,
-        ("sleepclausemod", "onSetStatus") => {
+        CondCbOp::SleepClauseModSetStatus => {
             // Unlike Stadium Sleep Clause, self-/ally-inflicted sleep (Rest)
             // does not engage the clause: only foe-sourced sleep counts.
             let t = tpoke.unwrap();
@@ -561,7 +534,7 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("freezeclausemod", "onSetStatus") => {
+        CondCbOp::FreezeClauseModSetStatus => {
             let t = tpoke.unwrap();
             if let Some(src) = source {
                 if src.side == t.side {
@@ -583,73 +556,27 @@ fn dispatch_cond(
             RV::Undef
         }
         // --------------------------------------------- lightscreen/reflect
-        ("lightscreen", "onSideStart") | ("reflect", "onSideStart") => {
-            let EvTarget::Side(n) = target else { return RV::Undef };
-            let ss = b.side_str(n);
-            let label = if cond == "lightscreen" { "move: Light Screen" } else { "Reflect" };
-            b.add(&["-sidestart", &ss, label]);
-            RV::Undef
-        }
-        ("lightscreen", "onSideEnd") | ("reflect", "onSideEnd") => {
-            let EvTarget::Side(n) = target else { return RV::Undef };
-            let ss = b.side_str(n);
-            let label = if cond == "lightscreen" { "move: Light Screen" } else { "Reflect" };
-            b.add(&["-sideend", &ss, label]);
-            RV::Undef
-        }
+        CondCbOp::LightScreenSideStart => screen_side_event(b, target, "-sidestart", "move: Light Screen"),
+        CondCbOp::ReflectSideStart => screen_side_event(b, target, "-sidestart", "Reflect"),
+        CondCbOp::LightScreenSideEnd => screen_side_event(b, target, "-sideend", "move: Light Screen"),
+        CondCbOp::ReflectSideEnd => screen_side_event(b, target, "-sideend", "Reflect"),
         // ------------------------------------------------------- safeguard
-        ("safeguard", "onSideStart") => {
+        CondCbOp::SafeguardSideStart => {
             let EvTarget::Side(n) = target else { return RV::Undef };
             let ss = b.side_str(n);
             b.add(&["-sidestart", &ss, "Safeguard"]);
             RV::Undef
         }
-        ("safeguard", "onSideEnd") => {
+        CondCbOp::SafeguardSideEnd => {
             let EvTarget::Side(n) = target else { return RV::Undef };
             let ss = b.side_str(n);
             b.add(&["-sideend", &ss, "Safeguard"]);
             RV::Undef
         }
-        ("safeguard", "onSetStatus") | ("safeguard", "onTryAddVolatile") => {
-            let t = tpoke.unwrap();
-            let Some(src) = source else { return RV::Undef };
-            if source_effect.is_none() {
-                return RV::Undef;
-            }
-            let is_move = matches!(source_effect, EffectHandle::MoveEff(_));
-            let infiltrates = b
-                .active_move
-                .as_ref()
-                .map(|am| {
-                    matches!(source_effect, EffectHandle::MoveEff(m) if am.id == Some(m))
-                        && am.infiltrates
-                })
-                .unwrap_or(false);
-            if is_move && infiltrates && t.side != src.side {
-                return RV::Undef;
-            }
-            if cb == "onSetStatus" {
-                if t != src {
-                    if is_move && !move_eff_has_secondaries(b, dex, source_effect) {
-                        let ts = b.poke_str(t);
-                        b.add(&["-activate", &ts, "move: Safeguard"]);
-                    }
-                    return RV::Null;
-                }
-            } else {
-                let is_confusion = relay == RV::Str("confusion");
-                if is_confusion && t != src {
-                    if is_move && !move_eff_has_secondaries(b, dex, source_effect) {
-                        let ts = b.poke_str(t);
-                        b.add(&["-activate", &ts, "move: Safeguard"]);
-                    }
-                    return RV::Null;
-                }
-            }
-            RV::Undef
-        }
+        CondCbOp::SafeguardSetStatus => safeguard_block(b, dex, tpoke, source, source_effect, relay, true),
+        CondCbOp::SafeguardTryAddVolatile => safeguard_block(b, dex, tpoke, source, source_effect, relay, false),
         // ---------------------------------------------------------- spikes
-        ("spikes", "onSideStart") => {
+        CondCbOp::SpikesSideStart => {
             let EvTarget::Side(n) = target else { return RV::Undef };
             let ss = b.side_str(n);
             b.add(&["-sidestart", &ss, "Spikes"]);
@@ -658,7 +585,7 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("spikes", "onEntryHazard") => {
+        CondCbOp::SpikesEntryHazard => {
             let t = tpoke.unwrap();
             if b.poke(t).has_type(dex.known_types.flying) {
                 return RV::Undef;
@@ -671,13 +598,13 @@ fn dispatch_cond(
             RV::Undef
         }
         // ------------------------------------------------------- leechseed
-        ("leechseed", "onStart") => {
+        CondCbOp::LeechSeedStart => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             b.add(&["-start", &ts, "move: Leech Seed"]);
             RV::Undef
         }
-        ("leechseed", "onAfterMoveSelf") => {
+        CondCbOp::LeechSeedAfterMoveSelf => {
             let t = tpoke.unwrap();
             if b.poke(t).hp <= 0 {
                 return RV::Undef;
@@ -702,7 +629,7 @@ fn dispatch_cond(
             RV::Undef
         }
         // ------------------------------------------------------- nightmare
-        ("nightmare", "onStart") => {
+        CondCbOp::NightmareStart => {
             let t = tpoke.unwrap();
             if b.poke(t).status != Status::Slp {
                 return RV::False;
@@ -711,7 +638,7 @@ fn dispatch_cond(
             b.add(&["-start", &ts, "Nightmare"]);
             RV::Undef
         }
-        ("nightmare", "onAfterMoveSelf") => {
+        CondCbOp::NightmareAfterMoveSelf => {
             let t = tpoke.unwrap();
             if b.poke(t).status == Status::Slp {
                 let dmg = b.poke(t).base_maxhp as f64 / 4.0;
@@ -721,14 +648,14 @@ fn dispatch_cond(
             RV::Undef
         }
         // ----------------------------------------------------------- curse
-        ("curse", "onStart") => {
+        CondCbOp::CurseStart => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             let of = format!("[of] {}", b.poke_str(source.unwrap()));
             b.add(&["-start", &ts, "Curse", &of]);
             RV::Undef
         }
-        ("curse", "onAfterMoveSelf") => {
+        CondCbOp::CurseAfterMoveSelf => {
             let t = tpoke.unwrap();
             let dmg = b.poke(t).base_maxhp as f64 / 4.0;
             let eff = EffectHandle::Cond(crate::cond_id!(dex, "curse").unwrap());
@@ -736,13 +663,13 @@ fn dispatch_cond(
             RV::Undef
         }
         // ------------------------------------------------------- foresight
-        ("foresight", "onStart") => {
+        CondCbOp::ForesightStart => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             b.add(&["-start", &ts, "Foresight"]);
             RV::Undef
         }
-        ("foresight", "onNegateImmunity") => {
+        CondCbOp::ForesightNegateImmunity => {
             let t = tpoke.unwrap();
             if b.poke(t).has_type(dex.known_types.ghost) {
                 if let RV::Num(tyv) = relay {
@@ -755,7 +682,7 @@ fn dispatch_cond(
             RV::Undef
         }
         // ---------------------------------------------------------- lockon
-        ("lockon", "onSourceAccuracy") => {
+        CondCbOp::LockOnSourceAccuracy => {
             let StateLoc::Volatile(holder, _) = state else { return RV::Undef };
             let locked_onto = b.state_at(state).and_then(|s| s.source);
             if source == Some(holder) && tpoke.is_some() && tpoke == locked_onto {
@@ -764,13 +691,13 @@ fn dispatch_cond(
             RV::Undef
         }
         // ----------------------------------------------------- destinybond
-        ("destinybond", "onStart") => {
+        CondCbOp::DestinyBondStart => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             b.add(&["-singlemove", &ts, "Destiny Bond"]);
             RV::Undef
         }
-        ("destinybond", "onFaint") => {
+        CondCbOp::DestinyBondFaint => {
             let t = tpoke.unwrap();
             let Some(src) = source else { return RV::Undef };
             if source_effect.is_none() || src.side == t.side {
@@ -785,7 +712,7 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("destinybond", "onBeforeMove") => {
+        CondCbOp::DestinyBondBeforeMove => {
             let t = tpoke.unwrap();
             let is_db = b
                 .active_move
@@ -798,27 +725,27 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("destinybond", "onMoveAborted") => {
+        CondCbOp::DestinyBondMoveAborted => {
             let t = tpoke.unwrap();
             b.remove_volatile(dex, t, "destinybond");
             RV::Undef
         }
         // gen2stadium2nc2000: Destiny Bond protects only until the foe next
         // acts — expire after the foe's own move, and on foe switch-out.
-        ("destinybond", "onFoeAfterMoveSelf") => {
+        CondCbOp::DestinyBondFoeAfterMoveSelf => {
             let StateLoc::Volatile(holder, _) = state else { return RV::Undef };
             if b.poke(holder).hp > 0 {
                 b.remove_volatile(dex, holder, "destinybond");
             }
             RV::Undef
         }
-        ("destinybond", "onFoeSwitchOut") => {
+        CondCbOp::DestinyBondFoeSwitchOut => {
             let StateLoc::Volatile(holder, _) = state else { return RV::Undef };
             b.remove_volatile(dex, holder, "destinybond");
             RV::Undef
         }
         // ------------------------------------------------------ perishsong
-        ("perishsong", "onResidual") => {
+        CondCbOp::PerishSongResidual => {
             let t = tpoke.unwrap();
             let dur = b.state_at(state).and_then(|s| s.duration).unwrap_or(0);
             let ts = b.poke_str(t);
@@ -826,7 +753,7 @@ fn dispatch_cond(
             b.add(&["-start", &ts, &tag]);
             RV::Undef
         }
-        ("perishsong", "onEnd") => {
+        CondCbOp::PerishSongEnd => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             b.add(&["-start", &ts, "perish0"]);
@@ -834,7 +761,7 @@ fn dispatch_cond(
             RV::Undef
         }
         // ---------------------------------------------------------- encore
-        ("encore", "onStart") => {
+        CondCbOp::EncoreStart => {
             let t = tpoke.unwrap();
             let locked = b.poke(t).last_move_encore;
             let Some(locked) = locked else { return RV::False };
@@ -853,7 +780,7 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("encore", "onOverrideAction") => {
+        CondCbOp::EncoreOverrideAction => {
             let move_key = match source_effect {
                 EffectHandle::MoveEff(m) => dex.moves.key(m),
                 _ => "",
@@ -868,7 +795,7 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("encore", "onResidual") => {
+        CondCbOp::EncoreResidual => {
             let t = tpoke.unwrap();
             let locked = b
                 .state_at(state)
@@ -885,13 +812,13 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("encore", "onEnd") => {
+        CondCbOp::EncoreEnd => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             b.add(&["-end", &ts, "Encore"]);
             RV::Undef
         }
-        ("encore", "onDisableMove") => {
+        CondCbOp::EncoreDisableMove => {
             let t = tpoke.unwrap();
             let locked = b
                 .state_at(state)
@@ -915,7 +842,7 @@ fn dispatch_cond(
             RV::Undef
         }
         // --------------------------------------------------------- disable
-        ("disable", "onStart") => {
+        CondCbOp::DisableStart => {
             let t = tpoke.unwrap();
             if !b.queue_will_move(t) {
                 if let Some(st) = b.state_at_mut(state) {
@@ -937,13 +864,13 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("disable", "onEnd") => {
+        CondCbOp::DisableEnd => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             b.add(&["-end", &ts, "Disable"]);
             RV::Undef
         }
-        ("disable", "onBeforeMove") => {
+        CondCbOp::DisableBeforeMove => {
             let t = tpoke.unwrap();
             let locked = b
                 .state_at(state)
@@ -964,7 +891,7 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("disable", "onDisableMove") => {
+        CondCbOp::DisableDisableMove => {
             let t = tpoke.unwrap();
             let locked = b
                 .state_at(state)
@@ -979,13 +906,13 @@ fn dispatch_cond(
             RV::Undef
         }
         // ------------------------------------------------------------ mist
-        ("mist", "onStart") => {
+        CondCbOp::MistStart => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             b.add(&["-start", &ts, "Mist"]);
             RV::Undef
         }
-        ("mist", "onTryBoost") => {
+        CondCbOp::MistTryBoost => {
             let t = tpoke.unwrap();
             let Some(src) = source else { return RV::Undef };
             if t == src {
@@ -1004,7 +931,7 @@ fn dispatch_cond(
             RV::Undef
         }
         // ------------------------------------------------------ substitute
-        ("substitute", "onStart") => {
+        CondCbOp::SubstituteStart => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             b.add(&["-start", &ts, "Substitute"]);
@@ -1023,13 +950,13 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("substitute", "onEnd") => {
+        CondCbOp::SubstituteEnd => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             b.add(&["-end", &ts, "Substitute"]);
             RV::Undef
         }
-        ("substitute", "onTryPrimaryHit") => {
+        CondCbOp::SubstituteTryPrimaryHit => {
             let t = tpoke.unwrap();
             let src = source.unwrap();
             let (stalling, is_drain, category, move_key, has_status, has_boosts, vs, has_recoil) = {
@@ -1131,7 +1058,7 @@ fn dispatch_cond(
             RV::Num(0.0) // HIT_SUBSTITUTE
         }
         // ------------------------------------------------------------ bide
-        ("bide", "onStart") => {
+        CondCbOp::BideStart => {
             let t = tpoke.unwrap();
             if let Some(st) = b.state_at_mut(state) {
                 st.set_int(crate::state::DK::TotalDamage, 0);
@@ -1140,7 +1067,7 @@ fn dispatch_cond(
             b.add(&["-start", &ts, "move: Bide"]);
             RV::Undef
         }
-        ("bide", "onDamage") => {
+        CondCbOp::BideDamage => {
             if !matches!(source_effect, EffectHandle::MoveEff(_)) || source.is_none() {
                 return RV::Undef;
             }
@@ -1152,7 +1079,7 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("bide", "onBeforeMove") => {
+        CondCbOp::BideBeforeMove => {
             let t = tpoke.unwrap();
             let (duration, total, last_src) = {
                 let st = b.state_at(state).unwrap();
@@ -1218,26 +1145,26 @@ fn dispatch_cond(
             b.add(&["-activate", &ts, "move: Bide"]);
             RV::Undef
         }
-        ("bide", "onMoveAborted") => {
+        CondCbOp::BideMoveAborted => {
             let t = tpoke.unwrap();
             b.remove_volatile(dex, t, "bide");
             RV::Undef
         }
-        ("bide", "onEnd") => {
+        CondCbOp::BideEnd => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             b.add(&["-end", &ts, "move: Bide", "[silent]"]);
             RV::Undef
         }
-        ("bide", "onSemiLockMove") => RV::Str("bide"),
+        CondCbOp::BideSemiLockMove => RV::Str("bide"),
         // ------------------------------------------------------------ rage
-        ("rage", "onStart") => {
+        CondCbOp::RageStart => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             b.add(&["-singlemove", &ts, "Rage"]);
             RV::Undef
         }
-        ("rage", "onHit") => {
+        CondCbOp::RageHit => {
             let t = tpoke.unwrap();
             let category = b.active_move.as_ref().map(|m| m.category);
             if source != Some(t) && category != Some(crate::dex::Category::Status) {
@@ -1246,20 +1173,20 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("rage", "onBeforeMove") => {
+        CondCbOp::RageBeforeMove => {
             let t = tpoke.unwrap();
             b.remove_volatile(dex, t, "rage");
             RV::Undef
         }
         // --------------------------------------------------------- rollout
-        ("rollout", "onStart") => {
+        CondCbOp::RolloutStart => {
             if let Some(st) = b.state_at_mut(state) {
                 st.set_int(crate::state::DK::HitCount, 0);
                 st.set_int(crate::state::DK::ContactHitCount, 0);
             }
             RV::Undef
         }
-        ("rollout", "onResidual") => {
+        CondCbOp::RolloutResidual => {
             let t = tpoke.unwrap();
             let is_struggle = b
                 .poke(t)
@@ -1273,15 +1200,15 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("rollout", "onLockMove") => RV::Str("rollout"),
+        CondCbOp::RolloutLockMove => RV::Str("rollout"),
         // ------------------------------------------------------ furycutter
-        ("furycutter", "onStart") => {
+        CondCbOp::FuryCutterStart => {
             if let Some(st) = b.state_at_mut(state) {
                 st.set_int(crate::state::DK::Multiplier, 1);
             }
             RV::Undef
         }
-        ("furycutter", "onRestart") => {
+        CondCbOp::FuryCutterRestart => {
             if let Some(st) = b.state_at_mut(state) {
                 let m = st.get_int(crate::state::DK::Multiplier);
                 if m < 16 {
@@ -1292,8 +1219,8 @@ fn dispatch_cond(
             RV::Undef
         }
         // ------------------------------------------- defensecurl/minimize
-        ("defensecurl", "onRestart") | ("minimize", "onRestart") => RV::Null,
-        ("minimize", "onSourceModifyDamage") => {
+        CondCbOp::DefenseCurlMinimizeRestart => RV::Null,
+        CondCbOp::MinimizeSourceModifyDamage => {
             let has_flag = b
                 .active_move
                 .as_ref()
@@ -1305,7 +1232,7 @@ fn dispatch_cond(
             RV::Undef
         }
         // --------------------------------------------------------- attract
-        ("attract", "onStart") => {
+        CondCbOp::AttractStart => {
             let t = tpoke.unwrap();
             let src = source.unwrap();
             let tg = b.poke(t).gender;
@@ -1323,7 +1250,7 @@ fn dispatch_cond(
             b.add(&["-start", &ts, "Attract"]);
             RV::Undef
         }
-        ("attract", "onUpdate") => {
+        CondCbOp::AttractUpdate => {
             let t = tpoke.unwrap();
             let src = b.state_at(state).and_then(|s| s.source);
             if let Some(src) = src {
@@ -1333,7 +1260,7 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("attract", "onBeforeMove") => {
+        CondCbOp::AttractBeforeMove => {
             let t = tpoke.unwrap();
             let src = b.state_at(state).and_then(|s| s.source);
             let ts = b.poke_str(t);
@@ -1346,14 +1273,14 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("attract", "onEnd") => {
+        CondCbOp::AttractEnd => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             b.add(&["-end", &ts, "Attract", "[silent]"]);
             RV::Undef
         }
         // ----------------------------------------------------- focusenergy
-        ("focusenergy", "onStart") => {
+        CondCbOp::FocusEnergyStart => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             let silent = matches!(
@@ -1367,15 +1294,15 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("focusenergy", "onModifyCritRatio") => RV::Num(relay.as_num() + 1.0),
+        CondCbOp::FocusEnergyModifyCritRatio => RV::Num(relay.as_num() + 1.0),
         // --------------------------------------------------------- protect
-        ("protect", "onStart") => {
+        CondCbOp::ProtectStart => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             b.add(&["-singleturn", &ts, "Protect"]);
             RV::Undef
         }
-        ("protect", "onTryHit") => {
+        CondCbOp::ProtectTryHit => {
             let t = tpoke.unwrap();
             let has_protect_flag = b
                 .active_move
@@ -1397,13 +1324,13 @@ fn dispatch_cond(
             RV::Null
         }
         // ---------------------------------------------------------- endure
-        ("endure", "onStart") => {
+        CondCbOp::EndureStart => {
             let t = tpoke.unwrap();
             let ts = b.poke_str(t);
             b.add(&["-singleturn", &ts, "move: Endure"]);
             RV::Undef
         }
-        ("endure", "onDamage") => {
+        CondCbOp::EndureDamage => {
             let t = tpoke.unwrap();
             if matches!(source_effect, EffectHandle::MoveEff(_)) {
                 let damage = relay.as_num();
@@ -1416,13 +1343,13 @@ fn dispatch_cond(
             RV::Undef
         }
         // ----------------------------------------------------------- stall
-        ("stall", "onStart") => {
+        CondCbOp::StallStart => {
             if let Some(st) = b.state_at_mut(state) {
                 st.set_int(crate::state::DK::Counter, 127);
             }
             RV::Undef
         }
-        ("stall", "onStallMove") => {
+        CondCbOp::StallMove => {
             let counter = b
                 .state_at(state)
                 .and_then(|s| s.get(crate::state::DK::Counter))
@@ -1434,7 +1361,7 @@ fn dispatch_cond(
             }
             RV::from_bool(b.prng.random_chance(c, 255))
         }
-        ("stall", "onRestart") => {
+        CondCbOp::StallRestart => {
             if let Some(st) = b.state_at_mut(state) {
                 let c = st.get(crate::state::DK::Counter).map(|v| v.as_f64()).unwrap_or(127.0);
                 let half = c / 2.0;
@@ -1448,7 +1375,7 @@ fn dispatch_cond(
             RV::Undef
         }
         // ----------------------------------------------------- twoturnmove
-        ("twoturnmove", "onStart") => {
+        CondCbOp::TwoTurnMoveStart => {
             let t = tpoke.unwrap();
             let EffectHandle::MoveEff(mv) = source_effect else { return RV::Undef };
             let move_key = dex.moves.key(mv);
@@ -1489,7 +1416,7 @@ fn dispatch_cond(
             b.run_event(dex, &ev::PrepareHit, EvTarget::Poke(t), source, source_effect, None, false, false);
             RV::Undef
         }
-        ("twoturnmove", "onEnd") => {
+        CondCbOp::TwoTurnMoveEnd => {
             let t = tpoke.unwrap();
             let locked = b
                 .state_at(state)
@@ -1501,7 +1428,7 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("twoturnmove", "onLockMove") => {
+        CondCbOp::TwoTurnMoveLockMove => {
             let locked = b
                 .state_at(state)
                 .and_then(|s| s.get_move())
@@ -1509,78 +1436,24 @@ fn dispatch_cond(
                 .unwrap_or("");
             RV::Str(locked)
         }
-        ("twoturnmove", "onMoveAborted") => {
+        CondCbOp::TwoTurnMoveAborted => {
             let t = tpoke.unwrap();
             b.remove_volatile(dex, t, "twoturnmove");
             RV::Undef
         }
         // ---------------------------------------------- dig / fly volatiles
-        ("dig", "onImmunity") => {
+        CondCbOp::DigImmunity => {
             if relay == RV::Str("sandstorm") || relay == RV::Str("hail") {
                 return RV::False;
             }
             RV::Undef
         }
-        ("dig", "onInvulnerability") | ("fly", "onInvulnerability") => {
-            let move_key = b
-                .active_move
-                .as_ref()
-                .and_then(|m| m.id)
-                .map(|m| dex.moves.key(m))
-                .unwrap_or("");
-            if cond == "dig" {
-                if matches!(move_key, "earthquake" | "magnitude" | "fissure") {
-                    return RV::Undef;
-                }
-            } else {
-                if matches!(move_key, "gust" | "twister" | "thunder" | "whirlwind") {
-                    return RV::Undef;
-                }
-                if matches!(move_key, "earthquake" | "magnitude" | "fissure") {
-                    return RV::False;
-                }
-            }
-            if matches!(
-                move_key,
-                "attract" | "curse" | "foresight" | "meanlook" | "mimic" | "nightmare"
-                    | "spiderweb" | "transform"
-            ) {
-                return RV::False;
-            }
-            // lock-on: source has lockon volatile targeting this pokemon
-            if let (Some(t), Some(src)) = (tpoke, source) {
-                let lo = crate::cond_id!(dex, "lockon").unwrap();
-                let locked = b
-                    .poke(src)
-                    .volatile(lo)
-                    .and_then(|v| v.source)
-                    .map(|locked| locked == t)
-                    .unwrap_or(false);
-                if b.poke(src).has_volatile(lo) && locked {
-                    return RV::Undef;
-                }
-            }
-            RV::False
-        }
-        ("dig", "onSourceBasePower") | ("fly", "onSourceBasePower") => {
-            let move_key = b
-                .active_move
-                .as_ref()
-                .and_then(|m| m.id)
-                .map(|m| dex.moves.key(m))
-                .unwrap_or("");
-            let doubled = if cond == "dig" {
-                matches!(move_key, "earthquake" | "magnitude")
-            } else {
-                matches!(move_key, "gust" | "twister")
-            };
-            if doubled {
-                b.chain_modify(2.0, 1.0);
-            }
-            RV::Undef
-        }
+        CondCbOp::DigInvulnerability => two_turn_invuln(b, dex, tpoke, source, true),
+        CondCbOp::FlyInvulnerability => two_turn_invuln(b, dex, tpoke, source, false),
+        CondCbOp::DigSourceBasePower => two_turn_source_bp(b, dex, true),
+        CondCbOp::FlySourceBasePower => two_turn_source_bp(b, dex, false),
         // ------------------------------------------------------ lockedmove
-        ("lockedmove", "onStart") => {
+        CondCbOp::LockedMoveStart => {
             let val = match source_effect {
                 EffectHandle::MoveEff(m) => Some(Scalar::MoveK(m)),
                 EffectHandle::Cond(c) => Some(Scalar::CondK(c)),
@@ -1591,7 +1464,7 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("lockedmove", "onResidual") => {
+        CondCbOp::LockedMoveResidual => {
             let t = tpoke.unwrap();
             let is_struggle = b
                 .poke(t)
@@ -1606,7 +1479,7 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("lockedmove", "onEnd") => {
+        CondCbOp::LockedMoveEnd => {
             let t = tpoke.unwrap();
             // silently delete confusion, then re-add unless safeguard
             let conf = crate::cond_id!(dex, "confusion").unwrap();
@@ -1619,7 +1492,7 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("lockedmove", "onLockMove") => {
+        CondCbOp::LockedMoveLockMove => {
             let locked = b
                 .state_at(state)
                 .and_then(|s| s.get_move())
@@ -1627,7 +1500,7 @@ fn dispatch_cond(
                 .unwrap_or("");
             RV::Str(locked)
         }
-        ("lockedmove", "onMoveAborted") => {
+        CondCbOp::LockedMoveAborted => {
             let t = tpoke.unwrap();
             let lm = crate::cond_id!(dex, "lockedmove").unwrap();
             b.poke_mut(t).volatiles.retain(|(k, _)| *k != lm);
@@ -1635,7 +1508,7 @@ fn dispatch_cond(
             RV::Undef
         }
         // --------------------------------------------------------- pursuit
-        ("pursuit", "onFoeBeforeSwitchOut") => {
+        CondCbOp::PursuitFoeBeforeSwitchOut => {
             let switching = tpoke.unwrap();
             let StateLoc::Volatile(holder, _) = state else { return RV::Undef };
             let (target_loc, src_effect) = {
@@ -1674,7 +1547,7 @@ fn dispatch_cond(
             RV::Undef
         }
         // ------------------------------------------------------ futuremove
-        ("futuremove", "onStart") => {
+        CondCbOp::FutureMoveStart => {
             let t = tpoke.unwrap();
             let slot = b.slot_of(t);
             let ending = b.turn as i64 + 1;
@@ -1684,7 +1557,7 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("futuremove", "onResidual") => {
+        CondCbOp::FutureMoveResidual => {
             let (ending, slot) = {
                 let st = b.state_at(state).unwrap();
                 (
@@ -1705,17 +1578,110 @@ fn dispatch_cond(
             }
             RV::Undef
         }
-        ("futuremove", "onEnd") => {
+        CondCbOp::FutureMoveEnd => {
             let t = tpoke.unwrap();
             super::moveexec::resolve_future_move(b, dex, state, t);
             RV::Undef
         }
         // ---------------------------------------------------------- trapper
-        ("trapper", _) => RV::Undef,
-        // ------------------------------------------------- marker volatiles
-        ("brnattackdrop", _) | ("parspeeddrop", _) | ("leppaberry", _) => RV::Undef,
-        _ => panic!("unported condition callback: {cond} {cb}"),
+        // trapper, stadiumsleepclause onSetStatus, marker volatiles (brnattackdrop, parspeeddrop, leppaberry)
+        CondCbOp::Noop => RV::Undef,
+        CondCbOp::Unported => unported_cond_cb(dex, cond, cb),
     }
+}
+
+#[inline]
+fn screen_side_event(b: &mut Battle, target: EvTarget, tag: &str, label: &str) -> RV {
+    let EvTarget::Side(n) = target else { return RV::Undef };
+    let ss = b.side_str(n);
+    b.add(&[tag, &ss, label]);
+    RV::Undef
+}
+
+fn safeguard_block(
+    b: &mut Battle,
+    dex: &Dex,
+    tpoke: Option<PokeId>,
+    source: Option<PokeId>,
+    source_effect: EffectHandle,
+    relay: RV,
+    is_set_status: bool,
+) -> RV {
+    let t = tpoke.unwrap();
+    let Some(src) = source else { return RV::Undef };
+    if source_effect.is_none() {
+        return RV::Undef;
+    }
+    let is_move = matches!(source_effect, EffectHandle::MoveEff(_));
+    let infiltrates = b
+        .active_move
+        .as_ref()
+        .map(|am| {
+            matches!(source_effect, EffectHandle::MoveEff(m) if am.id == Some(m)) && am.infiltrates
+        })
+        .unwrap_or(false);
+    if is_move && infiltrates && t.side != src.side {
+        return RV::Undef;
+    }
+    if t != src && (is_set_status || relay == RV::Str("confusion")) {
+        if is_move && !move_eff_has_secondaries(b, dex, source_effect) {
+            let ts = b.poke_str(t);
+            b.add(&["-activate", &ts, "move: Safeguard"]);
+        }
+        return RV::Null;
+    }
+    RV::Undef
+}
+
+fn two_turn_invuln(
+    b: &Battle,
+    dex: &Dex,
+    tpoke: Option<PokeId>,
+    source: Option<PokeId>,
+    is_dig: bool,
+) -> RV {
+    let move_key = b.active_move.as_ref().and_then(|m| m.id).map(|m| dex.moves.key(m)).unwrap_or("");
+    if is_dig {
+        if matches!(move_key, "earthquake" | "magnitude" | "fissure") {
+            return RV::Undef;
+        }
+    } else {
+        if matches!(move_key, "gust" | "twister" | "thunder" | "whirlwind") {
+            return RV::Undef;
+        }
+        if matches!(move_key, "earthquake" | "magnitude" | "fissure") {
+            return RV::False;
+        }
+    }
+    if matches!(
+        move_key,
+        "attract" | "curse" | "foresight" | "meanlook" | "mimic" | "nightmare" | "spiderweb"
+            | "transform"
+    ) {
+        return RV::False;
+    }
+    if let (Some(t), Some(src)) = (tpoke, source) {
+        let lo = crate::cond_id!(dex, "lockon").unwrap();
+        let locked =
+            b.poke(src).volatile(lo).and_then(|v| v.source).map(|l| l == t).unwrap_or(false);
+        if b.poke(src).has_volatile(lo) && locked {
+            return RV::Undef;
+        }
+    }
+    RV::False
+}
+
+fn two_turn_source_bp(b: &mut Battle, dex: &Dex, is_dig: bool) -> RV {
+    let move_key = b.active_move.as_ref().and_then(|m| m.id).map(|m| dex.moves.key(m)).unwrap_or("");
+    let doubled = if is_dig {
+        matches!(move_key, "earthquake" | "magnitude")
+    } else {
+        matches!(move_key, "gust" | "twister")
+    };
+    if doubled {
+        b.chain_modify(2.0, 1.0);
+    }
+    RV::Undef
 }
 
 /// Whether the effect (a move) has secondaries — mist/safeguard message gate.

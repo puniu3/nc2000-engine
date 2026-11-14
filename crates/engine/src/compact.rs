@@ -1288,33 +1288,60 @@ pub struct RosterCompactCache {
 }
 
 impl RosterCompactCache {
+    fn build_side_entries(
+        side: &crate::state::Side,
+        dex: &Dex,
+        dt: &CompactDexTables,
+    ) -> [Option<CachedRosterMon>; 6] {
+        let mut out = [None; 6];
+        for (slot, p) in side.roster.iter().take(6).enumerate() {
+            if p.transformed {
+                continue;
+            }
+            let (spec, move_specs) = build_static_mon_spec(p, dex, dt);
+            let mut guard_maxpp = [0i32; 4];
+            for m_i in 0..(spec.num_moves as usize) {
+                guard_maxpp[m_i] = p.move_slots[m_i].maxpp;
+            }
+            out[slot] = Some(CachedRosterMon {
+                spec,
+                move_specs,
+                guard_maxhp: p.maxhp,
+                guard_stored_stats: p.stored_stats,
+                guard_types: p.types,
+                guard_item: p.item,
+                guard_hp_type: p.hp_type,
+                guard_hp_power: p.hp_power,
+                guard_happiness: p.happiness,
+                guard_maxpp,
+            });
+        }
+        out
+    }
+
     pub fn from_battle(battle: &Battle, dex: &Dex) -> Self {
         let dt = dex_tables(dex);
-        let mut entries = [[None; 6]; 2];
-        for side_n in 0..2usize {
-            for (slot, p) in battle.sides[side_n].roster.iter().take(6).enumerate() {
-                if p.transformed {
-                    continue;
-                }
-                let (spec, move_specs) = build_static_mon_spec(p, dex, dt);
-                let mut guard_maxpp = [0i32; 4];
-                for m_i in 0..(spec.num_moves as usize) {
-                    guard_maxpp[m_i] = p.move_slots[m_i].maxpp;
-                }
-                entries[side_n][slot] = Some(CachedRosterMon {
-                    spec,
-                    move_specs,
-                    guard_maxhp: p.maxhp,
-                    guard_stored_stats: p.stored_stats,
-                    guard_types: p.types,
-                    guard_item: p.item,
-                    guard_hp_type: p.hp_type,
-                    guard_hp_power: p.hp_power,
-                    guard_happiness: p.happiness,
-                    guard_maxpp,
-                });
-            }
+        let entries = [
+            Self::build_side_entries(&battle.sides[0], dex, dt),
+            Self::build_side_entries(&battle.sides[1], dex, dt),
+        ];
+        Self { entries }
+    }
+
+    pub fn from_battle_with_side_template(
+        battle: &Battle,
+        dex: &Dex,
+        template_side: usize,
+        template: &Self,
+    ) -> Self {
+        if template_side >= 2 {
+            return Self::from_battle(battle, dex);
         }
+        let dt = dex_tables(dex);
+        let mut entries = [[None; 6]; 2];
+        entries[template_side] = template.entries[template_side];
+        let other = 1 - template_side;
+        entries[other] = Self::build_side_entries(&battle.sides[other], dex, dt);
         Self { entries }
     }
 }
