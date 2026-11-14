@@ -21,7 +21,7 @@ const legacyFork = forkName && !["1", "true"].includes(forkName.toLowerCase());
 function Root() {
   const [language, setLanguage] = useState(locale);
   useLayoutEffect(() => subscribeLocale(() => setLanguage(locale())), []);
-  const kifu = params.has("kifu-preview") || (door === "fork" && !legacyFork && !params.has("advanced"));
+  const kifu = door === "fork" && !legacyFork && !params.has("advanced");
   const pdinput = door === "pdinput";
   const tool = kifu || pdinput || door === "evaluate" || door === "fork";
   useLayoutEffect(() => {

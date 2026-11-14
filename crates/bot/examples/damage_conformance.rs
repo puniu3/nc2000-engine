@@ -11,7 +11,7 @@
 //! on both sides, so a ratio != 1.0 is a genuine model divergence, not variance.
 //!
 //! NOTE: `get_damage` does not run `onModifyMove`, so Hidden Power's runtime
-//! type/category must be planted by hand (as `replay_analysis.rs` does). That
+//! type/category must be planted by hand. That
 //! planting is itself part of the answer: the engine core is not a drop-in
 //! oracle — the move-modification callbacks live outside it.
 

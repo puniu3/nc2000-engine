@@ -5,16 +5,16 @@ Verifies:
    static XLA HLO compilation with zero host callbacks or dynamic shapes, VMEM fit).
 2. Bit-exact parity of the 32-bit `uint32[2]` Gen5 PRNG against the 64-bit reference LCG.
 3. Exhaustive parity of branchless primitives (`ActionSortKey`, `get_stat_branchless`,
-   `ACC_LUT` `lookup_accuracy_threshold`, `apply_roll_branchless`, `evaluate_hit_simd16`).
+   `lookup_accuracy_threshold`, `apply_roll_branchless`).
 4. Trajectory & state parity of `CompactBattle` (`step_turn`, `step_switch`, `apply_actions`,
-   `legal_actions_mask`, `eval_leaf`) against `nc2000-engine`'s `compact.rs` tests.
-5. Multi-core `shard_map` rollout equivalence and Pallas `interpret=True` VMEM kernel parity.
+   `legal_actions_mask`, `eval_leaf`, `compact_race_margin`) against
+   `nc2000-engine`'s `compact.rs` tests.
+5. Multi-core `shard_map` rollout equivalence and Kodoku / Bayesian equilibrium solvers.
 """
 
 from __future__ import annotations
 
 import math
-import subprocess
 import json
 from pathlib import Path
 
@@ -24,10 +24,8 @@ import numpy as np
 import pytest
 
 from gen2_tpu import (
-    ACC_LUT,
     PACKED_BATTLE_BYTES,
     PACKED_BATTLE_WORDS,
-    SIMD16_ROLLS,
     TPU_V5E,
     ActionPhase,
     CompactBattle,
@@ -35,6 +33,7 @@ from gen2_tpu import (
     ItemStatKind,
     Status,
     VolBit,
+    action_sort_key,
     action_sort_key_new,
     apply_actions,
     apply_roll_branchless,
@@ -51,7 +50,6 @@ from gen2_tpu import (
     eval_leaf,
     eval_residual_forward,
     evaluate_depth2_counterfactual_oracle,
-    evaluate_hit_simd16,
     evaluate_root_payoff_matrix,
     export_residual_bundle_json,
     extract_eval_features,
@@ -64,7 +62,6 @@ from gen2_tpu import (
     lookup_accuracy_threshold,
     make_tpu_mesh,
     pack_battle,
-    pallas_evaluate_hits,
     prng_next_u32,
     prng_random,
     prng_random_chance,
@@ -74,12 +71,14 @@ from gen2_tpu import (
     seed_from_u64_int,
     seed_to_str,
     seed_to_u64_int,
+    select_shell_belief_minimax_action_jax,
     sharded_heavy_rollout,
     sharded_tpu_rollout,
     solve_rm_plus_jax,
     step_turn,
     train_residual_bundle_jax,
     unpack_battle,
+    update_shell_belief_mask_jax,
     verify_tpu_compatibility,
     vmap_rollout,
 )
@@ -178,10 +177,21 @@ def test_action_sort_key_orders_switches_priority_quick_claw_and_speed_ties():
     first, second, is_tie = resolve_turn_order(sw, prot)
     assert (int(first), int(second), bool(is_tie)) == (0, 1, False)
 
-    # BeforeTurnPursuit beats Switch
-    pursuit = action_sort_key_new(ActionPhase.BEFORE_TURN_PURSUIT, 0, False, 50, 0)
-    first, second, is_tie = resolve_turn_order(sw, pursuit)
-    assert (int(first), int(second), bool(is_tie)) == (1, 0, False)
+    # Forced Hyper Beam recharge (slot_refs & 0x80) uses MOVE phase even if switch action >= 4 is passed
+    p1 = [
+        _mk_set("Snorlax", 55, "Leftovers", ["Hyper Beam", "Earthquake", "Rest", "Sleep Talk"]),
+        _mk_set("Zapdos", 50, "Mint Berry", ["Thunderbolt", "Hidden Power", "Rest", "Whirlwind"]),
+        _mk_set("Cloyster", 50, "Leftovers", ["Surf", "Ice Beam", "Spikes", "Explosion"]),
+    ]
+    p2 = [
+        _mk_set("Marowak", 55, "Thick Club", ["Earthquake", "Rock Slide", "Swords Dance", "Rest"]),
+        _mk_set("Skarmory", 50, "Leftovers", ["Drill Peck", "Whirlwind", "Curse", "Rest"]),
+        _mk_set("Raikou", 50, "Miracle Berry", ["Thunderbolt", "Crunch", "Reflect", "Rest"]),
+    ]
+    tbl, st = build_compact_battle("1,2,3,4", p1, p2)
+    st_rech = st._replace(slot_refs=st.slot_refs.at[0].set(0x80))
+    key_rech = action_sort_key(st_rech, tbl, 0, jnp.int32(5), jnp.int32(0))
+    assert int(key_rech >> 15) == int(ActionPhase.MOVE)
 
     # Quick Claw on slower Pokemon beats faster Pokemon at equal priority
     slow_qc = action_sort_key_new(ActionPhase.MOVE, 0, True, 90, 0)
@@ -204,8 +214,7 @@ def test_action_sort_key_orders_switches_priority_quick_claw_and_speed_ties():
 
 
 def test_stat_branchless_matches_reference_formula():
-    stat_pos = [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0]
-    stat_neg = [100.0, 66.0, 50.0, 40.0, 33.0, 28.0, 25.0]
+    stat_num = [25, 28, 33, 40, 50, 66, 100, 150, 200, 250, 300, 350, 400]
 
     stored_vals = [1, 15, 95, 130, 178, 255, 358, 500, 999]
     items = [
@@ -219,46 +228,48 @@ def test_stat_branchless_matches_reference_formula():
     for stored in stored_vals:
         for stat_idx in range(5):
             for unboosted in (False, True):
-                for par in (False, True):
-                    for brn in (False, True):
-                        for screen in (False, True):
-                            for item in items:
-                                rows.append(
-                                    (
-                                        stored,
-                                        stat_idx,
-                                        int(unboosted),
-                                        int(par),
-                                        int(brn),
-                                        int(screen),
-                                        int(item),
-                                    )
-                                )
-                                exp_b = []
-                                for boost in range(-6, 7):
-                                    ref_val = float(stored)
-                                    if not unboosted:
-                                        if boost >= 0:
-                                            ref_val = math.floor(ref_val * stat_pos[boost])
-                                        else:
-                                            ref_val = math.floor(
-                                                ref_val * stat_neg[-boost] / 100.0
+                for unmodified in (False, True):
+                    for fast_return in (False, True):
+                        for par in (False, True):
+                            for brn in (False, True):
+                                for screen in (False, True):
+                                    for item in items:
+                                        rows.append(
+                                            (
+                                                stored,
+                                                stat_idx,
+                                                int(unboosted),
+                                                int(unmodified),
+                                                int(fast_return),
+                                                int(par),
+                                                int(brn),
+                                                int(screen),
+                                                int(item),
                                             )
-                                    if par and stat_idx == 4:
-                                        ref_val = math.floor(ref_val / 4.0)
-                                    if brn and stat_idx == 0:
-                                        ref_val = math.floor(ref_val / 2.0)
-                                    ref_val = max(1.0, min(999.0, ref_val))
-                                    if not unboosted and screen and stat_idx in (1, 3):
-                                        ref_val *= 2.0
-                                    if (item == ItemStatKind.THICK_CLUB and stat_idx == 0) or (
-                                        item == ItemStatKind.LIGHT_BALL and stat_idx == 2
-                                    ):
-                                        ref_val *= 2.0
-                                    elif item == ItemStatKind.METAL_POWDER and stat_idx in (1, 3):
-                                        ref_val = math.floor(ref_val * 1.5)
-                                    exp_b.append(int(ref_val))
-                                expected_rows.append(exp_b)
+                                        )
+                                        exp_b = []
+                                        for boost in range(-6, 7):
+                                            eff_boost = 0 if unboosted else boost
+                                            val = (stored * stat_num[eff_boost + 6]) // 100
+                                            if par and stat_idx == 4:
+                                                val >>= 2
+                                            if brn and (not unmodified) and stat_idx == 0:
+                                                val >>= 1
+                                            val = max(1, min(999, val))
+                                            if fast_return:
+                                                exp_b.append(int(val))
+                                            else:
+                                                post_val = val
+                                                if (not unboosted) and screen and stat_idx in (1, 3):
+                                                    post_val <<= 1
+                                                if (item == ItemStatKind.THICK_CLUB and stat_idx == 0) or (
+                                                    item == ItemStatKind.LIGHT_BALL and stat_idx == 2
+                                                ):
+                                                    post_val <<= 1
+                                                if item == ItemStatKind.METAL_POWDER and stat_idx in (1, 3):
+                                                    post_val += post_val >> 1
+                                                exp_b.append(int(post_val))
+                                        expected_rows.append(exp_b)
 
     cfg = jnp.asarray(rows, dtype=jnp.int32)
     boosts = jnp.arange(-6, 7, dtype=jnp.int32)
@@ -271,13 +282,13 @@ def test_stat_branchless_matches_reference_formula():
                         b,
                         row[1],
                         row[2] != 0,
-                        False,
-                        False,
                         row[3] != 0,
                         row[4] != 0,
                         row[5] != 0,
-                        row[5] != 0,
-                        row[6],
+                        row[6] != 0,
+                        row[7] != 0,
+                        row[7] != 0,
+                        row[8],
                     )
                 )(boosts)
             )
@@ -286,17 +297,45 @@ def test_stat_branchless_matches_reference_formula():
     np.testing.assert_array_equal(actual_grid, np.asarray(expected_rows, dtype=np.int32))
 
 
-def test_damage_rolls_and_simd16_and_pallas_vmem_kernel():
-    # Verify 13-entry ACC_NUM lookup_accuracy_threshold matches all 17,069 ACC_LUT entries bit-for-bit
+def test_accuracy_threshold_and_damage_rolls_branchless():
+    # Verify lookup_accuracy_threshold across all pct (0..100), acc (-6..6), eva (-6..6), BrightPowder, and ignore flags
+    acc_mults = [33, 36, 43, 50, 60, 75, 100, 133, 166, 200, 233, 266, 300]
     pcts = jnp.arange(101, dtype=jnp.int32)[:, None, None]
     accs = jnp.arange(-6, 7, dtype=jnp.int32)[None, :, None]
     evas = jnp.arange(-6, 7, dtype=jnp.int32)[None, None, :]
-    acc_grid = np.asarray(
+
+    pcts_np = np.arange(101, dtype=np.int32)[:, None, None]
+    accs_np = np.arange(-6, 7, dtype=np.int32)[None, :, None]
+    evas_np = np.arange(-6, 7, dtype=np.int32)[None, None, :]
+    acc_mults_arr = np.asarray(acc_mults, dtype=np.int32)
+    num_acc_np = np.take(acc_mults_arr, accs_np + 6)
+    num_eva_np = np.take(acc_mults_arr, 6 - evas_np)
+    base_pct = (pcts_np * 255) // 100
+    expected_base = np.clip((base_pct * num_acc_np * num_eva_np) // 10000, 1, 255)
+    expected_bp = np.maximum(0, expected_base - 20)
+
+    actual_base = np.asarray(
         jax.jit(lambda p, a, e: lookup_accuracy_threshold(p, a, e, False, False, False, False))(
             pcts, accs, evas
         )
     )
-    np.testing.assert_array_equal(acc_grid, np.asarray(ACC_LUT))
+    np.testing.assert_array_equal(actual_base, expected_base)
+
+    actual_bp = np.asarray(
+        jax.jit(lambda p, a, e: lookup_accuracy_threshold(p, a, e, False, False, False, True))(
+            pcts, accs, evas
+        )
+    )
+    np.testing.assert_array_equal(actual_bp, expected_bp)
+    assert int(lookup_accuracy_threshold(30, -6, 6, True, True, False, False)) == int(
+        lookup_accuracy_threshold(30, 0, 0, False, False, False, False)
+    )
+    assert int(lookup_accuracy_threshold(50, 0, 6, False, False, True, False)) == int(
+        lookup_accuracy_threshold(50, 0, 0, False, False, False, False)
+    )
+    assert int(lookup_accuracy_threshold(50, 0, -6, False, False, True, False)) == int(
+        lookup_accuracy_threshold(50, 0, -6, False, False, False, False)
+    )
 
     # Verify 32-bit apply_roll_branchless matches floor(dmg * roll / 255) for all dmg 1..4000, rolls 217..255
     dmgs = jnp.arange(1, 4001, dtype=jnp.int32)[:, None]
@@ -307,31 +346,6 @@ def test_damage_rolls_and_simd16_and_pallas_vmem_kernel():
     rolls_np = np.arange(217, 256, dtype=np.float64)[None, :]
     exact_grid = np.maximum(1, np.floor(dmgs_np * rolls_np / 255.0).astype(np.int32))
     np.testing.assert_array_equal(fast_grid, exact_grid)
-
-    # Verify evaluate_hit_simd16 matches compact.rs test cases
-    sub_hit = evaluate_hit_simd16(120, False, 300, 110, False)
-    assert int(sub_hit.ko_mask) == 0
-    assert int(sub_hit.sub_broke_mask) != 0
-    np.testing.assert_array_equal(np.asarray(sub_hit.post_hp), np.full((16,), 300))
-
-    ko_hit = evaluate_hit_simd16(200, False, 185, 0, False)
-    assert 0 < int(ko_hit.ko_mask) < 0xFFFF
-
-    # Verify Pallas interpret=True VMEM block kernel matches evaluate_hit_simd16 across 256 battles
-    B = 256
-    rng = np.random.default_rng(42)
-    bd_arr = jnp.asarray(rng.integers(0, 350, size=(B,), dtype=np.int32))
-    hp_arr = jnp.asarray(rng.integers(50, 300, size=(B,), dtype=np.int32))
-    sub_arr = jnp.asarray(rng.integers(0, 100, size=(B,), dtype=np.int32))
-    byp_arr = jnp.asarray(rng.integers(0, 2, size=(B,), dtype=np.int32))
-
-    p_dealt, p_hp, p_sub = pallas_evaluate_hits(bd_arr, hp_arr, sub_arr, byp_arr, block_size=128)
-    v_out = jax.vmap(lambda bd, hp, sub, byp: evaluate_hit_simd16(bd, False, hp, sub, byp != 0))(
-        bd_arr, hp_arr, sub_arr, byp_arr
-    )
-    np.testing.assert_array_equal(np.asarray(p_dealt), np.asarray(v_out.dealt))
-    np.testing.assert_array_equal(np.asarray(p_hp), np.asarray(v_out.post_hp))
-    np.testing.assert_array_equal(np.asarray(p_sub), np.asarray(v_out.post_sub_hp))
 
 
 def test_compact_battle_turn_and_forced_switch_parity():
@@ -530,8 +544,8 @@ def test_heavy_playout_eval_weights_and_root_rm_plus():
     assert float(eq.sigma1[4]) == 0.0
 
 
-def test_20_diverse_games_488_steps_rust_parity():
-    """Step-by-step differential test against 20 multi-turn golden games (488 steps)
+def test_20_diverse_games_486_steps_rust_parity():
+    """Step-by-step differential test against 20 multi-turn golden games (486 steps)
     generated directly from `nc2000-engine` (`CompactBattle`) and `nc2000-bot` (`eval.rs`).
     Covers Baton Pass, Perish Song, Mean Look, Spikes, Roar/Whirlwind, Counter/Mirror Coat,
     Destiny Bond, Encore, Disable, Substitute, Belly Drum, Curse, Leech Seed, Nightmare,
@@ -618,7 +632,7 @@ def test_20_diverse_games_488_steps_rust_parity():
             assert abs(float(ev0_np[s_idx]) - float(ref["eval_leaf0"])) < 1e-5
             assert abs(float(rm_np[s_idx]) - float(ref["compact_race_margin"])) < 1e-5
 
-    assert total_steps == 488
+    assert total_steps == 486
 
 
 def test_residual_zero_identity_monotonicity_and_baton_pass_antisymmetry():
@@ -1107,10 +1121,10 @@ def test_dominated_mask7_perish_trap_combo_and_tpu_hlo():
     _, act_skarm_phaze = sample_heavy_playout_action(st_both_perish, table, 1, seed, eps=0.0)
     assert int(act_skarm_phaze) == 1  # Skarmory's Whirlwind
 
-    # 5. Perish escape at timer == 1: Misdreavus switches out to bench (action 4 or 5)
+    # 5. Perish escape at timer == 1: Misdreavus switches out to bench (action 5 or 6)
     st_cnt1 = st_both_perish._replace(timers=st_both_perish.timers.at[0, 3].set(1))
     _, act_escape = sample_heavy_playout_action(st_cnt1, table, 0, seed, eps=0.0)
-    assert int(act_escape) in (4, 5)
+    assert int(act_escape) in (5, 6)
 
     # 6. Leftovers `own_recovery_wait` exemption: when Misdreavus is chipped and Skarmory is asleep
     # with sleep counter 3 (and no Sleep Talk), no-ops are exempted so Misdreavus can stall for Leftovers!
@@ -1528,10 +1542,215 @@ def test_kodoku_evolution_and_training_normalization_tpu(tmp_path):
     assert (evo_out / "kodoku_evolution_summary.json").exists()
 
 
+def test_pack_battle_61pp_and_stall_counter_roundtrip():
+    p1 = [
+        _mk_set("Snorlax", 55, "Leftovers", ["Double-Edge", "Earthquake", "Rest", "Sleep Talk"]),
+        _mk_set("Zapdos", 50, "Mint Berry", ["Thunderbolt", "Hidden Power", "Rest", "Whirlwind"]),
+        _mk_set("Cloyster", 50, "Leftovers", ["Surf", "Ice Beam", "Spikes", "Explosion"]),
+    ]
+    p2 = [
+        _mk_set("Marowak", 55, "Thick Club", ["Earthquake", "Rock Slide", "Swords Dance", "Rest"]),
+        _mk_set("Skarmory", 50, "Leftovers", ["Drill Peck", "Whirlwind", "Curse", "Rest"]),
+        _mk_set("Raikou", 50, "Miracle Berry", ["Thunderbolt", "Crunch", "Reflect", "Rest"]),
+    ]
+    _, cb = build_compact_battle("1,2,3,4", p1, p2)
+    pp_hi = cb.pp.at[0, 0].set(61).at[3, 2].set(63)
+    timers_hi = cb.timers.at[0, 3].set(2 | (3 << 3)).at[4, 3].set(1 | (5 << 3))
+    cb_hi = cb._replace(pp=pp_hi, timers=timers_hi)
+
+    restored = jax.jit(lambda s: unpack_battle(pack_battle(s)))(cb_hi)
+    np.testing.assert_array_equal(np.asarray(restored.pp), np.asarray(cb_hi.pp))
+    np.testing.assert_array_equal(np.asarray(restored.timers), np.asarray(cb_hi.timers))
 
 
+def test_kernel_gen2_mechanics_regression_guards():
+    # 1. Protect/Endure stall counter, moved_second failure, and Endure 1-HP clamp
+    p1 = [
+        _mk_set("Snorlax", 55, "Leftovers", ["Protect", "Endure", "Body Slam", "Rest"]),
+        _mk_set("Zapdos", 50, "Leftovers", ["Thunderbolt", "Hidden Power", "Rest", "Whirlwind"]),
+        _mk_set("Cloyster", 50, "Leftovers", ["Rapid Spin", "Surf", "Spikes", "Explosion"]),
+    ]
+    p2 = [
+        _mk_set("Golem", 55, "Leftovers", ["Explosion", "Earthquake", "Rock Slide", "Curse"]),
+        _mk_set("Skarmory", 50, "Leftovers", ["Drill Peck", "Whirlwind", "Curse", "Rest"]),
+        _mk_set("Starmie", 50, "Leftovers", ["Surf", "Psychic", "Recover", "Rapid Spin"]),
+    ]
+    tbl, st = build_compact_battle("1,2,3,4", p1, p2)
+
+    # Slower/forced Endure (move 1) survives lethal Explosion (move 0) at 1 HP cleanly
+    st_end = _JIT_APPLY(st, tbl, jnp.array([1, 0], dtype=jnp.int32))
+    assert int(st_end.hp_pool[0, 0]) == 1
+    assert (int(st_end.timers[0, 3]) >> 3) == 1
+    assert int(st_end.alive_mask[1]) == 6
+
+    # Protect moving second after opponent switch fails with stall counter remaining 0
+    st_prot_sw = _JIT_APPLY(st, tbl, jnp.array([0, 5], dtype=jnp.int32))
+    assert (int(st_prot_sw.timers[0, 3]) >> 3) == 0
+
+    # 2. Hyper Beam sets 0x80 recharge bit restricting legal_actions_mask to [0], then clears
+    p1_hb = [
+        _mk_set("Snorlax", 55, "Leftovers", ["Hyper Beam", "Earthquake", "Rest", "Sleep Talk"]),
+        _mk_set("Zapdos", 50, "Leftovers", ["Thunderbolt", "Hidden Power", "Rest", "Whirlwind"]),
+        _mk_set("Cloyster", 50, "Leftovers", ["Surf", "Ice Beam", "Spikes", "Explosion"]),
+    ]
+    tbl_hb, st_hb = build_compact_battle("9,8,7,6", p1_hb, p2)
+    st_hb1 = _JIT_APPLY(st_hb, tbl_hb, jnp.array([0, 3], dtype=jnp.int32))
+    assert (int(st_hb1.slot_refs[0]) & 0x80) != 0
+    assert list(np.flatnonzero(np.asarray(legal_actions_mask(st_hb1, tbl_hb, 0)))) == [0]
+    st_hb2 = _JIT_APPLY(st_hb1, tbl_hb, jnp.array([5, 3], dtype=jnp.int32))
+    assert (int(st_hb2.slot_refs[0]) & 0x80) == 0
+    assert int(st_hb2.active_idx[0]) == 0
+
+    # 3. Struggle fallback when all PP == 0 does not wrap PP negative and inflicts 1/4 damage dealt recoil
+    st_struggle = st_hb._replace(
+        pp=st_hb.pp.at[0].set(jnp.zeros((4,), dtype=jnp.int32)),
+        item=st_hb.item.at[0].set(jnp.int32(0)),
+    )
+    assert list(np.flatnonzero(np.asarray(legal_actions_mask(st_struggle, tbl_hb, 0)))) == [0, 5, 6]
+    st_str_after = _JIT_APPLY(st_struggle, tbl_hb, jnp.array([0, 3], dtype=jnp.int32))
+    assert list(np.asarray(st_str_after.pp[0])) == [0, 0, 0, 0]
+    assert int(st_str_after.hp_pool[0, 0]) < int(tbl_hb.maxhp[0])
+
+    # 4. Moonlight weather healing ignores stale weather_kind when weather_turns == 0
+    p1_moon = [
+        _mk_set("Umbreon", 55, "Leftovers", ["Moonlight", "Curse", "Body Slam", "Rest"]),
+        _mk_set("Zapdos", 50, "Leftovers", ["Thunderbolt", "Hidden Power", "Rest", "Whirlwind"]),
+        _mk_set("Cloyster", 50, "Leftovers", ["Rapid Spin", "Surf", "Spikes", "Explosion"]),
+    ]
+    tbl_m, st_m = build_compact_battle("1,2,3,4", p1_moon, p2)
+    maxhp_u = int(tbl_m.maxhp[0])
+    st_m_stale = st_m._replace(
+        hp_pool=st_m.hp_pool.at[0, 0].set(maxhp_u // 4),
+        weather_kind=jnp.int32(CompactWeather.RAIN),
+        weather_turns=jnp.int32(0),
+    )
+    st_m_after = _JIT_APPLY(st_m_stale, tbl_m, jnp.array([0, 3], dtype=jnp.int32))
+    expected_clear_hp = min(maxhp_u, (maxhp_u // 4) + (maxhp_u // 2) + int(tbl_m.quantum_1_16[0]))
+    assert int(st_m_after.hp_pool[0, 0]) == expected_clear_hp
+
+    # 5. Rapid Spin clears Spikes, Leech Seed, and TRAPPED_OR_LOCKED
+    st_rs = st._replace(
+        active_idx=jnp.array([2, 0], dtype=jnp.int32),
+        side_flags=jnp.array([3, 0], dtype=jnp.int32),
+        vol_flags=st.vol_flags.at[2].set(VolBit.LEECH_SEED | VolBit.TRAPPED_OR_LOCKED),
+    )
+    st_rs_after = _JIT_APPLY(st_rs, tbl, jnp.array([0, 3], dtype=jnp.int32))
+    assert (int(st_rs_after.side_flags[0]) & 0x03) == 0
+    assert (int(st_rs_after.vol_flags[2]) & (VolBit.LEECH_SEED | VolBit.TRAPPED_OR_LOCKED)) == 0
+
+    # 6. AncientPower raises all 5 stats (+1) with chance forced by high-probability seed check
+    p1_ap = [
+        _mk_set("Omastar", 50, "Leftovers", ["Ancient Power", "Surf", "Ice Beam", "Rest"]),
+        _mk_set("Zapdos", 50, "Leftovers", ["Thunderbolt", "Hidden Power", "Rest", "Whirlwind"]),
+        _mk_set("Cloyster", 50, "Leftovers", ["Rapid Spin", "Surf", "Spikes", "Explosion"]),
+    ]
+    tbl_ap, st_ap = build_compact_battle("1,2,3,4", p1_ap, p2)
+    omni_hit = False
+    for k in range(40):
+        cand = _JIT_APPLY(
+            st_ap._replace(prng_seed=jnp.array([k * 0x1234567 + 1, k * 0x89ABCDEF + 3], dtype=jnp.uint32)),
+            tbl_ap,
+            jnp.array([0, 3], dtype=jnp.int32),
+        )
+        if np.all(np.asarray(cand.boosts[0, :5]) == 1):
+            omni_hit = True
+            break
+    assert omni_hit
 
 
+def test_wait_action_handling_and_counter_immunity_and_belief_invariance():
+    # 1. Forced-switch Wait state (`request == [2, 0]`): Wait side uses action 7 cleanly
+    p1 = [
+        _mk_set("Gengar", 55, "Leftovers", ["Thunderbolt", "Ice Punch", "Destiny Bond", "Explosion"]),
+        _mk_set("Snorlax", 55, "Leftovers", ["Double-Edge", "Earthquake", "Rest", "Sleep Talk"]),
+        _mk_set("Zapdos", 50, "Leftovers", ["Thunderbolt", "Hidden Power", "Rest", "Whirlwind"]),
+    ]
+    p2 = [
+        _mk_set("Gengar", 50, "Leftovers", ["Shadow Ball", "Thunderbolt", "Counter", "Mirror Coat"]),
+        _mk_set("Blissey", 55, "Leftovers", ["Ice Beam", "Soft-Boiled", "Heal Bell", "Seismic Toss"]),
+        _mk_set("Skarmory", 50, "Leftovers", ["Drill Peck", "Whirlwind", "Curse", "Rest"]),
+    ]
+    tbl, st = build_compact_battle("1,2,3,4", p1, p2)
 
+    # Simulate P1 needing forced switch (`request = [2, 0]`)
+    st_wait = st._replace(
+        hp_pool=st.hp_pool.at[0, 0].set(0),
+        alive_mask=jnp.array([6, 7], dtype=jnp.int32),
+        request=jnp.array([2, 0], dtype=jnp.int32),
+    )
+    w = default_eval_weights()
+    eq = evaluate_root_payoff_matrix(st_wait, tbl, w, samples_per_cell=4, rollout_turns=0)
+    assert np.isfinite(float(eq.game_value))
+    d2 = evaluate_depth2_counterfactual_oracle(st_wait, tbl, w, rollout_turns=0)
+    assert np.isfinite(float(d2.game_value))
 
+    # `select_shell_belief_minimax_action_jax` returns action 7 for waiting side 1
+    cand_tbs = jax.tree_util.tree_map(lambda x: x[None, ...], tbl)
+    _, a1_wait = select_shell_belief_minimax_action_jax(
+        st_wait,
+        tbl,
+        cand_tbs,
+        jnp.array([1.0], dtype=jnp.float32),
+        jnp.array([True], dtype=jnp.bool_),
+        1,
+        jnp.array([0x1111, 0x2222], dtype=jnp.uint32),
+        w,
+        rollout_turns=0,
+        rm_sweeps=8,
+    )
+    assert int(a1_wait) == 7
+
+    # 2. Counter immunity guard in `sample_heavy_playout_action(..., rollout_residual=None)`:
+    # P2 Gengar (Ghost/Poison) hit by Normal damage cannot hit Ghost with Counter -> must NOT choose Counter
+    p1_norm = [
+        _mk_set("Snorlax", 55, "Leftovers", ["Body Slam", "Earthquake", "Rest", "Sleep Talk"]),
+        _mk_set("Zapdos", 50, "Leftovers", ["Thunderbolt", "Hidden Power", "Rest", "Whirlwind"]),
+        _mk_set("Cloyster", 50, "Leftovers", ["Surf", "Ice Beam", "Spikes", "Explosion"]),
+    ]
+    p2_cnt = [
+        _mk_set("Wobbuffet", 50, "Leftovers", ["Counter", "Mirror Coat", "Safeguard", "Destiny Bond"]),
+        _mk_set("Blissey", 55, "Leftovers", ["Ice Beam", "Soft-Boiled", "Heal Bell", "Seismic Toss"]),
+        _mk_set("Skarmory", 50, "Leftovers", ["Drill Peck", "Whirlwind", "Curse", "Rest"]),
+    ]
+    tbl_cnt, st_cnt = build_compact_battle("1,2,3,4", p1_norm, p2_cnt)
+    # Force opponent (P1) active = Gengar (Ghost type -> Counter Normal move is immune!)
+    tbl_ghost, st_ghost = build_compact_battle("1,2,3,4", p1, p2_cnt)
+    st_g_hurt = st_ghost._replace(
+        hurt_damage_this_turn=jnp.array([0, 120], dtype=jnp.int32),
+        hurt_cat_this_turn=jnp.array([0, 1], dtype=jnp.int32),
+    )
+    _, a1_cnt_imm = sample_heavy_playout_action(
+        st_g_hurt, tbl_ghost, 1, jnp.array([1, 2], dtype=jnp.uint32), eps=0.0, rollout_residual=None
+    )
+    assert int(a1_cnt_imm) != 0
+
+    # Against Snorlax (Normal type, not immune), Counter SHOULD be preferred when hurt_cat == 1
+    st_s_hurt = st_cnt._replace(
+        hurt_damage_this_turn=jnp.array([0, 120], dtype=jnp.int32),
+        hurt_cat_this_turn=jnp.array([0, 1], dtype=jnp.int32),
+    )
+    _, a1_cnt = sample_heavy_playout_action(
+        st_s_hurt, tbl_cnt, 1, jnp.array([1, 2], dtype=jnp.uint32), eps=0.0, rollout_residual=None
+    )
+    assert int(a1_cnt) == 0
+
+    # 3. `update_shell_belief_mask_jax` move-slot-order invariance and Thief item-gain guard
+    p2_perm = [
+        _mk_set("Wobbuffet", 50, "Leftovers", ["Mirror Coat", "Counter", "Safeguard", "Destiny Bond"]),
+        p2_cnt[1],
+        p2_cnt[2],
+    ]
+    tbl_perm, _ = build_compact_battle("1,2,3,4", p1_norm, p2_perm)
+    cands_p = jax.tree_util.tree_map(lambda x, y: jnp.stack([x, y], axis=0), tbl_cnt, tbl_perm)
+    # P2 uses Counter (slot 0 in tbl_cnt, slot 1 in tbl_perm) AND gains an item from 0 -> 1 via Thief
+    st_prev = st_cnt._replace(item=st_cnt.item.at[3].set(0))
+    st_curr = st_prev._replace(
+        pp=st_prev.pp.at[3, 0].set(st_prev.pp[3, 0] - 1),
+        item=st_prev.item.at[3].set(23),
+    )
+    upd = update_shell_belief_mask_jax(
+        st_prev, st_curr, tbl_cnt, cands_p, 0, jnp.array([True, True], dtype=jnp.bool_)
+    )
+    assert bool(upd[0]) is True
+    assert bool(upd[1]) is True
 

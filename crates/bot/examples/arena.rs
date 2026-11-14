@@ -96,11 +96,10 @@ enum AgentSpec {
     Mcts5 { iterations: u32, c: f64 },
     Rm { iterations: u32, probe: f64, threshold: f64, buckets: i64 },
     SkUct { iterations: u32, c: f64, buckets: i64 },
-    /// skuct with the parked M16c rollout upgrades ON (A/B research arm).
+    /// M16c rollout arm: status pseudo-scoring + bad-matchup voluntary switching
+    /// in `greedy_pick`. Off by default, as shipped.
     SkUctNs { iterations: u32, c: f64, buckets: i64 },
-    /// M17 cluster-2 probe: threshold-preserving node key (`hp_class`).
-    SkUctThr { iterations: u32, c: f64, buckets: i64 },
-    /// Threshold key + damage-bookkeeping-free key (the full abstraction).
+    /// Damage-bookkeeping-free key abstraction.
     SkUctAbs { iterations: u32, c: f64, buckets: i64 },
     Blind { iterations: u32, c: f64, buckets: i64, mask: MaskRules, perish: PerishRollout, m16c: M16c, mixed: bool, res: bool, bp: bool, endgame: EndgameRules },
     Open { iterations: u32, c: f64, buckets: i64, perish: PerishRollout, m16c: M16c, res: bool, bp: bool, endgame: EndgameRules },
@@ -417,11 +416,6 @@ impl AgentSpec {
                 c: opt_num(&parts, 2, "c")?.unwrap_or(1.0),
                 buckets: opt_num(&parts, 3, "buckets")?.unwrap_or(16),
             }),
-            "skuctthr" => Ok(AgentSpec::SkUctThr {
-                iterations: opt_num(&parts, 1, "iters")?.unwrap_or(1000),
-                c: opt_num(&parts, 2, "c")?.unwrap_or(1.0),
-                buckets: opt_num(&parts, 3, "buckets")?.unwrap_or(16),
-            }),
             "skuct" => Ok(AgentSpec::SkUct {
                 iterations: opt_num(&parts, 1, "iters")?.unwrap_or(1000),
                 c: opt_num(&parts, 2, "c")?.unwrap_or(1.0),
@@ -551,19 +545,7 @@ impl AgentSpec {
                     rule: SelRule::Ucb,
                     c: *c,
                     hp_buckets: *buckets,
-                    threshold_key: true,
                     key_no_damage: true,
-                    ..Default::default()
-                },
-                seed,
-            )),
-            AgentSpec::SkUctThr { iterations, c, buckets } => Box::new(RmAgent::new(
-                RmConfig {
-                    iterations: *iterations,
-                    rule: SelRule::Ucb,
-                    c: *c,
-                    hp_buckets: *buckets,
-                    threshold_key: true,
                     ..Default::default()
                 },
                 seed,
@@ -676,9 +658,6 @@ impl AgentSpec {
             }
             AgentSpec::SkUctNs { iterations, c, buckets } => {
                 format!("skuctm16c:{iterations}:{c}:{buckets}")
-            }
-            AgentSpec::SkUctThr { iterations, c, buckets } => {
-                format!("skuctthr:{iterations}:{c}:{buckets}")
             }
             AgentSpec::SkUctAbs { iterations, c, buckets } => {
                 format!("skuctabs:{iterations}:{c}:{buckets}")

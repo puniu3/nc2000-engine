@@ -47,6 +47,12 @@ export class SolverWorker {
     });
     let onReady!: () => void;
     this.ready = new Promise<void>((r) => (onReady = r));
+    this.worker.onerror = (ev: ErrorEvent) => {
+      for (const [id, p] of this.pending) {
+        this.pending.delete(id);
+        p.reject(new Error(ev.message || "Solver worker error"));
+      }
+    };
     this.worker.onmessage = (e: MessageEvent<SolverResponse>) => {
       const m = e.data;
       switch (m.t) {

@@ -77,8 +77,7 @@ fn main() {
     // A = shipped default, B = the scheme. This is the arm that is *supposed*
     // to have a footprint: the exchange term as a bonus changed the bot's top-1
     // on 13.8% of corpus decisions against a 15.5% seed-flip floor, which is
-    // why it could only ever read parity. Screen with
-    // `tools/eval-candidate-screen.py` before spending a duel on it.
+    // why it could only ever read parity.
     let scheme: Option<f64> = args
         .iter()
         .position(|a| a == "--scheme")

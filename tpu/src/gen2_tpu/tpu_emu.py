@@ -49,9 +49,6 @@ class TPUSpec:
     def vmem_bytes(self) -> int:
         return self.vmem_mib * 1024 * 1024
 
-    @property
-    def vector_width(self) -> int:
-        return self.vpu_lanes[1]
 
 
 TPU_V5E = TPUSpec(
@@ -63,14 +60,6 @@ TPU_V5E = TPUSpec(
     hbm_gib_per_core=16,
 )
 
-TPU_V5P = TPUSpec(
-    name="TPU v5p",
-    cores_per_host=8,
-    vpu_lanes=(8, 128),
-    vmem_mib=64,
-    smem_kib=1024,
-    hbm_gib_per_core=95,
-)
 
 TPU_V6E = TPUSpec(
     name="TPU v6e (Trillium)",
@@ -137,27 +126,6 @@ def make_tpu_mesh(
         axis_shapes = (len(devices),)
     reshaped = np.asarray(devices, dtype=object).reshape(axis_shapes)
     return Mesh(reshaped, axis_names)
-
-
-def shard_batch(
-    fn: Callable[..., Any],
-    mesh: Mesh | None = None,
-    batch_axis: str = "core",
-    in_specs: Any = P("core"),
-    out_specs: Any = P("core"),
-) -> Callable[..., Any]:
-    """Wrap a batched function to execute in parallel across virtual TPU cores via shard_map."""
-    if mesh is None:
-        mesh = make_tpu_mesh(axis_names=(batch_axis,))
-
-    sharded_fn = jax.shard_map(
-        fn,
-        mesh=mesh,
-        in_specs=in_specs,
-        out_specs=out_specs,
-        check_vma=False,
-    )
-    return jax.jit(sharded_fn)
 
 
 def _collect_forbidden_dtypes(tree: Any) -> list[str]:

@@ -287,15 +287,6 @@ pub struct ItemData {
 }
 
 impl ItemData {
-    pub fn has_callback(&self, name: &str) -> bool {
-        self.callbacks.iter().any(|c| c == name)
-    }
-
-    /// `on{Event}Order`/`Priority`/`SubOrder` numbers (resolvePriority).
-    pub fn num(&self, key: &str) -> Option<i32> {
-        self.extra.get(key).and_then(|v| v.as_i64()).map(|v| v as i32)
-    }
-
     #[inline]
     pub fn cb_num(&self, cb: Cb) -> CbNums {
         self.cb_nums.iter().find(|(c, _)| *c == cb).map(|(_, n)| *n).unwrap_or_default()
@@ -322,13 +313,6 @@ pub struct ConditionData {
     pub callbacks: Vec<String>,
     #[serde(flatten)]
     pub extra: BTreeMap<String, Value>,
-}
-
-impl ConditionData {
-    /// `on{Event}Order` / `Priority` / `SubOrder` data fields (resolvePriority).
-    pub fn handler_num(&self, key: &str) -> Option<i32> {
-        self.extra.get(key).and_then(|v| v.as_i64()).map(|v| v as i32)
-    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -391,10 +375,6 @@ impl<I: From<u16> + Into<u16> + Copy, T> Table<I, T> {
 
     pub fn len(&self) -> usize {
         self.values.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.values.is_empty()
     }
 }
 
@@ -827,10 +807,6 @@ pub struct CondEntry {
 impl CondEntry {
     pub fn has_callback(&self, name: &str) -> bool {
         self.callbacks.iter().any(|c| c == name)
-    }
-
-    pub fn num(&self, key: &str) -> Option<i32> {
-        self.nums.get(key).copied()
     }
 
     #[inline]
@@ -1448,18 +1424,5 @@ impl Dex {
             2 => -1,
             _ => 0,
         }
-    }
-
-    /// PS `dex.getImmunity`: false = immune. `source_type` may be a move type
-    /// or a status id ('psn', 'trapped', 'sandstorm', ...).
-    pub fn get_immunity(&self, source_type: &str, defend_types: &[String]) -> bool {
-        for ty in defend_types {
-            if let Some(t) = self.typechart.get(&toid(ty)) {
-                if t.damage_taken.get(source_type).copied().unwrap_or(0) == 3 {
-                    return false;
-                }
-            }
-        }
-        true
     }
 }

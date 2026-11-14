@@ -50,7 +50,7 @@ const AFFECTED_ONLY = !!args.affected;
 
 const psDex = Dex.mod('gen2stadium2');
 const validator = new TeamValidator(FORMAT);
-const pool = JSON.parse(fs.readFileSync(path.join(REPO, 'data/meta-pool-v0/meta-pool.json'), 'utf8'));
+const pool = JSON.parse(fs.readFileSync(path.join(REPO, 'data/belief-pool-v3/belief-pool.json'), 'utf8'));
 const poolJson = JSON.stringify(pool);
 
 /// Pool indices with at least one >155 triple (illegal picks existed pre-fix).
@@ -86,12 +86,6 @@ for (const dir of ['full', 'puredata']) {
   if (fixtureTeams.length >= 40) break;
 }
 
-// baked pair tables (fed to the searcher for table-answered previews)
-const pairDir = path.join(REPO, 'data/preview-tables-v0');
-const pairFiles = fs.existsSync(pairDir)
-  ? fs.readdirSync(pairDir).filter(f => f.startsWith('pair-') && f.endsWith('.json'))
-  : [];
-
 const toID = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 // PS normalizes typed hidden powers to the plain id; our engine keeps
 // typed ids — compare canonically.
@@ -114,7 +108,8 @@ class LevelCapPickAI extends RandomPlayerAI {
       const total = pick.reduce((a, i) => a + levels[i - 1], 0);
       if (total <= 155) return `team ${pick.join('')}`;
     }
-    return 'team 123';
+    const lowest = [1, 2, 3, 4, 5, 6].sort((a, b) => levels[a - 1] - levels[b - 1]);
+    return `team ${lowest.slice(0, 3).join('')}`;
   }
 }
 
@@ -263,17 +258,9 @@ async function playGame(gameIdx, master, counters) {
 
   // our searcher
   const dex = new wasm.Dex();
-  const searcher = new wasm.ProtocolSearcher(dex, ourSide, poolJson, SEED * 1000 + gameIdx);
+  const searcher = new wasm.ProtocolSearcher(dex, ourSide, poolJson, SEED * 1000 + gameIdx, MODE === 'open' ? 1.0 : 0.4);
   searcher.setOwnTeam(JSON.stringify(ourTeam));
   if (MODE === 'open') searcher.pinOpponent(JSON.stringify(oppTeam));
-  for (const f of pairFiles) {
-    try {
-      searcher.addPair(fs.readFileSync(path.join(pairDir, f), 'utf8'));
-    } catch (e) {
-      // stale (pre-Max-Total-Level) or malformed table: treat as missing
-      if (gameIdx === 0) console.warn(`pair ${f} rejected: ${e.message || e}`);
-    }
-  }
 
   const p1team = ourSide === 0 ? ourTeam : oppTeam;
   const p2team = ourSide === 0 ? oppTeam : ourTeam;
@@ -314,11 +301,8 @@ async function playGame(gameIdx, master, counters) {
       const view = JSON.parse(searcher.stateView());
       verifyState(view, battleStream.battle, ourSide, mismatches, `game ${gameIdx} d${decisions}`);
     }
-    let choice = searcher.bakedPreview();
-    if (!choice) {
-      searcher.step(ITERS);
-      choice = searcher.best();
-    }
+    searcher.step(ITERS);
+    const choice = searcher.best();
     if (!choice) throw new Error('searcher returned no choice');
     void battleStream.write(`>${ourSlot} ${choice}`);
   };
@@ -345,7 +329,8 @@ async function playGame(gameIdx, master, counters) {
     for (const line of String(r.v).split('\n')) {
       if (!line) continue;
       if (line.startsWith('|request|')) {
-        pendingRequest = line.slice(9);
+        const reqText = line.slice(9);
+        if (reqText && reqText !== 'null') pendingRequest = reqText;
       } else if (line.startsWith('|error|')) {
         rejected++;
         counters.rejections.push(`game ${gameIdx}: ${line}`);

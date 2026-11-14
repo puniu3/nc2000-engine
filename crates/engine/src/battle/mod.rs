@@ -583,7 +583,11 @@ impl Battle {
         } else {
             set.name.clone()
         };
-        let name = PokeName::new(&name.chars().take(20).collect::<String>());
+        let mut char_end = name.len();
+        if let Some((idx, _)) = name.char_indices().nth(20) {
+            char_end = idx;
+        }
+        let name = PokeName::new(crate::state::truncate_utf8_bytes(&name[..char_end], 24));
 
         // gender: set.gender || species.gender || battle.sample(['M','F'])
         let gender = match set.gender.as_deref() {
@@ -739,8 +743,6 @@ impl Battle {
         };
         // item/status states: PS initEffectState with target → effectOrder is
         // only assigned when the pokemon is active (it isn't at construction).
-        let _ = side;
-        let _ = &mut p;
         Ok(p)
     }
 

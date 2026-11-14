@@ -2,8 +2,7 @@
 //! *non-dominated* legal set space plus gauntlet fitness evaluation.
 //!
 //! Provable Dominance Pruning (with Pre-Adaptation Unlock):
-//! 1. DVs / EVs / Gender: deterministic in canonicalization (`EvTweak` and
-//!    `DvTweak` removed from random mutation). Every stat gets 255 Stat Exp
+//! 1. DVs / EVs / Gender: deterministic in canonicalization. Every stat gets 255 Stat Exp
 //!    and 15 DV except special/status-only sets without Hidden Power or
 //!    move-calling moves, which deterministically get `Atk EV = 0, Atk DV = 1`
 //!    (minimizing confusion self-hit while keeping `HP DV = 15` and `F` gender).
@@ -239,15 +238,9 @@ pub enum MutOp {
     /// Transition across Pareto-optimal (slack-free) team level allocations or
     /// swap levels between two teammates.
     LevelTweak,
-    /// Retained for enum compatibility; DVs are deterministically optimized.
-    DvTweak,
-    /// Retained for enum compatibility; EVs are deterministically optimized.
-    EvTweak,
     /// New species from the non-dominated legal species pool (Species Clause
     /// honored); set derived ab initio from non-dominated moves/items.
     SpeciesSwap,
-    /// Retained for enum compatibility; pool-set copying is retired.
-    MonReplace,
 }
 
 impl MutOp {
@@ -263,10 +256,7 @@ impl MutOp {
             MutOp::MoveSwap => "move-swap",
             MutOp::ItemSwap => "item-swap",
             MutOp::LevelTweak => "level-tweak",
-            MutOp::DvTweak => "dv-tweak",
-            MutOp::EvTweak => "ev-tweak",
             MutOp::SpeciesSwap => "species-swap",
-            MutOp::MonReplace => "mon-replace",
         }
     }
 }
@@ -702,7 +692,6 @@ impl TeamGen {
             MutOp::ItemSwap => self.mut_item_swap(dex, &mut raw, slot, rng)?,
             MutOp::LevelTweak => self.mut_level_tweak(&mut raw, slot, rng)?,
             MutOp::SpeciesSwap => self.mut_species_swap(dex, &mut raw, slot, rng)?,
-            MutOp::DvTweak | MutOp::EvTweak | MutOp::MonReplace => unreachable!(),
         }
         self.optimize_team_dominance(dex, &mut raw, rng);
         let team = self.canonize(dex, &raw)?;
@@ -771,7 +760,6 @@ impl TeamGen {
                     MutOp::ItemSwap => self.mut_item_swap(dex, &mut raw, slot, rng),
                     MutOp::LevelTweak => self.mut_level_tweak(&mut raw, slot, rng),
                     MutOp::SpeciesSwap => self.mut_species_swap(dex, &mut raw, slot, rng),
-                    MutOp::DvTweak | MutOp::EvTweak | MutOp::MonReplace => unreachable!(),
                 };
                 if ok.is_some() {
                     if applied == 0 {
@@ -938,7 +926,6 @@ impl TeamGen {
                 MutOp::SpeciesSwap => {
                     self.mut_species_swap_endogenous(dex, &mut raw, slot, endo_pool, rng)
                 }
-                MutOp::DvTweak | MutOp::EvTweak | MutOp::MonReplace => unreachable!(),
             };
             if ok.is_none() {
                 continue;
@@ -1078,7 +1065,6 @@ impl TeamGen {
                     MutOp::ItemSwap => self.mut_item_swap(dex, &mut raw, slot, rng),
                     MutOp::LevelTweak => self.mut_level_tweak(&mut raw, slot, rng),
                     MutOp::SpeciesSwap => self.mut_species_swap(dex, &mut raw, slot, rng),
-                    MutOp::DvTweak | MutOp::EvTweak | MutOp::MonReplace => unreachable!(),
                 };
                 if ok.is_some() {
                     if applied == 0 {

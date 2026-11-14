@@ -138,7 +138,7 @@ jobs:
 
       - name: Verify server cache bindings
         run: |
-          for suite in smoke determinism parity kifu fork solver destiny-bond priority-heal residual-wait own-recovery-wait preview-cache; do
+          for suite in smoke determinism parity kifu fork solver endgame destiny-bond priority-heal residual-wait own-recovery-wait preview-cache; do
             node "crates/wasm/tests-node/$suite.js"
           done
           python3 tools/render-preview-cache-doc.py web/dist

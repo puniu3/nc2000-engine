@@ -14,8 +14,6 @@ body:
         2. You must run the triage CLI on the turn's state:
            ```bash
            node tools/diagnose-position.js --spec <spec.json> --expect-action "<HUMAN_ACTION>" --emit-repro repro-bundle.json
-           # Or from Castle match trace:
-           node tools/pbs-parity-audit.js data/pbs-traces/<matchId>.jsonl --turn <N> --expect-action "<HUMAN_ACTION>" --emit-repro repro-bundle.json
            ```
         3. Issues are accepted ONLY when the triage telemetry reports `verdict`:
            - `CATEGORY_B1_RULE_INVALID_SPEC` (Rule violation or illegal move)
@@ -28,7 +26,7 @@ body:
     id: triage_telemetry
     attributes:
       label: "Single-Line Triage Telemetry (`nc2000-triage-report-v1`)"
-      description: "Paste the exact JSON line printed on stdout by `tools/diagnose-position.js` or `tools/pbs-parity-audit.js`."
+      description: "Paste the exact JSON line printed on stdout by `tools/diagnose-position.js`."
       placeholder: '{"schema":"nc2000-triage-report-v1","engine_sha":"...","verdict":"CATEGORY_B1_...","bot_action":"...","expected_action":"..."}'
     validations:
       required: true

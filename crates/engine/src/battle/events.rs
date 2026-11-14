@@ -843,11 +843,6 @@ impl Battle {
         }
     }
 
-    /// side.allies() as a list (kept for non-hot callers).
-    pub fn allies_and_self(&self, p: PokeId) -> Vec<PokeId> {
-        self.ally_of(p).into_iter().collect()
-    }
-
     /// pokemon.foes() as a list (kept for non-hot callers).
     pub fn foes_of(&self, p: PokeId, all: bool) -> Vec<PokeId> {
         self.foe_of(p, all).into_iter().collect()
@@ -1187,9 +1182,6 @@ impl Battle {
         for side_n in 0..2u8 {
             self.find_side_event_handlers(dex, side_n, cbs.on_side, get_key, None, &mut handlers);
             if let Some(active) = self.active_id(side_n as usize) {
-                if ev.name == "SwitchIn" {
-                    self.find_pokemon_event_handlers(dex, active, cbs.on_any, false, &mut handlers);
-                }
                 if let Some(ts) = targets {
                     if !ts.contains(&active) {
                         continue;

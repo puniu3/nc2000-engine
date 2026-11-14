@@ -668,10 +668,21 @@ pub struct PokeName {
     len: u8,
 }
 
+pub(crate) fn truncate_utf8_bytes(s: &str, max_bytes: usize) -> &str {
+    if s.len() <= max_bytes {
+        return s;
+    }
+    let mut end = max_bytes;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
+}
+
 impl PokeName {
     pub fn new(name: &str) -> PokeName {
-        let bytes = name.as_bytes();
-        assert!(bytes.len() <= 24, "pokemon name too long: {name}");
+        let sliced = truncate_utf8_bytes(name, 24);
+        let bytes = sliced.as_bytes();
         let mut buf = [0u8; 24];
         buf[..bytes.len()].copy_from_slice(bytes);
         PokeName {
@@ -2034,7 +2045,6 @@ impl Side {
         &mut self,
         source: &Self,
         same_roster_sets: bool,
-        picked_mask: Option<u8>,
     ) {
         let Side {
             name,
@@ -2057,7 +2067,6 @@ impl Side {
         if self.roster.len() != roster.len() {
             self.roster.clone_from(roster);
         } else {
-            let _ = picked_mask;
             for (dst, src) in self.roster.iter_mut().zip(roster.iter()) {
                 if same_roster_sets
                     && !dst.is_started
@@ -2131,7 +2140,6 @@ impl Battle {
         &mut self,
         source: &Self,
         same_roster_sets: [bool; 2],
-        picked_masks: [Option<u8>; 2],
     ) {
         let Battle {
             preview_level_caps,
@@ -2183,8 +2191,8 @@ impl Battle {
         self.field.weather = field.weather;
         self.field.weather_state = field.weather_state;
         self.field.pseudo_weather.clone_from(&field.pseudo_weather);
-        self.sides[0].reset_search_side(&sides[0], same_roster_sets[0], picked_masks[0]);
-        self.sides[1].reset_search_side(&sides[1], same_roster_sets[1], picked_masks[1]);
+        self.sides[0].reset_search_side(&sides[0], same_roster_sets[0]);
+        self.sides[1].reset_search_side(&sides[1], same_roster_sets[1]);
         if queue.is_empty() {
             self.queue.clear();
         } else {
@@ -2242,11 +2250,5 @@ impl Battle {
     }
 }
 
-/// Sparse boosts as an ordered list (PS object iteration order).
-pub type SparseBoostsOwned = Vec<(usize, i8)>;
-
 /// Convenience: full 7-slot boost names.
 pub const BOOST_NAMES: [&str; 7] = ["atk", "def", "spa", "spd", "spe", "accuracy", "evasion"];
-
-/// Map BTreeMap-based scalar bags (unused placeholder to keep serde imports out).
-pub type ScalarMap = BTreeMap<String, Scalar>;

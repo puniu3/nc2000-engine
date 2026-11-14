@@ -37,9 +37,18 @@ function getWasm() {
       throw new Error(`WASM module not found at: ${wasmPath}`);
     }
     wasmModule = require(wasmPath);
+  }
+  if (!wasmDexInstance) {
     wasmDexInstance = new wasmModule.Dex();
   }
   return { wasm: wasmModule, dex: wasmDexInstance };
+}
+
+function freeDex() {
+  if (wasmDexInstance) {
+    wasmDexInstance.free();
+    wasmDexInstance = null;
+  }
 }
 
 function getBeliefPool() {
@@ -96,7 +105,7 @@ function parseArgs() {
       opts.specPath = path.resolve(process.cwd(), args[++i]);
     } else if (a === '--expect-action' && args[i + 1]) {
       opts.expectAction = args[++i];
-    } else if (a === '--actual-foe-spec' && args[i + 1]) {
+    } else if ((a === '--actual-foe-spec' || a === '--actual-foe') && args[i + 1]) {
       opts.actualFoePath = path.resolve(process.cwd(), args[++i]);
     } else if (a === '--iters' && args[i + 1]) {
       const parts = args[++i].split(',').map(n => parseInt(n.trim(), 10));
@@ -188,7 +197,10 @@ function runDiagnosis() {
       verdict: 'CATEGORY_B1_RULE_INVALID_SPEC',
       error: `setPosition rejected spec: ${err.message || err}`,
     }));
+    freeDex();
     return;
+  } finally {
+    testSearcher?.free();
   }
 
   // Multi-seed evaluation
@@ -197,20 +209,24 @@ function runDiagnosis() {
 
   for (const s of opts.seeds) {
     const searcher = new wasm.ProtocolSearcher(dex, side, pool, s, 0.4);
-    searcher.setPosition(specRaw);
-    searcher.step(opts.baseIters);
-    const bestChoice = searcher.best();
-    const rootPolicy = JSON.parse(searcher.rootPolicy());
-    const report = JSON.parse(searcher.report(0, 0));
+    try {
+      searcher.setPosition(specRaw);
+      searcher.step(opts.baseIters);
+      const bestChoice = searcher.best();
+      const rootPolicy = JSON.parse(searcher.rootPolicy());
+      const report = JSON.parse(searcher.report(0, 0));
 
-    seedResults.push({
-      seed: s,
-      best: bestChoice,
-      rootPolicy,
-      report,
-    });
-    const normBest = normalizeAction(bestChoice);
-    seedActionVotes[normBest] = (seedActionVotes[normBest] || 0) + 1;
+      seedResults.push({
+        seed: s,
+        best: bestChoice,
+        rootPolicy,
+        report,
+      });
+      const normBest = normalizeAction(bestChoice);
+      seedActionVotes[normBest] = (seedActionVotes[normBest] || 0) + 1;
+    } finally {
+      searcher.free();
+    }
   }
 
   // Find consensus top action
@@ -257,13 +273,19 @@ function runDiagnosis() {
   let qDeepBot = null;
   if (opts.deepIters > opts.baseIters) {
     const deepSearcher = new wasm.ProtocolSearcher(dex, side, pool, opts.seeds[0], 0.4);
-    deepSearcher.setPosition(specRaw);
-    deepSearcher.step(opts.deepIters);
-    const deepBest = normalizeAction(deepSearcher.best());
-    const deepPolicy = JSON.parse(deepSearcher.rootPolicy());
-    const deepTop = (deepPolicy.actions || [])[0];
-    deepAgreement = deepBest === botActionNorm;
-    qDeepBot = deepTop?.mean || null;
+    try {
+      deepSearcher.setPosition(specRaw);
+      deepSearcher.step(opts.deepIters);
+      const deepBest = normalizeAction(deepSearcher.best());
+      const deepPolicy = JSON.parse(deepSearcher.rootPolicy());
+      const deepBotEntry = (deepPolicy.actions || []).find(
+        a => normalizeAction(a.input) === botActionNorm
+      );
+      deepAgreement = deepBest === botActionNorm;
+      qDeepBot = deepBotEntry?.mean ?? null;
+    } finally {
+      deepSearcher.free();
+    }
   }
 
   // Expected action comparison (if provided)
@@ -285,11 +307,11 @@ function runDiagnosis() {
   let oracleHindsightQBot = null;
   let oracleHindsightQExpected = null;
   if (opts.actualFoePath && fs.existsSync(opts.actualFoePath)) {
+    const oracleSearcher = new wasm.ProtocolSearcher(dex, side, pool, opts.seeds[0], 0.4);
     try {
       const foeSetsJson = fs.readFileSync(opts.actualFoePath, 'utf8');
-      const oracleSearcher = new wasm.ProtocolSearcher(dex, side, pool, opts.seeds[0], 0.4);
-      oracleSearcher.setPosition(specRaw);
       oracleSearcher.pinOpponent(foeSetsJson);
+      oracleSearcher.setPosition(specRaw);
       oracleSearcher.step(opts.baseIters);
       const oraclePolicy = JSON.parse(oracleSearcher.rootPolicy());
       const oracleActions = oraclePolicy.actions || [];
@@ -301,8 +323,11 @@ function runDiagnosis() {
       oracleHindsightQExpected = oracleExp?.mean ?? null;
     } catch {
       // Pinned search unavailable or failed
+    } finally {
+      oracleSearcher.free();
     }
   }
+  freeDex();
 
   // Determine Verdict
   let verdict = 'CATEGORY_C0_MCTS_VALUE_PREFERENCE';
@@ -310,16 +335,16 @@ function runDiagnosis() {
     verdict = 'CATEGORY_B2_Q_VISIT_INVERSION';
   } else if ((entropyNorm > 0.92 && deltaPi < 0.03) || seedStability < 0.60) {
     verdict = 'CATEGORY_B3_FLAT_ROOT_LOTTERY';
-  } else if (normExpected && qDiff !== null && Math.abs(qDiff) <= 0.02) {
-    verdict = 'CATEGORY_C1_NASH_INDIFFERENCE';
   } else if (
     oracleHindsightQExpected !== null &&
     oracleHindsightQBot !== null &&
-    oracleHindsightQExpected > oracleHindsightQBot &&
+    oracleHindsightQExpected - oracleHindsightQBot > 0.02 &&
     qDiff !== null &&
-    qDiff > 0.02
+    qDiff > 0
   ) {
     verdict = 'CATEGORY_C2_BELIEF_RISK_MITIGATION';
+  } else if (normExpected && qDiff !== null && Math.abs(qDiff) <= 0.02) {
+    verdict = 'CATEGORY_C1_NASH_INDIFFERENCE';
   } else if (qBot < 0.10 || qBot > 0.95) {
     verdict = 'CATEGORY_C3_HORIZON_DESPERATION';
   }
@@ -347,6 +372,7 @@ function runDiagnosis() {
     root_entropy_norm: Number(entropyNorm.toFixed(4)),
     seed_stability: Number(seedStability.toFixed(2)),
     deep_budget_agreement: deepAgreement,
+    q_deep_bot: qDeepBot !== null ? Number(qDeepBot.toFixed(4)) : null,
     oracle_hindsight_q_bot:
       oracleHindsightQBot !== null ? Number(oracleHindsightQBot.toFixed(4)) : null,
     oracle_hindsight_q_expected:

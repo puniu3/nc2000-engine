@@ -1,8 +1,7 @@
 //! The exported dex loads, has the measured shape, and every callback name in
-//! the data maps onto an `events::Handler` variant (no silent enum drift).
+//! the data resolves in `dex.cb` (`KnownCallbacks`).
 
 use crate::suite::common;
-use nc2000_engine::events::Handler;
 
 #[test]
 fn dex_has_expected_counts() {
@@ -15,28 +14,46 @@ fn dex_has_expected_counts() {
 }
 
 #[test]
-fn every_data_callback_maps_to_a_handler_variant() {
+fn every_data_callback_resolves_in_dex_cb_table() {
     let dex = common::dex().clone();
     let mut unknown = Vec::new();
     let mut total = 0;
-    let mut check = |entry: &str, names: &[String]| {
+    let mut check = |entry: &str, names: &[String], is_move: bool| {
         for n in names {
             total += 1;
-            if Handler::from_name(n).is_none() {
+            if is_move {
+                if let Some((prefix, leaf)) = n.split_once('.') {
+                    if !matches!(prefix, "condition" | "self" | "secondary") {
+                        unknown.push(format!("{entry}: {n} (unexpected prefix)"));
+                        continue;
+                    }
+                    let cb = dex.cb(leaf);
+                    if !cb.exists() || dex.cb_key(cb) != leaf {
+                        unknown.push(format!("{entry}: {n}"));
+                    } else if prefix == "condition"
+                        && !dex.conds_id(entry).is_some_and(|cid| dex.cond(cid).mask.has(cb))
+                    {
+                        unknown.push(format!("{entry}: {n} (missing from cond mask)"));
+                    }
+                    continue;
+                }
+            }
+            let cb = dex.cb(n);
+            if !cb.exists() || dex.cb_key(cb) != n {
                 unknown.push(format!("{entry}: {n}"));
             }
         }
     };
     for (i, m) in dex.moves.values.iter().enumerate() {
-        check(&dex.moves.keys[i], &m.callbacks);
+        check(&dex.moves.keys[i], &m.callbacks, true);
     }
     for (i, it) in dex.items.values.iter().enumerate() {
-        check(&dex.items.keys[i], &it.callbacks);
+        check(&dex.items.keys[i], &it.callbacks, false);
     }
     for (i, c) in dex.conditions.values.iter().enumerate() {
-        check(&dex.conditions.keys[i], &c.callbacks);
+        check(&dex.conditions.keys[i], &c.callbacks, false);
     }
-    assert!(unknown.is_empty(), "callback names without a Handler variant:\n{}", unknown.join("\n"));
+    assert!(unknown.is_empty(), "callback names missing from dex cb_index:\n{}", unknown.join("\n"));
     assert!(total > 300, "expected the measured ~355 callbacks, saw {total}");
 }
 

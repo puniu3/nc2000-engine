@@ -156,9 +156,6 @@ export function speciesDisplay(id: string): string {
   return dexData?.species[toId(id)]?.name ?? id;
 }
 
-export function moveDisplay(id: string): string {
-  return dexData?.moves[toId(id)]?.name ?? id;
-}
 
 /** Max PP under this format's fixed 3 PP Ups — the same arithmetic the
  * engine applies when it builds a set (`battle/mod.rs`, `new_pokemon`), and

@@ -333,10 +333,6 @@ export function Game(props: {
       req.picks[BOT] = legal[0].input;
       return;
     }
-    if (legal[0].kind === "team") {
-      void searchBot(req, legal);
-      return;
-    }
     void searchBot(req, legal);
   }
 
@@ -852,9 +848,10 @@ export function ChoiceButtons(props: {
       {switches.length > 0 && (
         <div class="switch-row">
           {switches.map((s) => {
-            // Current item from the live view (species-matched — party
-            // order and choice pos live in different index spaces).
+            // Current item from the live view (`pos` is 1-based party slot,
+            // with species match as fallback if out of range).
             const pk =
+              props.party[s.pos - 1] ??
               props.party.find((p) => toId(p.species) === toId(s.species)) ??
               null;
             const cur = pk?.item ?? null;

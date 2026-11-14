@@ -8,12 +8,7 @@ export interface UIStrings {
   // title / start screen
   subtitle: string;
   startBattle: string;
-  strengthLabel: string;
-  strengthStandard: string;
-  strengthStrong: string;
-  strengthNote: string;
   yourParty: string;
-  oppParty: string;
   randomLabel: string;
   randomCard: (n: number) => string;
   chooseYours: string;
@@ -78,7 +73,6 @@ export interface UIStrings {
   bp: (n: number) => string;
   // thinking / waiting
   thinkChip: (doneK: string, budgetK: string) => string;
-  ponderChip: (bonusK: string) => string;
   botThinking: (done: number, budget: number) => string;
   botFinishing: string;
   waitingBot: string;
@@ -122,14 +116,9 @@ export interface UIStrings {
   settingsValue: (pool: string, prior: string) => string;
   // the conclusion mode (`?nash`, info-mode.ts): blind rules, but the
   // opponent is drawn from the solved mixture and nothing on the screen is
-  // configurable. nashBanner replaces blindBanner in the same
-  // one-line slot; it has to say what blind's says (sets hidden both ways,
-  // new opponent every battle) AND why the opponent row below it is now
-  // worth opening. The mixture's weights are shown, deliberately: the claim
+  // configurable. The mixture's weights are shown, deliberately: the claim
   // is that knowing the distribution does not help, so hiding it would be
   // demonstrating something weaker than what was proved.
-  nashBanner: string;
-  nashTitle: string;
   nashMixNote: string;
   nashSource: (file: string) => string;
   // community belief prior (M18): a distribution table that fills in an
@@ -162,10 +151,9 @@ export interface UIStrings {
   drawPrevNashSummary: string;
   drawPrevNashR1: (n: number) => string;
   drawOldNash: (n: number) => string;
-  nashSwitchOld: string;
-  nashSwitchNew: string;
-  // the start screen's link to the party evaluator (`?evaluate`)
+  // the start screen's link to the party evaluator (`?evaluate`) and PDINPUT
   evaluateLink: string;
+  pdinputLink: string;
   poolLoaded: (name: string, n: number) => string;
   poolHelp: string;
   poolPick: string;
@@ -242,7 +230,6 @@ export interface SolverStrings {
   activeLabel: string;
   setActive: string;
   faintedLabel: string;
-  broughtLabel: string;
   hpLabel: string;
   statusLabel: string;
   restLabel: string;
@@ -254,13 +241,11 @@ export interface SolverStrings {
   addMove: string;
   itemLabel: string;
   itemUnknown: string;
-  itemNone: string;
   turnLabel: string;
   weatherLabel: string;
   weatherNone: string;
   forceSwitchLabel: string;
   trappedLabel: string;
-  previewLabel: string;
   solve: string;
   solving: string;
   deeper: string;
@@ -329,12 +314,7 @@ const EN: UIStrings = {
   settingUp: "Setting up battle…",
   subtitle: "Gen 2 · human vs bot",
   startBattle: "Start battle",
-  strengthLabel: "Bot strength",
-  strengthStandard: "Standard · shorter wait",
-  strengthStrong: "Strong · longer wait",
-  strengthNote: "The bot thinks while you choose. Choosing quickly does not make it weaker.",
   yourParty: "Your party",
-  oppParty: "Opponent's party",
   randomLabel: "Random",
   randomCard: (n) => `Random (${n} ${n === 1 ? "party" : "parties"})`,
   chooseYours: "Choose your team",
@@ -399,7 +379,6 @@ const EN: UIStrings = {
   moveCat: (c) => c,
   bp: (n) => `${n} BP`,
   thinkChip: (d, b) => `thinking ${d}/${b}`,
-  ponderChip: (x) => `pondering +${x}`,
   botThinking: (d, b) => `Bot is thinking… ${d} / ${b}`,
   botFinishing: "Bot is finishing up…",
   waitingBot: "Waiting for the bot…",
@@ -430,11 +409,6 @@ const EN: UIStrings = {
   settingsLabel: "Setup",
   settingsTitle: "Setup",
   settingsValue: (pool, prior) => `${pool} · ${prior}`,
-  nashBanner:
-    "The recorded mixture — neither side sees the other's sets; each battle " +
-    "the bot draws one of the parties below at the odds shown. You can use " +
-    "any party; the draw probabilities are public.",
-  nashTitle: "The solved mixture",
   nashMixNote:
     "These weights were computed for an earlier version of the bot. " +
     "Equilibrium for the current version has not been established. The bot " +
@@ -465,9 +439,8 @@ const EN: UIStrings = {
   drawPrevNashSummary: "Previous Nash mixtures (2)",
   drawPrevNashR1: (n) => `Old mixture r1 (${n} ${n === 1 ? "party" : "parties"})`,
   drawOldNash: (n) => `Old mixture v3 (${n} ${n === 1 ? "party" : "parties"})`,
-  nashSwitchOld: "Play against the old mixture (v3)",
-  nashSwitchNew: "Play against the new solved mixture",
   evaluateLink: "Measure a party's strength",
+  pdinputLink: "Import party pool to PDINPUT.cgi",
   poolLoaded: (name, n) => `${name} (${n} ${n === 1 ? "team" : "teams"})`,
   poolHelp:
     "A pool file replaces the parties the opponent is drawn from (uniformly) " +
@@ -532,7 +505,6 @@ const EN: UIStrings = {
     activeLabel: "Out",
     setActive: "Send out",
     faintedLabel: "Fainted",
-    broughtLabel: "Brought",
     hpLabel: "HP %",
     statusLabel: "Status",
     restLabel: "from Rest",
@@ -544,13 +516,11 @@ const EN: UIStrings = {
     addMove: "Add a move",
     itemLabel: "Item",
     itemUnknown: "Unknown",
-    itemNone: "None (gone)",
     turnLabel: "Turn",
     weatherLabel: "Weather",
     weatherNone: "None",
     forceSwitchLabel: "You must switch (yours fainted)",
     trappedLabel: "You cannot switch out",
-    previewLabel: "Team preview (choosing three)",
     solve: "Analyze",
     solving: "Thinking",
     deeper: "Think longer",
@@ -625,12 +595,7 @@ const JA: UIStrings = {
   settingUp: "対戦を準備中…",
   subtitle: "第2世代 · 人間 vs ボット",
   startBattle: "対戦開始",
-  strengthLabel: "Botの強さ",
-  strengthStandard: "標準 · 待ち時間が短い",
-  strengthStrong: "強い · じっくり考える",
-  strengthNote: "あなたが選んでいる間に考えます。早く選んでもBotの強さは変わりません。",
   yourParty: "自分のパーティ",
-  oppParty: "相手のパーティ",
   randomLabel: "ランダム",
   randomCard: (n) => `ランダム(全${n}パーティ)`,
   chooseYours: "自分のチームを選ぶ",
@@ -695,7 +660,6 @@ const JA: UIStrings = {
     c === "Physical" ? "物理" : c === "Special" ? "特殊" : "変化",
   bp: (n) => `威力${n}`,
   thinkChip: (d, b) => `思考中 ${d}/${b}`,
-  ponderChip: (x) => `先読み中 +${x}`,
   botThinking: (d, b) => `ボットの思考中… ${d} / ${b}`,
   botFinishing: "ボットが考えをまとめています…",
   waitingBot: "ボットを待っています…",
@@ -724,10 +688,6 @@ const JA: UIStrings = {
   settingsLabel: "設定",
   settingsTitle: "設定",
   settingsValue: (pool, prior) => `${pool} · ${prior}`,
-  nashBanner:
-    "記録された混合戦略 — 互いの構成(技・持ち物)は非公開。ボットは毎回、下の" +
-    "確率でパーティを1つ引きます。あなたの編成は自由で、抽選確率は公開です。",
-  nashTitle: "結論の混合戦略",
   nashMixNote:
     "以前のボットで計算した選出確率です。現在のボットで均衡が成り立つことは" +
     "確認できていません。ボットは毎回引き直すので、今どれと当たっているかは" +
@@ -757,9 +717,8 @@ const JA: UIStrings = {
   drawPrevNashSummary: "以前の混合戦略 (2種)",
   drawPrevNashR1: (n) => `旧混合戦略 r1(${n}パーティ)`,
   drawOldNash: (n) => `旧混合戦略 v3(${n}パーティ)`,
-  nashSwitchOld: "旧混合戦略(v3)と対戦する",
-  nashSwitchNew: "新しい結論の混合戦略と対戦する",
   evaluateLink: "パーティの強さを測る",
+  pdinputLink: "PDINPUT.cgi にパーティプールを取り込む",
   poolLoaded: (name, n) => `${name}(${n}チーム)`,
   poolHelp:
     "相手チームの抽選元(一様に抽選)とこの画面の自分のチーム一覧が" +
@@ -822,7 +781,6 @@ const JA: UIStrings = {
     activeLabel: "場",
     setActive: "場に出す",
     faintedLabel: "ひんし",
-    broughtLabel: "選出済み",
     hpLabel: "HP %",
     statusLabel: "状態",
     restLabel: "ねむる由来",
@@ -834,13 +792,11 @@ const JA: UIStrings = {
     addMove: "技を追加",
     itemLabel: "道具",
     itemUnknown: "不明",
-    itemNone: "無し（消費済み）",
     turnLabel: "ターン",
     weatherLabel: "天候",
     weatherNone: "なし",
     forceSwitchLabel: "交代を選ぶ場面（自分がひんし）",
     trappedLabel: "交代できない",
-    previewLabel: "選出画面（3体を選ぶ）",
     solve: "解析",
     solving: "思考中",
     deeper: "もっと考える",

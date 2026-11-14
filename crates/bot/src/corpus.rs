@@ -296,7 +296,7 @@ fn collect_set_evidence(lines: &[String]) -> SetEvidence {
                     moves.push(key);
                 }
             }
-            "-enditem" if line.contains("[eat]") => {
+            "-enditem" => {
                 let Some(item) = parts.get(3) else { continue };
                 evidence
                     .items
@@ -925,7 +925,7 @@ fn reconstruct_context_inner(
                 .moves
                 .id(&key)
                 .map(|id| {
-                    let mx = dex.moves.get(id).pp as i32 * 8 / 5;
+                    let mx = crate::position::max_pp(dex, id);
                     ((mx - uses_of(&key)).max(0), mx)
                 })
                 .unwrap_or((5, 5));
@@ -1079,7 +1079,7 @@ pub fn complete_active_moves_from_future(
                         && battle.poke(id).last_move_used != Some(slot.id)
                 })
                 .map(|(index, _)| index);
-            let maxpp = dex.moves.get(move_id).pp as i32 * 8 / 5;
+            let maxpp = crate::position::max_pp(dex, move_id);
             let slot = MoveSlot {
                 id: move_id,
                 pp: maxpp,
@@ -1297,7 +1297,8 @@ mod tests {
     }
 
     #[test]
-    fn transformed_moves_are_not_submitted_set_evidence_and_switch_or_replace_clears_it() {
+    fn transformed_moves_never_leak_into_set_evidence_or_tracker() {
+        let dex = conformance::load_dex();
         let switched = vec![
             "|switch|p1a: Mew|Mew, L50|100/100".into(),
             "|move|p1a: Mew|Transform|p2a: Snorlax".into(),
@@ -1307,8 +1308,10 @@ mod tests {
             "|switch|p1a: Mew|Mew, L50|100/100".into(),
             "|move|p1a: Mew|Psychic|p2a: Snorlax".into(),
         ];
-        let evidence = collect_set_evidence(&switched);
-        assert_eq!(evidence.moves(0, "Mew", "mew"), ["transform", "psychic"]);
+        assert_eq!(
+            collect_set_evidence(&switched).moves(0, "Mew", "mew"),
+            ["transform", "psychic"]
+        );
 
         let replaced = vec![
             "|switch|p1a: Mew|Mew, L50|100/100".into(),
@@ -1318,38 +1321,31 @@ mod tests {
             "|replace|p1a: Mew|Mew, L50|100/100".into(),
             "|move|p1a: Mew|Psychic|p2a: Snorlax".into(),
         ];
-        let evidence = collect_set_evidence(&replaced);
-        assert_eq!(evidence.moves(0, "Mew", "mew"), ["transform", "psychic"]);
-    }
+        assert_eq!(
+            collect_set_evidence(&replaced).moves(0, "Mew", "mew"),
+            ["transform", "psychic"]
+        );
 
-    #[test]
-    fn ditto_transform_corpus_excerpt_does_not_leak_copied_move_to_future_oracle() {
-        // battle-gen2...pbs-F-20260401-121508-7c046d6831be.raw.log
-        // lines 51-66: Ditto transforms into Snorlax, then uses Body Slam.
-        let dex = conformance::load_dex();
         let team = vec![transform_set()];
         let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &team, &team).unwrap();
         let p1 = battle.legal_choices(&dex, 0)[0];
         let p2 = battle.legal_choices(&dex, 1)[0];
         battle.apply_choices(&dex, [Some(p1), Some(p2)]).unwrap();
-        let lines = vec![
+        let ditto_lines = vec![
             "|switch|p1a: Ditto|Ditto, L50|100/100".into(),
             "|move|p1a: Ditto|Transform|p2a: Snorlax".into(),
             "|-transform|p1a: Ditto|p2a: Snorlax".into(),
             "|move|p1a: Ditto|Body Slam|p2a: Snorlax".into(),
         ];
-
-        let evidence = collect_set_evidence(&lines);
-        assert_eq!(evidence.moves(0, "Ditto", "ditto"), ["transform"]);
         assert_eq!(
-            active_future_revealed_moves(&dex, &battle, &lines)[0],
+            collect_set_evidence(&ditto_lines).moves(0, "Ditto", "ditto"),
             ["transform"]
         );
-    }
+        assert_eq!(
+            active_future_revealed_moves(&dex, &battle, &ditto_lines)[0],
+            ["transform"]
+        );
 
-    #[test]
-    fn tracker_does_not_retain_transformed_move_as_base_set_evidence() {
-        let dex = conformance::load_dex();
         let mut tracker = ProtocolTracker::new(0);
         for line in [
             "|poke|p1|Ditto, L50|",
@@ -1368,11 +1364,7 @@ mod tests {
             tracker.push_line(&dex, line);
         }
         let (mons, _) = tracker.snapshot(0);
-        let moves: Vec<_> = mons[0]
-            .uses
-            .iter()
-            .map(|(id, _)| dex.moves.key(*id))
-            .collect();
+        let moves: Vec<_> = mons[0].uses.iter().map(|(id, _)| dex.moves.key(*id)).collect();
         assert_eq!(moves, ["transform"]);
     }
 
@@ -1405,5 +1397,22 @@ mod tests {
                 .iter()
                 .any(|slot| slot.id == rest));
         }
+    }
+
+    #[test]
+    fn berserk_gene_enditem_without_eat_and_max_pp_40_is_61() {
+        let dex = conformance::load_dex();
+        let evidence = collect_set_evidence(&[
+            "|switch|p1a: Tauros|Tauros, L50, M|100/100".into(),
+            "|-enditem|p1a: Tauros|Berserk Gene".into(),
+        ]);
+        assert_eq!(
+            evidence.item(0, "Tauros", "tauros").map(|e| e.item.as_str()),
+            Some("Berserk Gene")
+        );
+        let tackle = dex.moves.id("tackle").expect("tackle interned");
+        let growl = dex.moves.id("growl").expect("growl interned");
+        assert_eq!(crate::position::max_pp(&dex, tackle), 56);
+        assert_eq!(crate::position::max_pp(&dex, growl), 61);
     }
 }

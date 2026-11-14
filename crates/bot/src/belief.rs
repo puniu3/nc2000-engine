@@ -941,8 +941,10 @@ impl Belief {
             let mo = &obs.mons()[slot];
             let projected = crate::hp_evidence::project(dex, &refs[slot], mo, rng);
             impute_mon(mon, projected.as_ref().unwrap_or(&refs[slot]), mo, dex);
-            if let Some(&(cur, den)) = self.hp_observations.as_ref().and_then(|h| h.get(slot)) {
-                mon.hp = crate::import::impute_hp(cur, den, mon.maxhp);
+            if mo.appeared {
+                if let Some(&(cur, den)) = self.hp_observations.as_ref().and_then(|h| h.get(slot)) {
+                    mon.hp = crate::import::impute_hp(cur, den, mon.maxhp);
+                }
             }
             out.refresh_poke_mask(dex, PokeId { side: opp as u8, slot: slot as u8 });
         }
@@ -978,30 +980,45 @@ impl Belief {
         if pending.is_empty() {
             return;
         }
-        if out
+        let new_id = if let Some(forced) = out
             .get_locked_move(dex, active)
             .or_else(|| out.get_semi_locked_move(dex, active))
-            .is_some()
+            .and_then(|k| dex.moves.id(k))
         {
-            return; // forced continuation: publicly known
-        }
-        let usable: Vec<MoveId> = out
-            .poke(active)
-            .move_slots
-            .iter()
-            .filter(|s| s.pp > 0 && !s.disabled)
-            .map(|s| s.id)
-            .collect();
-        let new_id = if usable.is_empty() {
-            dex.moves.id("struggle").expect("struggle interned")
+            forced
+        } else if let Some(encored) = dex
+            .conds_id("encore")
+            .and_then(|c| out.poke(active).volatile(c))
+            .and_then(|v| v.get_move())
+            .filter(|&m| {
+                out.poke(active)
+                    .move_slots
+                    .iter()
+                    .any(|s| s.id == m && s.pp > 0)
+            })
+        {
+            encored
         } else {
-            usable[rng.below(usable.len())]
+            let usable: Vec<MoveId> = out
+                .poke(active)
+                .move_slots
+                .iter()
+                .filter(|s| s.pp > 0 && !s.disabled)
+                .map(|s| s.id)
+                .collect();
+            if usable.is_empty() {
+                dex.moves.id("struggle").expect("struggle interned")
+            } else {
+                usable[rng.below(usable.len())]
+            }
         };
+        let speed = out.get_pokemon_action_speed(dex, active) as f64;
         for i in pending {
             let old_id = match out.queue[i].choice {
                 ActionKind::Move { move_id, .. } => move_id,
                 _ => unreachable!(),
             };
+            out.queue[i].speed = speed;
             if old_id == new_id {
                 continue;
             }
@@ -1017,7 +1034,6 @@ impl Belief {
             }
             out.queue[i].priority = dex.move_static(new_id).priority as f64;
             out.queue[i].fractional_priority = 0.0;
-            out.queue[i].speed = out.get_pokemon_action_speed(dex, active) as f64;
             if dex.moves.key(new_id) == "pursuit" {
                 if let Some(target) = out.active_id(1 - opp) {
                     out.before_turn_callback(dex, new_id, active, target);
@@ -2446,7 +2462,7 @@ fn non_dominated_learnset_moves(dex: &Dex, mo: &MonObs) -> Vec<(MoveId, String, 
         ("bellydrum", 2.2),
         ("charm", 2.0),
         ("painsplit", 2.1),
-        ("Safeguard", 1.7),
+        ("safeguard", 1.7),
         ("healbell", 2.3),
         ("leechseed", 2.2),
         ("spikes", 2.5),
@@ -2473,7 +2489,7 @@ fn non_dominated_learnset_moves(dex: &Dex, mo: &MonObs) -> Vec<(MoveId, String, 
             2.6
         } else if m == "counter" || m == "mirrorcoat" || m == "seismictoss" || m == "superfang" {
             2.0
-        } else if m == "rapidspin" || m == "pursuit" || m == "thief" || m == "encore" {
+        } else if m == "rapidspin" || m == "pursuit" || m == "thief" {
             1.9
         } else if md.base_power > 0 {
             let stab = if sp_types.iter().any(|t| t == &md.move_type) {
@@ -3709,6 +3725,79 @@ mod fallback_tests {
                 mvs.contains(&"agility") && mvs.contains(&"attract") && mvs.contains(&"batonpass"),
                 "every Tier B completion for Agility+Attract Jolteon must retain Baton Pass: {mvs:?}"
             );
+        }
+    }
+
+    #[test]
+    fn unrevealed_bench_ignores_hp_observations_and_scrub_enforces_locked_move() {
+        use nc2000_engine::battle::{EffectHandle, SearchChoice};
+        use nc2000_engine::state::{Action, ActionKind};
+        let dex = test_dex();
+        let pool: MetaPool = serde_json::from_str(include_str!(
+            "../../../data/belief-pool-v3/belief-pool.json"
+        ))
+        .unwrap();
+        let p1 = pool.teams[0].sets.clone();
+        let mut p2 = pool.teams[0].sets.clone();
+        p2[0].moves = vec![
+            "Outrage".into(),
+            "Earthquake".into(),
+            "Rest".into(),
+            "Sleep Talk".into(),
+        ];
+        let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
+        battle
+            .apply_choices(&dex, [Some(SearchChoice::Team([1, 2, 3])), Some(SearchChoice::Team([1, 2, 3]))])
+            .unwrap();
+        let mut obs = Observer::new(&battle, 0);
+        obs.observe(&battle, &dex);
+        let mut belief = Belief::new(&dex, &pool, &obs);
+        belief.set_hp_observations(vec![
+            (100, 100),
+            (1, 100),
+            (100, 100),
+            (100, 100),
+            (100, 100),
+            (100, 100),
+        ]);
+        let det = belief.determinize(&dex, &battle, &obs, &mut SplitMix64::new(7));
+        assert_eq!(det.sides[1].roster[1].hp, det.sides[1].roster[1].maxhp);
+
+        let opp_act = battle.active_id(1).unwrap();
+        let outrage = dex.moves.id("outrage").unwrap();
+        let earthquake = dex.moves.id("earthquake").unwrap();
+        battle.add_volatile(
+            &dex,
+            opp_act,
+            "lockedmove",
+            Some(opp_act),
+            EffectHandle::MoveEff(outrage),
+        );
+        if let Some(lm) = battle.poke_mut(opp_act).volatile_mut(dex.conds_id("lockedmove").unwrap()) {
+            lm.duration = Some(2);
+        }
+        battle.queue.push(Action {
+            choice: ActionKind::Move {
+                move_id: earthquake,
+                target_loc: 1,
+                original_target: None,
+                source_effect: None,
+            },
+            order: 200,
+            priority: 0.0,
+            fractional_priority: 0.0,
+            speed: 1.0,
+            pokemon: Some(opp_act),
+        });
+        let det_locked = belief.determinize(&dex, &battle, &obs, &mut SplitMix64::new(9));
+        let queued = det_locked
+            .queue
+            .iter()
+            .find(|q| q.pokemon == Some(opp_act))
+            .expect("queued foe action");
+        match queued.choice {
+            ActionKind::Move { move_id, .. } => assert_eq!(move_id, outrage),
+            _ => panic!("expected move action"),
         }
     }
 }

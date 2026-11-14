@@ -472,31 +472,6 @@ struct SampledWorld {
     world_id: u64,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-enum OppActionKey {
-    Move(nc2000_engine::dex::MoveId),
-    SwitchSlot(u8),
-    Team([u8; 3]),
-    Pass,
-}
-
-struct IsmctsOppBucket {
-    raw_sig: u64,
-    kept_keys: nc2000_engine::smallvec::SmallVec<[OppActionKey; 6]>,
-    ranks: nc2000_engine::smallvec::SmallVec<[crate::smmcts::ActionRank; 6]>,
-    n: nc2000_engine::smallvec::SmallVec<[u32; 6]>,
-    w: nc2000_engine::smallvec::SmallVec<[f64; 6]>,
-}
-
-struct IsmctsNode {
-    my_acts: nc2000_engine::smallvec::SmallVec<[SearchChoice; 6]>,
-    my_ranks: nc2000_engine::smallvec::SmallVec<[crate::smmcts::ActionRank; 6]>,
-    my_n: nc2000_engine::smallvec::SmallVec<[u32; 6]>,
-    my_w: nc2000_engine::smallvec::SmallVec<[f64; 6]>,
-    opp_buckets: nc2000_engine::smallvec::SmallVec<[IsmctsOppBucket; 2]>,
-    hp_dist: [crate::smmcts::MonHpDist; 2],
-}
-
 /// Persistent, incrementally steppable blind search over ONE decision point
 /// — `BlindAgent`'s search loop in the form the wasm bridge's ponder loop
 /// needs, mirroring `SkuctSearch`: create it at the current (true) battle
@@ -525,8 +500,6 @@ pub struct BlindSearch {
     side: usize,
     /// The public own-side choice list — the information-set root.
     my_acts: Vec<SearchChoice>,
-    /// Public-only 3-rank soft-pruning tags aligned with `my_acts`.
-    my_ranks: Vec<crate::smmcts::ActionRank>,
     my_n: Vec<u32>,
     joint_probe_n: Vec<u32>,
     my_w: Vec<f64>,
@@ -539,12 +512,9 @@ pub struct BlindSearch {
     /// Final-choice exclusions: self-KO, sleep-forfeit risk, and proven no-ops.
     my_dominated: Vec<bool>,
     opponent_preview_prior: bool,
-    /// Per-determinization roots + fallback full-state interior nodes.
+    /// Per-determinization roots + full-state interior nodes.
     nodes: Vec<Node>,
     table: FxHashMap<u64, usize>,
-    /// Shared visible-state ISMCTS interior nodes aggregated across determinizations.
-    ismcts_nodes: Vec<IsmctsNode>,
-    ismcts_table: FxHashMap<u64, usize>,
     done: u32,
     depth_sum: u64,
     max_depth: u32,
@@ -610,7 +580,6 @@ impl BlindSearch {
             crate::accounting::LeafSettlementMode::BlindSpotLeaf
                 | crate::accounting::LeafSettlementMode::BlindSpotRollout
                 | crate::accounting::LeafSettlementMode::BlindSpotBoth
-                | crate::accounting::LeafSettlementMode::SolverQuiescence
         ) {
             cfg.settlement = crate::accounting::LeafSettlementMode::LegacyRollout;
         }
@@ -622,7 +591,6 @@ impl BlindSearch {
         }
         let turn_cap = base.turn.saturating_add(cfg.horizon);
         let my_acts = base.legal_choices(dex, side);
-        let my_ranks = crate::smmcts::classify_actions_public_root(&base, dex, side, &my_acts, &cfg);
         let my_dominated = my_acts
             .iter()
             .map(|&c| {
@@ -652,11 +620,8 @@ impl BlindSearch {
             my_dominated,
             opponent_preview_prior: false,
             my_acts,
-            my_ranks,
             nodes: Vec::new(),
             table: FxHashMap::default(),
-            ismcts_nodes: Vec::new(),
-            ismcts_table: FxHashMap::default(),
             done: 0,
             depth_sum: 0,
             max_depth: 0,
@@ -687,7 +652,7 @@ impl BlindSearch {
         let root = match self.table.get(&key) {
             Some(&i) => i,
             None => {
-                let node = Node::at_root(sim, dex, &self.cfg);
+                let node = Node::at(sim, dex);
                 debug_assert_eq!(
                     node.acts[self.side].as_slice(),
                     self.my_acts.as_slice(),
@@ -864,7 +829,7 @@ impl BlindSearch {
                     same_sets[1 - self.side] = self.scratch_world_id == world_id;
                     let mut sim = match self.scratch.take() {
                         Some(mut sim) => {
-                            sim.reset_search_sim(&cached.sim, same_sets, cache.picked_masks_opt());
+                            sim.reset_search_sim(&cached.sim, same_sets);
                             sim
                         }
                         None => Box::new(cached.sim.clone()),
@@ -981,11 +946,7 @@ impl BlindSearch {
         same_sets[1 - self.side] = self.scratch_world_id == world_id;
         let mut sim = match self.scratch.take() {
             Some(mut sim) => {
-                sim.reset_search_sim(
-                    &self.world_pool[w_idx].sim,
-                    same_sets,
-                    cache.picked_masks_opt(),
-                );
+                sim.reset_search_sim(&self.world_pool[w_idx].sim, same_sets);
                 sim
             }
             None => Box::new(self.world_pool[w_idx].sim.clone()),
@@ -1001,869 +962,6 @@ impl BlindSearch {
         }
         std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
         (sim, root, type_index, pick, cache)
-    }
-
-    /// Publicly visible state hash from `self.side`'s perspective for ISMCTS node aggregation:
-    /// - Hashes viewer's picked party mons (omitting unpicked 3/6 roster slots, safe state diet).
-    /// - Hashes opponent's PUBLIC projection only (`pokemon_left`, `side_conditions`, active
-    ///   species/level/types/status/boosts/public-volatiles/bar48-semantic-HP, and appeared bench
-    ///   mons in canonical roster order — never hidden unappeared bench picks, hidden moves,
-    ///   hidden items, hidden EVs, or exact HP).
-    /// - Uses `semantic_active_hp_sig_public` / `semantic_bench_hp_sig` when enabled so non-cliff
-    ///   damage rolls collapse into one shared node and `Rest` / full heals merge by Markovity.
-    fn visible_state_key(&self, dex: &Dex, sim: &Battle) -> u64 {
-        use std::hash::{Hash, Hasher};
-        use nc2000_engine::state::{ActionKind, Status, DK};
-        let mut h = nc2000_engine::fxhash::SearchHasher::default();
-        let dt = nc2000_engine::compact::dex_tables(dex);
-        let viewer = self.side;
-        let opp = 1 - viewer;
-        let omit_dmg = self.cfg.key_no_damage;
-
-        (
-            sim.turn,
-            sim.request_state,
-            sim.mid_turn,
-            sim.started,
-            sim.ended,
-            sim.sides[0].request_state(),
-            sim.sides[1].request_state(),
-            sim.field.weather,
-            sim.field.weather_state.duration.unwrap_or(0) as i8,
-        )
-            .hash(&mut h);
-
-        if sim.mid_turn {
-            let viewer_qc = sim
-                .active_id(viewer)
-                .and_then(|id| sim.poke(id).item)
-                .is_some_and(|it| Some(it) == dex.known_items.quickclaw);
-            if viewer_qc {
-                sim.quick_claw_roll.hash(&mut h);
-            }
-        }
-        if !sim.queue.is_empty() || !sim.faint_queue.is_empty() {
-            sim.queue.len().hash(&mut h);
-            sim.faint_queue.len().hash(&mut h);
-            for act in sim.queue.iter() {
-                act.order.hash(&mut h);
-                if act.pokemon.is_some_and(|id| id.side as usize == viewer) {
-                    act.choice.hash(&mut h);
-                } else {
-                    let kind_tag: u8 = match act.choice {
-                        ActionKind::Start => 1,
-                        ActionKind::BeforeTurn => 2,
-                        ActionKind::Residual => 3,
-                        ActionKind::Team { .. } => 4,
-                        ActionKind::Move { .. } => 5,
-                        ActionKind::BeforeTurnMove { .. } => 6,
-                        ActionKind::Switch { .. } => 7,
-                        ActionKind::RunSwitch => 8,
-                    };
-                    (kind_tag, act.pokemon.map(|id| id.side)).hash(&mut h);
-                }
-            }
-        }
-
-        let hash_side_conds = |sc: &[(nc2000_engine::dex::CondId, nc2000_engine::state::EffectState)],
-                               hasher: &mut nc2000_engine::fxhash::SearchHasher|
-         -> bool {
-            if sc.is_empty() {
-                0u32.hash(hasher);
-                return false;
-            }
-            let mut refl = 0u8;
-            let mut ls = 0u8;
-            let mut safe = 0u8;
-            let mut spk = 0u8;
-            let mut extra = 0u32;
-            for &(cid, ref est) in sc.iter() {
-                if Some(cid) == dt.refl_cond {
-                    refl = est.duration.unwrap_or(1).clamp(1, 15) as u8;
-                } else if Some(cid) == dt.ls_cond {
-                    ls = est.duration.unwrap_or(1).clamp(1, 15) as u8;
-                } else if Some(cid) == dt.safe_cond {
-                    safe = est.duration.unwrap_or(1).clamp(1, 15) as u8;
-                } else if Some(cid) == dt.spikes_cond {
-                    spk = est.get_int(DK::Layers).clamp(1, 3) as u8;
-                } else {
-                    extra ^= u32::from(cid.0).wrapping_mul(0x9e37_79b9);
-                }
-            }
-            let packed = u32::from(refl)
-                | (u32::from(ls) << 4)
-                | (u32::from(safe) << 8)
-                | (u32::from(spk) << 12)
-                | (extra << 16);
-            packed.hash(hasher);
-            spk > 0
-        };
-
-        let hash_volatiles = |vols: &[(nc2000_engine::dex::CondId, nc2000_engine::state::EffectState)],
-                              hasher: &mut nc2000_engine::fxhash::SearchHasher| {
-            if vols.is_empty() {
-                0u32.hash(hasher);
-                return;
-            }
-            let mut mask = 0u32;
-            let mut extra = 0u32;
-            for &(cid, ref est) in vols.iter() {
-                if Some(cid) == dt.sub_cond {
-                    if est.get_int(DK::Hp) > 0 {
-                        mask |= 1 << 0;
-                    }
-                } else if Some(cid) == dt.conf_cond {
-                    mask |= 1 << 1;
-                } else if Some(cid) == dt.seed_cond {
-                    mask |= 1 << 2;
-                } else if Some(cid) == dt.curse_cond {
-                    mask |= 1 << 3;
-                } else if Some(cid) == dt.night_cond {
-                    mask |= 1 << 4;
-                } else if Some(cid) == dt.dbond_cond {
-                    mask |= 1 << 5;
-                } else if Some(cid) == dt.fore_cond {
-                    mask |= 1 << 6;
-                } else if Some(cid) == dt.prot_cond || Some(cid) == dt.end_cond {
-                    mask |= 1 << 7;
-                } else if Some(cid) == dt.enc_cond {
-                    mask |= 1 << 8;
-                } else if Some(cid) == dt.dis_cond {
-                    mask |= 1 << 9;
-                } else if Some(cid) == dt.recharge_cond {
-                    mask |= 1 << 10;
-                } else if Some(cid) == dt.stall_cond {
-                    let cnt = (est.get_int(DK::Counter).clamp(0, 3) as u32) & 3;
-                    mask |= cnt << 12;
-                } else if Some(cid) == dt.perish_cond {
-                    let dur = (est.duration.unwrap_or(0).clamp(0, 4) as u32) & 7;
-                    mask |= (1 << 14) | (dur << 15);
-                } else {
-                    let lay = (est.get_int(DK::Layers).clamp(0, 7) as u32)
-                        ^ (est.get_int(DK::Counter).clamp(0, 7) as u32);
-                    extra ^= u32::from(cid.0)
-                        .wrapping_mul(0x85eb_ca6b)
-                        .wrapping_add(lay << 16);
-                }
-            }
-            (mask, extra).hash(hasher);
-        };
-
-        let status_extra = |p: &nc2000_engine::state::Pokemon, side_u8: u8, slot: u8| -> u8 {
-            match p.status {
-                Status::Tox => p.status_state.get_int(DK::Time).clamp(1, 15) as u8,
-                Status::Slp => {
-                    let is_rest = p.status_state.get_int(DK::StartTime) == 3
-                        && p.status_state.source
-                            == Some(nc2000_engine::state::PokeId {
-                                side: side_u8,
-                                slot,
-                            });
-                    if is_rest {
-                        100 + (p.status_state.get_int(DK::Time).clamp(0, 3) as u8)
-                    } else {
-                        1
-                    }
-                }
-                _ => 0,
-            }
-        };
-
-        // ---- 1. Viewer's own side (only picked party mons; unpicked 3/6 roster omitted)
-        let my_side = &sim.sides[viewer];
-        (
-            my_side.party.as_slice(),
-            my_side.active,
-            my_side.pokemon_left,
-            my_side.total_fainted,
-            my_side.fainted_this_turn.is_some(),
-            my_side.request,
-            &my_side.choice,
-        )
-            .hash(&mut h);
-        let my_spikes = hash_side_conds(&my_side.side_conditions, &mut h);
-        if !my_side.slot_conditions.is_empty() {
-            my_side.slot_conditions.len().hash(&mut h);
-            for &(cid, ref est) in my_side.slot_conditions.iter() {
-                (cid, est.duration.unwrap_or(0) as i8).hash(&mut h);
-            }
-        }
-
-        let mut viewer_has_enc_or_dis = false;
-        for &slot in my_side.party.iter() {
-            let p = &my_side.roster[slot as usize];
-            let is_act = my_side.active == Some(slot);
-            (slot, is_act, p.species, p.fainted, p.status).hash(&mut h);
-            if p.fainted || p.hp <= 0 {
-                continue;
-            }
-            let st_ex = status_extra(p, viewer as u8, slot);
-            if is_act {
-                if self.cfg.hp_buckets <= 0 {
-                    p.hp.hash(&mut h);
-                } else if self.cfg.semantic_hp_thresholds {
-                    crate::smmcts::semantic_active_hp_sig_public(sim, dex, viewer, viewer)
-                        .hash(&mut h);
-                } else {
-                    (((p.hp as i64) * self.cfg.hp_buckets) / (p.maxhp.max(1) as i64)).hash(&mut h);
-                }
-                (
-                    st_ex,
-                    p.boosts,
-                    p.item,
-                    p.types,
-                    p.transformed,
-                    p.trapped,
-                    p.maybe_trapped,
-                    p.switch_flag.is_set(),
-                    p.force_switch_flag,
-                )
-                    .hash(&mut h);
-                hash_volatiles(&p.volatiles, &mut h);
-                if !p.volatiles.is_empty() {
-                    (p.last_move_encore, p.last_move).hash(&mut h);
-                }
-                for ms in p.move_slots.iter() {
-                    let pp_band: u8 = if ms.pp == 0 {
-                        0
-                    } else if ms.pp == 1 {
-                        1
-                    } else {
-                        2
-                    };
-                    (ms.id, pp_band, ms.disabled).hash(&mut h);
-                    let sk = dt.move_specs[ms.id.0 as usize].special_kind;
-                    if sk == 8 || sk == 9 {
-                        viewer_has_enc_or_dis = true;
-                    }
-                }
-                if !omit_dmg {
-                    (p.hurt_this_turn.map(|v| v / 16), p.last_damage / 16).hash(&mut h);
-                    for a in p.attacked_by.iter() {
-                        (a.source.side, a.move_id, a.this_turn, a.damage / 16).hash(&mut h);
-                    }
-                }
-            } else {
-                if self.cfg.hp_buckets <= 0 {
-                    p.hp.hash(&mut h);
-                } else if self.cfg.semantic_hp_thresholds {
-                    let bar48 = crate::import::announce_hp(p.hp, p.maxhp, 48);
-                    crate::smmcts::semantic_bench_hp_sig(
-                        bar48,
-                        my_spikes,
-                        p.has_type(dex.known_types.flying),
-                    )
-                    .hash(&mut h);
-                } else {
-                    (((p.hp as i64) * self.cfg.hp_buckets) / (p.maxhp.max(1) as i64)).hash(&mut h);
-                }
-                (st_ex, p.item).hash(&mut h);
-                for ms in p.move_slots.iter() {
-                    (ms.id, ms.pp == 0).hash(&mut h);
-                }
-            }
-        }
-
-        // ---- 2. Opponent's side (strictly public projection; hidden bench & moves omitted)
-        let opp_side = &sim.sides[opp];
-        (
-            opp_side.active,
-            opp_side.pokemon_left,
-            opp_side.total_fainted,
-            opp_side.fainted_this_turn.is_some(),
-            opp_side.request_state(),
-        )
-            .hash(&mut h);
-        let opp_spikes = hash_side_conds(&opp_side.side_conditions, &mut h);
-        if !opp_side.slot_conditions.is_empty() {
-            opp_side.slot_conditions.len().hash(&mut h);
-            for &(cid, ref est) in opp_side.slot_conditions.iter() {
-                (cid, est.duration.unwrap_or(0) as i8).hash(&mut h);
-            }
-        }
-
-        if let Some(act_slot) = opp_side.active {
-            let op = &opp_side.roster[act_slot as usize];
-            (
-                op.species,
-                op.level,
-                op.types,
-                op.fainted,
-                op.transformed,
-                op.trapped,
-                op.boosts,
-                op.status,
-                op.switch_flag.is_set(),
-                op.force_switch_flag,
-                viewer_has_enc_or_dis && op.last_move.is_some(),
-            )
-                .hash(&mut h);
-            if !op.fainted && op.hp > 0 {
-                if self.cfg.hp_buckets <= 0 {
-                    crate::import::announce_hp(op.hp, op.maxhp, 48).hash(&mut h);
-                } else if self.cfg.semantic_hp_thresholds {
-                    crate::smmcts::semantic_active_hp_sig_public(sim, dex, viewer, opp)
-                        .hash(&mut h);
-                } else {
-                    let bar48 = crate::import::announce_hp(op.hp, op.maxhp, 48) as i64;
-                    ((bar48 * self.cfg.hp_buckets) / 48).hash(&mut h);
-                }
-                status_extra(op, opp as u8, act_slot).hash(&mut h);
-                hash_volatiles(&op.volatiles, &mut h);
-                if !op.volatiles.is_empty() {
-                    op.last_move_encore.or(op.last_move).hash(&mut h);
-                }
-                if !omit_dmg {
-                    op.hurt_this_turn.is_some().hash(&mut h);
-                }
-            }
-        }
-
-        // Canonical roster-order scan of opponent bench mons that have publicly appeared!
-        for slot in 0..opp_side.roster.len() {
-            if opp_side.active == Some(slot as u8) {
-                continue;
-            }
-            let p = &opp_side.roster[slot];
-            let appeared =
-                (p.previously_switched_in > 0 || p.fainted) && opp_side.party.contains(&(slot as u8));
-            if !appeared {
-                continue;
-            }
-            let hp_sig: u8 = if p.fainted || p.hp <= 0 {
-                0
-            } else {
-                let bar48 = crate::import::announce_hp(p.hp, p.maxhp, 48);
-                crate::smmcts::semantic_bench_hp_sig(
-                    bar48,
-                    opp_spikes,
-                    p.has_type(dex.known_types.flying),
-                )
-            };
-            (slot as u8, p.fainted, p.status, hp_sig).hash(&mut h);
-        }
-
-        h.finish()
-    }
-
-    #[inline]
-    fn opp_choice_to_key(opp_side: &nc2000_engine::state::Side, sc: SearchChoice) -> OppActionKey {
-        match sc {
-            SearchChoice::Move(mid) => OppActionKey::Move(mid),
-            SearchChoice::Switch(pos) => {
-                let slot = opp_side
-                    .party
-                    .get((pos as usize).saturating_sub(1))
-                    .copied()
-                    .unwrap_or(pos);
-                OppActionKey::SwitchSlot(slot)
-            }
-            SearchChoice::Team(t) => OppActionKey::Team(t),
-            SearchChoice::Pass => OppActionKey::Pass,
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn run_ismcts_from_root(
-        &mut self,
-        dex: &Dex,
-        sim: &mut Battle,
-        root: usize,
-        force: [Option<usize>; 2],
-        root_joint: &mut [usize; 2],
-        cache: &nc2000_engine::battle::BattleSearchCache,
-        mut leaf: Option<&mut dyn FnMut(&mut Battle, &mut SplitMix64, bool) -> f64>,
-        mut trace: Option<&mut dyn FnMut(crate::smmcts::SearchTrace<'_>)>,
-        mut root_child_value: Option<&mut dyn FnMut(&Battle) -> Option<f64>>,
-    ) -> f64 {
-        use nc2000_engine::smallvec::{smallvec, SmallVec};
-        let viewer = self.side;
-        let opp = 1 - viewer;
-
-        // ---- Step 0: Root selection on `self.nodes[root]`
-        let mut root_picks = [None, None];
-        let mut root_recorded = [None, None];
-        for s in 0..2 {
-            let k = self.nodes[root].acts[s].len();
-            if k == 0 {
-                continue;
-            }
-            let ai = if k == 1 {
-                0
-            } else {
-                let picked = match force[s] {
-                    Some(f) => {
-                        self.nodes[root].n[s][f] += 1;
-                        f
-                    }
-                    None => crate::smmcts::select_ucb(
-                        &self.cfg,
-                        &mut self.rng,
-                        &mut self.nodes[root],
-                        s,
-                    ),
-                };
-                root_recorded[s] = Some(picked);
-                picked
-            };
-            root_picks[s] = Some(self.nodes[root].acts[s][ai]);
-            root_joint[s] = ai;
-        }
-        if let Some(tr) = trace.as_deref_mut() {
-            let node = &self.nodes[root];
-            let t_acts = [node.acts[0].to_vec(), node.acts[1].to_vec()];
-            let t_n = [node.n[0].to_vec(), node.n[1].to_vec()];
-            let t_w = [node.w[0].to_vec(), node.w[1].to_vec()];
-            tr(crate::smmcts::SearchTrace::Choice {
-                battle: sim,
-                node: root,
-                actions: &t_acts,
-                visits: &t_n,
-                rewards: &t_w,
-                chosen: root_picks,
-            });
-        }
-
-        let eval_leaf_step = |cfg: &RmConfig,
-                              turn_cap: u16,
-                              sim: &mut Battle,
-                              rng: &mut SplitMix64,
-                              rollout: bool,
-                              hp_dist: Option<&[crate::smmcts::MonHpDist; 2]>,
-                              leaf_cb: &mut Option<&mut dyn FnMut(&mut Battle, &mut SplitMix64, bool) -> f64>|
-         -> f64 {
-            if let Some(cb) = leaf_cb.as_deref_mut() {
-                cb(sim, rng, rollout)
-            } else if !rollout {
-                if let Some(dist) = hp_dist {
-                    crate::smmcts::leaf_eval_dist_cached(cfg, sim, dex, dist, Some(cache))
-                } else {
-                    crate::smmcts::leaf_eval_cached(cfg, sim, dex, Some(cache))
-                }
-            } else {
-                crate::smmcts::default_leaf_cached(cfg, sim, dex, turn_cap, rng, true, Some(cache))
-            }
-        };
-
-        // Path entries at interior ISMCTS nodes: `(vis_idx, my_ai_opt, opp_bucket_and_ai_opt)`
-        let mut path_buf = [(0usize, usize::MAX, usize::MAX, usize::MAX); 32];
-        let mut path_len = 0usize;
-        let mut path_overflow: Vec<(usize, usize, usize, usize)> = Vec::new();
-        let mut depth = 0u32;
-
-        let reward0 = if root_picks == [None, None] {
-            if let Some(tr) = trace.as_deref_mut() {
-                tr(crate::smmcts::SearchTrace::Leaf {
-                    battle: sim,
-                    rng: &self.rng,
-                    rollout: false,
-                });
-            }
-            crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(sim, sim.outcome()));
-            eval_leaf_step(&self.cfg, self.turn_cap, sim, &mut self.rng, false, None, &mut leaf)
-        } else {
-            sim.apply_choices(dex, root_picks)
-                .expect("cached root legal choice rejected");
-            if let Some(o) = sim.outcome() {
-                crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(sim, Some(o)));
-                match o {
-                    nc2000_engine::battle::Outcome::P1Win => 1.0,
-                    nc2000_engine::battle::Outcome::P2Win => 0.0,
-                    nc2000_engine::battle::Outcome::Tie => 0.5,
-                }
-            } else if let Some(value) = root_child_value
-                .as_deref_mut()
-                .and_then(|evaluate| evaluate(sim))
-            {
-                assert!((0. ..=1.).contains(&value));
-                crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(
-                    sim,
-                    sim.outcome(),
-                ));
-                value
-            } else if sim.turn > self.turn_cap {
-                if let Some(tr) = trace.as_deref_mut() {
-                    tr(crate::smmcts::SearchTrace::Leaf {
-                        battle: sim,
-                        rng: &self.rng,
-                        rollout: false,
-                    });
-                }
-                crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(
-                    sim,
-                    sim.outcome(),
-                ));
-                eval_leaf_step(&self.cfg, self.turn_cap, sim, &mut self.rng, false, None, &mut leaf)
-            } else {
-                // ---- Step 1+: Descent through shared visible-state ISMCTS nodes!
-                let mut raw_my: SmallVec<[SearchChoice; 6]> = SmallVec::new();
-                let mut raw_opp: SmallVec<[SearchChoice; 6]> = SmallVec::new();
-                let mut raw_opp_mapped: SmallVec<[(OppActionKey, SearchChoice); 6]> =
-                    SmallVec::new();
-                loop {
-                    let vis_key = self.visible_state_key(dex, sim);
-                    let vis_idx = match self.ismcts_table.get(&vis_key).copied() {
-                        Some(idx) => {
-                            crate::smmcts::observe_battle_hp_dist(
-                                sim,
-                                &mut self.ismcts_nodes[idx].hp_dist,
-                            );
-                            depth += 1;
-                            idx
-                        }
-                        None => {
-                            raw_my.clear();
-                            sim.legal_choices_into(dex, viewer, &mut raw_my);
-                            if self.cfg.collapse_sleep_actions {
-                                crate::smmcts::collapse_sleep_choices_smallvec(
-                                    sim,
-                                    dex,
-                                    viewer,
-                                    &mut raw_my,
-                                );
-                            }
-                            let my_ranks = crate::smmcts::classify_actions_sim(
-                                sim,
-                                dex,
-                                viewer,
-                                &mut raw_my,
-                                &self.cfg,
-                            );
-                            let mut hp_dist = [crate::smmcts::MonHpDist::default(); 2];
-                            crate::smmcts::observe_battle_hp_dist(sim, &mut hp_dist);
-                            let k_my = raw_my.len();
-                            let idx = self.ismcts_nodes.len();
-                            self.ismcts_nodes.push(IsmctsNode {
-                                my_acts: raw_my.clone(),
-                                my_ranks,
-                                my_n: smallvec![0; k_my],
-                                my_w: smallvec![0.0; k_my],
-                                opp_buckets: SmallVec::new(),
-                                hp_dist,
-                            });
-                            self.ismcts_table.insert(vis_key, idx);
-                            depth += 1;
-                            if let Some(tr) = trace.as_deref_mut() {
-                                tr(crate::smmcts::SearchTrace::Leaf {
-                                    battle: sim,
-                                    rng: &self.rng,
-                                    rollout: true,
-                                });
-                            }
-                            crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(
-                                sim,
-                                sim.outcome(),
-                            ));
-                            break eval_leaf_step(
-                                &self.cfg,
-                                self.turn_cap,
-                                sim,
-                                &mut self.rng,
-                                true,
-                                None,
-                                &mut leaf,
-                            );
-                        }
-                    };
-
-                    // Select viewer action & canonical opponent action on `ismcts_nodes[vis_idx]`
-                    let mut step_joint = [None, None];
-                    let mut my_rec = usize::MAX;
-                    let mut opp_b_rec = usize::MAX;
-                    let mut opp_ai_rec = usize::MAX;
-
-                    let k_my = self.ismcts_nodes[vis_idx].my_acts.len();
-                    if k_my == 1 {
-                        step_joint[viewer] = Some(self.ismcts_nodes[vis_idx].my_acts[0]);
-                    } else if k_my > 1 {
-                        let node = &mut self.ismcts_nodes[vis_idx];
-                        let ai = crate::smmcts::select_ucb_ranked(
-                            &self.cfg,
-                            &mut self.rng,
-                            &mut node.my_n,
-                            &node.my_w,
-                            &node.my_ranks,
-                        );
-                        my_rec = ai;
-                        step_joint[viewer] = Some(node.my_acts[ai]);
-                    }
-
-                    raw_opp.clear();
-                    sim.legal_choices_into(dex, opp, &mut raw_opp);
-                    if self.cfg.collapse_sleep_actions {
-                        crate::smmcts::collapse_sleep_choices_smallvec(sim, dex, opp, &mut raw_opp);
-                    }
-                    raw_opp_mapped.clear();
-                    let mut trace_b_idx = usize::MAX;
-                    if raw_opp.len() == 1 {
-                        step_joint[opp] = Some(raw_opp[0]);
-                    } else if raw_opp.len() > 1 {
-                        use std::hash::{Hash, Hasher};
-                        let opp_side = &sim.sides[opp];
-                        for &sc in raw_opp.iter() {
-                            raw_opp_mapped.push((Self::opp_choice_to_key(opp_side, sc), sc));
-                        }
-                        raw_opp_mapped.sort_unstable_by_key(|&(k, _)| k);
-                        let mut h = nc2000_engine::fxhash::FxHasher::default();
-                        opp_side.active.hash(&mut h);
-                        for &(k, _) in raw_opp_mapped.iter() {
-                            k.hash(&mut h);
-                        }
-                        let raw_sig = h.finish();
-
-                        let existing_bi = self.ismcts_nodes[vis_idx]
-                            .opp_buckets
-                            .iter()
-                            .position(|b| b.raw_sig == raw_sig);
-                        let b_idx = match existing_bi {
-                            Some(bi) => bi,
-                            None => {
-                                let mut pruned_opp = raw_opp.clone();
-                                let opp_ranks = crate::smmcts::classify_actions_sim(
-                                    sim,
-                                    dex,
-                                    opp,
-                                    &mut pruned_opp,
-                                    &self.cfg,
-                                );
-                                let opp_side_now = &sim.sides[opp];
-                                let mut kept: SmallVec<
-                                    [(OppActionKey, crate::smmcts::ActionRank); 6],
-                                > = SmallVec::new();
-                                for (sc, rk) in pruned_opp.into_iter().zip(opp_ranks.into_iter()) {
-                                    kept.push((Self::opp_choice_to_key(opp_side_now, sc), rk));
-                                }
-                                kept.sort_unstable_by_key(|&(k, _)| k);
-                                let k_kept = kept.len();
-                                let kept_keys = kept.iter().map(|&(k, _)| k).collect();
-                                let ranks = kept.into_iter().map(|(_, rk)| rk).collect();
-                                let node = &mut self.ismcts_nodes[vis_idx];
-                                let bi = node.opp_buckets.len();
-                                node.opp_buckets.push(IsmctsOppBucket {
-                                    raw_sig,
-                                    kept_keys,
-                                    ranks,
-                                    n: smallvec![0; k_kept],
-                                    w: smallvec![0.0; k_kept],
-                                });
-                                bi
-                            }
-                        };
-                        trace_b_idx = b_idx;
-                        let bucket = &mut self.ismcts_nodes[vis_idx].opp_buckets[b_idx];
-                        let k_kept = bucket.kept_keys.len();
-                        if k_kept == 1 {
-                            let tk = bucket.kept_keys[0];
-                            let sc = raw_opp_mapped
-                                .iter()
-                                .find(|&&(k, _)| k == tk)
-                                .map_or(raw_opp_mapped[0].1, |&(_, sc)| sc);
-                            step_joint[opp] = Some(sc);
-                        } else if k_kept > 1 {
-                            let oi = crate::smmcts::select_ucb_ranked(
-                                &self.cfg,
-                                &mut self.rng,
-                                &mut bucket.n,
-                                &bucket.w,
-                                &bucket.ranks,
-                            );
-                            let tk = bucket.kept_keys[oi];
-                            let sc = raw_opp_mapped
-                                .iter()
-                                .find(|&&(k, _)| k == tk)
-                                .map_or(raw_opp_mapped[0].1, |&(_, sc)| sc);
-                            opp_b_rec = b_idx;
-                            opp_ai_rec = oi;
-                            step_joint[opp] = Some(sc);
-                        }
-                    }
-
-                    if let Some(tr) = trace.as_deref_mut() {
-                        let node = &self.ismcts_nodes[vis_idx];
-                        let (opp_acts_vec, opp_n_vec, opp_w_vec) = if trace_b_idx != usize::MAX {
-                            let b = &node.opp_buckets[trace_b_idx];
-                            let acts: Vec<SearchChoice> = b
-                                .kept_keys
-                                .iter()
-                                .map(|&tk| {
-                                    raw_opp_mapped
-                                        .iter()
-                                        .find(|&&(k, _)| k == tk)
-                                        .map_or(raw_opp_mapped[0].1, |&(_, sc)| sc)
-                                })
-                                .collect();
-                            (acts, b.n.to_vec(), b.w.to_vec())
-                        } else {
-                            let ko = raw_opp.len();
-                            (raw_opp.to_vec(), vec![0; ko], vec![0.0; ko])
-                        };
-                        let (t_acts, t_n, t_w) = if viewer == 0 {
-                            (
-                                [node.my_acts.to_vec(), opp_acts_vec],
-                                [node.my_n.to_vec(), opp_n_vec],
-                                [node.my_w.to_vec(), opp_w_vec],
-                            )
-                        } else {
-                            (
-                                [opp_acts_vec, node.my_acts.to_vec()],
-                                [opp_n_vec, node.my_n.to_vec()],
-                                [opp_w_vec, node.my_w.to_vec()],
-                            )
-                        };
-                        tr(crate::smmcts::SearchTrace::Choice {
-                            battle: sim,
-                            node: self.nodes.len() + vis_idx,
-                            actions: &t_acts,
-                            visits: &t_n,
-                            rewards: &t_w,
-                            chosen: step_joint,
-                        });
-                    }
-
-                    if step_joint == [None, None] {
-                        if let Some(tr) = trace.as_deref_mut() {
-                            tr(crate::smmcts::SearchTrace::Leaf {
-                                battle: sim,
-                                rng: &self.rng,
-                                rollout: false,
-                            });
-                        }
-                        crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(
-                            sim,
-                            sim.outcome(),
-                        ));
-                        let dist = self.ismcts_nodes[vis_idx].hp_dist;
-                        break eval_leaf_step(
-                            &self.cfg,
-                            self.turn_cap,
-                            sim,
-                            &mut self.rng,
-                            false,
-                            Some(&dist),
-                            &mut leaf,
-                        );
-                    }
-
-                    if sim.apply_choices(dex, step_joint).is_err() {
-                        if my_rec != usize::MAX {
-                            self.ismcts_nodes[vis_idx].my_n[my_rec] =
-                                self.ismcts_nodes[vis_idx].my_n[my_rec].saturating_sub(1);
-                        }
-                        if opp_ai_rec != usize::MAX {
-                            self.ismcts_nodes[vis_idx].opp_buckets[opp_b_rec].n[opp_ai_rec] = self
-                                .ismcts_nodes[vis_idx]
-                                .opp_buckets[opp_b_rec]
-                                .n[opp_ai_rec]
-                                .saturating_sub(1);
-                        }
-                        crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(
-                            sim,
-                            sim.outcome(),
-                        ));
-                        let dist = self.ismcts_nodes[vis_idx].hp_dist;
-                        break eval_leaf_step(
-                            &self.cfg,
-                            self.turn_cap,
-                            sim,
-                            &mut self.rng,
-                            false,
-                            Some(&dist),
-                            &mut leaf,
-                        );
-                    }
-
-                    if my_rec != usize::MAX || opp_ai_rec != usize::MAX {
-                        let entry = (vis_idx, my_rec, opp_b_rec, opp_ai_rec);
-                        if path_len < path_buf.len() {
-                            path_buf[path_len] = entry;
-                            path_len += 1;
-                        } else {
-                            path_overflow.push(entry);
-                        }
-                    }
-                    if let Some(o) = sim.outcome() {
-                        crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(
-                            sim,
-                            Some(o),
-                        ));
-                        break match o {
-                            nc2000_engine::battle::Outcome::P1Win => 1.0,
-                            nc2000_engine::battle::Outcome::P2Win => 0.0,
-                            nc2000_engine::battle::Outcome::Tie => 0.5,
-                        };
-                    }
-                    if sim.turn > self.turn_cap {
-                        if let Some(tr) = trace.as_deref_mut() {
-                            tr(crate::smmcts::SearchTrace::Leaf {
-                                battle: sim,
-                                rng: &self.rng,
-                                rollout: false,
-                            });
-                        }
-                        crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(
-                            sim,
-                            sim.outcome(),
-                        ));
-                        let dist = self.ismcts_nodes[vis_idx].hp_dist;
-                        break eval_leaf_step(
-                            &self.cfg,
-                            self.turn_cap,
-                            sim,
-                            &mut self.rng,
-                            false,
-                            Some(&dist),
-                            &mut leaf,
-                        );
-                    }
-                }
-            }
-        };
-
-        self.depth_sum += u64::from(depth);
-        if depth > self.max_depth {
-            self.max_depth = depth;
-        }
-
-        let cur_val_my = if viewer == 0 { reward0 } else { 1.0 - reward0 };
-        for (vis_idx, my_ai, opp_bi, opp_ai) in path_overflow.into_iter().rev() {
-            let node = &mut self.ismcts_nodes[vis_idx];
-            if my_ai != usize::MAX {
-                node.my_w[my_ai] += cur_val_my;
-            }
-            if opp_ai != usize::MAX && opp_bi < node.opp_buckets.len() {
-                node.opp_buckets[opp_bi].w[opp_ai] += 1.0 - cur_val_my;
-            }
-        }
-        for &(vis_idx, my_ai, opp_bi, opp_ai) in path_buf[..path_len].iter().rev() {
-            let node = &mut self.ismcts_nodes[vis_idx];
-            if my_ai != usize::MAX {
-                node.my_w[my_ai] += cur_val_my;
-            }
-            if opp_ai != usize::MAX && opp_bi < node.opp_buckets.len() {
-                node.opp_buckets[opp_bi].w[opp_ai] += 1.0 - cur_val_my;
-            }
-        }
-        let root_reward0 = if viewer == 0 {
-            cur_val_my
-        } else {
-            1.0 - cur_val_my
-        };
-        for s in 0..2 {
-            if let Some(ai) = root_recorded[s] {
-                self.nodes[root].w[s][ai] += if s == 0 {
-                    root_reward0
-                } else {
-                    1.0 - root_reward0
-                };
-            }
-        }
-        if let Some(tr) = trace {
-            tr(crate::smmcts::SearchTrace::Result {
-                battle: sim,
-                reward0: root_reward0,
-            });
-        }
-        root_reward0
     }
 
     fn step_one_impl(
@@ -1885,19 +983,8 @@ impl BlindSearch {
             if !self.is_preview() && self.cfg.root_revisit_interval == 0 && self.done >= 512 {
                 let allowed = |i: usize| self.my_mask.as_ref().map_or(true, |mask| mask[i]);
                 let safe = (0..self.my_acts.len()).any(|i| allowed(i) && !self.my_dominated[i]);
-                let has_unmarked = self.cfg.three_rank_pruning
-                    && (0..self.my_acts.len()).any(|i| {
-                        allowed(i)
-                            && (!safe || !self.my_dominated[i])
-                            && self.my_ranks[i] == crate::smmcts::ActionRank::Unmarked
-                    });
                 let elig: nc2000_engine::smallvec::SmallVec<[usize; 8]> = (0..self.my_acts.len())
-                    .filter(|&i| {
-                        allowed(i)
-                            && (!safe || !self.my_dominated[i])
-                            && (!has_unmarked
-                                || self.my_ranks[i] == crate::smmcts::ActionRank::Unmarked)
-                    })
+                    .filter(|&i| allowed(i) && (!safe || !self.my_dominated[i]))
                     .collect();
                 let n_elig = (elig.len().max(1)) as u32;
                 let stats = &self.root_types[type_index];
@@ -1917,27 +1004,31 @@ impl BlindSearch {
             } else {
                 None
             };
-        let my_pick = if self.cfg.root_revisit_interval > 0
+        let revisit_action = if self.cfg.root_revisit_interval > 0
             && !self.is_preview()
             && self.done > 0
             && self.done % self.cfg.root_revisit_interval == 0
         {
-            let action = (0..self.my_acts.len())
-                .filter(|&i| self.my_mask.as_ref().map_or(true, |mask| mask[i]))
+            let allowed = |i: usize| self.my_mask.as_ref().map_or(true, |mask| mask[i]);
+            let has_safe = (0..self.my_acts.len()).any(|i| allowed(i) && !self.my_dominated[i]);
+            (0..self.my_acts.len())
+                .filter(|&i| allowed(i) && (!has_safe || !self.my_dominated[i]))
                 .min_by_key(|&i| self.my_n[i])
-                .unwrap();
+        } else {
+            None
+        };
+        let my_pick = if let Some(action) = revisit_action {
             self.my_n[action] += 1;
             action
         } else if let Some(action) = min_floor_pick {
             self.my_n[action] += 1;
             action
         } else {
-            select_global_with_prior_ranked(
+            select_global_with_prior(
                 &self.cfg,
                 &mut self.rng,
                 &mut self.my_n,
                 &self.my_w,
-                &self.my_ranks,
                 self.my_mask.as_deref(),
                 self.bayesian_row_q.as_deref(),
             )
@@ -1954,19 +1045,7 @@ impl BlindSearch {
         }
         let mut joint = [0usize; 2];
         let mut iter_depth = 0u32;
-        let r = if self.cfg.ismcts_visible_tree && !self.is_preview() {
-            self.run_ismcts_from_root(
-                dex,
-                &mut sim,
-                root,
-                force,
-                &mut joint,
-                &cache,
-                leaf,
-                trace,
-                None,
-            )
-        } else if let Some(leaf) = leaf {
+        let r = if let Some(leaf) = leaf {
             let v = crate::smmcts::run_iteration_with_leaf_cached(
                 &self.cfg,
                 &mut self.rng,
@@ -2213,14 +1292,12 @@ impl BlindSearch {
                         (own, Some(reply), true)
                     }
                     None => (
-                        select_global_with_prior_ranked(
+                        select_global(
                             &self.cfg,
                             &mut self.rng,
                             &mut self.my_n,
                             &self.my_w,
-                            &self.my_ranks,
                             self.my_mask.as_deref(),
-                            self.bayesian_row_q.as_deref(),
                         ),
                         None,
                         false,
@@ -2243,19 +1320,7 @@ impl BlindSearch {
         }
         let mut joint = [0usize; 2];
         let mut iter_depth = 0u32;
-        let r = if self.cfg.ismcts_visible_tree && !self.is_preview() {
-            self.run_ismcts_from_root(
-                dex,
-                &mut sim,
-                root,
-                force,
-                &mut joint,
-                &cache,
-                None,
-                trace,
-                root_child_value,
-            )
-        } else if let Some(evaluate) = root_child_value {
+        let r = if let Some(evaluate) = root_child_value {
             let v = crate::smmcts::run_iteration_with_root_child_value_cached(
                 &self.cfg,
                 &mut self.rng,
@@ -2611,13 +1676,9 @@ impl BlindSearch {
         self.done
     }
 
-    /// Distinct states in the determinized / visible ISMCTS tree (see `SkuctSearch::node_count`).
+    /// Distinct states in the determinized tree (see `SkuctSearch::node_count`).
     pub fn node_count(&self) -> usize {
-        if self.cfg.ismcts_visible_tree && !self.is_preview() {
-            self.nodes.len() + self.ismcts_nodes.len()
-        } else {
-            self.nodes.len()
-        }
+        self.nodes.len()
     }
 
     pub fn mean_depth(&self) -> f64 {
@@ -3336,105 +2397,6 @@ fn select_global_with_prior(
     pick
 }
 
-fn select_global_with_prior_ranked(
-    cfg: &RmConfig,
-    rng: &mut SplitMix64,
-    n: &mut [u32],
-    w: &[f64],
-    ranks: &[crate::smmcts::ActionRank],
-    mask: Option<&[bool]>,
-    bayesian_q: Option<&[f64]>,
-) -> usize {
-    use crate::smmcts::ActionRank;
-    if !cfg.three_rank_pruning || ranks.len() != n.len() {
-        return select_global_with_prior(cfg, rng, n, w, mask, bayesian_q);
-    }
-    let k = n.len();
-    let ok = |a: usize| mask.map_or(true, |m| m[a]);
-    let has_unmarked = (0..k).any(|a| ok(a) && ranks[a] == ActionRank::Unmarked);
-    if !has_unmarked {
-        return select_global_with_prior(cfg, rng, n, w, mask, bayesian_q);
-    }
-
-    let mut n_untried_unmarked = 0usize;
-    for a in 0..k {
-        if n[a] == 0 && ok(a) && ranks[a] == ActionRank::Unmarked {
-            n_untried_unmarked += 1;
-        }
-    }
-    if n_untried_unmarked > 0 {
-        let mut target = rng.below(n_untried_unmarked);
-        let mut chosen = 0;
-        for a in 0..k {
-            if n[a] == 0 && ok(a) && ranks[a] == ActionRank::Unmarked {
-                if target == 0 {
-                    chosen = a;
-                    break;
-                }
-                target -= 1;
-            }
-        }
-        n[chosen] += 1;
-        return chosen;
-    }
-
-    let total: u32 = n.iter().sum();
-    let marked_unlocked = total >= cfg.marked_unlock_visits;
-    let ln_total = (total.max(1) as f64).ln();
-
-    let mut unmarked_n = 0u64;
-    let mut unmarked_w = 0.0f64;
-    for a in 0..k {
-        if ok(a) && ranks[a] == ActionRank::Unmarked {
-            unmarked_n += u64::from(n[a]);
-            unmarked_w += w[a];
-        }
-    }
-    let unmarked_mean = if unmarked_n > 0 {
-        unmarked_w / unmarked_n as f64
-    } else {
-        0.5
-    };
-    const MARKED_PRIOR_N: f64 = 3.0;
-    let marked_prior_q = (unmarked_mean - 0.08).clamp(0.02, 0.92);
-
-    let mut best = (0..k)
-        .find(|&a| ok(a) && ranks[a] == ActionRank::Unmarked)
-        .unwrap_or(0);
-    let mut best_v = f64::NEG_INFINITY;
-    for a in (0..k).filter(|&a| ok(a)) {
-        let is_marked = ranks[a] != ActionRank::Unmarked;
-        if is_marked && !marked_unlocked {
-            continue;
-        }
-        let v = if !is_marked {
-            let (na, wa) = (n[a] as f64, w[a]);
-            let raw_mean = wa / na;
-            let mean_a = match bayesian_q.and_then(|q| q.get(a).copied()) {
-                Some(qa) => qa,
-                None => raw_mean,
-            };
-            mean_a + cfg.c * (ln_total / na).sqrt()
-        } else {
-            let na = n[a] as f64;
-            let eff_n = na + MARKED_PRIOR_N;
-            let eff_mean = match bayesian_q.and_then(|q| q.get(a).copied()) {
-                Some(qa) if n[a] > 0 => {
-                    (na * qa + MARKED_PRIOR_N * marked_prior_q) / eff_n
-                }
-                _ => (w[a] + MARKED_PRIOR_N * marked_prior_q) / eff_n,
-            };
-            eff_mean + cfg.c * (ln_total / eff_n).sqrt()
-        };
-        if v > best_v {
-            best_v = v;
-            best = a;
-        }
-    }
-    n[best] += 1;
-    best
-}
-
 // ------------------------------------------------- open-sheet agent (M14)
 
 /// M14 `open` agent: the M12 open-team-sheet product policy in arena form —
@@ -4086,7 +3048,6 @@ mod mixed_selection_tests {
         assert_eq!(format!("{rng:?}"), format!("{:?}", battle.prng));
         let cfg = RmConfig {
             hp_buckets: 4,
-            threshold_key: false,
             ..Default::default()
         };
         let opponent = battle.active_id(1).unwrap();

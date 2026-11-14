@@ -126,9 +126,23 @@ fn damage_row(
         fake.category = if special { Category::Special } else { Category::Physical };
     }
     let max = get_damage_synthetic(b, dex, att, def, fake.clone()).unwrap_or(0.0) as i32;
-    let min = ((max as f64) * MIN_ROLL_NUM / MIN_ROLL_DEN).floor() as i32;
+    let fixed = ms.damage.is_some()
+        || ms.ohko
+        || ms.no_damage_variance
+        || matches!(dex.moves.key(mid), "superfang" | "counter" | "mirrorcoat" | "bide");
+    let min = if fixed {
+        max
+    } else if max >= 1 {
+        (((max as f64) * MIN_ROLL_NUM / MIN_ROLL_DEN).floor() as i32).max(1)
+    } else {
+        0
+    };
     fake.will_crit = Some(true);
-    let crit = get_damage_synthetic(b, dex, att, def, fake).unwrap_or(0.0) as i32;
+    let crit = if fixed {
+        max
+    } else {
+        get_damage_synthetic(b, dex, att, def, fake).unwrap_or(0.0) as i32
+    };
     let d = b.poke(def);
     let (hp, maxhp) = (d.hp, d.maxhp);
     let ko = if max <= 0 {
@@ -493,4 +507,50 @@ fn line_json(agent: &ProtocolAgent, dex: &Dex, seed: u64, plies: usize) -> Value
             }))
             .collect::<Vec<Value>>(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::damage_row;
+    use nc2000_engine::battle::PokemonSet;
+    use nc2000_engine::state::Battle;
+
+    #[test]
+    fn damage_row_preserves_fixed_damage_and_floors_chip_to_one() {
+        let dex = conformance::load_dex();
+        let p1: Vec<PokemonSet> = serde_json::from_value(serde_json::json!([
+            {
+                "name": "Chansey", "species": "Chansey", "item": "", "level": 10,
+                "moves": ["Seismic Toss", "Ember"], "ability": "No Ability", "nature": "Hardy",
+                "evs": {"hp": 0, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 0},
+                "ivs": {"hp": 0, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 0}
+            }
+        ]))
+        .unwrap();
+        let p2: Vec<PokemonSet> = serde_json::from_value(serde_json::json!([
+            {
+                "name": "Omastar", "species": "Omastar", "item": "", "level": 55,
+                "moves": ["Tackle"], "ability": "No Ability", "nature": "Hardy",
+                "evs": {"hp": 255, "atk": 255, "def": 255, "spa": 255, "spd": 255, "spe": 255},
+                "ivs": {"hp": 30, "atk": 30, "def": 30, "spa": 30, "spd": 30, "spe": 30}
+            }
+        ]))
+        .unwrap();
+        let mut b = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
+        b.choose(&dex, 0, "team 1").unwrap();
+        b.choose(&dex, 1, "team 1").unwrap();
+        let att = b.active_id(0).unwrap();
+        let def = b.active_id(1).unwrap();
+
+        let toss_id = dex.moves.id("seismictoss").unwrap();
+        let toss = damage_row(&mut b, &dex, att, def, toss_id, true);
+        assert_eq!(toss["min"], 10);
+        assert_eq!(toss["max"], 10);
+        assert_eq!(toss["crit"], 10);
+
+        let chip_id = dex.moves.id("ember").unwrap();
+        let chip = damage_row(&mut b, &dex, att, def, chip_id, true);
+        assert_eq!(chip["max"], 1);
+        assert_eq!(chip["min"], 1);
+    }
 }

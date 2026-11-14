@@ -22,16 +22,6 @@ export function liveBudget(strength: Strength, preview = false): number {
   return Number.isSafeInteger(testBudget) && testBudget > 0
     ? testBudget : preview ? live.unknownPreview : live.battle[strength];
 }
-export function loadStrength(): Strength {
-  try {
-    const saved = localStorage.getItem("nc2000-strength");
-    return isStrength(saved) ? saved : DEFAULT_STRENGTH;
-  }
-  catch { return DEFAULT_STRENGTH; }
-}
-export function storeStrength(value: Strength): void {
-  try { localStorage.setItem("nc2000-strength", value); } catch { /* Private browsing. */ }
-}
 
 /** Live play is "blind"; "open" is the retired profile, only for replaying
  * records made under it. */

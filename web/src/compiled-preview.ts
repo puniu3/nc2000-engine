@@ -48,7 +48,9 @@ async function computeCompatibility(poolJson: string, dexJson: string): Promise<
 }
 
 export async function compiledPreviewMatches(poolJson: string, dexJson: string): Promise<boolean> {
-  return (await compiledPreviewCompatibility(poolJson, dexJson)).size === Object.keys(artifact.policies).length;
+  const total = Object.keys(artifact.policies).length;
+  if (total === 0) return false;
+  return (await compiledPreviewCompatibility(poolJson, dexJson)).size === total;
 }
 
 /** Both the key and build identity come from the engine. The key contains

@@ -5,8 +5,7 @@
 //! per-call volume is tiny next to search work. Four classes, exported under
 //! clean JS names:
 //!
-//! - `Dex` — the loaded game data. Embedded copy (`new Dex()`) or
-//!   caller-supplied JSON (`Dex.fromJson(text)`).
+//! - `Dex` — the loaded game data (`new Dex()`, embedded at compile time).
 //! - `Battle` — one battle, protocol log ON by default (the GUI narrates
 //!   from `takeNewLog`). Choices go in as PS-canonical strings (the same
 //!   strings `legalChoices` returns), exactly the fixture/inputLog format.
@@ -54,8 +53,7 @@ use nc2000_engine::validate::{canonicalize_team, validate_team, Learnsets};
 use nc2000_engine::replay::{Recorder, Replay};
 
 /// data/gen2stadium2.json baked into the binary (~416 KB, ~150 KB gzipped
-/// over the wire) — one fetch fewer and no path plumbing for the common
-/// case; `Dex.fromJson` exists for callers that want to ship it separately.
+/// over the wire) — one fetch fewer and no path plumbing.
 const EMBEDDED_DEX: &str = include_str!("../../../data/gen2stadium2.json");
 
 /// Exact data embedded in this binary, for compiled-policy compatibility.
@@ -67,7 +65,7 @@ pub fn embedded_dex_json() -> String {
 
 /// data/learnsets-gen2.json baked in too (~124 KB raw, ~13 KB gzipped —
 /// well under the dex's embed precedent, and the validator is useless
-/// without it); `Validator.fromJson` exists for callers shipping their own.
+/// without it).
 const EMBEDDED_LEARNSETS: &str = include_str!("../../../data/learnsets-gen2.json");
 
 fn js_err(e: impl std::fmt::Debug) -> JsError {
@@ -86,14 +84,7 @@ impl WasmDex {
     /// The embedded gen2stadium2 dex.
     #[wasm_bindgen(constructor)]
     pub fn new() -> Result<WasmDex, JsError> {
-        Self::from_json(EMBEDDED_DEX)
-    }
-
-    /// Construct from caller-supplied dex JSON (`data/gen2stadium2.json`
-    /// contents).
-    #[wasm_bindgen(js_name = fromJson)]
-    pub fn from_json(text: &str) -> Result<WasmDex, JsError> {
-        let dex = Dex::from_json(text).map_err(js_err)?;
+        let dex = Dex::from_json(EMBEDDED_DEX).map_err(js_err)?;
         Ok(WasmDex { dex: Rc::new(dex) })
     }
 }
@@ -118,13 +109,7 @@ impl WasmValidator {
     /// Validator over the embedded learnsets (`data/learnsets-gen2.json`).
     #[wasm_bindgen(constructor)]
     pub fn new(dex: &WasmDex) -> Result<WasmValidator, JsError> {
-        Self::from_json(dex, EMBEDDED_LEARNSETS)
-    }
-
-    /// Construct from caller-supplied learnsets JSON.
-    #[wasm_bindgen(js_name = fromJson)]
-    pub fn from_json(dex: &WasmDex, learnsets_json: &str) -> Result<WasmValidator, JsError> {
-        let learnsets = Learnsets::from_json(learnsets_json).map_err(|e| JsError::new(&e))?;
+        let learnsets = Learnsets::from_json(EMBEDDED_LEARNSETS).map_err(|e| JsError::new(&e))?;
         Ok(WasmValidator { dex: dex.dex.clone(), learnsets })
     }
 
@@ -215,6 +200,9 @@ impl WasmBattle {
     /// team: slots (1-based display positions, lead first).
     #[wasm_bindgen(js_name = legalChoices)]
     pub fn legal_choices(&mut self, side: usize) -> String {
+        if side > 1 {
+            return "[]".to_string();
+        }
         let choices = self.battle.legal_choices(&self.dex, side);
         let arr: Vec<serde_json::Value> =
             choices.iter().map(|&c| choice_json(&self.battle, &self.dex, side, c)).collect();
@@ -225,6 +213,9 @@ impl WasmBattle {
     /// be in the protocol's form (`move hiddenpower`); `null` when illegal.
     #[wasm_bindgen(js_name = resolveChoice)]
     pub fn resolve_choice(&mut self, side: usize, input: &str) -> Option<String> {
+        if side > 1 {
+            return None;
+        }
         let legal = self.battle.legal_choices(&self.dex, side);
         nc2000_bot::fork::find_choice(&self.dex, &legal, input).map(|c| c.to_input(&self.dex))
     }
@@ -243,6 +234,9 @@ impl WasmBattle {
 
     #[wasm_bindgen(js_name = exportKifu)]
     pub fn export_kifu(&mut self, open: bool, bot_side: usize) -> Result<String, JsError> {
+        if bot_side > 1 {
+            return Err(JsError::new("side must be 0 or 1"));
+        }
         let r = self.recorder.as_mut().ok_or_else(|| JsError::new("this battle has no replay origin"))?;
         r.replay.open = open;
         r.replay.bot_side = bot_side;
@@ -380,10 +374,13 @@ impl WasmSearcher {
         seed: u32,
         c: Option<f64>,
         hp_buckets: Option<i32>,
-    ) -> WasmSearcher {
+    ) -> Result<WasmSearcher, JsError> {
+        if side > 1 {
+            return Err(JsError::new("side must be 0 or 1"));
+        }
         let cfg = skuct_config(c.unwrap_or(RESEARCH_SKUCT_C), hp_buckets);
         let search = SkuctSearch::new(&battle.battle, &battle.dex, cfg, seed as u64);
-        WasmSearcher { dex: battle.dex.clone(), search, side }
+        Ok(WasmSearcher { dex: battle.dex.clone(), search, side })
     }
 
     /// Pump `n` iterations (each: clone root + fresh chance seed + one
@@ -537,6 +534,9 @@ impl WasmBlindSearcher {
     /// (`setBeliefPrior` refuses outright in the other order.)
     #[wasm_bindgen(js_name = pinOpponent)]
     pub fn pin_opponent(&mut self, team_json: &str) -> Result<(), JsError> {
+        if self.observed || self.search.is_some() {
+            return Err(JsError::new("pinOpponent must be called before observe"));
+        }
         let sets: Vec<PokemonSet> = serde_json::from_str(team_json).map_err(js_err)?;
         self.belief =
             Belief::pinned_checked(&self.dex, "opponent", &sets, &self.observer).map_err(js_err)?;
@@ -898,6 +898,9 @@ impl WasmProtocolSearcher {
         c: Option<f64>,
         hp_buckets: Option<i32>,
     ) -> Result<WasmProtocolSearcher, JsError> {
+        if side > 1 {
+            return Err(JsError::new("side must be 0 or 1"));
+        }
         let pool: MetaPool = serde_json::from_str(pool_json).map_err(js_err)?;
         let cfg = skuct_config(c.unwrap_or_else(|| profile_c("blind")), hp_buckets);
         let preview_cache_identity = Some(preview_cache::Identity::new("protocol", &cfg, pool_json));
@@ -939,7 +942,7 @@ impl WasmProtocolSearcher {
     #[wasm_bindgen(js_name = pinOpponent)]
     pub fn pin_opponent(&mut self, team_json: &str) -> Result<(), JsError> {
         let sets: Vec<PokemonSet> = serde_json::from_str(team_json).map_err(js_err)?;
-        self.agent.pin_opponent(sets);
+        self.agent.pin_opponent(&self.dex, sets).map_err(|e| JsError::new(&e))?;
         self.pinned = true;
         // M18, belt and braces for the one unacceptable outcome: a prior
         // installed BEFORE the pin is dropped here rather than trusting the
@@ -1253,6 +1256,9 @@ impl WasmTables {
     /// argmax: {slots, input}}` with `mixed` restricted to p > 0, sorted
     /// descending, and `value` the side-a equilibrium value.
     pub fn resolve(&self, battle: &WasmBattle, side: usize) -> String {
+        if side > 1 {
+            return r#"{"found":false}"#.to_string();
+        }
         let Some((tab, i_am_a)) = self.set.lookup(&battle.battle, side) else {
             return r#"{"found":false}"#.to_string();
         };
@@ -1262,6 +1268,9 @@ impl WasmTables {
         } else {
             (&tab.sol.p_b, tab.sol.argmax_b)
         };
+        if !p.iter().all(|v| v.is_finite()) {
+            return r#"{"found":false}"#.to_string();
+        }
         let mut mixed: Vec<serde_json::Value> = p
             .iter()
             .enumerate()
@@ -1274,7 +1283,11 @@ impl WasmTables {
                 })
             })
             .collect();
-        mixed.sort_by(|a, b| b["p"].as_f64().partial_cmp(&a["p"].as_f64()).unwrap());
+        mixed.sort_by(|a, b| {
+            let bp = b["p"].as_f64().unwrap_or(0.0);
+            let ap = a["p"].as_f64().unwrap_or(0.0);
+            bp.total_cmp(&ap)
+        });
         serde_json::json!({
             "found": true,
             "teamA": tab.team_a,
@@ -1294,15 +1307,21 @@ impl WasmTables {
     /// (ready-to-apply input string), or `null` for unknown matchups.
     /// Deterministic per seed — one fresh seed per preview decision.
     pub fn sample(&self, battle: &WasmBattle, side: usize, seed: u32) -> Option<String> {
+        if side > 1 {
+            return None;
+        }
         let (tab, i_am_a) = self.set.lookup(&battle.battle, side)?;
         let p = if i_am_a { &tab.sol.p_a } else { &tab.sol.p_b };
+        if !p.iter().all(|v| v.is_finite()) {
+            return None;
+        }
         let mut rng = SplitMix64::new(seed as u64);
         let u = rng.next_f64();
         let mut acc = 0.0;
         let mut pick = p
             .iter()
             .enumerate()
-            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+            .max_by(|a, b| a.1.total_cmp(b.1))
             .map(|(i, _)| i)
             .unwrap_or(0);
         for (i, &pr) in p.iter().enumerate() {
@@ -1319,6 +1338,9 @@ impl WasmTables {
     /// The argmax-policy pick (pure best reply to the opponent's
     /// equilibrium), or `null` for unknown matchups.
     pub fn argmax(&self, battle: &WasmBattle, side: usize) -> Option<String> {
+        if side > 1 {
+            return None;
+        }
         let (tab, i_am_a) = self.set.lookup(&battle.battle, side)?;
         let amax = if i_am_a { tab.sol.argmax_a } else { tab.sol.argmax_b };
         let triple = self.set.actions()[amax];
@@ -1600,7 +1622,12 @@ impl WasmKifu {
             }
             self.replay.apply(&self.dex, &mut b, round).map_err(|e| JsError::new(&e))?;
         }
-        Ok(serde_json::json!({ "scenes": scenes, "turns": b.turn.min(1000), "outcome": b.outcome().map(|o| format!("{o:?}")),
+        let outcome = b.outcome().map(|o| match o {
+            Outcome::P1Win => "p1",
+            Outcome::P2Win => "p2",
+            Outcome::Tie => "tie",
+        });
+        Ok(serde_json::json!({ "scenes": scenes, "turns": b.turn.min(1000), "outcome": outcome,
             "botSide": self.replay.bot_side, "side": target, "info": if self.replay.open { "open" } else { "blind" } }).to_string())
     }
 
@@ -1785,7 +1812,7 @@ mod tests {
                 let legal: Vec<serde_json::Value> =
                     serde_json::from_str(&b.legal_choices(side)).unwrap();
                 assert!(!legal.is_empty());
-                let mut s = WasmSearcher::new(&b, side, 7 + side as u32, None, None);
+                let mut s = WasmSearcher::new(&b, side, 7 + side as u32, None, None).unwrap();
                 s.step(60);
                 let best = s.best().unwrap();
                 assert!(

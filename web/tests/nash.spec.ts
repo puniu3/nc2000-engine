@@ -317,6 +317,7 @@ test("the drawn opponent is one arm of the mixture, and no prior reaches the gam
   const chip = page.locator('[data-testid="belief-chip"]');
   await expect(chip).toBeVisible();
   await expect(chip).toContainText("off-pool");
+  await expect(chip).not.toContainText("prior");
 
   expect(errors).toEqual([]);
 });

@@ -30,6 +30,9 @@ pub const MAX_TOTAL_LEVEL: u32 = 155;
 
 impl Battle {
     pub fn choose(&mut self, dex: &Dex, side_n: usize, input: &str) -> Result<(), EngineError> {
+        if side_n >= 2 {
+            return Err(EngineError::InvalidChoice(format!("invalid side {side_n}")));
+        }
         let parsed = ParsedChoice::parse(input)
             .map_err(|e| EngineError::InvalidChoice(format!("p{}: {e}", side_n + 1)))?;
         self.submit_choice(dex, side_n, || input.to_owned(), |battle| {
@@ -55,6 +58,9 @@ impl Battle {
         choice: super::SearchChoice,
     ) -> Result<(), EngineError> {
         use super::SearchChoice;
+        if side_n >= 2 {
+            return Err(EngineError::InvalidChoice(format!("invalid side {side_n}")));
+        }
         if choice == SearchChoice::Team([0; 3]) {
             return self.choose(dex, side_n, &choice.to_input(dex));
         }
@@ -141,6 +147,12 @@ impl Battle {
         if self.sides[side_n].request_state() != Some(RequestKind::TeamPreview) {
             return Err(EngineError::InvalidChoice(format!(
                 "p{}: team choice outside team preview",
+                side_n + 1
+            )));
+        }
+        if slots.contains(&0) {
+            return Err(EngineError::InvalidChoice(format!(
+                "p{}: team slot cannot be 0",
                 side_n + 1
             )));
         }
@@ -288,6 +300,9 @@ impl Battle {
     }
 
     fn choose_move_slot(&mut self, dex: &Dex, side_n: usize, slot: u8) -> Result<(), EngineError> {
+        if slot == 0 {
+            return Err(EngineError::InvalidChoice("no move slot 0".into()));
+        }
         let pokemon = self
             .active_id(side_n)
             .ok_or_else(|| EngineError::InvalidChoice("no active pokemon".into()))?;
@@ -332,6 +347,9 @@ impl Battle {
         let pokemon = self
             .active_id(side_n)
             .ok_or_else(|| EngineError::InvalidChoice("no active pokemon".into()))?;
+        if slot_1based == 0 {
+            return Err(EngineError::InvalidChoice("no pokemon in slot 0".into()));
+        }
         let slot = slot_1based as usize - 1;
         if slot >= self.sides[side_n].party.len() {
             return Err(EngineError::InvalidChoice(format!("no pokemon in slot {slot_1based}")));

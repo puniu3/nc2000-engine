@@ -341,31 +341,3 @@ fn the_confusion_penalty_tracks_the_engine_clock() {
     b.poke_mut(me).volatile_mut(cf).unwrap().set_int(DK::Time, 5);
     assert_eq!(before, eval::eval01(&b, &dex, &off), "confusion ships inert");
 }
-
-// ---- 6. the candidate preset says what it means ------------------------
-
-#[test]
-fn exchange_scheme_moves_the_absorbed_terms_out() {
-    let full = EvalWeights::exchange_scheme(0.75, 0.0);
-    assert_eq!(full.exchange, 0.75);
-    assert!(full.exchange_v2);
-    assert_eq!(full.race, 0.0, "the matrix generalizes the race term — do not pay twice");
-    for (name, v) in [
-        ("brn", full.brn),
-        ("par", full.par),
-        ("slp", full.slp),
-        ("frz", full.frz),
-        ("psn", full.psn),
-        ("tox", full.tox),
-        ("substitute", full.substitute),
-        ("spikes", full.spikes),
-    ] {
-        assert_eq!(v, 0.0, "{name} is the exchange's input now, not its own term");
-    }
-    // The material terms are what is left when the exchange declines to claim.
-    let d = EvalWeights::default();
-    assert_eq!((full.hp, full.alive, full.pp, full.threat), (d.hp, d.alive, d.pp, d.threat));
-    // damp = 1.0 keeps them, which is the double-counting end of the sweep.
-    let kept = EvalWeights::exchange_scheme(0.75, 1.0);
-    assert_eq!((kept.tox, kept.spikes, kept.substitute), (d.tox, d.spikes, d.substitute));
-}

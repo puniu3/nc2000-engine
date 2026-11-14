@@ -16,12 +16,13 @@ const options = {
 };
 const cache = createPreviewCache(options);
 const objects = [];
-function blind({ours = own, theirs = foe, seed = 7, c = .4, pool = poolJson, prior, buckets} = {}) {
+function blind({ours = own, theirs = foe, seed = 7, c = .4, pool = poolJson, prior, buckets, pinBeforeObserve = false} = {}) {
 	const b = new wasm.Battle(dex, JSON.stringify(ours), JSON.stringify(theirs), '1,2,3,4');
 	const s = new wasm.BlindSearcher(b, 0, pool, seed, c, buckets);
 	objects.push(s, b);
 	assert.equal(s.previewCacheInfo(), undefined);
 	if (prior) assert.equal(JSON.parse(s.setBeliefPrior(prior)).applied, true);
+	if (pinBeforeObserve) s.pinOpponent(JSON.stringify(theirs));
 	s.observe(b);
 	return {s, b};
 }
@@ -61,7 +62,10 @@ try {
 	assert.notEqual(cache.key(blind({theirs: gender}).s), key, 'public gender must distinguish keys');
 	const ownChanged = structuredClone(own); ownChanged[0].moves = ['Tackle'];
 	assert.notEqual(cache.key(blind({ours: ownChanged}).s), key);
-	const pinned = blind().s; pinned.pinOpponent(JSON.stringify(foe)); assert.equal(cache.key(pinned), null);
+	const pinned = blind({pinBeforeObserve: true}).s;
+	assert.equal(cache.key(pinned), null);
+	const alreadyObserved = blind().s;
+	assert.throws(() => alreadyObserved.pinOpponent(JSON.stringify(foe)), /before observe/);
 
 	// Lookup after observation must preserve the later decision's RNG and belief.
 	b.applyChoice(0, cache.readRecord(fresh, record).choice);
@@ -76,7 +80,11 @@ try {
 	ps2.step(1); assert.equal(cache.readRecord(ps2, protocolRecord), null, 'never replace a partial search');
 	ps.step(1); assert.throws(() => cache.createRecord(ps), /exactly 128/);
 	ps2.onRequest(JSON.stringify({wait: true})); assert.equal(cache.key(ps2), null);
-	const pinnedPs = protocol(); pinnedPs.pinOpponent(JSON.stringify(foe)); assert.equal(cache.key(pinnedPs), null);
+	const pinnedPs = protocol();
+	assert.ok(JSON.parse(pinnedPs.beliefInfo()).count > 1);
+	pinnedPs.pinOpponent(JSON.stringify(foe));
+	assert.equal(JSON.parse(pinnedPs.beliefInfo()).count, 1);
+	assert.equal(cache.key(pinnedPs), null);
 	console.log('preview-cache: passed (real WASM, both drivers, invalidation, public-only identity, RNG continuation)');
 } finally {
 	for (const object of objects) object.free();

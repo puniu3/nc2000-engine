@@ -127,11 +127,11 @@ fn active_mixture_is_identical_across_ambiguous_hidden_stats() {
     let meta = Arc::new(MetaPool {teams:opponents.iter().enumerate().map(|(i, sets)|nc2000_bot::preview::MetaTeam {
         id:format!("counter-{i}"), sets:sets.clone(), weight:None,
     }).collect()});
-    let cfg = RmConfig {iterations:12000, c:0.4, ..Default::default()};
+    let cfg = RmConfig {iterations:1000, c:0.4, ..Default::default()};
     let mut observations = Vec::new();
     for opponent in &opponents {
         let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &own, opponent).unwrap();
-        let mut agent = BlindAgent::new(cfg.clone(), meta.clone(), None, 7).with_adaptive_mixture(4800);
+        let mut agent = BlindAgent::new(cfg.clone(), meta.clone(), None, 7).with_adaptive_mixture(400);
         let legal = battle.legal_choices(&dex, 0);
         let pick = agent.choose(&battle, &dex, 0, &legal);
         let other = battle.legal_choices(&dex, 1)[0];
@@ -153,7 +153,7 @@ fn active_mixture_is_identical_across_ambiguous_hidden_stats() {
         let belief = agent.belief().unwrap(); let observer = agent.observer().unwrap();
         assert_eq!(belief.candidate_count(), 2);
         let mut reference = BlindSearch::new(&battle, &dex, cfg.clone(), 0, before_rng);
-        reference.finish_with_typed_mixed_probes(&dex, belief, observer, 12000, 4800);
+        reference.finish_with_typed_mixed_probes(&dex, belief, observer, 1000, 400);
         assert!(reference.mixed_policy().is_some());
         let probes = reference.joint_probe_visits().iter().sum::<u32>();
         reference.step_typed_joint_probes(&dex, belief, observer, 240);

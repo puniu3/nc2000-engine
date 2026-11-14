@@ -553,7 +553,7 @@ export function PdinputTool() {
                         borderRadius: "4px",
                       }}
                     >
-                      {m.jpSpecies} Lv{m.level} ({m.jpItem || "なし"}) [{m.jpMoves.filter(Boolean).join(" / ")}]
+                      {m.jpSpecies} Lv{m.level} ({m.jpItem || (locale() === "ja" ? "なし" : "None")}) [{m.jpMoves.filter(Boolean).join(" / ")}]
                     </span>
                   ))}
                 </div>

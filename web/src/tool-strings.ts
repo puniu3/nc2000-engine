@@ -134,7 +134,6 @@ const strings = {
   training: { ja: "育成状態", en: "Stat experience" },
   memberTraining: { ja: "{0}の育成状態", en: "{0} stat experience" },
   trainingMax: { ja: "十分に育成（最大）", en: "Fully trained (maximum)" },
-  trainingNone: { ja: "育成前（0）", en: "Untrained (0)" },
   trainingCustom: { ja: "読み込んだ個別の設定", en: "Imported individual values" },
   removePokemon: { ja: "このポケモンを外す", en: "Remove this Pokémon" },
   enterTeam: { ja: "パーティを入力してください。", en: "Enter a team." },

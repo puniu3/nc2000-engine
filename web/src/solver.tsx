@@ -101,6 +101,8 @@ export function Solver(props: {
   pool: MetaPool;
   /** The belief candidate pool the searcher reasons with. */
   poolJson: string;
+  /** Optional community belief prior table (loaded on the start screen). */
+  priorJson?: string;
   locale: Locale;
   onLocale: (l: Locale) => void;
 }) {
@@ -147,6 +149,7 @@ export function Solver(props: {
         : await w.solve({
             spec: JSON.stringify(toSolverSpec(spec)),
             poolJson: props.poolJson,
+            priorJson: props.priorJson,
             seed: 1,
             budget: total,
             plies: LINE_PLIES,

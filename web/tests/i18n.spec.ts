@@ -20,14 +20,14 @@ async function englishEvaluation(page: Page) {
   });
 }
 
-for (const route of ["", "?blind", "?nash", "?solver", "?evaluate", "?fork", "?fork&advanced", "?kifu-preview"]) {
+for (const route of ["", "?blind", "?nash", "?solver", "?evaluate", "?fork", "?fork&advanced"]) {
   test(`English entry ${route || "/"}`, async ({ page }) => {
     const errors: string[] = [];
     page.on("pageerror", e => errors.push(String(e)));
     await page.goto(base + route);
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
     await expect(page.getByRole("heading").first()).toBeVisible();
-    if (["?evaluate", "?fork", "?fork&advanced", "?kifu-preview"].includes(route)) {
+    if (["?evaluate", "?fork", "?fork&advanced"].includes(route)) {
       await expect(language(page)).toHaveValue("en");
       expect(await page.locator("main").innerText()).not.toMatch(/[ぁ-んァ-ヶ一-龠]/);
     }

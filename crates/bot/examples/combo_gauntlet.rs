@@ -3,8 +3,7 @@
 //! produce identical games and every difference is the arms' own.
 //!
 //! Self-play cannot measure this: bots rarely bring or use the trap, so a
-//! bot-vs-bot arena almost never contains a Perish line
-//! (`combo_census`). Exposure is forced by role instead:
+//! bot-vs-bot arena almost never contains a Perish line. Exposure is forced by role instead:
 //!
 //! - `--mode defense`: the arm's team has no trapper; the opponent's has
 //!   one, leads with it and plays the trap as a fixed script

@@ -66,7 +66,7 @@ fn imported_trapping_preserves_both_sides_switch_legality() {
                 let mut agent =
                     ProtocolAgent::new(&dex, observer, pool.clone(), RmConfig::default(), 7);
                 agent.set_own_team(sets.clone());
-                agent.pin_opponent(sets.clone());
+                agent.pin_opponent(&dex, sets.clone()).unwrap();
                 let mut filter = SplitFilter::new(observer);
                 for line in &b.log {
                     if filter.visible(line) {
@@ -135,6 +135,25 @@ fn imported_trapping_preserves_both_sides_switch_legality() {
         }
         assert!(b.poke(b.active_id(1).unwrap()).trapped, "trap did not land");
         check(&b, "trapped");
+        let mut bp = b.clone();
+        bp.choose(&dex, 0, "move batonpass").unwrap();
+        bp.choose(&dex, 1, "move curse").unwrap();
+        assert_eq!(bp.request_state, nc2000_engine::state::RequestState::Switch);
+        check(&bp, "baton pass switch prompt");
+        bp.choose(&dex, 0, "switch 2").unwrap();
+        if matches!(trap, "Mean Look" | "Spider Web") {
+            assert!(
+                bp.poke(bp.active_id(1).unwrap()).trapped,
+                "{trap} must survive baton pass"
+            );
+            check(&bp, "baton pass kept trapping");
+        } else {
+            assert!(
+                !bp.poke(bp.active_id(1).unwrap()).trapped,
+                "{trap} binding must end on baton pass"
+            );
+            check(&bp, "baton pass released binding");
+        }
         let mut knocked_out = b.clone();
         let source = knocked_out.active_id(0).unwrap();
         knocked_out.poke_mut(source).hp = 1;
@@ -296,20 +315,38 @@ fn build_request(
                 .find(|p| p["active"].as_bool().unwrap_or(false));
             let moves: Vec<Value> = active
                 .map(|p| {
-                    p["moves"]
-                        .as_array()
-                        .unwrap()
-                        .iter()
-                        .map(|m| {
-                            let id = m["id"].as_str().unwrap();
-                            serde_json::json!({
-                                "id": id,
-                                "pp": m["pp"].as_i64().unwrap_or(0),
-                                "maxpp": maxpp_of(dex, id),
-                                "disabled": m["disabled"].as_bool().unwrap_or(false),
+                    let v = &p["volatiles"];
+                    let locked_id = if v.get("mustrecharge").is_some() {
+                        Some("recharge".to_string())
+                    } else if let Some(s) = v.get("lockedmove").and_then(|x| x["move"].as_str()) {
+                        Some(s.to_string())
+                    } else if let Some(s) = v.get("twoturnmove").and_then(|x| x["move"].as_str()) {
+                        Some(s.to_string())
+                    } else if v.get("rollout").is_some() {
+                        Some("rollout".to_string())
+                    } else if v.get("bide").is_some() {
+                        Some("bide".to_string())
+                    } else {
+                        None
+                    };
+                    if let Some(id) = locked_id {
+                        vec![serde_json::json!({ "id": id })]
+                    } else {
+                        p["moves"]
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .map(|m| {
+                                let id = m["id"].as_str().unwrap();
+                                serde_json::json!({
+                                    "id": id,
+                                    "pp": m["pp"].as_i64().unwrap_or(0),
+                                    "maxpp": maxpp_of(dex, id),
+                                    "disabled": m["disabled"].as_bool().unwrap_or(false),
+                                })
                             })
-                        })
-                        .collect()
+                            .collect()
+                    }
                 })
                 .unwrap_or_default();
             // PS computes `trapped` from state; mirror the same conditions
@@ -561,7 +598,7 @@ fn replay(dex: &Dex, fixture: &Value, side: usize, pinned: bool, stats: &mut Sta
     let mut agent = ProtocolAgent::new(dex, side, pool_ref.clone(), cfg, 7 + side as u64);
     agent.set_own_team(own_sets);
     if pinned {
-        agent.pin_opponent(opp_sets);
+        agent.pin_opponent(dex, opp_sets).unwrap();
     }
 
     let snaps = fixture["snapshots"].as_array().unwrap();

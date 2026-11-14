@@ -50,6 +50,7 @@ fn duel(
             let (p1, p2): (&mut dyn Agent, &mut dyn Agent) =
                 if a_is_p1 { (a.as_mut(), b.as_mut()) } else { (b.as_mut(), a.as_mut()) };
             let res = play_game(&dex, &mut battle, &mut [p1, p2], 500).unwrap();
+            assert!(battle.turn > 1, "played game must advance past team preview");
             let p1_score = match res {
                 GameResult::Outcome(Outcome::P1Win) => 1.0,
                 GameResult::Outcome(Outcome::P2Win) => 0.0,
@@ -63,13 +64,20 @@ fn duel(
 
 #[test]
 fn random_vs_random_completes() {
-    let s = duel(
+    let s1 = duel(
         &|seed| Box::new(RandomAgent::new(seed)),
         &|seed| Box::new(RandomAgent::new(seed ^ 0xDEAD)),
         10,
         42,
     );
-    assert!((0.0..=1.0).contains(&s));
+    let s2 = duel(
+        &|seed| Box::new(RandomAgent::new(seed)),
+        &|seed| Box::new(RandomAgent::new(seed ^ 0xDEAD)),
+        10,
+        42,
+    );
+    assert!(s1.is_finite() && (0.0..=1.0).contains(&s1));
+    assert_eq!(s1, s2, "random agent duel must be seed-deterministic");
 }
 
 #[test]
@@ -85,30 +93,28 @@ fn maxdamage_beats_random() {
 
 #[test]
 fn mcts_uniform_smoke() {
-    let s = duel(
-        &|seed| Box::new(MctsAgent::new(MctsConfig::uniform(32, 1.0), seed)),
-        &|seed| Box::new(RandomAgent::new(seed)),
-        2,
-        3,
-    );
-    assert!((0.0..=1.0).contains(&s));
+    let build = |seed: u64| -> Box<dyn Agent> {
+        Box::new(MctsAgent::new(MctsConfig::uniform(32, 1.0), seed))
+    };
+    let s1 = duel(&build, &|seed| Box::new(RandomAgent::new(seed)), 2, 3);
+    let s2 = duel(&build, &|seed| Box::new(RandomAgent::new(seed)), 2, 3);
+    assert!(s1.is_finite() && (0.0..=1.0).contains(&s1));
+    assert_eq!(s1, s2, "mcts uniform agent must be seed-deterministic");
 }
 
 #[test]
 fn mcts_heavy_smoke() {
     // default config = M6 heavy playout
-    let s = duel(
-        &|seed| {
-            Box::new(MctsAgent::new(
-                MctsConfig { iterations: 32, ..Default::default() },
-                seed,
-            ))
-        },
-        &|seed| Box::new(RandomAgent::new(seed)),
-        2,
-        3,
-    );
-    assert!((0.0..=1.0).contains(&s));
+    let build = |seed: u64| -> Box<dyn Agent> {
+        Box::new(MctsAgent::new(
+            MctsConfig { iterations: 32, ..Default::default() },
+            seed,
+        ))
+    };
+    let s1 = duel(&build, &|seed| Box::new(RandomAgent::new(seed)), 2, 3);
+    let s2 = duel(&build, &|seed| Box::new(RandomAgent::new(seed)), 2, 3);
+    assert!(s1.is_finite() && (0.0..=1.0).contains(&s1));
+    assert_eq!(s1, s2, "mcts heavy agent must be seed-deterministic");
     assert!(matches!(MctsConfig::default().playout, Playout::Heavy { .. }));
 }
 
@@ -119,27 +125,25 @@ fn rm_smoke_and_determinism() {
     };
     let s1 = duel(&build, &|seed| Box::new(RandomAgent::new(seed)), 2, 3);
     let s2 = duel(&build, &|seed| Box::new(RandomAgent::new(seed)), 2, 3);
-    assert!((0.0..=1.0).contains(&s1));
+    assert!(s1.is_finite() && (0.0..=1.0).contains(&s1));
     assert_eq!(s1, s2, "rm agent must be deterministic per seed");
 }
 
 #[test]
 fn exploit_smoke() {
-    let s = duel(
-        &|seed| {
-            let model: Box<dyn Agent> = Box::new(MaxDamageAgent::new());
-            Box::new(BrAgent::new(
-                model,
-                2,
-                MctsConfig { iterations: 32, ..Default::default() },
-                seed,
-            ))
-        },
-        &|_| Box::new(MaxDamageAgent::new()),
-        2,
-        5,
-    );
-    assert!((0.0..=1.0).contains(&s));
+    let build = |seed: u64| -> Box<dyn Agent> {
+        let model: Box<dyn Agent> = Box::new(MaxDamageAgent::new());
+        Box::new(BrAgent::new(
+            model,
+            2,
+            MctsConfig { iterations: 32, ..Default::default() },
+            seed,
+        ))
+    };
+    let s1 = duel(&build, &|_| Box::new(MaxDamageAgent::new()), 2, 5);
+    let s2 = duel(&build, &|_| Box::new(MaxDamageAgent::new()), 2, 5);
+    assert!(s1.is_finite() && (0.0..=1.0).contains(&s1));
+    assert_eq!(s1, s2, "br agent must be seed-deterministic");
 }
 
 #[test]

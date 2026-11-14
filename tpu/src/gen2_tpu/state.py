@@ -70,12 +70,8 @@ class ItemStatKind:
 class ActionPhase:
     """Action phase ordering (`nc2000_engine::compact::ActionPhase`)."""
 
-    RESIDUAL = 0
     MOVE = 1
     SWITCH = 2
-    BEFORE_TURN_PURSUIT = 3
-    INSTA_SWITCH = 4
-    TEAM_PREVIEW = 5
 
 
 class MatchTable(NamedTuple):
@@ -185,12 +181,10 @@ class ItemFlag:
     QUICK_CLAW = 1 << 0
     LEFTOVERS = 1 << 1
     BRIGHTPOWDER = 1 << 2
-    FOCUSBAND = 1 << 3
     MINTBERRY = 1 << 4
     MIRACLEBERRY = 1 << 5
     GOLDBERRY = 1 << 6
     BERRY = 1 << 7
-    MYSTERYBERRY = 1 << 8
     SCOPE_LENS = 1 << 9
 
 
@@ -218,6 +212,10 @@ class MoveFlag:
     DRAIN_HALF = 1 << 18
     RECOIL_QUARTER = 1 << 19
     BOOSTS_SELF = 1 << 20
+    IS_ENDURE = 1 << 21
+    BLOCKED_BY_PROTECT = 1 << 22
+    IS_RECHARGE = 1 << 23
+    IS_DEFROST = 1 << 24
 
 
 class CompactBattle(NamedTuple):
@@ -331,6 +329,7 @@ def pack_battle(state: CompactBattle) -> PackedBattle:
     t1 = (state.timers[..., :, 1].astype(jnp.uint32)) & jnp.uint32(0x7)
     t2 = (state.timers[..., :, 2].astype(jnp.uint32)) & jnp.uint32(0x7)
     t3 = (state.timers[..., :, 3].astype(jnp.uint32)) & jnp.uint32(0x7)
+    stall = ((state.timers[..., :, 3].astype(jnp.uint32)) >> jnp.uint32(3)) & jnp.uint32(0x7)
 
     w_hp_st = (
         hp_main
@@ -340,13 +339,14 @@ def pack_battle(state: CompactBattle) -> PackedBattle:
         | (t1 << jnp.uint32(29))
     )
 
-    pp_u = jnp.clip(state.pp, 0, 127).astype(jnp.uint32)
+    pp_u = jnp.clip(state.pp, 0, 63).astype(jnp.uint32)
     w_pp = (
         pp_u[..., :, 0]
-        | (pp_u[..., :, 1] << jnp.uint32(7))
-        | (pp_u[..., :, 2] << jnp.uint32(14))
-        | (pp_u[..., :, 3] << jnp.uint32(21))
-        | (t2 << jnp.uint32(28))
+        | (pp_u[..., :, 1] << jnp.uint32(6))
+        | (pp_u[..., :, 2] << jnp.uint32(12))
+        | (pp_u[..., :, 3] << jnp.uint32(18))
+        | (t2 << jnp.uint32(24))
+        | (stall << jnp.uint32(27))
     )
 
     vol_u = (state.vol_flags.astype(jnp.uint32)) & jnp.uint32(0xFFFF)
@@ -461,14 +461,16 @@ def unpack_battle(packed: PackedBattle) -> CompactBattle:
     status_packed = ((w_hp_st >> jnp.uint32(18)) & jnp.uint32(0xFF)).astype(jnp.int32)
     t0 = ((w_hp_st >> jnp.uint32(26)) & jnp.uint32(0x7)).astype(jnp.int32)
     t1 = ((w_hp_st >> jnp.uint32(29)) & jnp.uint32(0x7)).astype(jnp.int32)
-    t2 = ((w_pp >> jnp.uint32(28)) & jnp.uint32(0x7)).astype(jnp.int32)
-    t3 = ((w_boosts >> jnp.uint32(28)) & jnp.uint32(0x7)).astype(jnp.int32)
+    t2 = ((w_pp >> jnp.uint32(24)) & jnp.uint32(0x7)).astype(jnp.int32)
+    stall = ((w_pp >> jnp.uint32(27)) & jnp.uint32(0x7)).astype(jnp.int32)
+    perish = ((w_boosts >> jnp.uint32(28)) & jnp.uint32(0x7)).astype(jnp.int32)
+    t3 = perish | (stall << jnp.int32(3))
     timers = jnp.stack([t0, t1, t2, t3], axis=-1)
 
-    pp0 = (w_pp & jnp.uint32(0x7F)).astype(jnp.int32)
-    pp1 = ((w_pp >> jnp.uint32(7)) & jnp.uint32(0x7F)).astype(jnp.int32)
-    pp2 = ((w_pp >> jnp.uint32(14)) & jnp.uint32(0x7F)).astype(jnp.int32)
-    pp3 = ((w_pp >> jnp.uint32(21)) & jnp.uint32(0x7F)).astype(jnp.int32)
+    pp0 = (w_pp & jnp.uint32(0x3F)).astype(jnp.int32)
+    pp1 = ((w_pp >> jnp.uint32(6)) & jnp.uint32(0x3F)).astype(jnp.int32)
+    pp2 = ((w_pp >> jnp.uint32(12)) & jnp.uint32(0x3F)).astype(jnp.int32)
+    pp3 = ((w_pp >> jnp.uint32(18)) & jnp.uint32(0x3F)).astype(jnp.int32)
     pp = jnp.stack([pp0, pp1, pp2, pp3], axis=-1)
 
     vol_flags = (w_vol & jnp.uint32(0xFFFF)).astype(jnp.int32)

@@ -15,8 +15,7 @@
 //! coverage measurement of the imputation).
 //!
 //! Output: one JSON line per decision point (agreement, bot ranking of the
-//! human action, revelation stratum, feature tags, fabrication provenance)
-//! → aggregate with tools/aggregate-human-agreement.py.
+//! human action, revelation stratum, feature tags, fabrication provenance).
 //!
 //! Smoke: cargo run --release -p nc2000-bot --example human_agreement -- \
 //!          --corpus tmp/corpus-spectator --battles 0-3 --iters 1000
@@ -394,11 +393,6 @@ fn main() {
     }
     // M16c rollout arm: status pseudo-scoring + bad-matchup voluntary switching
     // in `greedy_pick`. Off by default, as shipped.
-    // M17 cluster-2 probe: threshold-preserving node key.
-    if args.iter().any(|a| a == "--threshold-key") {
-        agent_cfg.threshold_key = true;
-        eprintln!("key override: threshold_key = true");
-    }
     if args.iter().any(|a| a == "--m16c") {
         agent_cfg.rollout_status = true;
         agent_cfg.rollout_switch = true;

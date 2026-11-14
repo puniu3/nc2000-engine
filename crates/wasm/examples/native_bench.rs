@@ -35,7 +35,9 @@ fn main() {
             }
             // timed bench searcher (thrown away)
             let mut bench =
-                WasmSearcher::new(&battle, side, 100_000 + decisions * 2 + side as u32, None, None);
+                WasmSearcher::new(&battle, side, 100_000 + decisions * 2 + side as u32, None, None)
+                    .map_err(|_| "searcher")
+                    .unwrap();
             let preview = battle.turn() == 0;
             let t = Instant::now();
             bench.step(BENCH_ITERS);
@@ -49,7 +51,9 @@ fn main() {
             }
             // the game-driving pick (same seeds as bench.js)
             let mut picker =
-                WasmSearcher::new(&battle, side, 42 + decisions * 2 + side as u32, None, None);
+                WasmSearcher::new(&battle, side, 42 + decisions * 2 + side as u32, None, None)
+                    .map_err(|_| "searcher")
+                    .unwrap();
             picker.step(PICK_ITERS);
             picks.push((side, picker.best().unwrap()));
         }

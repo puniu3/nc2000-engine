@@ -872,7 +872,11 @@ pub fn dispatch_move_callback(
                 return RV::False;
             }
             let pick = pool[b.prng.sample_index(pool.len())].1;
+            let saved = (b.active_move.take(), b.active_pokemon, b.active_target);
             b.use_move(dex, pick, user, None, None);
+            b.active_move = saved.0;
+            b.active_pokemon = saved.1;
+            b.active_target = saved.2;
             RV::Undef
         }
         ("mimic", "onHit") => {
@@ -922,7 +926,11 @@ pub fn dispatch_move_callback(
             if NO_MIRROR.contains(&last_key) || own.contains(&last) {
                 return RV::False;
             }
+            let saved = (b.active_move.take(), b.active_pokemon, b.active_target);
             b.use_move(dex, last, user, None, None);
+            b.active_move = saved.0;
+            b.active_pokemon = saved.1;
+            b.active_target = saved.2;
             RV::Undef
         }
         ("moonlight", "onHit") | ("morningsun", "onHit") | ("synthesis", "onHit") => {
@@ -1017,7 +1025,11 @@ pub fn dispatch_move_callback(
                 return RV::False;
             }
             let pick = moves[b.prng.sample_index(moves.len())];
+            let saved = (b.active_move.take(), b.active_pokemon, b.active_target);
             b.use_move(dex, pick, user, None, None);
+            b.active_move = saved.0;
+            b.active_pokemon = saved.1;
+            b.active_target = saved.2;
             RV::Undef
         }
         ("spite", "onHit") => {
@@ -1255,9 +1267,7 @@ pub fn resolve_future_move(b: &mut Battle, dex: &Dex, state: StateLoc, target: P
         // Hit event; no self/secondaries/forceSwitch.
         let mut cur_target = Some(target);
         let rv = b.run_event(dex, &ev::TryPrimaryHit, EvTarget::Poke(target), Some(source), move_eff, None, false, false);
-        if rv == RV::Num(0.0) {
-            cur_target = None;
-        } else if !rv.truthy() {
+        if !rv.truthy() {
             cur_target = None;
         }
         let mut dealt: Option<f64> = None;
@@ -1359,10 +1369,9 @@ impl Battle {
         }
         let is_self = target_loc == -1;
         let is_foe = target_loc == 1;
-        let is_adjacent = is_foe || (is_self && false) || target_loc == -1 && false;
         // singles: adjacency = the foe slot only (|loc| == 1, loc != selfLoc);
         // selfLoc is -1, so isAdjacent === (targetLoc == 1).
-        let is_adjacent = is_adjacent || target_loc == 1;
+        let is_adjacent = is_foe;
         match target_type {
             "randomNormal" | "scripted" | "normal" => is_adjacent,
             "adjacentAlly" => is_adjacent && !is_foe,
@@ -1514,9 +1523,7 @@ impl Battle {
             None,
         );
         // gen2: if !move.selfSwitch && foe active has hp → AfterMoveSelf
-        let self_switch = self.active_move.as_ref().and_then(|m| m.self_switch.clone());
         let move_self_switch = dex.move_static(move_id).self_switch.is_some();
-        let _ = self_switch;
         let foe_hp = self
             .active_id(1 - pokemon.side as usize)
             .map(|f| self.poke(f).hp > 0)
@@ -1666,13 +1673,6 @@ impl Battle {
             move_eff,
             None,
         );
-
-        {
-            let am = self.active_move.as_mut().unwrap();
-            // (data always carries an explicit bool; PS's undefined-default
-            // logic resolved at export time)
-            let _ = &am.ignore_immunity;
-        }
 
         // gen3: selfdestruct === 'always' faints the user up front (the
         // stadium2 tryMoveHit faint below is then a no-op; side.lastMove
@@ -2492,95 +2492,10 @@ impl Battle {
     // ---------------------------------------------------------- getDamage
 
     /// Semantic information used by the experimental damage-roll quotient.
-    /// Mechanics which can later observe numeric damage can retain exact
-    /// rolls; the remaining thresholds describe predicates that change at a
-    /// small number of meaningful post-hit HP values.
-    fn damage_roll_context(
-        &self,
-        dex: &Dex,
-        target: PokeId,
-        mode: DamageRollMode,
-    ) -> DamageRollContext {
+    /// Mechanics which can later observe numeric damage retain exact rolls
+    /// even when `DamageRollMode::Mean` merges remaining rolls.
+    fn damage_roll_context(&self, dex: &Dex, target: PokeId) -> DamageRollContext {
         let p = self.poke(target);
-        let maxhp = p.maxhp.max(1);
-        let lean = matches!(
-            mode,
-            DamageRollMode::ThresholdLean
-                | DamageRollMode::ThresholdLeanNoCounter
-                | DamageRollMode::ThresholdLeanNoDrainRecoil
-                | DamageRollMode::ThresholdLeanNoMultiHit
-                | DamageRollMode::ThresholdLeanNoSubstitute
-                | DamageRollMode::ThresholdLeanMinimal
-                | DamageRollMode::ThresholdLeanMinimalLow
-                | DamageRollMode::ThresholdLeanMinimalHigh
-                | DamageRollMode::ThresholdLeanNext
-                | DamageRollMode::ThresholdLeanResidual
-                | DamageRollMode::ThresholdLeanClock
-                | DamageRollMode::ThresholdHealSplit
-                | DamageRollMode::ThresholdHeal
-        );
-        let mut thresholds = if lean {
-            vec![0]
-        } else {
-            // Baseline retained for direct comparison with the original
-            // experiment. The lean modes below require an observable cause.
-            vec![0, maxhp / 4, maxhp / 3, maxhp / 2]
-        };
-
-        let usable_move = |name: &str| {
-            p.move_slots.iter().any(|slot| slot.pp > 0 && dex.moves.key(slot.id) == name)
-        };
-        if lean {
-            if usable_move("substitute") {
-                thresholds.push(maxhp / 4);
-            }
-            if usable_move("bellydrum") {
-                thresholds.push(maxhp / 2);
-            }
-            if p.item.is_some_and(|item| {
-                matches!(dex.items.key(item), "berry" | "goldberry" | "berryjuice")
-            }) {
-                thresholds.push(maxhp / 2);
-            }
-        }
-
-        // Flail/Reversal's six base-power bands. Only add them when the
-        // damaged Pokemon can actually make the predicate observable.
-        let has_hp_power_move = p
-            .move_slots
-            .iter()
-            .any(|slot| slot.pp > 0 && matches!(dex.moves.key(slot.id), "flail" | "reversal"));
-        if has_hp_power_move {
-            for ratio_max in [1, 4, 9, 16, 32] {
-                let numerator = (ratio_max + 1) * maxhp;
-                let boundary = (numerator + 47) / 48 - 1;
-                if boundary > 0 && boundary < maxhp {
-                    thresholds.push(boundary);
-                }
-            }
-        }
-        thresholds.sort_unstable();
-        thresholds.dedup();
-
-        // The next status tick's nominal damage. This clock is a grouping
-        // hint, not a battle-rule replacement; the engine still executes the
-        // real residual handlers on every representative state.
-        let residual_damage = if matches!(p.status, Status::Brn | Status::Psn | Status::Tox) {
-            let residual = crate::cond_id!(dex, "residualdmg");
-            if let Some(state) = residual.and_then(|id| p.volatile(id)) {
-                let counter = state.get_int(DK::Counter) as i32;
-                if p.status == Status::Tox && counter == 0 {
-                    0
-                } else {
-                    ((maxhp / 16).max(1) * counter.max(1)).max(1)
-                }
-            } else {
-                (maxhp / 8).max(1)
-            }
-        } else {
-            0
-        };
-
         let active_exact_reason = self.active_move.as_ref().and_then(|mv| {
             if mv.multihit.is_some() {
                 Some(DamageExactReason::MultiHit)
@@ -2594,66 +2509,13 @@ impl Battle {
         let has_damage_callback = p.move_slots.iter().any(|slot| {
             slot.pp > 0 && matches!(dex.moves.key(slot.id), "counter" | "mirrorcoat" | "bide")
         }) || crate::cond_id!(dex, "bide").is_some_and(|id| p.has_volatile(id));
-        let has_heal_move = p.move_slots.iter().any(|slot| {
-            slot.pp > 0
-                && matches!(
-                    dex.moves.key(slot.id),
-                    "rest"
-                        | "recover"
-                        | "softboiled"
-                        | "milkdrink"
-                        | "moonlight"
-                        | "morningsun"
-                        | "synthesis"
-                )
-        });
-        let heal_sensitive =
-            mode == DamageRollMode::ThresholdHeal && p.hp <= maxhp / 2 && has_heal_move;
-        let heal_threshold = if mode == DamageRollMode::ThresholdHealSplit && has_heal_move {
-            maxhp / 2
-        } else {
-            0
-        };
 
-        let keep_exact = |reason| match (mode, reason) {
-            (
-                DamageRollMode::ThresholdLeanMinimal
-                | DamageRollMode::ThresholdLeanMinimalLow
-                | DamageRollMode::ThresholdLeanMinimalHigh,
-                _,
-            ) => false,
-            (DamageRollMode::ThresholdLeanNoCounter, DamageExactReason::CounterBide) => false,
-            (DamageRollMode::ThresholdLeanNoDrainRecoil, DamageExactReason::DrainRecoil) => false,
-            (DamageRollMode::ThresholdLeanNoMultiHit, DamageExactReason::MultiHit) => false,
-            (DamageRollMode::ThresholdLeanNoSubstitute, DamageExactReason::Substitute) => false,
-            _ => true,
-        };
         let exact_reason = active_exact_reason
-            .filter(|&reason| keep_exact(reason))
-            .or_else(|| {
-                has_substitute
-                    .then_some(DamageExactReason::Substitute)
-                    .filter(|&reason| keep_exact(reason))
-            })
-            .or_else(|| {
-                has_damage_callback
-                    .then_some(DamageExactReason::CounterBide)
-                    .filter(|&reason| keep_exact(reason))
-            })
-            .or_else(|| {
-                heal_sensitive
-                    .then_some(DamageExactReason::Heal)
-                    .filter(|&reason| keep_exact(reason))
-            })
+            .or_else(|| has_substitute.then_some(DamageExactReason::Substitute))
+            .or_else(|| has_damage_callback.then_some(DamageExactReason::CounterBide))
             .unwrap_or_default();
 
-        DamageRollContext {
-            hp: p.hp,
-            thresholds,
-            residual_damage,
-            heal_threshold,
-            exact_reason,
-        }
+        DamageRollContext { exact_reason }
     }
 
     /// gen2stadium2 getDamage on the current active move.
@@ -2963,7 +2825,7 @@ impl Battle {
             if mode == DamageRollMode::Exact {
                 damage = self.prng.apply_damage_variance(damage);
             } else {
-                let context = self.damage_roll_context(dex, target, mode);
+                let context = self.damage_roll_context(dex, target);
                 damage = self.prng.apply_damage_variance_with_context(damage, Some(&context));
             }
         }
@@ -3076,4 +2938,94 @@ struct EffectiveMoveData {
     secondaries: smallvec::SmallVec<[HitEffect; 2]>,
     force_switch: bool,
     self_switch: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::battle::PokemonSet;
+    use crate::dex::Dex;
+    use crate::state::{Battle, Status};
+
+    fn load_dex() -> Dex {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../data/gen2stadium2.json");
+        Dex::from_json(&std::fs::read_to_string(path).unwrap()).unwrap()
+    }
+
+    fn mk(species: &str, moves: &[&str]) -> PokemonSet {
+        serde_json::from_value(serde_json::json!({
+            "name": species, "species": species, "item": "", "ability": "No Ability",
+            "moves": moves, "level": 50,
+            "evs": {"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},
+            "ivs": {"hp":30,"atk":30,"def":30,"spa":30,"spd":30,"spe":30},
+            "happiness": 255
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn nested_sleep_talk_does_not_clobber_active_move_or_emit_ohko() {
+        let dex = load_dex();
+        let p1 = vec![
+            mk("Aerodactyl", &["Horn Drill", "Slash"]),
+            mk("Snorlax", &["Double-Edge", "Sleep Talk"]),
+        ];
+        let p2 = vec![
+            mk("Snorlax", &["Sleep Talk", "Horn Drill"]),
+            mk("Jynx", &["Lovely Kiss", "Psychic"]),
+        ];
+        let mut b = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
+        b.choose(&dex, 0, "team 1,2").unwrap();
+        b.choose(&dex, 1, "team 1,2").unwrap();
+        b.log.clear();
+
+        // Force P2 Snorlax asleep so Sleep Talk actually executes Horn Drill.
+        let p2_act = b.active_id(1).unwrap();
+        b.try_set_status(&dex, p2_act, "slp", None, super::EffectHandle::None);
+        b.poke_mut(p2_act).status_state.set_int(crate::state::DK::Time, 3);
+        b.poke_mut(p2_act).status_state.set_int(crate::state::DK::StartTime, 3);
+
+        // Faster Aerodactyl hits sleeping P2 Snorlax with Slash, then Snorlax uses Sleep Talk (only Horn Drill is pickable).
+        b.choose(&dex, 0, "move slash").unwrap();
+        b.choose(&dex, 1, "move sleeptalk").unwrap();
+
+        let p2_after = b.poke(p2_act);
+        assert_eq!(p2_after.times_attacked, 1, "nested Sleep Talk must not self-credit times_attacked");
+        let attackers: Vec<_> = p2_after.attacked_by.iter().map(|a| a.source).collect();
+        assert_eq!(attackers, vec![b.active_id(0).unwrap()], "get_last_attacked_by must still point to foe, not self");
+        assert!(
+            !b.log.iter().any(|l| l.starts_with("|-ohko|")),
+            "missed inner OHKO must not emit |-ohko| on outer Sleep Talk: {:?}",
+            b.log
+        );
+    }
+
+    #[test]
+    fn nested_metronome_does_not_self_credit_attacked_by() {
+        let dex = load_dex();
+        // Put Togetic (Metronome) slower than Jolteon so Jolteon hits first and Togetic retaliates with Metronome.
+        let p1 = vec![mk("Jolteon", &["Quick Attack", "Thunderbolt"])];
+        let p2 = vec![mk("Togetic", &["Metronome", "Tackle"])];
+        // Sweep a few seeds until Metronome picks a move without killing Jolteon or itself.
+        let mut checked = 0;
+        for seed in 1..20u64 {
+            let mut b = Battle::from_fixture(&dex, &format!("{seed},2,3,4"), &p1, &p2).unwrap();
+            b.choose(&dex, 0, "team 1").unwrap();
+            b.choose(&dex, 1, "team 1").unwrap();
+            b.choose(&dex, 0, "move quickattack").unwrap();
+            b.choose(&dex, 1, "move metronome").unwrap();
+            let p2_act = b.active_id(1).unwrap();
+            if b.poke(p2_act).hp > 0 {
+                let p2_after = b.poke(p2_act);
+                assert!(
+                    p2_after.attacked_by.iter().all(|a| a.source != p2_act),
+                    "nested Metronome must never attribute attack to user: {:?}",
+                    p2_after.attacked_by
+                );
+                assert_eq!(p2_after.times_attacked, 1);
+                checked += 1;
+            }
+        }
+        assert!(checked > 0);
+    }
 }

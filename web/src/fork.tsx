@@ -109,6 +109,18 @@ function forkName(): string | null {
   return v === "" || v === "1" || v.toLowerCase() === "true" ? null : v;
 }
 
+export function displayForkLabel(label: string): string {
+  const m = /^(\d+)ターン目$/.exec(label.trim());
+  if (m && locale() !== "ja") return toolText("turn", Number(m[1]));
+  return label;
+}
+
+export function displayArmLabel(label: string): string {
+  if (label === "元の手") return toolText("originalMove");
+  if (label === "試す手") return toolText("tryAnotherMove");
+  return label;
+}
+
 export function armNames(json: string, info: ForkInfo): string[] {
   const b = forkBattle(json, 0);
   try {
@@ -401,12 +413,12 @@ function ForkSummary(props: {
   return (
     <>
       <section class="fork-panel">
-        <h2>{info.label || toolText("fork")}</h2>
+        <h2>{info.label ? displayForkLabel(info.label) : toolText("fork")}</h2>
         <dl class="fork-facts">
           <dt>{toolText("startingPosition")}</dt>
           <dd>{toolText("turn", info.turn)}</dd>
           <dt>{toolText("you")}</dt>
-          <dd>{toolText("playerSide", 2 - info.botSide)}</dd>
+          <dd>{toolText("playerSide", 1 + (1 - (info.recordedBotSide ?? info.botSide)))}</dd>
           <dt>{toolText("botInformation")}</dt>
           <dd>
             {info.info === "blind"
@@ -421,7 +433,7 @@ function ForkSummary(props: {
               {info.arms.map((a, i) => (
                 <li key={i}>
                   {fork.armNames[i]}
-                  {a.label && <span class="fork-arm-label">{a.label}</span>}
+                  {a.label && <span class="fork-arm-label">{displayArmLabel(a.label)}</span>}
                 </li>
               ))}
             </ul>
@@ -451,7 +463,7 @@ function ForkSummary(props: {
                   <th>{toolText("botLosses")}</th>
                   <th>{toolText("draws")}</th>
                   <th>{toolText("botWinInterval")}</th>
-                  <th>{toolText("differenceFrom", info.arms[0].label || toolText("firstCandidate"))}</th>
+                  <th>{toolText("differenceFrom", info.arms[0].label ? displayArmLabel(info.arms[0].label) : toolText("firstCandidate"))}</th>
                 </tr>
               </thead>
               <tbody>
@@ -464,7 +476,7 @@ function ForkSummary(props: {
                       <td>
                         {fork.armNames[i]}
                         {info.arms[i].label && (
-                          <span class="fork-arm-label">{info.arms[i].label}</span>
+                          <span class="fork-arm-label">{displayArmLabel(info.arms[i].label)}</span>
                         )}
                       </td>
                       <td>{r.n}</td>
@@ -758,7 +770,7 @@ export function ForkGame(props: {
             <h2 class={`end-text ${outcome === "loss" ? "win" : "lose"}`}>
               {outcome === "loss" ? toolText("youWin") : outcome === "win" ? toolText("botWin") : toolText("draw")}
             </h2>
-            <p class="fork-muted">{toolText("revealedFirstMove", props.fork.armNames[props.record.arm], props.record.label && `（${props.record.label}）`)}</p>
+            <p class="fork-muted">{toolText("revealedFirstMove", props.fork.armNames[props.record.arm], props.record.label && (locale() === "ja" ? `（${displayArmLabel(props.record.label)}）` : ` (${displayArmLabel(props.record.label)})`))}</p>
             <div class="end-actions">
               <button class="primary" onClick={props.onNext}>{toolText("nextGame")}</button>
               <button class="ghost" onClick={props.onBack}>

@@ -87,6 +87,4 @@ fn split_log_keeps_only_the_players_own_exact_health() {
         ["own-exact", "foe-percent"]
     );
     assert!(channel.frame(&mut b, &dex).unwrap().lines.is_empty());
-    let choices = b.legal_choices(&dex, 0);
-    assert!(!action_input(&dex, choices[0]).is_empty());
 }

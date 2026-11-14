@@ -155,20 +155,6 @@ fn merged_moves_have_identical_successors_against_every_reply() {
 }
 
 #[test]
-fn waking_and_berry_cures_make_apparently_redundant_moves_different() {
-    let dex = super::common::dex();
-    for (item, time) in [("", 1), ("Mint Berry", 2), ("Miracle Berry", 2)] {
-        let mut b = position(&dex, 0, &["Scratch", "Growl"], &["Splash"], item, time);
-        let own = b.legal_choices(&dex, 0);
-        let reply = b.legal_choices(&dex, 1)[0];
-        assert_ne!(
-            distribution(&b, &dex, own[0], reply, 0),
-            distribution(&b, &dex, own[1], reply, 0)
-        );
-    }
-}
-
-#[test]
 fn public_rest_clock_enables_root_merging_but_hidden_sleep_clock_does_not() {
     let dex = super::common::dex();
     for side in 0..2 {

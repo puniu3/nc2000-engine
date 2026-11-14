@@ -27,6 +27,7 @@ from .kernel import (
     _get2,
     apply_actions,
     best_hit_fraction,
+    effectiveness_ext,
     expected_hit_fraction,
     legal_actions_mask,
     mon_stat,
@@ -652,10 +653,8 @@ def compact_dominated_mask7(
 
         fp_idx = foe_side * 3 + p_slot
         fp_alive = ((foe_alive_m & (1 << p_slot)) != 0) & (_get2(state.hp_pool, fp_idx, 0) > 0)
-        fp_st_pk = _get1(state.status_packed, fp_idx)
-        fp_is_slp = (fp_st_pk & 0x07) == Status.SLP
-        fp_self_slp = (fp_st_pk & 0x80) != 0
-        foe_has_clause_slp = foe_has_clause_slp | (fp_alive & fp_is_slp & (~fp_self_slp))
+        fp_is_slp = (_get1(state.status_packed, fp_idx) & 0x07) == Status.SLP
+        foe_has_clause_slp = foe_has_clause_slp | (fp_alive & fp_is_slp)
 
     ghost_mask = jnp.uint32(1) << (table.ghost_type.astype(jnp.uint32) & jnp.uint32(31))
     att_is_ghost = (_get1(table.type_mask, att_idx) & ghost_mask) != jnp.uint32(0)
@@ -958,7 +957,7 @@ def _perish_combo_override(
     perish_act = current_act
     has_stall = jnp.bool_(False)
     stall_act = current_act
-    prot_streak = _get2(state.timers, att_idx, 1)
+    prot_streak = (_get2(state.timers, att_idx, 3) >> jnp.int32(3)) & jnp.int32(0x07)
 
     for m_i in range(4):
         m_ok = legal7[m_i]
@@ -975,7 +974,7 @@ def _perish_combo_override(
         is_prot = m_ok & ((m_fl & MoveFlag.IS_PROTECT) != 0) & (prot_streak == 0)
         is_heal = (
             m_ok
-            & ((m_fl & (MoveFlag.IS_REST | MoveFlag.IS_HALF_HEAL)) != 0)
+            & (((m_fl & (MoveFlag.IS_REST | MoveFlag.IS_HALF_HEAL)) != 0) | (m_sk == 29))
             & ((att_hp * 4) <= (att_maxhp * 3))
         )
         is_st = is_prot | is_heal
@@ -986,7 +985,7 @@ def _perish_combo_override(
     foe_perished = (def_vol & VolBit.PERISH_SONG) != 0
     own_perished = (att_vol & VolBit.PERISH_SONG) != 0
     foe_sub = (def_vol & VolBit.SUBSTITUTE) != 0
-    foe_perish_cnt = _get2(state.timers, def_idx, 3)
+    foe_perish_cnt = _get2(state.timers, def_idx, 3) & jnp.int32(0x07)
 
     step1_trap = (
         active
@@ -1004,7 +1003,7 @@ def _perish_combo_override(
         & foe_trapped
         & foe_perished
         & (foe_perish_cnt >= 2)
-        & ((~own_perished) | (_get2(state.timers, att_idx, 3) >= 2))
+        & ((~own_perished) | ((_get2(state.timers, att_idx, 3) & jnp.int32(0x07)) >= 2))
         & has_stall
     )
 
@@ -1045,6 +1044,7 @@ def sample_heavy_playout_action(
     n_legal = jnp.sum(legal7.astype(jnp.int32))
 
     # Draw 1: epsilon check (out of 10000)
+    seed_in = seed
     seed, r_eps = prng_random(seed, jnp.int32(10000))
     # Draw 2: uniform index draw
     seed, r_unif = prng_random(seed, jnp.maximum(jnp.int32(1), n_legal))
@@ -1092,188 +1092,194 @@ def sample_heavy_playout_action(
         best_move_act = jnp.where(better, jnp.int32(m_i), best_move_act)
         best_move_score = jnp.where(better, sc, best_move_score)
 
+    att_hp_f = _get2(state.hp_pool, att_idx, 0).astype(jnp.float32)
+    att_maxhp_f = jnp.maximum(jnp.int32(1), _get1(table.maxhp, att_idx)).astype(jnp.float32)
+    own_hp_frac = att_hp_f / att_maxhp_f
+    def_hp_f = _get2(state.hp_pool, def_idx, 0).astype(jnp.float32)
+    def_maxhp_f = jnp.maximum(jnp.int32(1), _get1(table.maxhp, def_idx)).astype(jnp.float32)
+    foe_hp_frac = def_hp_f / def_maxhp_f
+
+    def_st_raw = _get1(state.status_packed, def_idx) & 0x07
+    foe_can_attack = (def_st_raw != Status.SLP) & (def_st_raw != Status.FRZ)
+    foe_phys_dmg = jnp.float32(0.0)
+    foe_spec_dmg = jnp.float32(0.0)
+    def_nm = _get1(table.num_moves, def_idx)
+    for fm_i in range(4):
+        f_ok = (jnp.int32(fm_i) < def_nm) & (_get2(state.pp, def_idx, fm_i) > 0) & foe_can_attack
+        f_fl = _get2(table.move_flags, def_idx, fm_i)
+        f_is_phys = (f_fl & MoveFlag.IS_PHYSICAL) != 0
+        f_is_stat = (f_fl & MoveFlag.IS_STATUS) != 0
+        f_sc = expected_hit_fraction(
+            state, table, def_side, def_slot, side, att_slot, fm_i, jnp.bool_(True)
+        )
+        f_sc_ok = jnp.where(f_ok & (~f_is_stat), f_sc, jnp.float32(0.0))
+        foe_phys_dmg = jnp.where(f_is_phys, jnp.maximum(foe_phys_dmg, f_sc_ok), foe_phys_dmg)
+        foe_spec_dmg = jnp.where(~f_is_phys, jnp.maximum(foe_spec_dmg, f_sc_ok), foe_spec_dmg)
+    foe_best_dmg = jnp.maximum(foe_phys_dmg, foe_spec_dmg)
+
+    att_vol = _get1(state.vol_flags, att_idx)
+    def_vol = _get1(state.vol_flags, def_idx)
+    foe_has_sub = (def_vol & VolBit.SUBSTITUTE) != 0
+    def_foresight = (def_vol & VolBit.FORESIGHT) != 0
+    own_alive_cnt = popcount_3bit(alive_m)
+    foe_alive_cnt = popcount_3bit(_get1(state.alive_mask, def_side))
+    att_faster = mon_action_speed(state, table, side, att_slot) > mon_action_speed(
+        state, table, def_side, def_slot
+    )
+    att_st_pk = _get1(state.status_packed, att_idx)
+    att_st_raw = att_st_pk & 0x07
+    att_st_cnt = (att_st_pk >> 3) & 0x07
+    att_wake_berry = (_get1(state.item, att_idx) != 0) & (
+        (_get1(table.item_flags, att_idx) & (ItemFlag.MINTBERRY | ItemFlag.MIRACLEBERRY)) != 0
+    )
+    att_asleep_turn = (att_st_raw == Status.SLP) & (att_st_cnt > 1) & (~att_wake_berry)
+
+    own_has_heal = jnp.bool_(False)
+    for hm_i in range(4):
+        hm_fl = _get2(table.move_flags, att_idx, hm_i)
+        hm_sk = _get2(table.move_special_kind, att_idx, hm_i)
+        own_has_heal = own_has_heal | (
+            legal7[hm_i]
+            & (((hm_fl & (MoveFlag.IS_REST | MoveFlag.IS_HALF_HEAL)) != 0) | (hm_sk == 29))
+        )
+    ghost_mask = jnp.uint32(1) << (table.ghost_type.astype(jnp.uint32) & jnp.uint32(31))
+    att_is_ghost = (_get1(table.type_mask, att_idx) & ghost_mask) != jnp.uint32(0)
+    att_b0 = _get2(state.boosts, att_idx, 0)
+    att_b2 = _get2(state.boosts, att_idx, 2)
+    att_b3 = _get2(state.boosts, att_idx, 3)
+
+    adj_move_scores = []
+    stay_non_sd = jnp.float32(0.0)
+    for m_i in range(4):
+        ok_m = legal7[m_i] & (~suicidal7[m_i])
+        sc_m = move_base_scores[m_i]
+        m_fl = _get2(table.move_flags, att_idx, m_i)
+        m_sk = _get2(table.move_special_kind, att_idx, m_i)
+        m_pvol = _get2(table.move_primary_vol, att_idx, m_i)
+        m_type = _get2(table.move_type, att_idx, m_i)
+        _, m_imm = effectiveness_ext(table, m_type, def_idx, def_foresight)
+        m_is_sd = (m_fl & MoveFlag.IS_SELFDESTRUCT) != 0
+
+        # Sleep Talk / Snore when guaranteed asleep this turn (`status_counter >= 2`)
+        slptalk_ok = att_asleep_turn & ((m_fl & MoveFlag.IS_SLEEP_USABLE) != 0)
+        sc_m = jnp.where(slptalk_ok, jnp.maximum(sc_m, jnp.float32(0.75)), sc_m)
+
+        # R2b: Healthy setup + recovery punishes passive non-phazing walls (`foe_best_dmg < 0.25`)
+        is_setup_move = (
+            ((m_sk == 5) & (~att_is_ghost) & (att_b0 < 2))
+            | ((m_fl & MoveFlag.BOOSTS_SELF) != 0) & ((att_b0 < 2) | (att_b2 < 2) | (att_b3 < 2))
+        )
+        r2b_ok = (
+            is_setup_move
+            & own_has_heal
+            & (~att_asleep_turn)
+            & (own_hp_frac >= jnp.float32(0.65))
+            & (best_move_score < jnp.float32(0.45))
+            & (foe_best_dmg < jnp.float32(0.25))
+            & ((att_vol & (VolBit.ENCORE | VolBit.PERISH_SONG)) == 0)
+        )
+        sc_m = jnp.where(r2b_ok, jnp.maximum(sc_m, jnp.float32(0.48)), sc_m)
+
+        # R1: Do not waste healthy Self-Destruct/Explosion for non-KO chip when not threatened
+        sc_m = jnp.where(
+            m_is_sd
+            & (own_hp_frac >= jnp.float32(0.50))
+            & (sc_m < jnp.float32(0.82))
+            & (foe_best_dmg < jnp.float32(0.70)),
+            sc_m * jnp.float32(0.15),
+            sc_m,
+        )
+        # Super Fang (sk == 15): 50% of current foe HP when not Ghost-immune (sc_m > 0)
+        sc_m = jnp.where(
+            (m_sk == 15) & (sc_m > jnp.float32(0.0)) & (foe_hp_frac >= jnp.float32(0.35)),
+            jnp.maximum(sc_m, jnp.float32(0.45) * foe_hp_frac),
+            sc_m,
+        )
+        # Counter (sk == 11) vs Physical attacker / Mirror Coat (sk == 12) vs Special attacker
+        cnt_ok = (
+            (m_sk == 11)
+            & (~m_imm)
+            & (own_hp_frac > foe_phys_dmg + jnp.float32(0.05))
+            & (foe_phys_dmg >= jnp.float32(0.15))
+            & (foe_phys_dmg >= foe_spec_dmg)
+        )
+        mc_ok = (
+            (m_sk == 12)
+            & (~m_imm)
+            & (own_hp_frac > foe_spec_dmg + jnp.float32(0.05))
+            & (foe_spec_dmg >= jnp.float32(0.15))
+            & (foe_spec_dmg >= foe_phys_dmg)
+        )
+        sc_m = jnp.where(
+            cnt_ok,
+            jnp.maximum(sc_m, jnp.minimum(jnp.float32(0.95), jnp.float32(1.6) * foe_phys_dmg)),
+            sc_m,
+        )
+        sc_m = jnp.where(
+            mc_ok,
+            jnp.maximum(sc_m, jnp.minimum(jnp.float32(0.95), jnp.float32(1.6) * foe_spec_dmg)),
+            sc_m,
+        )
+        # Bulky Recovery (Rest / Recover / Soft-Boiled / Milk Drink / Moonlight) when < 48% HP
+        heal_ok = (
+            (((m_fl & (MoveFlag.IS_REST | MoveFlag.IS_HALF_HEAL)) != 0) | (m_sk == 29))
+            & (own_hp_frac < jnp.float32(0.48))
+            & (foe_best_dmg < jnp.float32(0.65))
+            & ((att_vol & VolBit.PERISH_SONG) == 0)
+        )
+        sc_m = jnp.where(heal_ok, jnp.maximum(sc_m, jnp.float32(0.52)), sc_m)
+        # Spikes (sk == 4) and Leech Seed (VolBit.LEECH_SEED) and low-HP Destiny Bond (sk == 20)
+        spikes_ok = (
+            (m_sk == 4)
+            & (foe_alive_cnt > 1)
+            & ((_get1(state.side_flags, def_side) & 0x03) == 0)
+            & (own_hp_frac > foe_best_dmg + jnp.float32(0.15))
+        )
+        sc_m = jnp.where(spikes_ok, jnp.maximum(sc_m, jnp.float32(0.34)), sc_m)
+        lseed_ok = (
+            (m_pvol == VolBit.LEECH_SEED)
+            & (~foe_has_sub)
+            & ((def_vol & VolBit.LEECH_SEED) == 0)
+            & (own_hp_frac > foe_best_dmg + jnp.float32(0.10))
+        )
+        sc_m = jnp.where(lseed_ok, jnp.maximum(sc_m, jnp.float32(0.36)), sc_m)
+        dbond_ok = (
+            (m_sk == 20)
+            & (own_alive_cnt >= 2)
+            & (own_hp_frac <= foe_best_dmg + jnp.float32(0.05))
+            & att_faster
+            & ((att_vol & VolBit.DESTINY_BOND) == 0)
+        )
+        sc_m = jnp.where(dbond_ok, jnp.maximum(sc_m, jnp.float32(0.60)), sc_m)
+
+        adj_move_scores.append(sc_m)
+        stay_non_sd = jnp.where(
+            ok_m & (~m_is_sd), jnp.maximum(stay_non_sd, move_base_scores[m_i]), stay_non_sd
+        )
+
     if rollout_residual is not None:
-        att_hp_f = _get2(state.hp_pool, att_idx, 0).astype(jnp.float32)
-        att_maxhp_f = jnp.maximum(jnp.int32(1), _get1(table.maxhp, att_idx)).astype(jnp.float32)
-        own_hp_frac = att_hp_f / att_maxhp_f
-        def_hp_f = _get2(state.hp_pool, def_idx, 0).astype(jnp.float32)
-        def_maxhp_f = jnp.maximum(jnp.int32(1), _get1(table.maxhp, def_idx)).astype(jnp.float32)
-        foe_hp_frac = def_hp_f / def_maxhp_f
-
-        def_st_raw = _get1(state.status_packed, def_idx) & 0x07
-        foe_can_attack = (def_st_raw != Status.SLP) & (def_st_raw != Status.FRZ)
-        foe_phys_dmg = jnp.float32(0.0)
-        foe_spec_dmg = jnp.float32(0.0)
-        def_nm = _get1(table.num_moves, def_idx)
-        for fm_i in range(4):
-            f_ok = (jnp.int32(fm_i) < def_nm) & (_get2(state.pp, def_idx, fm_i) > 0) & foe_can_attack
-            f_fl = _get2(table.move_flags, def_idx, fm_i)
-            f_is_phys = (f_fl & MoveFlag.IS_PHYSICAL) != 0
-            f_is_stat = (f_fl & MoveFlag.IS_STATUS) != 0
-            f_sc = expected_hit_fraction(
-                state, table, def_side, def_slot, side, att_slot, fm_i, jnp.bool_(True)
-            )
-            f_sc_ok = jnp.where(f_ok & (~f_is_stat), f_sc, jnp.float32(0.0))
-            foe_phys_dmg = jnp.where(f_is_phys, jnp.maximum(foe_phys_dmg, f_sc_ok), foe_phys_dmg)
-            foe_spec_dmg = jnp.where(~f_is_phys, jnp.maximum(foe_spec_dmg, f_sc_ok), foe_spec_dmg)
-        foe_best_dmg = jnp.maximum(foe_phys_dmg, foe_spec_dmg)
-
-        att_vol = _get1(state.vol_flags, att_idx)
-        def_vol = _get1(state.vol_flags, def_idx)
-        foe_has_sub = (def_vol & VolBit.SUBSTITUTE) != 0
-        own_alive_cnt = popcount_3bit(alive_m)
-        foe_alive_cnt = popcount_3bit(_get1(state.alive_mask, def_side))
-        att_faster = mon_action_speed(state, table, side, att_slot) > mon_action_speed(
-            state, table, def_side, def_slot
-        )
-        att_st_pk = _get1(state.status_packed, att_idx)
-        att_st_raw = att_st_pk & 0x07
-        att_st_cnt = (att_st_pk >> 3) & 0x07
-        att_wake_berry = (_get1(state.item, att_idx) != 0) & (
-            (_get1(table.item_flags, att_idx) & (ItemFlag.MINTBERRY | ItemFlag.MIRACLEBERRY)) != 0
-        )
-        att_asleep_turn = (att_st_raw == Status.SLP) & (att_st_cnt > 1) & (~att_wake_berry)
-
-        own_has_heal = jnp.bool_(False)
-        for hm_i in range(4):
-            hm_fl = _get2(table.move_flags, att_idx, hm_i)
-            own_has_heal = own_has_heal | (
-                legal7[hm_i] & ((hm_fl & (MoveFlag.IS_REST | MoveFlag.IS_HALF_HEAL)) != 0)
-            )
-        ghost_mask = jnp.uint32(1) << (table.ghost_type.astype(jnp.uint32) & jnp.uint32(31))
-        att_is_ghost = (_get1(table.type_mask, att_idx) & ghost_mask) != jnp.uint32(0)
-        att_b0 = _get2(state.boosts, att_idx, 0)
-        att_b2 = _get2(state.boosts, att_idx, 2)
-        att_b3 = _get2(state.boosts, att_idx, 3)
-
-        adj_move_scores = []
-        stay_non_sd = jnp.float32(0.0)
-        for m_i in range(4):
-            ok_m = legal7[m_i] & (~suicidal7[m_i])
-            sc_m = move_base_scores[m_i]
-            m_fl = _get2(table.move_flags, att_idx, m_i)
-            m_sk = _get2(table.move_special_kind, att_idx, m_i)
-            m_pvol = _get2(table.move_primary_vol, att_idx, m_i)
-            m_is_sd = (m_fl & MoveFlag.IS_SELFDESTRUCT) != 0
-
-            # Sleep Talk / Snore when guaranteed asleep this turn (`status_counter >= 2`)
-            slptalk_ok = att_asleep_turn & ((m_fl & MoveFlag.IS_SLEEP_USABLE) != 0)
-            sc_m = jnp.where(slptalk_ok, jnp.maximum(sc_m, jnp.float32(0.75)), sc_m)
-
-            # R2b: Healthy setup + recovery punishes passive non-phazing walls (`foe_best_dmg < 0.25`)
-            is_setup_move = (
-                ((m_sk == 5) & (~att_is_ghost) & (att_b0 < 2))
-                | ((m_fl & MoveFlag.BOOSTS_SELF) != 0) & ((att_b0 < 2) | (att_b2 < 2) | (att_b3 < 2))
-            )
-            r2b_ok = (
-                is_setup_move
-                & own_has_heal
-                & (~att_asleep_turn)
-                & (own_hp_frac >= jnp.float32(0.65))
-                & (best_move_score < jnp.float32(0.45))
-                & (foe_best_dmg < jnp.float32(0.25))
-                & ((att_vol & (VolBit.ENCORE | VolBit.PERISH_SONG)) == 0)
-            )
-            sc_m = jnp.where(r2b_ok, jnp.maximum(sc_m, jnp.float32(0.48)), sc_m)
-
-            # R1: Do not waste healthy Self-Destruct/Explosion for non-KO chip when not threatened
-            sc_m = jnp.where(
-                m_is_sd
-                & (own_hp_frac >= jnp.float32(0.50))
-                & (sc_m < jnp.float32(0.82))
-                & (foe_best_dmg < jnp.float32(0.70)),
-                sc_m * jnp.float32(0.15),
-                sc_m,
-            )
-            # Super Fang (sk == 15): 50% of current foe HP when not Ghost-immune (sc_m > 0)
-            sc_m = jnp.where(
-                (m_sk == 15) & (sc_m > jnp.float32(0.0)) & (foe_hp_frac >= jnp.float32(0.35)),
-                jnp.maximum(sc_m, jnp.float32(0.45) * foe_hp_frac),
-                sc_m,
-            )
-            # Counter (sk == 11) vs Physical attacker / Mirror Coat (sk == 12) vs Special attacker
-            cnt_ok = (
-                (m_sk == 11)
-                & (sc_m > jnp.float32(0.0))
-                & (own_hp_frac > foe_phys_dmg + jnp.float32(0.05))
-                & (foe_phys_dmg >= jnp.float32(0.15))
-                & (foe_phys_dmg >= foe_spec_dmg)
-            )
-            mc_ok = (
-                (m_sk == 12)
-                & (sc_m > jnp.float32(0.0))
-                & (own_hp_frac > foe_spec_dmg + jnp.float32(0.05))
-                & (foe_spec_dmg >= jnp.float32(0.15))
-                & (foe_spec_dmg >= foe_phys_dmg)
-            )
-            sc_m = jnp.where(
-                cnt_ok,
-                jnp.maximum(sc_m, jnp.minimum(jnp.float32(0.95), jnp.float32(1.6) * foe_phys_dmg)),
-                sc_m,
-            )
-            sc_m = jnp.where(
-                mc_ok,
-                jnp.maximum(sc_m, jnp.minimum(jnp.float32(0.95), jnp.float32(1.6) * foe_spec_dmg)),
-                sc_m,
-            )
-            # Bulky Recovery (Rest / Recover / Soft-Boiled / Milk Drink / Moonlight) when < 48% HP
-            heal_ok = (
-                ((m_fl & (MoveFlag.IS_REST | MoveFlag.IS_HALF_HEAL)) != 0)
-                & (own_hp_frac < jnp.float32(0.48))
-                & (foe_best_dmg < jnp.float32(0.65))
-                & ((att_vol & VolBit.PERISH_SONG) == 0)
-            )
-            sc_m = jnp.where(heal_ok, jnp.maximum(sc_m, jnp.float32(0.52)), sc_m)
-            # Spikes (sk == 4) and Leech Seed (VolBit.LEECH_SEED) and low-HP Destiny Bond (sk == 20)
-            spikes_ok = (
-                (m_sk == 4)
-                & (foe_alive_cnt > 1)
-                & ((_get1(state.side_flags, def_side) & 0x03) == 0)
-                & (own_hp_frac > foe_best_dmg + jnp.float32(0.15))
-            )
-            sc_m = jnp.where(spikes_ok, jnp.maximum(sc_m, jnp.float32(0.34)), sc_m)
-            lseed_ok = (
-                (m_pvol == VolBit.LEECH_SEED)
-                & (~foe_has_sub)
-                & ((def_vol & VolBit.LEECH_SEED) == 0)
-                & (own_hp_frac > foe_best_dmg + jnp.float32(0.10))
-            )
-            sc_m = jnp.where(lseed_ok, jnp.maximum(sc_m, jnp.float32(0.36)), sc_m)
-            dbond_ok = (
-                (m_sk == 20)
-                & (own_alive_cnt >= 2)
-                & (own_hp_frac <= foe_best_dmg + jnp.float32(0.05))
-                & att_faster
-                & ((att_vol & VolBit.DESTINY_BOND) == 0)
-            )
-            sc_m = jnp.where(dbond_ok, jnp.maximum(sc_m, jnp.float32(0.60)), sc_m)
-
-            sc_eff = jnp.where(rollout_residual.active, sc_m, move_base_scores[m_i])
-            adj_move_scores.append(sc_eff)
-            stay_non_sd = jnp.where(
-                ok_m & (~m_is_sd), jnp.maximum(stay_non_sd, move_base_scores[m_i]), stay_non_sd
-            )
-
-        stay_dmg = jnp.where(
-            rollout_residual.active,
-            stay_non_sd,
-            jnp.maximum(jnp.float32(0.0), best_move_score),
-        )
         deltas = compute_rollout_action_residuals(
-            state, table, side, legal7, stay_dmg, rollout_residual
+            state, table, side, legal7, stay_non_sd, rollout_residual
         )
-        base7 = jnp.concatenate(
-            [jnp.stack(adj_move_scores, axis=0), jnp.zeros((3,), dtype=jnp.float32)],
-            axis=0,
-        )
-        best_move_act = jnp.int32(0)
-        best_move_score = jnp.float32(-1.0)
-        for c_i in range(7):
-            ok_c = legal7[c_i] & (~suicidal7[c_i]) & ((c_i < 4) | (deltas[c_i] > jnp.float32(0.0)))
-            tot_c = base7[c_i] + jnp.maximum(jnp.float32(0.0), deltas[c_i])
-            better_c = ok_c & (tot_c > best_move_score)
-            best_move_act = jnp.where(better_c, jnp.int32(c_i), best_move_act)
-            best_move_score = jnp.where(better_c, tot_c, best_move_score)
+        switch_cond = deltas > jnp.float32(0.0)
+        pos_deltas = jnp.maximum(jnp.float32(0.0), deltas)
+    else:
+        deltas = jnp.zeros((7,), dtype=jnp.float32)
+        switch_cond = jnp.zeros((7,), dtype=jnp.bool_)
+        pos_deltas = deltas
+
+    base7 = jnp.concatenate(
+        [jnp.stack(adj_move_scores, axis=0), jnp.zeros((3,), dtype=jnp.float32)],
+        axis=0,
+    )
+    best_move_act = jnp.int32(0)
+    best_move_score = jnp.float32(-1.0)
+    for c_i in range(7):
+        ok_c = legal7[c_i] & (~suicidal7[c_i]) & ((c_i < 4) | switch_cond[c_i])
+        tot_c = base7[c_i] + pos_deltas[c_i]
+        better_c = ok_c & (tot_c > best_move_score)
+        best_move_act = jnp.where(better_c, jnp.int32(c_i), best_move_act)
+        best_move_score = jnp.where(better_c, tot_c, best_move_score)
 
     greedy_move_act = jnp.where(best_move_score > jnp.float32(0.0), best_move_act, safe_act)
 
@@ -1312,14 +1318,11 @@ def sample_heavy_playout_action(
         eff = best_hit_fraction(state, table, side, slot, def_side, def_slot, jnp.bool_(True))
         bp_sc = hp_f * (jnp.float32(0.4) + jnp.float32(0.6) * passed_stat + jnp.float32(0.8) * jnp.minimum(jnp.float32(1.5), eff))
 
-        if rollout_residual is not None:
-            faint_sc = jnp.where(
-                rollout_residual.active & foe_alive,
-                hp_f + jnp.float32(0.25) * jnp.minimum(jnp.float32(1.2), eff),
-                hp_f,
-            )
-        else:
-            faint_sc = hp_f
+        faint_sc = jnp.where(
+            foe_alive,
+            hp_f + jnp.float32(0.25) * jnp.minimum(jnp.float32(1.2), eff),
+            hp_f,
+        )
         sc = jnp.where(passing_alive, bp_sc, faint_sc)
         better = ok & (sc > best_sw_score)
         best_sw_act = jnp.where(better, act_code, best_sw_act)
@@ -1334,8 +1337,9 @@ def sample_heavy_playout_action(
     tactical_act = _perish_combo_override(
         state, table, side, legal7, _perish_escape_override(state, table, side, legal7, ordinary_act)
     )
-    chosen = jnp.where(req == 0, jnp.int32(7), tactical_act)
-    return seed, chosen
+    chosen = jnp.where((state.outcome != 0) | (req == 0), jnp.int32(7), tactical_act)
+    next_seed = jnp.where(state.outcome == 0, seed, seed_in)
+    return next_seed, chosen
 
 
 # =========================================================================
@@ -1360,19 +1364,34 @@ def heavy_rollout_packed_single(
     turns: int = 8,
     eps: float = 0.2,
 ) -> HeavyRolloutResult:
-    """Run an `8`-turn `Playout::Heavy` rollout from a 120-byte `PackedBattle` state."""
+    """Run an up-to-`turns` turn `Playout::Heavy` rollout from a 120-byte `PackedBattle` state."""
     init_state = unpack_battle(init_packed)
+    if turns <= 0:
+        val = eval_compact_leaf(init_state, table, weights)
+        return HeavyRolloutResult(
+            final_packed=pack_battle(init_state),
+            leaf_values=val,
+            outcomes=init_state.outcome,
+            turns_played=init_state.turn,
+        )
+
+    cutoff_turn = init_state.turn + jnp.int32(turns - 1)
 
     def _step(carry: tuple[CompactBattle, jax.Array], _: None):
         st, p_seed = carry
-        p_seed, a0 = sample_heavy_playout_action(st, table, 0, p_seed, eps=eps)
-        p_seed, a1 = sample_heavy_playout_action(st, table, 1, p_seed, eps=eps)
+        active = (st.outcome == 0) & (st.turn <= cutoff_turn)
+        next_p_seed, a0 = sample_heavy_playout_action(st, table, 0, p_seed, eps=eps)
+        next_p_seed, a1 = sample_heavy_playout_action(st, table, 1, next_p_seed, eps=eps)
         acts = jnp.stack([a0, a1], axis=0)
-        next_st = apply_actions(st, table, acts)
-        return (next_st, p_seed), None
+        cand_st = apply_actions(st, table, acts)
+        next_st = jax.tree_util.tree_map(
+            lambda a, b: jnp.where(active, a, b), cand_st, st
+        )
+        out_seed = jnp.where(active, next_p_seed, p_seed)
+        return (next_st, out_seed), None
 
     (final_st, _), _ = jax.lax.scan(
-        _step, (init_state, policy_seed), None, length=turns
+        _step, (init_state, policy_seed), None, length=max(1, turns * 2)
     )
     val = eval_compact_leaf(final_st, table, weights)
     return HeavyRolloutResult(
@@ -1433,22 +1452,43 @@ def _vmap_heavy_rollout_impl(
             in_axes=(0, 0),
         )(batched_packed, policy_seeds)
 
+    if turns <= 0:
+        init_st = unpack_battle(batched_packed)
+        val = jax.vmap(eval_compact_leaf, in_axes=(0, None, None))(
+            init_st, table, weights
+        )
+        return HeavyRolloutResult(
+            final_packed=batched_packed,
+            leaf_values=val,
+            outcomes=init_st.outcome,
+            turns_played=init_st.turn,
+        )
+
     init_st = unpack_battle(batched_packed)
+    cutoff_turns = init_st.turn + jnp.int32(turns - 1)
+
+    def _bcast(cond: jax.Array, target: jax.Array) -> jax.Array:
+        return cond.reshape((cond.shape[0],) + (1,) * (target.ndim - 1))
 
     def _step(carry: tuple[CompactBattle, jax.Array], _: None):
         st, ps = carry
-        ps, a0 = jax.vmap(
+        active = (st.outcome == 0) & (st.turn <= cutoff_turns)
+        next_ps, a0 = jax.vmap(
             lambda s, p: sample_heavy_playout_action(s, table, 0, p, eps=eps)
         )(st, ps)
-        ps, a1 = jax.vmap(
+        next_ps, a1 = jax.vmap(
             lambda s, p: sample_heavy_playout_action(s, table, 1, p, eps=eps)
-        )(st, ps)
+        )(st, next_ps)
         acts = jnp.stack([a0, a1], axis=-1)
-        next_st = jax.vmap(apply_actions, in_axes=(0, None, 0))(st, table, acts)
-        return (next_st, ps), None
+        cand_st = jax.vmap(apply_actions, in_axes=(0, None, 0))(st, table, acts)
+        next_st = jax.tree_util.tree_map(
+            lambda a, b: jnp.where(_bcast(active, a), a, b), cand_st, st
+        )
+        out_ps = jnp.where(active[:, None], next_ps, ps)
+        return (next_st, out_ps), None
 
     (final_st, _), _ = jax.lax.scan(
-        _step, (init_st, policy_seeds), None, length=turns
+        _step, (init_st, policy_seeds), None, length=max(1, turns * 2)
     )
     val = jax.vmap(eval_compact_leaf, in_axes=(0, None, None))(
         final_st, table, weights
@@ -1589,6 +1629,27 @@ def solve_rm_plus_jax(
     return sigma0, sigma1, game_val
 
 
+def _eff_mask7_and_wait(
+    state: CompactBattle, table: MatchTable, side: int
+) -> tuple[jax.Array, jax.Array, jax.Array]:
+    """Return `(eff_mask7, fallback_action, is_wait_only)` mapping `Wait` (`7`) cleanly."""
+    raw8 = legal_actions_mask(state, table, side)
+    raw7 = raw8[:7]
+    is_wait = raw8[7] & (~jnp.any(raw7))
+    nd7 = raw7 & (~compact_dominated_mask7(state, table, side))
+    non_wait7 = jnp.where(jnp.any(nd7), nd7, raw7)
+    wait7 = jnp.array(
+        [True, False, False, False, False, False, False], dtype=jnp.bool_
+    )
+    eff7 = jnp.where(is_wait, wait7, non_wait7)
+    fb = jnp.where(
+        is_wait,
+        jnp.int32(7),
+        jnp.argmax(non_wait7.astype(jnp.int32)).astype(jnp.int32),
+    )
+    return eff7, fb, is_wait
+
+
 @partial(
     jax.jit,
     static_argnames=("samples_per_cell", "rollout_turns", "rm_sweeps", "base_seed_int"),
@@ -1612,14 +1673,8 @@ def evaluate_root_payoff_matrix(
     if weights is None:
         weights = default_eval_weights()
 
-    raw_mask0 = legal_actions_mask(root_state, table, 0)[:7]
-    raw_mask1 = legal_actions_mask(root_state, table, 1)[:7]
-    nondom0 = raw_mask0 & (~compact_dominated_mask7(root_state, table, 0))
-    nondom1 = raw_mask1 & (~compact_dominated_mask7(root_state, table, 1))
-    mask0 = jnp.where(jnp.any(nondom0), nondom0, raw_mask0)
-    mask1 = jnp.where(jnp.any(nondom1), nondom1, raw_mask1)
-    fb0 = jnp.argmax(mask0.astype(jnp.int32)).astype(jnp.int32)
-    fb1 = jnp.argmax(mask1.astype(jnp.int32)).astype(jnp.int32)
+    mask0, fb0, wait0 = _eff_mask7_and_wait(root_state, table, 0)
+    mask1, fb1, wait1 = _eff_mask7_and_wait(root_state, table, 1)
 
     # Paired common random numbers across all 49 cells so every (a0, a1) cell faces
     # the exact same sequence of `samples_per_cell` battle & rollout PRNG seeds
@@ -1658,10 +1713,8 @@ def evaluate_root_payoff_matrix(
         def _step_root_cell(
             a0: jax.Array, a1: jax.Array, b_seed: jax.Array
         ) -> PackedBattle:
-            eff_a0 = _get1(mask0, a0)
-            eff_a1 = _get1(mask1, a1)
-            act0 = jnp.where(eff_a0, a0, fb0)
-            act1 = jnp.where(eff_a1, a1, fb1)
+            act0 = jnp.where(wait0, jnp.int32(7), jnp.where(_get1(mask0, a0), a0, fb0))
+            act1 = jnp.where(wait1, jnp.int32(7), jnp.where(_get1(mask1, a1), a1, fb1))
             st0 = root_state._replace(prng_seed=b_seed)
             st1 = apply_actions(st0, table, jnp.stack([act0, act1], axis=0))
             return pack_battle(st1)
@@ -1680,8 +1733,8 @@ def evaluate_root_payoff_matrix(
         def _eval_joint_sample(
             a0: jax.Array, a1: jax.Array, b_seed: jax.Array, p_seed: jax.Array
         ) -> jax.Array:
-            act0 = jnp.where(_get1(mask0, a0), a0, fb0)
-            act1 = jnp.where(_get1(mask1, a1), a1, fb1)
+            act0 = jnp.where(wait0, jnp.int32(7), jnp.where(_get1(mask0, a0), a0, fb0))
+            act1 = jnp.where(wait1, jnp.int32(7), jnp.where(_get1(mask1, a1), a1, fb1))
             st0 = root_state._replace(prng_seed=b_seed)
             st1 = apply_actions(st0, table, jnp.stack([act0, act1], axis=0))
             res = heavy_rollout_packed_single(
@@ -1774,7 +1827,7 @@ def _step_and_settle_batch(
 
 @partial(
     jax.jit,
-    static_argnames=("top_k", "ply2_samples", "base_seed_int"),
+    static_argnames=("top_k", "ply2_samples", "base_seed_int", "n_p1_seeds"),
 )
 def _prepare_ply1_candidates(
     root_state: CompactBattle,
@@ -1783,11 +1836,16 @@ def _prepare_ply1_candidates(
     top_k: int = 3,
     ply2_samples: int = 4,
     base_seed_int: int = 0xCAFEBABE12345678,
+    n_p1_seeds: int = 1,
 ):
+    raw8_0 = legal_actions_mask(root_state, table, 0)
+    raw8_1 = legal_actions_mask(root_state, table, 1)
+    wait0 = raw8_0[7] & (~jnp.any(raw8_0[:7]))
+    wait1 = raw8_1[7] & (~jnp.any(raw8_1[:7]))
     mask0 = ply1.legal_mask0
     mask1 = ply1.legal_mask1
-    fb0 = jnp.argmax(mask0.astype(jnp.int32)).astype(jnp.int32)
-    fb1 = jnp.argmax(mask1.astype(jnp.int32)).astype(jnp.int32)
+    fb0 = jnp.where(wait0, jnp.int32(7), jnp.argmax(mask0.astype(jnp.int32)).astype(jnp.int32))
+    fb1 = jnp.where(wait1, jnp.int32(7), jnp.argmax(mask1.astype(jnp.int32)).astype(jnp.int32))
 
     q0_ply1 = jnp.where(mask0, jnp.matmul(ply1.payoff_matrix, ply1.sigma1), jnp.float32(-1e9))
     q1_ply1 = jnp.where(
@@ -1804,36 +1862,41 @@ def _prepare_ply1_candidates(
     cand_a0 = top_a0[grid_i.reshape(-1)]  # [K*K]
     cand_a1 = top_a1[grid_j.reshape(-1)]  # [K*K]
 
-    act0 = jnp.where(mask0[cand_a0], cand_a0, fb0)
-    act1 = jnp.where(mask1[cand_a1], cand_a1, fb1)
+    act0 = jnp.where(wait0, jnp.int32(7), jnp.where(mask0[cand_a0], cand_a0, fb0))
+    act1 = jnp.where(wait1, jnp.int32(7), jnp.where(mask1[cand_a1], cand_a1, fb1))
     acts1 = jnp.stack([act0, act1], axis=-1)  # [K*K, 2]
+    acts1_rep = jnp.repeat(acts1, n_p1_seeds, axis=0)  # [K*K*S1, 2]
 
     num_cands = top_k * top_k
+    num_branches = num_cands * n_p1_seeds
     hi_base = jnp.uint32((base_seed_int >> 32) & 0xFFFFFFFF)
     lo_base = jnp.uint32(base_seed_int & 0xFFFFFFFF)
-    ply1_b_seeds = jnp.broadcast_to(
-        jnp.array(
-            [hi_base ^ jnp.uint32(0x13579BDF), lo_base + jnp.uint32(0x2468ACE1)],
-            dtype=jnp.uint32,
-        ),
-        (num_cands, 2),
+    s1_idx = jnp.arange(n_p1_seeds, dtype=jnp.uint32)
+    b1_per_s = jnp.stack(
+        [
+            (hi_base ^ jnp.uint32(0x13579BDF)) ^ (s1_idx * jnp.uint32(0x9E3779B9)),
+            (lo_base + jnp.uint32(0x2468ACE1)) + (s1_idx * jnp.uint32(0x85EBCA6B)),
+        ],
+        axis=-1,
     )
-    ply1_p_seeds = jnp.broadcast_to(
-        jnp.array(
-            [hi_base ^ jnp.uint32(0xDEAD10CC), lo_base + jnp.uint32(0xBEEF2026)],
-            dtype=jnp.uint32,
-        ),
-        (num_cands, 2),
+    p1_per_s = jnp.stack(
+        [
+            (hi_base ^ jnp.uint32(0xDEAD10CC)) ^ (s1_idx * jnp.uint32(0x27D4EB2F)),
+            (lo_base + jnp.uint32(0xBEEF2026)) ^ (s1_idx * jnp.uint32(0x165667B1)),
+        ],
+        axis=-1,
     )
+    ply1_b_seeds = jnp.tile(b1_per_s, (num_cands, 1))
+    ply1_p_seeds = jnp.tile(p1_per_s, (num_cands, 1))
     root_batch = jax.tree_util.tree_map(
-        lambda x: jnp.broadcast_to(x, (num_cands,) + x.shape), root_state
+        lambda x: jnp.broadcast_to(x, (num_branches,) + x.shape), root_state
     )
-    return cand_a0, cand_a1, root_batch, acts1, ply1_b_seeds, ply1_p_seeds
+    return cand_a0, cand_a1, root_batch, acts1_rep, ply1_b_seeds, ply1_p_seeds
 
 
 @partial(
     jax.jit,
-    static_argnames=("top_k", "ply2_samples", "base_seed_int"),
+    static_argnames=("top_k", "ply2_samples", "base_seed_int", "n_p1_seeds"),
 )
 def _prepare_ply2_batch(
     settled_cands: CompactBattle,
@@ -1841,18 +1904,16 @@ def _prepare_ply2_batch(
     top_k: int = 3,
     ply2_samples: int = 4,
     base_seed_int: int = 0xCAFEBABE12345678,
+    n_p1_seeds: int = 1,
 ):
-    num_cands = top_k * top_k
+    num_branches = top_k * top_k * n_p1_seeds
 
-    def _eff_mask(s: CompactBattle, side: int) -> jax.Array:
-        raw_m = legal_actions_mask(s, table, side)[:7]
-        nd_m = raw_m & (~compact_dominated_mask7(s, table, side))
-        return jnp.where(jnp.any(nd_m), nd_m, raw_m)
-
-    m2_0_cands = jax.vmap(lambda s: _eff_mask(s, 0))(settled_cands)
-    m2_1_cands = jax.vmap(lambda s: _eff_mask(s, 1))(settled_cands)
-    fb2_0_cands = jnp.argmax(m2_0_cands.astype(jnp.int32), axis=-1).astype(jnp.int32)
-    fb2_1_cands = jnp.argmax(m2_1_cands.astype(jnp.int32), axis=-1).astype(jnp.int32)
+    m2_0_cands, fb2_0_cands, w2_0_cands = jax.vmap(
+        lambda s: _eff_mask7_and_wait(s, table, 0)
+    )(settled_cands)
+    m2_1_cands, fb2_1_cands, w2_1_cands = jax.vmap(
+        lambda s: _eff_mask7_and_wait(s, table, 1)
+    )(settled_cands)
 
     hi_base = jnp.uint32((base_seed_int >> 32) & 0xFFFFFFFF)
     lo_base = jnp.uint32(base_seed_int & 0xFFFFFFFF)
@@ -1878,24 +1939,32 @@ def _prepare_ply2_batch(
     flat_b1 = jnp.repeat(grid_b1.reshape(-1), ply2_samples)  # [49 * S2]
 
     n_per_cand = 49 * ply2_samples
-    cand_idx_flat = jnp.repeat(jnp.arange(num_cands, dtype=jnp.int32), n_per_cand)
-    b0_all = jnp.tile(flat_b0, (num_cands,))
-    b1_all = jnp.tile(flat_b1, (num_cands,))
-    b2_all = jnp.tile(b2_seeds, (num_cands * 49, 1))
-    p2_all = jnp.tile(p2_seeds, (num_cands * 49, 1))
+    cand_idx_flat = jnp.repeat(jnp.arange(num_branches, dtype=jnp.int32), n_per_cand)
+    b0_all = jnp.tile(flat_b0, (num_branches,))
+    b1_all = jnp.tile(flat_b1, (num_branches,))
+    b2_all = jnp.tile(b2_seeds, (num_branches * 49, 1))
+    p2_all = jnp.tile(p2_seeds, (num_branches * 49, 1))
 
     st_in_batch = jax.tree_util.tree_map(lambda x: x[cand_idx_flat], settled_cands)
     m2_0_flat = m2_0_cands[cand_idx_flat]
     m2_1_flat = m2_1_cands[cand_idx_flat]
     eb0 = jnp.where(
-        m2_0_flat[jnp.arange(num_cands * n_per_cand), b0_all],
-        b0_all,
-        fb2_0_cands[cand_idx_flat],
+        w2_0_cands[cand_idx_flat],
+        jnp.int32(7),
+        jnp.where(
+            m2_0_flat[jnp.arange(num_branches * n_per_cand), b0_all],
+            b0_all,
+            fb2_0_cands[cand_idx_flat],
+        ),
     )
     eb1 = jnp.where(
-        m2_1_flat[jnp.arange(num_cands * n_per_cand), b1_all],
-        b1_all,
-        fb2_1_cands[cand_idx_flat],
+        w2_1_cands[cand_idx_flat],
+        jnp.int32(7),
+        jnp.where(
+            m2_1_flat[jnp.arange(num_branches * n_per_cand), b1_all],
+            b1_all,
+            fb2_1_cands[cand_idx_flat],
+        ),
     )
     acts2_all = jnp.stack([eb0, eb1], axis=-1)
     return m2_0_cands, m2_1_cands, st_in_batch, acts2_all, b2_all, p2_all
@@ -1903,7 +1972,7 @@ def _prepare_ply2_batch(
 
 @partial(
     jax.jit,
-    static_argnames=("top_k", "ply2_samples", "rm_sweeps"),
+    static_argnames=("top_k", "ply2_samples", "rm_sweeps", "n_p1_seeds"),
 )
 def _solve_depth2_from_leaves(
     ply1: RootEquilibriumResult,
@@ -1918,12 +1987,14 @@ def _solve_depth2_from_leaves(
     top_k: int = 3,
     ply2_samples: int = 4,
     rm_sweeps: int = 256,
+    n_p1_seeds: int = 1,
 ) -> Depth2OracleResult:
     num_cands = top_k * top_k
+    num_branches = num_cands * n_p1_seeds
     all_vals = jax.vmap(lambda s: eval_compact_leaf(s, table, weights))(st2_batch).reshape(
-        num_cands, 49, ply2_samples
+        num_branches, 49, ply2_samples
     )
-    mats2 = jnp.mean(all_vals, axis=-1).reshape(num_cands, 7, 7)
+    mats2 = jnp.mean(all_vals, axis=-1).reshape(num_branches, 7, 7)
 
     def _solve_ply2_cand(
         mat2: jax.Array, m2_0: jax.Array, m2_1: jax.Array, outc: jax.Array
@@ -1941,9 +2012,10 @@ def _solve_depth2_from_leaves(
             ),
         )
 
-    ply2_vals = jax.vmap(_solve_ply2_cand)(
+    branch_vals = jax.vmap(_solve_ply2_cand)(
         mats2, m2_0_cands, m2_1_cands, settled_outcomes
     )
+    ply2_vals = jnp.mean(branch_vals.reshape(num_cands, n_p1_seeds), axis=-1)
     mask0 = ply1.legal_mask0
     mask1 = ply1.legal_mask1
     refined_matrix = ply1.payoff_matrix.at[cand_a0, cand_a1].set(ply2_vals)
@@ -1995,14 +2067,15 @@ def evaluate_depth2_counterfactual_oracle(
     1. Evaluates all `7 x 7 = 49` Ply-1 joint actions `(a0, a1)` across `ply1_samples`
        paired chance seeds via the JIT-cached `evaluate_root_payoff_matrix`.
     2. Selects the top-`top_k` legal actions per side (`top_k x top_k` critical cells).
-    3. Steps Ply 1, settles any mid-turn `Baton Pass` or faint `request == 2` switch via
-       `step_switch`, expands the `7 x 7 = 49` Ply-2 stage game across `ply2_samples`
-       paired chance seeds using the shared `_step_and_settle_batch` kernel, and solves
-       the refined root Nash equilibrium.
+    3. Steps Ply 1 across `n_p1_seeds = max(1, min(ply1_samples, 4))` chance seeds, settles
+       any mid-turn `Baton Pass` or faint `request == 2` switch via `step_switch`, expands
+       the `7 x 7 = 49` Ply-2 stage game across `ply2_samples` paired chance seeds using the
+       shared `_step_and_settle_batch` kernel, and solves the refined root Nash equilibrium.
     """
     if weights is None:
         weights = default_eval_weights()
 
+    n_p1_seeds = max(1, min(ply1_samples, 4))
     ply1 = evaluate_root_payoff_matrix(
         root_state,
         table,
@@ -2019,6 +2092,7 @@ def evaluate_depth2_counterfactual_oracle(
         top_k=top_k,
         ply2_samples=ply2_samples,
         base_seed_int=base_seed_int,
+        n_p1_seeds=n_p1_seeds,
     )
     settled_cands = _step_and_settle_batch(root_batch, table, acts1, b1_seeds, p1_seeds)
     m2_0_cands, m2_1_cands, st_in_batch, acts2_all, b2_all, p2_all = _prepare_ply2_batch(
@@ -2027,6 +2101,7 @@ def evaluate_depth2_counterfactual_oracle(
         top_k=top_k,
         ply2_samples=ply2_samples,
         base_seed_int=base_seed_int,
+        n_p1_seeds=n_p1_seeds,
     )
     st2_batch = _step_and_settle_batch(st_in_batch, table, acts2_all, b2_all, p2_all)
     if ply2_rollout_turns > 0:
@@ -2052,6 +2127,7 @@ def evaluate_depth2_counterfactual_oracle(
         top_k=top_k,
         ply2_samples=ply2_samples,
         rm_sweeps=rm_sweeps,
+        n_p1_seeds=n_p1_seeds,
     )
 
 

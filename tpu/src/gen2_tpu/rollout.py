@@ -1,13 +1,10 @@
-"""Batched TPU rollout, multi-core `shard_map`, and Pallas `interpret=True` kernels.
+"""Batched TPU rollout and multi-core `shard_map`.
 
 Provides:
-1. `rollout_single` & `vmap_rollout`: Multi-turn fixed-horizon trajectory rollouts
+1. `rollout_single` & `vmap_rollout`: Multi-turn turn-capped trajectory rollouts
    compiled into a single XLA `while`/`scan` loop with zero host round-trips.
 2. `sharded_tpu_rollout`: Distributes a batch of `N` rollouts across all virtual TPU
    cores (`jax.devices()`) using `shard_map` and `NamedSharding`.
-3. `pallas_evaluate_hits`: Explicit Pallas (`jax.experimental.pallas`) kernel running
-   in `interpret=True` mode to emulate TPU VMEM block tiling (`BlockSpec`) and grid
-   execution locally on CPU.
 """
 
 from __future__ import annotations
@@ -17,11 +14,9 @@ from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
-from jax.experimental import pallas as pl
-from jax.sharding import Mesh, NamedSharding, PartitionSpec as P
+from jax.sharding import Mesh, PartitionSpec as P
 
 from .kernel import (
-    SIMD16_ROLLS,
     apply_actions,
     eval_leaf,
     sample_uniform_legal_action,
@@ -45,18 +40,33 @@ def rollout_single(
     policy_seed: jax.Array,
     horizon: int = 32,
 ) -> RolloutResult:
-    """Run a single `CompactBattle` for `horizon` steps using `jax.lax.scan`."""
+    """Run a single `CompactBattle` for up to `horizon` turns using `jax.lax.scan`."""
+    if horizon <= 0:
+        val = eval_leaf(init_state, table, 0)
+        return RolloutResult(
+            final_state=init_state,
+            leaf_values=val,
+            outcomes=init_state.outcome,
+            turns_played=init_state.turn,
+        )
+
+    cutoff_turn = init_state.turn + jnp.int32(horizon - 1)
 
     def _step(carry: tuple[CompactBattle, jax.Array], _: None):
         st, p_seed = carry
-        p_seed, a0 = sample_uniform_legal_action(st, table, 0, p_seed)
-        p_seed, a1 = sample_uniform_legal_action(st, table, 1, p_seed)
+        active = (st.outcome == 0) & (st.turn <= cutoff_turn)
+        next_seed, a0 = sample_uniform_legal_action(st, table, 0, p_seed)
+        next_seed, a1 = sample_uniform_legal_action(st, table, 1, next_seed)
         acts = jnp.stack([a0, a1], axis=0)
-        next_st = apply_actions(st, table, acts)
-        return (next_st, p_seed), None
+        cand_st = apply_actions(st, table, acts)
+        next_st = jax.tree_util.tree_map(
+            lambda new, old: jnp.where(active, new, old), cand_st, st
+        )
+        out_seed = jnp.where(active, next_seed, p_seed)
+        return (next_st, out_seed), None
 
     (final_st, _), _ = jax.lax.scan(
-        _step, (init_state, policy_seed), None, length=horizon
+        _step, (init_state, policy_seed), None, length=max(1, horizon * 2)
     )
     val = eval_leaf(final_st, table, 0)
     return RolloutResult(
@@ -117,20 +127,39 @@ def _vmap_rollout_impl(
             in_axes=(0, 0),
         )(batched_state, policy_seeds)
 
+    if horizon <= 0:
+        val = jax.vmap(eval_leaf, in_axes=(0, None, None))(batched_state, table, 0)
+        return RolloutResult(
+            final_state=batched_state,
+            leaf_values=val,
+            outcomes=batched_state.outcome,
+            turns_played=batched_state.turn,
+        )
+
+    cutoff_turn = batched_state.turn + jnp.int32(horizon - 1)
+
     def _step(carry: tuple[CompactBattle, jax.Array], _: None):
         st, ps = carry
-        ps, a0 = jax.vmap(
+        active = (st.outcome == 0) & (st.turn <= cutoff_turn)
+        next_ps, a0 = jax.vmap(
             sample_uniform_legal_action, in_axes=(0, None, None, 0)
         )(st, table, 0, ps)
-        ps, a1 = jax.vmap(
+        next_ps, a1 = jax.vmap(
             sample_uniform_legal_action, in_axes=(0, None, None, 0)
-        )(st, table, 1, ps)
+        )(st, table, 1, next_ps)
         acts = jnp.stack([a0, a1], axis=-1)
-        next_st = jax.vmap(apply_actions, in_axes=(0, None, 0))(st, table, acts)
-        return (next_st, ps), None
+        cand_st = jax.vmap(apply_actions, in_axes=(0, None, 0))(st, table, acts)
+
+        def _select(new: jax.Array, old: jax.Array) -> jax.Array:
+            mask = active.reshape((active.shape[0],) + (1,) * (new.ndim - 1))
+            return jnp.where(mask, new, old)
+
+        next_st = jax.tree_util.tree_map(_select, cand_st, st)
+        out_ps = jnp.where(active[:, None], next_ps, ps)
+        return (next_st, out_ps), None
 
     (final_st, _), _ = jax.lax.scan(
-        _step, (batched_state, policy_seeds), None, length=horizon
+        _step, (batched_state, policy_seeds), None, length=max(1, horizon * 2)
     )
     val = jax.vmap(eval_leaf, in_axes=(0, None, None))(final_st, table, 0)
     return RolloutResult(
@@ -193,98 +222,3 @@ def sharded_tpu_rollout(
         mesh = make_tpu_mesh(axis_names=("core",))
     fn = _build_sharded_rollout_fn(mesh, horizon)
     return fn(batched_state, table, policy_seeds)
-
-
-# =========================================================================
-# Pallas TPU VMEM Emulation Kernel (`interpret=True`)
-# =========================================================================
-
-
-def _pallas_hit_16_kernel(
-    base_dmg_ref,
-    hp_ref,
-    sub_hp_ref,
-    bypasses_ref,
-    rolls_ref,
-    dealt_out_ref,
-    post_hp_out_ref,
-    post_sub_out_ref,
-):
-    """Pallas kernel computing 16 damage rolls and branchless `[hp, sub_hp]` updates
-    per battle in a VMEM tile of size `block_b`.
-    """
-    bd = base_dmg_ref[:]  # int32[block_b]
-    hp = hp_ref[:]  # int32[block_b]
-    sub = sub_hp_ref[:]  # int32[block_b]
-    byp = bypasses_ref[:]  # int32[block_b] (0 or 1)
-    rolls = rolls_ref[:]  # int32[16]
-
-    # Broadcast [block_b, 1] x [1, 16] -> [block_b, 16] inside VMEM
-    bd_2d = bd[:, None]
-    rolls_2d = rolls[None, :]
-    varied = jnp.maximum(jnp.int32(1), (bd_2d * rolls_2d) // jnp.int32(255))
-    d_lanes = jnp.where(
-        bd_2d <= 0,
-        jnp.int32(0),
-        jnp.where(bd_2d == 1, jnp.int32(1), varied),
-    )
-
-    hits_sub = (sub > 0) & (byp == 0)
-    hits_sub_2d = hits_sub[:, None]
-    hp_2d = jnp.broadcast_to(hp[:, None], d_lanes.shape)
-    sub_2d = jnp.broadcast_to(sub[:, None], d_lanes.shape)
-
-    before = jnp.where(hits_sub_2d, sub_2d, hp_2d)
-    dealt = jnp.minimum(d_lanes, before)
-    after = before - dealt
-
-    dealt_out_ref[:, :] = dealt
-    post_hp_out_ref[:, :] = jnp.where(hits_sub_2d, hp_2d, after)
-    post_sub_out_ref[:, :] = jnp.where(hits_sub_2d, after, sub_2d)
-
-
-@partial(jax.jit, static_argnames=("block_size",))
-def pallas_evaluate_hits(
-    base_dmg: jax.Array,
-    target_hp: jax.Array,
-    target_sub_hp: jax.Array,
-    bypasses_sub: jax.Array,
-    block_size: int = 128,
-) -> tuple[jax.Array, jax.Array, jax.Array]:
-    """Execute the 16-roll damage + Substitute/HP pool kernel via Pallas `interpret=True`.
-
-    Tiles the batch of size `B` (multiple of `block_size`, default 128 matching TPU VPU
-    lane width) into VMEM blocks using `pl.BlockSpec`.
-    """
-    batch_size = base_dmg.shape[0]
-    if batch_size % block_size != 0:
-        raise ValueError(
-            f"batch_size ({batch_size}) must be a multiple of VPU block_size ({block_size})"
-        )
-    grid_len = batch_size // block_size
-    out_shape = jax.ShapeDtypeStruct((batch_size, 16), jnp.int32)
-
-    return pl.pallas_call(
-        _pallas_hit_16_kernel,
-        out_shape=(out_shape, out_shape, out_shape),
-        grid=(grid_len,),
-        in_specs=[
-            pl.BlockSpec((block_size,), lambda i: (i,)),
-            pl.BlockSpec((block_size,), lambda i: (i,)),
-            pl.BlockSpec((block_size,), lambda i: (i,)),
-            pl.BlockSpec((block_size,), lambda i: (i,)),
-            pl.BlockSpec((16,), lambda _: (0,)),
-        ],
-        out_specs=[
-            pl.BlockSpec((block_size, 16), lambda i: (i, 0)),
-            pl.BlockSpec((block_size, 16), lambda i: (i, 0)),
-            pl.BlockSpec((block_size, 16), lambda i: (i, 0)),
-        ],
-        interpret=True,
-    )(
-        base_dmg.astype(jnp.int32),
-        target_hp.astype(jnp.int32),
-        target_sub_hp.astype(jnp.int32),
-        bypasses_sub.astype(jnp.int32),
-        SIMD16_ROLLS,
-    )

@@ -40,6 +40,7 @@ impl Identity {
             "pool": self.pool,
             "prior": self.prior,
             "teamKey": team_key,
+            "previewLevelCaps": battle.preview_level_caps,
             "opponentPublic": public,
         }).to_string())
     }

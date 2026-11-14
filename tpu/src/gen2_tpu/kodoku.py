@@ -354,8 +354,6 @@ def compile_roster6(
                 iflags |= ItemFlag.LEFTOVERS
             if ikey == "brightpowder":
                 iflags |= ItemFlag.BRIGHTPOWDER
-            if ikey == "focusband":
-                iflags |= ItemFlag.FOCUSBAND
             if ikey == "mintberry":
                 iflags |= ItemFlag.MINTBERRY
             if ikey == "miracleberry":
@@ -364,8 +362,6 @@ def compile_roster6(
                 iflags |= ItemFlag.GOLDBERRY
             if ikey in ("berry", "berryjuice"):
                 iflags |= ItemFlag.BERRY
-            if ikey == "mysteryberry":
-                iflags |= ItemFlag.MYSTERYBERRY
             if ikey == "scopelens":
                 iflags |= ItemFlag.SCOPE_LENS
             item_flags_arr[c_idx] = iflags
@@ -710,25 +706,41 @@ def _single_table_heavy_rollout(
     eps: float = 0.2,
     residual_bundle: ResidualBundle | None = None,
 ) -> HeavyRolloutResult:
-    """Run a `turns`-step `Playout::Heavy` game on a single `(PackedBattle, MatchTable)`."""
+    """Run up to `turns` game turns of `Playout::Heavy` on a single `(PackedBattle, MatchTable)`."""
     init_state = unpack_battle(init_packed)
+    if turns <= 0:
+        val = eval_compact_leaf(init_state, table, weights, residual_bundle=residual_bundle)
+        return HeavyRolloutResult(
+            final_packed=init_packed,
+            leaf_values=val,
+            outcomes=init_state.outcome,
+            turns_played=init_state.turn,
+        )
+
     rollout_res: RolloutResidualWeights | None = (
         residual_bundle.rollout if residual_bundle is not None else None
     )
+    cutoff_turn = init_state.turn + jnp.int32(turns - 1)
+    scan_steps = max(1, int(turns) * 2)
 
     def _step(carry: tuple[CompactBattle, jax.Array], _: None):
         st, p_seed = carry
-        p_seed, a0 = sample_heavy_playout_action(
+        active = (st.outcome == 0) & (st.turn <= cutoff_turn)
+        p_seed2, a0 = sample_heavy_playout_action(
             st, table, 0, p_seed, eps=eps, rollout_residual=rollout_res
         )
-        p_seed, a1 = sample_heavy_playout_action(
-            st, table, 1, p_seed, eps=eps, rollout_residual=rollout_res
+        p_seed2, a1 = sample_heavy_playout_action(
+            st, table, 1, p_seed2, eps=eps, rollout_residual=rollout_res
         )
         acts = jnp.stack([a0, a1], axis=0)
-        next_st = apply_actions(st, table, acts)
-        return (next_st, p_seed), None
+        cand_st = apply_actions(st, table, acts)
+        next_st = jax.tree_util.tree_map(
+            lambda nx, cur: jnp.where(active, nx, cur), cand_st, st
+        )
+        next_ps = jnp.where(active, p_seed2, p_seed)
+        return (next_st, next_ps), None
 
-    (final_st, _), _ = jax.lax.scan(_step, (init_state, policy_seed), None, length=turns)
+    (final_st, _), _ = jax.lax.scan(_step, (init_state, policy_seed), None, length=scan_steps)
     val = eval_compact_leaf(final_st, table, weights, residual_bundle=residual_bundle)
     return HeavyRolloutResult(
         final_packed=pack_battle(final_st),
@@ -763,46 +775,68 @@ def _get_jit_multi_table_rollout_fn(turns: int, eps: float):
             )(batched_packed, batched_tables, policy_seeds)
 
         init_st = unpack_battle(batched_packed)
+        if turns <= 0:
+            val = jax.vmap(
+                lambda s, tb: eval_compact_leaf(s, tb, weights, residual_bundle=residual_bundle)
+            )(init_st, batched_tables)
+            return HeavyRolloutResult(
+                final_packed=batched_packed,
+                leaf_values=val,
+                outcomes=init_st.outcome,
+                turns_played=init_st.turn,
+            )
+
         rollout_res: RolloutResidualWeights | None = (
             residual_bundle.rollout if residual_bundle is not None else None
         )
+        cutoff_turn = init_st.turn + jnp.int32(turns - 1)
+        max_steps = max(1, int(turns) * 2)
 
         def _step(carry: tuple[CompactBattle, jax.Array], _: None):
             st, ps = carry
-            ps, a0 = jax.vmap(
+            active = (st.outcome == 0) & (st.turn <= cutoff_turn)
+            ps2, a0 = jax.vmap(
                 lambda s, tb, p: sample_heavy_playout_action(
                     s, tb, 0, p, eps=eps, rollout_residual=rollout_res
                 )
             )(st, batched_tables, ps)
-            ps, a1 = jax.vmap(
+            ps2, a1 = jax.vmap(
                 lambda s, tb, p: sample_heavy_playout_action(
                     s, tb, 1, p, eps=eps, rollout_residual=rollout_res
                 )
-            )(st, batched_tables, ps)
+            )(st, batched_tables, ps2)
             acts = jnp.stack([a0, a1], axis=-1)
-            next_st = jax.vmap(apply_actions, in_axes=(0, 0, 0))(st, batched_tables, acts)
-            return (next_st, ps), None
+            cand_st = jax.vmap(apply_actions, in_axes=(0, 0, 0))(st, batched_tables, acts)
+            next_st = jax.tree_util.tree_map(
+                lambda nx, cur: jnp.where(
+                    jnp.expand_dims(active, axis=tuple(range(1, cur.ndim))), nx, cur
+                ),
+                cand_st,
+                st,
+            )
+            next_ps = jnp.where(active[:, None], ps2, ps)
+            return (next_st, next_ps), None
 
-        block_turns = 5
-        if turns >= 10 and (turns % block_turns == 0):
-            n_blocks = turns // block_turns
+        block_steps = 10
+        if max_steps >= 20 and (max_steps % block_steps == 0):
+            n_blocks = max_steps // block_steps
 
             def _cond(loop_carry: tuple[jax.Array, CompactBattle, jax.Array]) -> jax.Array:
                 b_idx, st, _ = loop_carry
-                return (b_idx < n_blocks) & jnp.any(st.outcome == 0)
+                return (b_idx < n_blocks) & jnp.any((st.outcome == 0) & (st.turn <= cutoff_turn))
 
             def _body(
                 loop_carry: tuple[jax.Array, CompactBattle, jax.Array],
             ) -> tuple[jax.Array, CompactBattle, jax.Array]:
                 b_idx, st, ps = loop_carry
-                (next_st, next_ps), _ = jax.lax.scan(_step, (st, ps), None, length=block_turns)
+                (next_st, next_ps), _ = jax.lax.scan(_step, (st, ps), None, length=block_steps)
                 return (b_idx + jnp.int32(1), next_st, next_ps)
 
             _, final_st, _ = jax.lax.while_loop(
                 _cond, _body, (jnp.int32(0), init_st, policy_seeds)
             )
         else:
-            (final_st, _), _ = jax.lax.scan(_step, (init_st, policy_seeds), None, length=turns)
+            (final_st, _), _ = jax.lax.scan(_step, (init_st, policy_seeds), None, length=max_steps)
 
         val = jax.vmap(
             lambda s, tb: eval_compact_leaf(s, tb, weights, residual_bundle=residual_bundle)
@@ -873,20 +907,6 @@ def _get_jit_subgame_chunk_fn(turns: int, eps: float):
         return jnp.where(swapped_mask, jnp.float32(1.0) - res.leaf_values, res.leaf_values)
 
     return _fn
-
-
-def _make_subgame_seeds(
-    n_trajectories: int,
-    seed_hi: jax.Array,
-    seed_lo: jax.Array,
-) -> tuple[jax.Array, jax.Array]:
-    """Generate deterministic 32-bit `(battle_seeds, policy_seeds)` of shape `uint32[N, 2]`."""
-    idx = jnp.arange(n_trajectories, dtype=jnp.uint32)
-    b_hi = seed_hi ^ (idx * jnp.uint32(0x9E3779B9))
-    b_lo = seed_lo + (idx * jnp.uint32(0x85EBCA6B) + jnp.uint32(1))
-    p_hi = (seed_hi + jnp.uint32(0xC2B2AE35)) ^ (idx * jnp.uint32(0x27D4EB2F))
-    p_lo = seed_lo ^ (idx * jnp.uint32(0x165667B1) + jnp.uint32(7))
-    return jnp.stack([b_hi, b_lo], axis=-1), jnp.stack([p_hi, p_lo], axis=-1)
 
 
 def _bucket_fused_trajectory_capacity(total_trajectories: int, max_chunk: int = 8192) -> int:
@@ -1048,6 +1068,21 @@ def solve_rect_rm_plus_jax(
     - `mask_cols`: optional `bool[C]` legality mask for Column Player.
     """
     n_rows, n_cols = payoff_matrix.shape
+    if n_rows == 0 or n_cols == 0:
+        half = jnp.float32(0.5)
+        return RectEquilibriumResult(
+            p_a=jnp.zeros((n_rows,), dtype=jnp.float32),
+            p_b=jnp.zeros((n_cols,), dtype=jnp.float32),
+            argmax_a=jnp.int32(0),
+            argmax_b=jnp.int32(0),
+            value=half,
+            guarantee_mixed_a=half,
+            guarantee_argmax_a=half,
+            guarantee_mixed_b=half,
+            guarantee_argmax_b=half,
+            ev_row=jnp.zeros((n_rows,), dtype=jnp.float32),
+            ev_col=jnp.zeros((n_cols,), dtype=jnp.float32),
+        )
     if mask_rows is None:
         m0 = jnp.ones((n_rows,), dtype=jnp.float32)
     else:
@@ -1133,37 +1168,6 @@ def solve_rect_rm_plus_jax(
         ev_row=ev_row,
         ev_col=ev_col,
     )
-
-
-def replicator_dynamics_jax(
-    payoff_matrix: jax.Array,
-    init_weights: jax.Array | None = None,
-    eta: float = 2.0,
-    steps: int = 1000,
-) -> tuple[jax.Array, jax.Array]:
-    r"""Continuous-abundance replicator dynamics $w_i^{(t+1)} = w_i^{(t)} \exp(\eta (u_i - \bar{u})) / Z$.
-
-    Matches `gcp-batch-psro.py::replicator_weights` and `meta_eco.rs` symmetric meta-Nash updates.
-    Returns `(final_weights, fitness_vector)`.
-    """
-    n = payoff_matrix.shape[0]
-    if init_weights is None:
-        w0 = jnp.full((n,), 1.0 / max(1, n), dtype=jnp.float32)
-    else:
-        w0 = init_weights.astype(jnp.float32)
-        w0 = w0 / jnp.maximum(jnp.sum(w0), jnp.float32(1e-12))
-
-    eta_f = jnp.float32(eta)
-
-    def _body(_: int, w: jax.Array) -> jax.Array:
-        u = jnp.matmul(payoff_matrix, w)
-        u_bar = jnp.sum(w * u)
-        w_next = w * jnp.exp(eta_f * (u - u_bar))
-        return w_next / jnp.maximum(jnp.sum(w_next), jnp.float32(1e-12))
-
-    w_star = jax.lax.fori_loop(0, steps, _body, w0)
-    u_star = jnp.matmul(payoff_matrix, w_star)
-    return w_star, u_star
 
 
 # =========================================================================
@@ -1717,16 +1721,24 @@ def recompute_population_wars_np(
       pairs in the population without any hand-coded level prior.
     - Returns `(slot_wars, alpha, beta)` where `slot_wars` has the same shape as `slot_marginals`.
     """
-    marg = np.asarray(slot_marginals, dtype=np.float64)
-    lvls = np.asarray(slot_levels, dtype=np.float64)
+    marg = np.nan_to_num(
+        np.asarray(slot_marginals, dtype=np.float64), nan=0.0, posinf=0.0, neginf=0.0
+    )
+    lvls = np.nan_to_num(
+        np.asarray(slot_levels, dtype=np.float64), nan=50.0, posinf=50.0, neginf=50.0
+    )
     if np.ndim(games) == 0:
-        g_arr = np.full(marg.shape, max(float(games), 1e-9), dtype=np.float64)
+        g_val = float(np.nan_to_num(float(games), nan=1.0, posinf=1.0, neginf=1.0))
+        g_arr = np.full(marg.shape, max(g_val, 1e-9), dtype=np.float64)
     else:
-        g_arr = np.maximum(np.asarray(games, dtype=np.float64), 1e-9)
+        g_arr = np.maximum(
+            np.nan_to_num(np.asarray(games, dtype=np.float64), nan=1.0, posinf=1.0, neginf=1.0),
+            1e-9,
+        )
         if g_arr.ndim == 1 and marg.ndim == 2:
             g_arr = g_arr[:, None]
 
-    norm_m = marg / g_arr
+    norm_m = np.nan_to_num(marg / g_arr, nan=0.0, posinf=0.0, neginf=0.0)
     flat_x = (lvls - 50.0).reshape(-1)
     flat_y = norm_m.reshape(-1)
     n = float(flat_x.size)
@@ -3035,7 +3047,10 @@ def evaluate_6v6_bayesian_election_call_tpu(
         )
         n_pairs_w = float(g_w // 2)
         sum_mat[ia_idx, ib_idx] += scores_w * n_pairs_w
-        sq_mat[ia_idx, ib_idx] += (scores_w * scores_w) * n_pairs_w
+        sq_mat[ia_idx, ib_idx] += (
+            (scores_w * scores_w) * n_pairs_w
+            + scores_w * (1.0 - scores_w) * max(0.0, n_pairs_w - 1.0)
+        )
         cnt_mat[ia_idx, ib_idx] += int(n_pairs_w)
 
         mean_mat, lcb_mat, ucb_mat, rad_mat = bayesian_election_call_bounds_np(
@@ -3130,24 +3145,30 @@ def update_shell_belief_mask_jax(
 
     item_prev = prev_state.item[f_slice]  # [3]
     item_curr = curr_state.item[f_slice]  # [3]
-    item_revealed = item_curr != item_prev  # bool[3]
+    item_revealed = (item_curr != item_prev) & (item_prev != jnp.int32(0))  # bool[3]
 
     true_m_type = true_table.move_type[f_slice]  # [3, 4]
     true_m_bp = true_table.move_base_power[f_slice]  # [3, 4]
     true_m_sk = true_table.move_special_kind[f_slice]  # [3, 4]
     true_iflags = true_table.item_flags[f_slice]  # [3]
 
-    def _check_variant(cand_tb: MatchTable) -> jax.Array:
-        c_m_type = cand_tb.move_type[f_slice]
-        c_m_bp = cand_tb.move_base_power[f_slice]
-        c_m_sk = cand_tb.move_special_kind[f_slice]
-        c_iflags = cand_tb.item_flags[f_slice]
+    slot_idx = jnp.arange(4, dtype=jnp.int32)[None, None, :]  # [1, 1, 4]
 
-        move_match = (
-            (c_m_type == true_m_type)
-            & (c_m_bp == true_m_bp)
-            & (c_m_sk == true_m_sk)
-        )
+    def _check_variant(cand_tb: MatchTable) -> jax.Array:
+        c_m_type = cand_tb.move_type[f_slice]  # [3, 4]
+        c_m_bp = cand_tb.move_base_power[f_slice]  # [3, 4]
+        c_m_sk = cand_tb.move_special_kind[f_slice]  # [3, 4]
+        c_num_moves = cand_tb.num_moves[f_slice]  # [3]
+        c_iflags = cand_tb.item_flags[f_slice]  # [3]
+
+        valid_c_slot = slot_idx < c_num_moves[:, None, None]  # [3, 1, 4]
+        move_match = jnp.any(
+            valid_c_slot
+            & (c_m_type[:, None, :] == true_m_type[:, :, None])
+            & (c_m_bp[:, None, :] == true_m_bp[:, :, None])
+            & (c_m_sk[:, None, :] == true_m_sk[:, :, None]),
+            axis=-1,
+        )  # [3, 4]
         moves_ok = jnp.all(jnp.where(move_used, move_match, True))
         items_ok = jnp.all(jnp.where(item_revealed, c_iflags == true_iflags, True))
         return moves_ok & items_ok
@@ -3336,12 +3357,18 @@ def select_shell_belief_minimax_action_jax(
         jnp.ones_like(prior_weights_foe) / jnp.maximum(jnp.float32(prior_weights_foe.shape[0]), jnp.float32(1.0)),
     )
 
-    raw_mask0 = legal_actions_mask(state, own_table, 0)[:7]
-    raw_mask1 = legal_actions_mask(state, own_table, 1)[:7]
+    full_mask0 = legal_actions_mask(state, own_table, 0)
+    full_mask1 = legal_actions_mask(state, own_table, 1)
+    wait0 = full_mask0[7]
+    wait1 = full_mask1[7]
+    wait_mask7 = jnp.array([True, False, False, False, False, False, False], dtype=jnp.bool_)
+
+    raw_mask0 = jnp.where(wait0, wait_mask7, full_mask0[:7])
+    raw_mask1 = jnp.where(wait1, wait_mask7, full_mask1[:7])
     nondom0 = raw_mask0 & (~compact_dominated_mask7(state, own_table, 0))
     nondom1 = raw_mask1 & (~compact_dominated_mask7(state, own_table, 1))
-    mask0 = jnp.where(jnp.any(nondom0), nondom0, raw_mask0)
-    mask1 = jnp.where(jnp.any(nondom1), nondom1, raw_mask1)
+    mask0 = jnp.where(wait0, wait_mask7, jnp.where(jnp.any(nondom0), nondom0, raw_mask0))
+    mask1 = jnp.where(wait1, wait_mask7, jnp.where(jnp.any(nondom1), nondom1, raw_mask1))
     fb0 = jnp.argmax(mask0.astype(jnp.int32)).astype(jnp.int32)
     fb1 = jnp.argmax(mask1.astype(jnp.int32)).astype(jnp.int32)
 
@@ -3352,32 +3379,59 @@ def select_shell_belief_minimax_action_jax(
     flat_a1 = grid_a1.reshape(-1)
 
     next_p_seed, u_draw = prng_random(policy_seed, jnp.int32(10000))
-    b_seed_probe = jnp.stack(
+    p_seed_ro0 = jnp.stack(
+        [
+            next_p_seed[0] ^ jnp.uint32(0xA5A5A5A5),
+            next_p_seed[1] + jnp.uint32(0x3C6EF372),
+        ],
+        axis=0,
+    )
+    p_seed_ro1 = jnp.stack(
+        [
+            next_p_seed[0] ^ jnp.uint32(0x5A5A5A5A),
+            next_p_seed[1] + jnp.uint32(0x6A09E667),
+        ],
+        axis=0,
+    )
+    b_seed_probe0 = jnp.stack(
         [
             state.prng_seed[0] ^ jnp.uint32(0x9E3779B9),
             state.prng_seed[1] + jnp.uint32(0x85EBCA6B),
         ],
         axis=0,
     )
+    b_seed_probe1 = jnp.stack(
+        [
+            state.prng_seed[0] ^ jnp.uint32(0xC2B2AE35),
+            state.prng_seed[1] + jnp.uint32(0x27D4EB2F),
+        ],
+        axis=0,
+    )
 
     def _eval_variant_matrix(cand_tb: MatchTable) -> tuple[jax.Array, jax.Array]:
-        c_raw0 = legal_actions_mask(state, cand_tb, 0)[:7]
-        c_raw1 = legal_actions_mask(state, cand_tb, 1)[:7]
+        c_full0 = legal_actions_mask(state, cand_tb, 0)
+        c_full1 = legal_actions_mask(state, cand_tb, 1)
+        c_wait0 = c_full0[7]
+        c_wait1 = c_full1[7]
+        c_raw0 = jnp.where(c_wait0, wait_mask7, c_full0[:7])
+        c_raw1 = jnp.where(c_wait1, wait_mask7, c_full1[:7])
         c_nd0 = c_raw0 & (~compact_dominated_mask7(state, cand_tb, 0))
         c_nd1 = c_raw1 & (~compact_dominated_mask7(state, cand_tb, 1))
-        m0_v = mask0 if int(side) == 0 else jnp.where(jnp.any(c_nd0), c_nd0, c_raw0)
-        m1_v = jnp.where(jnp.any(c_nd1), c_nd1, c_raw1) if int(side) == 0 else mask1
+        m0_v = mask0 if int(side) == 0 else jnp.where(c_wait0, wait_mask7, jnp.where(jnp.any(c_nd0), c_nd0, c_raw0))
+        m1_v = jnp.where(c_wait1, wait_mask7, jnp.where(jnp.any(c_nd1), c_nd1, c_raw1)) if int(side) == 0 else mask1
         fb0_v = jnp.argmax(m0_v.astype(jnp.int32)).astype(jnp.int32)
         fb1_v = jnp.argmax(m1_v.astype(jnp.int32)).astype(jnp.int32)
 
         m0_flat = jnp.broadcast_to(m0_v[:, None], (7, 7)).reshape(-1)
         m1_flat = jnp.broadcast_to(m1_v[None, :], (7, 7)).reshape(-1)
-        act0_v = jnp.where(m0_flat, flat_a0, fb0_v)
-        act1_v = jnp.where(m1_flat, flat_a1, fb1_v)
+        act0_v = jnp.where(c_wait0, jnp.int32(7), jnp.where(m0_flat, flat_a0, fb0_v))
+        act1_v = jnp.where(c_wait1, jnp.int32(7), jnp.where(m1_flat, flat_a1, fb1_v))
         acts_49_v = jnp.stack([act0_v, act1_v], axis=-1)
 
-        def _eval_cell(act_pair: jax.Array) -> jax.Array:
-            st0 = state._replace(prng_seed=b_seed_probe)
+        def _eval_cell_seed(
+            act_pair: jax.Array, b_seed_p: jax.Array, p_seed_ro: jax.Array
+        ) -> jax.Array:
+            st0 = state._replace(prng_seed=b_seed_p)
             st1 = apply_actions(st0, cand_tb, act_pair)
             v_leaf = eval_compact_leaf(st1, cand_tb, weights, residual_bundle=residual_bundle)
             if rollout_turns <= 0:
@@ -3385,7 +3439,7 @@ def select_shell_belief_minimax_action_jax(
             ro = _single_table_heavy_rollout(
                 pack_battle(st1),
                 cand_tb,
-                next_p_seed,
+                p_seed_ro,
                 weights,
                 turns=rollout_turns,
                 eps=0.06,
@@ -3399,6 +3453,11 @@ def select_shell_belief_minimax_action_jax(
             )
             return jnp.where(use_beq, shrunk, ro.leaf_values)
 
+        def _eval_cell(act_pair: jax.Array) -> jax.Array:
+            v0 = _eval_cell_seed(act_pair, b_seed_probe0, p_seed_ro0)
+            v1 = _eval_cell_seed(act_pair, b_seed_probe1, p_seed_ro1)
+            return jnp.float32(0.5) * (v0 + v1)
+
         vals_49 = jax.vmap(_eval_cell)(acts_49_v).reshape(7, 7)
         mask_opp_v = m1_v if int(side) == 0 else m0_v
         # Orient matrix so row = `side`'s action, col = `1 - side`'s action, payoff = `side`'s score
@@ -3406,6 +3465,7 @@ def select_shell_belief_minimax_action_jax(
         return mat_oriented, mask_opp_v
 
     mats_oriented_v, masks_opp_v = jax.vmap(_eval_variant_matrix)(candidate_tables_foe)
+    wait_side = wait0 if int(side) == 0 else wait1
     mask_side = mask0 if int(side) == 0 else mask1
     fb_side = fb0 if int(side) == 0 else fb1
 
@@ -3434,7 +3494,8 @@ def select_shell_belief_minimax_action_jax(
     hit_mask = (cdf >= u01) & mask_side
     sampled = jnp.argmax(hit_mask.astype(jnp.int32)).astype(jnp.int32)
     chosen = jnp.where(jnp.any(hit_mask), sampled, fb_side)
-    return next_p_seed, chosen
+    chosen_final = jnp.where(wait_side, jnp.int32(7), chosen)
+    return next_p_seed, chosen_final
 
 
 @lru_cache(maxsize=32)
@@ -4059,7 +4120,10 @@ def run_unified_nash_and_bake_pipeline_tpu(
         for sc in spec_scores:
             val_f = float(sc)
             ni_sum[0] += val_f * n_pairs_spec
-            ni_sq[0] += (val_f * val_f) * n_pairs_spec
+            ni_sq[0] += (
+                (val_f * val_f) * n_pairs_spec
+                + val_f * (1.0 - val_f) * max(0, n_pairs_spec - 1)
+            )
             ni_cnt[0] += n_pairs_spec
 
         m_arr, l_arr, u_arr, _ = bayesian_election_call_bounds_np(ni_sum, ni_sq, ni_cnt, z=z_value)
@@ -4111,7 +4175,6 @@ def run_unified_nash_and_bake_pipeline_tpu(
     preview_val_mat = np.full((n_teams, n_teams), 0.5, dtype=np.float32)
     pair_val_mat = np.full((n_teams, n_teams), 0.5, dtype=np.float32)
     pair_pol_sum = np.zeros((n_teams, n_teams), dtype=np.float64)
-    pair_pol_sq = np.zeros((n_teams, n_teams), dtype=np.float64)
     pair_pol_cnt = np.zeros((n_teams, n_teams), dtype=np.int32)
     pair_evaluated = np.zeros((n_teams, n_teams), dtype=bool)
     for i in range(n_teams):
@@ -4182,7 +4245,10 @@ def run_unified_nash_and_bake_pipeline_tpu(
                     )
                     n_pairs_w = float(g_w // 2)
                     sub_sum[(i, j)][ia_idx, ib_idx] += scores_w * n_pairs_w
-                    sub_sq[(i, j)][ia_idx, ib_idx] += (scores_w * scores_w) * n_pairs_w
+                    sub_sq[(i, j)][ia_idx, ib_idx] += (
+                        (scores_w * scores_w) * n_pairs_w
+                        + scores_w * (1.0 - scores_w) * max(0.0, n_pairs_w - 1.0)
+                    )
                     sub_cnt[(i, j)][ia_idx, ib_idx] += int(n_pairs_w)
 
                     # Prune provably dominated or tightly resolved 3v3 cells for subsequent waves
@@ -4267,7 +4333,6 @@ def run_unified_nash_and_bake_pipeline_tpu(
             for idx_p, (i, j, _, _) in enumerate(wave_pol_specs):
                 sc_pol = float(pol_scores_wave[idx_p])
                 pair_pol_sum[i, j] += sc_pol * n_pol_pairs
-                pair_pol_sq[i, j] += (sc_pol * sc_pol) * n_pol_pairs
                 pair_pol_cnt[i, j] += n_pol_pairs
 
         # Step 2c: Compute each active team's blended payoff and credible interval against incumbent Nash
@@ -4544,7 +4609,6 @@ _EXCLUDED_KODOKU_MOVES = frozenset(
         "nightmare",
         "bide",
         "rage",
-        "Detect",
         "detect",
     }
 )

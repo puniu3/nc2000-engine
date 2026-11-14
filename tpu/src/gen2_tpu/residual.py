@@ -74,29 +74,12 @@ class ResidualBundle(NamedTuple):
     rollout: RolloutResidualWeights
 
 
-def zero_eval_residual_weights() -> EvalResidualWeights:
-    return EvalResidualWeights(
-        active=jnp.bool_(False),
-        w1=jnp.zeros((EVAL_HIDDEN_DIM, EVAL_FEAT_DIM), dtype=jnp.float32),
-        b1=jnp.zeros((EVAL_HIDDEN_DIM,), dtype=jnp.float32),
-        w2=jnp.zeros((EVAL_HIDDEN_DIM,), dtype=jnp.float32),
-    )
-
-
 def zero_rollout_residual_weights() -> RolloutResidualWeights:
     return RolloutResidualWeights(
         active=jnp.bool_(False),
         u_proj=jnp.zeros((ROLLOUT_RANK, ROLLOUT_STATE_DIM), dtype=jnp.float32),
         v_proj=jnp.zeros((ROLLOUT_RANK, ROLLOUT_ACT_DIM), dtype=jnp.float32),
         act_bias=jnp.zeros((ROLLOUT_ACT_DIM,), dtype=jnp.float32),
-    )
-
-
-def zero_residual_bundle() -> ResidualBundle:
-    """Return an inactive all-zero `ResidualBundle` (`ResidualBundle::zero()`)."""
-    return ResidualBundle(
-        eval=zero_eval_residual_weights(),
-        rollout=zero_rollout_residual_weights(),
     )
 
 
@@ -213,31 +196,6 @@ def default_residual_bundle() -> ResidualBundle:
             w2=jnp.array(_DEFAULT_W2_LIST, dtype=jnp.float32),
         ),
         rollout=zero_rollout_residual_weights(),
-    )
-
-
-def calibrated_rollout_residual_weights() -> RolloutResidualWeights:
-    """Return calibrated `RolloutResidualWeights` activating all 6 tactical action features:
-    - `act_bias[0] = 0.68`: Baton Pass (`sk == 18`) transfer when boosted or behind Substitute
-    - `act_bias[1] = 0.72`: Whirlwind/Roar (`sk == 7`) phaze against boosted or Substitute foe
-    - `act_bias[2] = 0.40`: Self-boost setup (`Curse`, `Belly Drum`, `SD`, `Agility`, `Growth`) when healthy/safe
-    - `act_bias[3] = 0.44`: `Substitute` creation when faster or safe
-    - `act_bias[4] = 0.48`: Status infliction (`Spore`/`Sleep`/`Paralysis`/`Toxic`) on unstatused foe
-    - `act_bias[5] = 0.35`: Voluntary offensive switch when `stay_best_dmg < 0.25`
-    """
-    return RolloutResidualWeights(
-        active=jnp.bool_(True),
-        u_proj=jnp.zeros((ROLLOUT_RANK, ROLLOUT_STATE_DIM), dtype=jnp.float32),
-        v_proj=jnp.zeros((ROLLOUT_RANK, ROLLOUT_ACT_DIM), dtype=jnp.float32),
-        act_bias=jnp.array([0.68, 0.72, 0.40, 0.44, 0.48, 0.35], dtype=jnp.float32),
-    )
-
-
-def calibrated_residual_bundle() -> ResidualBundle:
-    """Return `ResidualBundle` with both Gate-1 `EvalResidualWeights` and tactical `RolloutResidualWeights` active."""
-    return ResidualBundle(
-        eval=default_residual_bundle().eval,
-        rollout=calibrated_rollout_residual_weights(),
     )
 
 

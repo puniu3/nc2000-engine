@@ -272,7 +272,6 @@ pub struct RolloutRules {
     /// Rollout sides play the Perish trap and its counter ([`perish_combo`]).
     /// Implies `perish_escape`, without which the combo kills its own singer.
     pub perish_combo: bool,
-    pub capped_damage: bool,
     pub rollout_residual: bool,
     pub baton_pass: bool,
     pub settlement: crate::accounting::LeafSettlementMode,
@@ -285,7 +284,6 @@ impl Default for RolloutRules {
             switch: false,
             perish_escape: false,
             perish_combo: false,
-            capped_damage: false,
             rollout_residual: false,
             baton_pass: true,
             settlement: crate::accounting::LeafSettlementMode::LegacyRollout,
@@ -333,9 +331,7 @@ pub fn playout_value_cached(
             return match playout {
                 Playout::Uniform => hp_eval(sim),
                 Playout::Heavy { weights, .. } => {
-                    if rules.settlement.is_solver_quiescence() {
-                        eval::eval_solver_leaf_cached(sim, dex, weights, roster_cache)
-                    } else if rules.settlement.uses_blindspot_leaf() {
+                    if rules.settlement.uses_blindspot_leaf() {
                         eval::eval_leaf_blindspot_cached(sim, dex, weights, roster_cache)
                     } else {
                         eval::eval_leaf_cached(sim, dex, weights, roster_cache)
@@ -358,17 +354,12 @@ pub fn playout_value_cached(
         set_last_sim_end(SimEndInfo::from_battle(sim, Some(o)));
         return outcome_reward(o);
     }
-    if sim.turn > turn_cap
-        || matches!(playout, Playout::Heavy { turns: 0, .. })
-        || (rules.settlement.is_solver_quiescence() && matches!(playout, Playout::Heavy { .. }))
-    {
+    if sim.turn > turn_cap || matches!(playout, Playout::Heavy { turns: 0, .. }) {
         set_last_sim_end(SimEndInfo::from_battle(sim, None));
         return match playout {
             Playout::Uniform => hp_eval(sim),
             Playout::Heavy { weights, .. } => {
-                if rules.settlement.is_solver_quiescence() {
-                    eval::eval_solver_leaf_cached(sim, dex, weights, roster_cache)
-                } else if rules.settlement.uses_blindspot_leaf() {
+                if rules.settlement.uses_blindspot_leaf() {
                     eval::eval_leaf_blindspot_cached(sim, dex, weights, roster_cache)
                 } else {
                     eval::eval_leaf_cached(sim, dex, weights, roster_cache)
@@ -418,16 +409,12 @@ pub fn compact_playout_value(
             }
             _ => {}
         }
-        if cb.turn > cutoff
-            || (rules.settlement.is_solver_quiescence() && matches!(playout, Playout::Heavy { .. }))
-        {
+        if cb.turn > cutoff {
             set_last_sim_end(SimEndInfo::from_compact(cb));
             return match playout {
                 Playout::Uniform => compact_hp_eval(cb, table),
                 Playout::Heavy { weights, .. } => {
-                    if rules.settlement.is_solver_quiescence() {
-                        eval::compact_eval_solver_leaf(cb, table, weights)
-                    } else if rules.settlement.uses_blindspot_leaf() {
+                    if rules.settlement.uses_blindspot_leaf() {
                         eval::compact_eval_leaf_blindspot(cb, table, weights)
                     } else {
                         eval::compact_eval_leaf(cb, table, weights)
@@ -996,24 +983,13 @@ fn compact_greedy_pick(
                     }
                     continue;
                 }
-                let mut score = if rules.capped_damage {
-                    if accuracy > 0.0 {
-                        (raw_score / accuracy).min(1.0) * accuracy
-                    } else {
-                        0.0
-                    }
-                } else {
-                    raw_score
-                };
+                let mut score = raw_score;
                 if score <= 0.0 && rules.status {
                     score = compact_status_pseudo_score(
                         cb, table, side, att_slot, def_side, def_slot, m_slot,
                     );
                 }
-                if best.map_or(true, |(_, old_score, old_raw)| {
-                    score > old_score
-                        || (rules.capped_damage && score == old_score && raw_score > old_raw)
-                }) {
+                if best.map_or(true, |(_, old_score, _)| score > old_score) {
                     best = Some((c, score, raw_score));
                 }
             }
@@ -1083,7 +1059,7 @@ fn compact_greedy_pick(
             }
         }
         if rules.baton_pass
-            && (cb.sides[side].side_flags & 0x80) == 0
+            && (cb.sides[0].side_flags & 0x80) == 0
             && (table.mons[att_idx].role_flags
                 & (nc2000_engine::compact::role_bit::BATON_PASS
                     | nc2000_engine::compact::role_bit::SWAGGER))
@@ -1576,5 +1552,55 @@ mod perish_rollout_tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn compact_p2_baton_pass_respects_sides0_disable_bit() {
+        let dex = conformance::load_dex();
+        let t0: Vec<PokemonSet> = serde_json::from_value(serde_json::json!([
+            set("Snorlax", &["Splash"]),
+            set("Zapdos", &["Thunderbolt"]),
+        ]))
+        .unwrap();
+        let t1: Vec<PokemonSet> = serde_json::from_value(serde_json::json!([
+            set("Jolteon", &["Quick Attack", "Baton Pass"]),
+            set("Snorlax", &["Return", "Earthquake"]),
+        ]))
+        .unwrap();
+        let mut b = Battle::from_fixture(&dex, "1,2,3,4", &t0, &t1).unwrap();
+        b.choose(&dex, 0, "team 1, 2").unwrap();
+        b.choose(&dex, 1, "team 1, 2").unwrap();
+        let (table, mut cb) = nc2000_engine::compact::CompactBattle::from_battle(&b, &dex);
+        cb.mons[3].boosts[0] = 4; // Side 1 (P2) Jolteon has +4 Atk boost to Baton Pass to Snorlax.
+        let mut legal_buf = [0u8; 7];
+        let n = cb.legal_actions(&table, 1, &mut legal_buf);
+        let cs = &legal_buf[..n];
+        let rules_on = RolloutRules {
+            baton_pass: true,
+            ..RolloutRules::default()
+        };
+        let pick_enabled = compact_playout_pick(
+            &cb,
+            &table,
+            &Playout::heavy(),
+            1,
+            cs,
+            &mut SplitMix64::new(7),
+            rules_on,
+        );
+        assert_eq!(pick_enabled, 1, "P2 must select Baton Pass (slot 1) when baton_pass fix enabled");
+
+        // Disabling via sides[0].side_flags & 0x80 must also disable P2 Baton Pass heuristic.
+        cb.sides[0].side_flags |= 0x80;
+        let pick_disabled = compact_playout_pick(
+            &cb,
+            &table,
+            &Playout::heavy(),
+            1,
+            cs,
+            &mut SplitMix64::new(7),
+            rules_on,
+        );
+        assert_eq!(pick_disabled, 0, "Disabling via sides[0] bit 0x80 must fall back to Quick Attack (slot 0)");
     }
 }

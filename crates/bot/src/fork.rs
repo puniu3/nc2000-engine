@@ -83,7 +83,7 @@ impl ReplayOrigin {
         if self.round >= replay.rounds.len() || side > 1 { return Err("invalid replay fork point".into()); }
         let mut agent = ProtocolAgent::new(dex, side, pool, cfg, seed);
         agent.set_own_team(replay.teams[side].clone());
-        if replay.open { agent.pin_opponent(replay.teams[1-side].clone()); }
+        if replay.open { agent.pin_opponent(dex, replay.teams[1-side].clone())?; }
         let mut channel = PlayerChannel::new(side);
         let mut battle = replay.initial(dex)?;
         for round in 0..=self.round {
@@ -206,7 +206,7 @@ impl ForkSpec {
         }
         let mut agent = ProtocolAgent::new(dex, self.bot_side(), pool, cfg, seed);
         if self.info == Info::Open {
-            agent.pin_opponent(self.opponent_team.clone());
+            agent.pin_opponent(dex, self.opponent_team.clone())?;
         }
         agent.set_position(dex, &self.position)?;
         Ok(agent)
@@ -244,7 +244,7 @@ impl ForkSpec {
         }
         let mut agent = ProtocolAgent::new(dex, opp, pool, cfg, seed);
         if self.info == Info::Open {
-            agent.pin_opponent(self.position.own_sets.clone());
+            agent.pin_opponent(dex, self.position.own_sets.clone())?;
         }
         agent.set_position(dex, view)?;
         Ok(agent)

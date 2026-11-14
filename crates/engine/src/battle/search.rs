@@ -64,7 +64,7 @@ pub struct BattleSearchCache {
     pub hp_buckets: Option<i64>,
     pub omit_damage_bookkeeping: bool,
     pub selected: bool,
-    pub picked_mask: [u8; 2],
+    picked_mask: [u8; 2],
     pub any_quick_claw: bool,
     prefix_steps: [[CachedMonPrefix; 6]; 2],
     bench_steps: [[CachedBenchMon; 6]; 2],
@@ -165,15 +165,6 @@ impl BattleSearchCache {
             prefix_steps,
             bench_steps,
             roster_compact,
-        }
-    }
-
-    #[inline]
-    pub fn picked_masks_opt(&self) -> [Option<u8>; 2] {
-        if self.selected {
-            [Some(self.picked_mask[0]), Some(self.picked_mask[1])]
-        } else {
-            [None, None]
         }
     }
 }
@@ -278,16 +269,6 @@ impl Battle {
     /// blur inside a node for sample density below it.
     pub fn state_key_bucketed(&self, buckets: i64) -> u64 {
         self.state_key_with(Some(buckets), false)
-    }
-
-    /// `state_key_bucketed` that additionally drops damage-history fields
-    /// (`last_damage`, `hurt_this_turn`, `attacked_by` magnitudes). Callers
-    /// MUST first establish `!damage_bookkeeping_observable(dex)` — only
-    /// Counter/Mirror Coat read them. Without this, every damage roll leaves
-    /// its own fingerprint in the key even after HP is bucketed, and a search
-    /// tree keyed on it can never revisit a state.
-    pub fn state_key_bucketed_no_damage(&self, buckets: i64) -> u64 {
-        self.state_key_with(Some(buckets), true)
     }
 
     fn state_key_with(&self, hp_buckets: Option<i64>, omit_damage_bookkeeping: bool) -> u64 {
@@ -670,7 +651,7 @@ impl Battle {
         out: &mut smallvec::SmallVec<[SearchChoice; 6]>,
     ) {
         out.clear();
-        if self.ended {
+        if self.ended || side_n >= 2 {
             return;
         }
         let Some(request) = self.sides[side_n].request_state() else {
@@ -693,7 +674,7 @@ impl Battle {
     /// free, PRNG-free) `LockMove`/`SemiLockMove` priority events, exactly
     /// like PS request generation does.
     pub fn legal_choices(&mut self, dex: &Dex, side_n: usize) -> Vec<SearchChoice> {
-        if self.ended {
+        if self.ended || side_n >= 2 {
             return Vec::new();
         }
         let Some(request) = self.sides[side_n].request_state() else {
@@ -846,6 +827,9 @@ impl Battle {
         side_n: usize,
         choice: SearchChoice,
     ) -> Result<(), EngineError> {
+        if side_n >= 2 {
+            return Err(EngineError::InvalidChoice(format!("invalid side {side_n}")));
+        }
         self.choose_search(dex, side_n, choice)
     }
 

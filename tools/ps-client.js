@@ -316,7 +316,8 @@ function randomChoice(req) {
 			const pick = order.slice(0, size);
 			if (pick.reduce((a, s) => a + levels[s - 1], 0) <= 155) return `team ${pick.join('')}`;
 		}
-		return `team ${mons.map((_, i) => i + 1).slice(0, size).join('')}`;
+		const lowest = mons.map((_, i) => i + 1).sort((a, b) => levels[a - 1] - levels[b - 1]);
+		return `team ${lowest.slice(0, size).join('')}`;
 	}
 	if (req.forceSwitch) {
 		const mons = req.side.pokemon;
@@ -356,7 +357,6 @@ const stats = {
 	proofsOk: 0, proofsBad: [], proofsSkipped: 0,
 	maxThinkMs: 0, thinkMsSum: 0, thinkN: 0,
 	legalityDrift: 0, projections: 0, reconnects: 0,
-	untriggeredDrops: 0,
 };
 
 // ---------------------------------------------------------- battle driver
@@ -539,7 +539,7 @@ class BattleDriver {
 		// last request ourselves (the searcher re-syncs and re-chooses);
 		// if that keeps getting rejected, fall back to the always-legal
 		// `default` choice rather than stall out the battle.
-		if (line.includes('[Unavailable choice]')) return;
+		if (line.includes('[Unavailable choice]') || /nothing to choose|not your turn|already ended/i.test(line)) return;
 		if (!this.pendingReq && this.lastReq) {
 			this.errRecoveries++;
 			if (this.errRecoveries > 2) {
@@ -690,11 +690,8 @@ class BattleDriver {
 		if (this.maybeDrop(req, 'pre')) return;
 
 		const t0 = Date.now();
-		let choice = this.searcher.bakedPreview();
-		if (!choice) {
-			this.searcher.step(ITERS);
-			choice = this.searcher.best();
-		}
+		this.searcher.step(ITERS);
+		const choice = this.searcher.best();
 		const think = Date.now() - t0;
 		stats.maxThinkMs = Math.max(stats.maxThinkMs, think);
 		stats.thinkMsSum += think;

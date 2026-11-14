@@ -165,39 +165,39 @@ function parseProperty(
     return v;
   };
 
-  if (line.startsWith("Trait: ") || line.startsWith("Ability: ")) {
-    set.ability = line.slice(line.indexOf(": ") + 2).trim();
+  if (/^(Trait|Ability):\s*/i.test(line)) {
+    set.ability = line.replace(/^(Trait|Ability):\s*/i, "").trim();
     return true;
   }
   if (/^Shiny:\s*/i.test(line)) {
     set.shiny = /^Shiny:\s*yes$/i.test(line.trim());
     return true;
   }
-  if (line.startsWith("Level: ")) {
-    const v = num(line.slice(7), "level");
+  if (/^Level:\s*/i.test(line)) {
+    const v = num(line.replace(/^Level:\s*/i, ""), "level");
     if (v !== null) set.level = v;
     return true;
   }
-  if (line.startsWith("Happiness: ")) {
-    const v = num(line.slice(11), "happiness");
+  if (/^Happiness:\s*/i.test(line)) {
+    const v = num(line.replace(/^Happiness:\s*/i, ""), "happiness");
     if (v !== null) set.happiness = v;
     return true;
   }
-  if (line.startsWith("Pokeball: ") || line.startsWith("Tera Type: ")) {
+  if (/^(Pokeball|Tera Type):\s*/i.test(line)) {
     return true; // recognized, irrelevant to gen 2 — ignore like PS does
   }
-  if (line.startsWith("Hidden Power: ")) {
+  if (/^Hidden Power:\s*/i.test(line)) {
     // newer-export HP-type annotation: remember it so a plain "Hidden
     // Power" move can be typed at the end
-    (set as { _hpType?: string })._hpType = line.slice(14).trim();
+    (set as { _hpType?: string })._hpType = line.replace(/^Hidden Power:\s*/i, "").trim();
     return true;
   }
-  if (line.startsWith("EVs: ")) {
-    set.evs = parseStatLine(line.slice(5), lineNo, 0, findings);
+  if (/^EVs:\s*/i.test(line)) {
+    set.evs = parseStatLine(line.replace(/^EVs:\s*/i, ""), lineNo, 0, findings);
     return true;
   }
-  if (line.startsWith("IVs: ")) {
-    set.ivs = parseStatLine(line.slice(5), lineNo, 31, findings);
+  if (/^IVs:\s*/i.test(line)) {
+    set.ivs = parseStatLine(line.replace(/^IVs:\s*/i, ""), lineNo, 31, findings);
     return true;
   }
   if (/^[A-Za-z]+ [Nn]ature/.test(line)) {
@@ -207,9 +207,9 @@ function parseProperty(
   }
   if (line.startsWith("-") || line.startsWith("~")) {
     let move = line.slice(line.charAt(1) === " " ? 2 : 1).trim();
-    const br = /^Hidden Power \[(.+)\]$/.exec(move);
+    const br = /^Hidden Power \[(.+)\]$/i.exec(move);
     if (br) move = `Hidden Power ${br[1]}`;
-    if (move === "Frustration" && set.happiness === undefined) {
+    if (move.toLowerCase() === "frustration" && set.happiness === undefined) {
       set.happiness = 0;
     }
     if (move) set.moves.push(move);
@@ -220,10 +220,10 @@ function parseProperty(
 
 /** First line of a block: `Nickname (Species) (G) @ Item`. */
 function parseHeader(line: string, set: ParsedSet): void {
-  const parts = line.split(" @ ");
-  let head = parts[0];
-  if (parts.length > 1) {
-    const item = parts[1].trim();
+  const at = line.lastIndexOf(" @ ");
+  let head = at >= 0 ? line.slice(0, at) : line;
+  if (at >= 0) {
+    const item = line.slice(at + 3).trim();
     set.item = toId(item) === "noitem" ? "" : item;
   }
   if (head.endsWith(" (M)")) {
@@ -235,7 +235,7 @@ function parseHeader(line: string, set: ParsedSet): void {
   }
   head = head.trim();
   if (head.endsWith(")") && head.includes("(")) {
-    const open = head.indexOf("(");
+    const open = head.lastIndexOf("(");
     set.name = head.slice(0, open).trim();
     set.species = head.slice(open + 1, -1).trim();
   } else {

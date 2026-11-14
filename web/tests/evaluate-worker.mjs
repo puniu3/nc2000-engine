@@ -65,8 +65,8 @@ try {
         try {
           const meta = JSON.parse(replay.scenes());
           check(meta.turns === game.turns && meta.botSide === game.playerSide && meta.info === "blind", "replay perspective/turns changed");
-          const expected = game.outcome === "cap" ? null : game.outcome === "tie" ? "Tie"
-            : (game.outcome === "win" ? game.playerSide : 1 - game.playerSide) === 0 ? "P1Win" : "P2Win";
+          const expected = game.outcome === "cap" ? null : game.outcome === "tie" ? "tie"
+            : (game.outcome === "win" ? game.playerSide : 1 - game.playerSide) === 0 ? "p1" : "p2";
           check(meta.outcome === expected, "replay outcome changed");
           for (const { round } of meta.scenes) {
             const scene = JSON.parse(replay.scene(round));

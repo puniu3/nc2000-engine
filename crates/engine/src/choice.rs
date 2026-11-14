@@ -24,9 +24,15 @@ impl Choice {
         // `team 5, 6, 1` is a single team choice containing commas.
         let input = input.trim();
         if let Some(rest) = input.strip_prefix("team ") {
-            let slots: Result<Vec<u8>, _> = rest
+            let slots: Result<Vec<u8>, String> = rest
                 .split(',')
-                .map(|p| p.trim().parse::<u8>().map_err(|e| e.to_string()))
+                .map(|p| {
+                    let s = p.trim().parse::<u8>().map_err(|e| e.to_string())?;
+                    if s == 0 {
+                        return Err("team slot cannot be 0".to_string());
+                    }
+                    Ok(s)
+                })
                 .collect();
             return Ok(vec![Choice::Team(slots?)]);
         }
@@ -45,18 +51,37 @@ impl Choice {
         }
         if let Some(rest) = part.strip_prefix("move ") {
             let rest = rest.trim();
-            return Ok(match rest.parse::<u8>() {
-                Ok(slot) => Choice::MoveBySlot(slot),
-                Err(_) => Choice::MoveById(rest.to_string()),
-            });
+            return match rest.parse::<u8>() {
+                Ok(0) => Err("move slot cannot be 0".to_string()),
+                Ok(slot) => Ok(Choice::MoveBySlot(slot)),
+                Err(_) => Ok(Choice::MoveById(rest.to_string())),
+            };
         }
         if let Some(rest) = part.strip_prefix("switch ") {
-            return rest
+            let slot = rest
                 .trim()
                 .parse::<u8>()
-                .map(Choice::Switch)
-                .map_err(|e| format!("bad switch slot: {e}"));
+                .map_err(|e| format!("bad switch slot: {e}"))?;
+            if slot == 0 {
+                return Err("switch slot cannot be 0".to_string());
+            }
+            return Ok(Choice::Switch(slot));
         }
         Err(format!("unrecognized choice: {part:?}"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Choice;
+
+    #[test]
+    fn zero_slots_are_rejected() {
+        assert!(Choice::parse("move 0").is_err());
+        assert!(Choice::parse("switch 0").is_err());
+        assert!(Choice::parse("team 0, 1, 2").is_err());
+        assert!(Choice::parse("team 1, 0, 2").is_err());
+        assert_eq!(Choice::parse("move 1").unwrap(), vec![Choice::MoveBySlot(1)]);
+        assert_eq!(Choice::parse("switch 2").unwrap(), vec![Choice::Switch(2)]);
     }
 }

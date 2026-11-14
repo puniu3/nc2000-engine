@@ -5,6 +5,7 @@ import { randomSeed32 } from "./engine";
 import { searchProfile } from "./search-profile";
 import { download, mcnemarP, pct, wilson } from "./fork-stats";
 import type { ArenaRequest, ArenaResponse } from "./fork-arena-worker";
+import { displayArmLabel } from "./fork";
 import type { ForkInfo } from "./types";
 
 type Foe = "protocol" | "skuct";
@@ -291,7 +292,7 @@ export function ArenaPanel(props: {
           )}
           {props.simple ? <div class="kp-arena-results" aria-live="polite">{info.arms.map((arm, i) => {
             const mine = rows.filter(row => row.action === arm.input);
-            return <div class="kp-card" key={arm.input}><h3>{arm.label} · {props.armNames[i]}</h3>
+            return <div class="kp-card" key={arm.input}><h3>{displayArmLabel(arm.label)} · {props.armNames[i]}</h3>
               <p>{toolText("winLossTie", mine.filter(row => row.outcome === "win").length, mine.filter(row => row.outcome === "loss").length, mine.filter(row => row.outcome === "tie").length)}</p>
               <p class="kp-muted">{toolText("arenaCompleted", mine.length, mine.some(row => row.outcome === "cap") && toolText("cappedGames", mine.filter(row => row.outcome === "cap").length))}</p>
             </div>;
@@ -324,7 +325,7 @@ function ArenaTable(props: { info: ForkInfo; armNames: string[]; rows: Row[] }) 
             <th>{toolText("draws")}</th>
             <th>{toolText("caps")}</th>
             <th>{toolText("botWinInterval")}</th>
-            <th>{toolText("differenceInterval", info.arms[0].label || toolText("firstCandidate"))}</th>
+            <th>{toolText("differenceInterval", info.arms[0].label ? displayArmLabel(info.arms[0].label) : toolText("firstCandidate"))}</th>
             <th>McNemar p</th>
           </tr>
         </thead>
@@ -362,7 +363,7 @@ function ArenaTable(props: { info: ForkInfo; armNames: string[]; rows: Row[] }) 
               <tr key={i}>
                 <td>
                   {props.armNames[i]}
-                  {arm.label && <span class="fork-arm-label">{arm.label}</span>}
+                  {arm.label && <span class="fork-arm-label">{displayArmLabel(arm.label)}</span>}
                 </td>
                 <td>{mine.length}</td>
                 <td>{mine.filter((r) => r.outcome === "win").length}</td>

@@ -1,9 +1,8 @@
-//! Direct micro-benchmark comparing the 256-byte branchless `CompactBattle`
+//! Direct micro-benchmark comparing the 192-byte branchless `CompactBattle`
 //! kernel against the full `Battle` engine across:
-//! 1. State clone (`Copy` 256B vs `Battle::clone_from`)
+//! 1. State clone (`Copy` 192B vs `Battle::clone_from`)
 //! 2. Search state hashing (`CompactBattle::search_hash` vs `Battle::search_key`)
-//! 3. 16-roll SIMD damage + Substitute pool evaluation (`evaluate_hit_simd16`)
-//! 4. Full turn stepping (`CompactBattle::step_turn` vs `Battle::apply_choices`)
+//! 3. Full turn stepping (`CompactBattle::step_turn` vs `Battle::apply_choices`)
 //!
 //! Run with:
 //!   cargo run --release -p nc2000-engine --example compact_bench
@@ -12,9 +11,7 @@ use std::hint::black_box;
 use std::time::Instant;
 
 use nc2000_engine::battle::{PokemonSet, SearchChoice};
-use nc2000_engine::compact::{
-    evaluate_hit_simd16, get_damage_base_branchless, CompactBattle, CompactWeather,
-};
+use nc2000_engine::compact::CompactBattle;
 use nc2000_engine::dex::Dex;
 use nc2000_engine::state::Battle;
 
@@ -101,35 +98,7 @@ fn main() {
     black_box(h_acc2);
     let compact_hash_ns = t0.elapsed().as_nanos() as f64 / iters as f64;
 
-    // 3. 16-roll SIMD damage + Substitute pool evaluation
-    let t0 = Instant::now();
-    let mut ko_acc = 0u32;
-    for i in 0..iters {
-        let base_dmg = get_damage_base_branchless(
-            55,
-            120,
-            black_box(198 + (i as i32 & 3)),
-            165,
-            true,
-            false,
-            false,
-            true,
-            CompactWeather::None,
-            false,
-            false,
-            false,
-            0,
-            1 << 0,
-            0,
-            false,
-        );
-        let hit = evaluate_hit_simd16(base_dmg, false, 290, 65, false);
-        ko_acc ^= (hit.ko_mask as u32) ^ (hit.sub_broke_mask as u32);
-    }
-    black_box(ko_acc);
-    let simd16_ns = t0.elapsed().as_nanos() as f64 / iters as f64;
-
-    // 4. Full turn step (clone + step + hash)
+    // 3. Full turn step (clone + step + hash)
     let step_iters = 100_000u64;
     let p1_move = base_battle.legal_choices(&dex, 0)[0];
     let p2_move = base_battle.legal_choices(&dex, 1)[0];
@@ -158,31 +127,16 @@ fn main() {
     let compact_step_ns = t0.elapsed().as_nanos() as f64 / step_iters as f64;
 
     println!(
-        "=== CompactBattle ({}B, align(64)) vs Battle ({}B) ===",
-        std::mem::size_of::<CompactBattle>(),
-        std::mem::size_of::<Battle>()
-    );
-    println!(
-        "1. State Clone : Battle = {:7.1} ns | CompactBattle = {:5.2} ns ({:6.1}x faster)",
-        battle_clone_ns,
-        compact_clone_ns,
-        battle_clone_ns / compact_clone_ns.max(0.01)
-    );
-    println!(
-        "2. Search Hash : Battle = {:7.1} ns | CompactBattle = {:5.2} ns ({:6.1}x faster)",
-        battle_hash_ns,
-        compact_hash_ns,
-        battle_hash_ns / compact_hash_ns.max(0.01)
-    );
-    println!(
-        "3. 16-Roll SIMD: base + 16 rolls + [hp, sub_hp] masks = {:5.2} ns ({:5.2} ns / roll)",
-        simd16_ns,
-        simd16_ns / 16.0
-    );
-    println!(
-        "4. Clone+Step+Hash: Battle = {:7.1} ns | CompactBattle = {:5.2} ns ({:6.1}x faster)",
-        battle_step_ns,
-        compact_step_ns,
-        battle_step_ns / compact_step_ns.max(0.01)
+        "{}",
+        serde_json::json!({
+            "battle_bytes": std::mem::size_of::<Battle>(),
+            "compact_bytes": std::mem::size_of::<CompactBattle>(),
+            "battle_clone_ns": battle_clone_ns,
+            "compact_clone_ns": compact_clone_ns,
+            "battle_hash_ns": battle_hash_ns,
+            "compact_hash_ns": compact_hash_ns,
+            "battle_step_ns": battle_step_ns,
+            "compact_step_ns": compact_step_ns,
+        })
     );
 }

@@ -26,8 +26,14 @@ self.onmessage = (e: MessageEvent<ArenaRequest>) => {
 async function handle(m: ArenaRequest) {
   await ready;
   if (m.t === "start") {
+    arena?.free();
+    arena = null;
     const dex = new Dex();
-    arena = new ForkArena(dex, m.fork, m.pool, m.arena);
+    try {
+      arena = new ForkArena(dex, m.fork, m.pool, m.arena);
+    } finally {
+      dex.free();
+    }
     arms = m.arms;
     post({ t: "ready" });
     return;

@@ -82,6 +82,9 @@ pub struct PositionSpec {
     /// PS `maybeTrapped` flag when present on the active request.
     #[serde(default, skip_serializing_if = "is_false")]
     pub maybe_trapped: bool,
+    /// Optional Stadium / Open Preview total level caps per side (`[me, opp]`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preview_level_caps: Option<[Option<u32>; 2]>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -563,6 +566,9 @@ impl PositionSpec {
         if self.team_preview {
             req["teamPreview"] = serde_json::json!(true);
             req["maxChosenTeamSize"] = serde_json::json!(PICKS);
+            if let Some(caps) = self.preview_level_caps {
+                req["side"]["previewLevelCaps"] = serde_json::json!(caps);
+            }
         } else if self.force_switch {
             req["forceSwitch"] = serde_json::json!([true]);
         } else {
@@ -720,12 +726,6 @@ pub fn details_of(dex: &Dex, m: &MonSpec) -> String {
 /// NC2000 brings three of six.
 const PICKS: usize = 3;
 
-impl SideSpec {
-    pub fn active_mon(&self) -> Option<&MonSpec> {
-        self.active.and_then(|a| self.mons.get(a))
-    }
-}
-
 impl MonSpec {
     pub fn volatile(&self, key: &str) -> Option<&VolSpec> {
         self.volatiles.iter().find(|v| v.key == key)
@@ -757,7 +757,12 @@ impl MonSpec {
             Some(hp) => hp.clamp(1, maxhp),
             None => {
                 let frac = self.hp_num as f64 / self.hp_den.max(1) as f64;
-                ((frac * maxhp as f64).round() as i32).clamp(1, maxhp)
+                let max_cap = if self.hp_num < self.hp_den {
+                    (maxhp - 1).max(1)
+                } else {
+                    maxhp
+                };
+                ((frac * maxhp as f64).round() as i32).clamp(1, max_cap)
             }
         }
     }

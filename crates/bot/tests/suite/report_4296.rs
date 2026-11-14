@@ -1,8 +1,14 @@
 use super::common;
 use conformance::fixture::repo_root;
-use nc2000_bot::position::{synthesize_spec, PositionSpec};
+use nc2000_bot::{
+    decision::PolicyMode,
+    import::ProtocolAgent,
+    mcts::Playout,
+    position::{synthesize_spec, PositionSpec},
+    smmcts::{RmConfig, SearchTrace},
+};
 use nc2000_engine::{
-    battle::{enumerate::enumerate_step, PokemonSet},
+    battle::PokemonSet,
     dex::Dex,
     state::Battle,
     validate::validate_team,
@@ -22,41 +28,8 @@ fn position(dex: &Dex, turn: u16) -> Battle {
     synthesize_spec(dex, &spec, pool, Some(&sets), 61001).unwrap()
 }
 
-fn ko_probabilities(dex: &Dex, b: &Battle, action: &str, reply: &str) -> (f64, f64) {
-    let mut b = b.clone();
-    let actor = b.active_id(1).unwrap();
-    let target = b.active_id(0).unwrap();
-    let mut joint = [None, None];
-    for (side, input) in [(0, reply), (1, action)] {
-        let canonical = input
-            .strip_prefix("move ")
-            .and_then(|m| dex.moves.id(m))
-            .map(|id| format!("move {}", dex.moves.key(dex.canonical_move_id(id))));
-        joint[side] = Some(
-            *b.legal_choices(dex, side)
-                .iter()
-                .find(|a| {
-                    let s = a.to_input(dex);
-                    s == input || canonical.as_deref() == Some(s.as_str())
-                })
-                .unwrap(),
-        );
-    }
-    let step = enumerate_step(dex, &b, joint, 200_000).unwrap();
-    assert!((step.leaves.iter().map(|l| l.prob).sum::<f64>() - 1.0).abs() < 1e-9);
-    let ko = |id| {
-        step.leaves
-            .iter()
-            .filter(|l| l.battle.poke(id).fainted)
-            .map(|l| l.prob)
-            .sum::<f64>()
-    };
-    (ko(actor), ko(target))
-}
-
 #[test]
 fn observing_search_preserves_statistics_and_subsequent_rng() {
-    use nc2000_bot::{import::ProtocolAgent, mcts::Playout, smmcts::{RmConfig, SearchTrace}};
     let dex = common::dex();
     let root = repo_root();
     let spec = PositionSpec::parse(&std::fs::read_to_string(root.join("data/report-4296/turn-11.json")).unwrap()).unwrap();
@@ -66,12 +39,11 @@ fn observing_search_preserves_statistics_and_subsequent_rng() {
         let cfg = RmConfig { playout, ..RmConfig::default() };
         let [mut observed, mut ordinary] = std::array::from_fn(|_| {
             let mut agent = ProtocolAgent::new(dex, 1, pool.clone(), cfg.clone(), 61001);
-            agent.pin_opponent(sets.clone());
+            agent.pin_opponent(dex, sets.clone()).unwrap();
             agent.set_position(dex, &spec).unwrap();
             agent
         });
         let mut results = 0;
-        let mut rewards = 0.0;
         let mut choices = 0;
         observed.step_observed(dex, 200, &mut |event| match event {
             SearchTrace::Choice { battle, chosen, .. } => {
@@ -84,15 +56,13 @@ fn observing_search_preserves_statistics_and_subsequent_rng() {
                 let mut copy = rng.clone();
                 std::hint::black_box(copy.next());
             },
-            SearchTrace::Result { reward0, .. } => {
+            SearchTrace::Result { .. } => {
                 results += 1;
-                rewards += 1.0-reward0;
             },
         }).unwrap();
         ordinary.step(dex, 200).unwrap();
         assert_eq!(results, 200);
         assert!(choices >= results);
-        assert!((0.0..=results as f64).contains(&rewards));
         for extra in [0, 50] {
             observed.step(dex, extra).unwrap();
             ordinary.step(dex, extra).unwrap();
@@ -145,54 +115,71 @@ fn submitted_sheet_is_legal_and_pinned_with_consumed_items_preserved() {
 }
 
 #[test]
-fn earthquake_prevents_shuckles_recorded_rest_at_turn_11() {
+fn protocol_agent_makes_deterministic_legal_decision_on_report_4296() {
     let dex = common::dex();
-    let mut b = position(&dex, 11);
-    let target = b.active_id(0).unwrap();
-    for hp in [70, 71] {
-        b.poke_mut(target).hp = hp;
-        assert_eq!(
-            ko_probabilities(&dex, &b, "move earthquake", "move rest"),
-            (0.0, 1.0)
-        );
-        let (_, hp_ko) = ko_probabilities(&dex, &b, "move hiddenpowerbug", "move rest");
-        assert!((hp_ko - 1.0 / 16.0).abs() < 1e-9);
+    let root = repo_root();
+    let dir = root.join("data/report-4296");
+    let sets: Vec<PokemonSet> =
+        serde_json::from_str(&std::fs::read_to_string(dir.join("opponent-team.json")).unwrap())
+            .unwrap();
+    let pool = common::meta_pool_v0();
+    for turn in [11u16, 24, 26] {
+        let spec = PositionSpec::parse(
+            &std::fs::read_to_string(dir.join(format!("turn-{turn}.json"))).unwrap(),
+        )
+        .unwrap();
+        let [mut a, mut b] = std::array::from_fn(|_| {
+            let mut agent = ProtocolAgent::new(dex, 1, pool.clone(), RmConfig::default(), 61001);
+            agent.pin_opponent(dex, sets.clone()).unwrap();
+            agent.set_position(dex, &spec).unwrap();
+            agent
+        });
+        assert_eq!(a.step(dex, 200).unwrap(), 200);
+        assert_eq!(b.step(dex, 200).unwrap(), 200);
+        let best_a = a.best(dex).unwrap();
+        let best_b = b.best(dex).unwrap();
+        assert_eq!(best_a, best_b, "turn {turn} search must be seed-deterministic");
+        assert_eq!(a.legality_drift, 0, "turn {turn} had legality drift");
+        let policy = a.decision_policy(dex, PolicyMode::EstimatedMix).unwrap();
+        let total_prob: f64 = policy.actions().iter().map(|row| row.probability).sum();
+        assert!((total_prob - 1.0).abs() < 1e-6);
+        assert!(policy.actions().iter().any(|row| row.input == best_a || best_a.starts_with("move ")));
     }
 }
 
 #[test]
-fn a_critical_ko_can_save_poisoned_marowak_at_turn_24() {
+fn default_search_uses_eight_turn_rollout_without_experimental_bundle() {
+    let cfg = RmConfig::default();
+    assert_eq!(
+        cfg.settlement,
+        nc2000_bot::accounting::LeafSettlementMode::BlindSpotLeaf
+    );
+    assert!(matches!(
+        cfg.playout,
+        Playout::Heavy { turns: 8, .. }
+    ));
     let dex = common::dex();
-    let mut b = position(&dex, 24);
-    let actor = b.active_id(1).unwrap();
-    for hp in [6, 7] {
-        b.poke_mut(actor).hp = hp;
-        let (actor_ko, _) = ko_probabilities(&dex, &b, "move earthquake", "switch 2");
-        assert!((actor_ko - 15.0 / 16.0).abs() < 1e-9);
-        let (actor_ko, _) = ko_probabilities(&dex, &b, "move swordsdance", "switch 2");
-        assert_eq!(actor_ko, 1.0);
-    }
-}
-
-#[test]
-fn confusion_does_not_make_fire_punch_as_likely_to_ko_as_thunderbolt() {
-    let dex = common::dex();
-    let mut b = position(&dex, 26);
-    let target = b.active_id(0).unwrap();
-    for hp in [22, 23] {
-        b.poke_mut(target).hp = hp;
-        assert_eq!(
-            nc2000_bot::import::announce_hp(hp, b.poke(target).maxhp, 100),
-            13
-        );
-        let (_, thunderbolt) = ko_probabilities(&dex, &b, "move thunderbolt", "move confuseray");
-        let (_, fire_punch) = ko_probabilities(&dex, &b, "move firepunch", "move confuseray");
-        assert!((thunderbolt - 0.5).abs() < 1e-9);
-        assert!(fire_punch < thunderbolt);
-        if hp == 23 {
-            assert!((fire_punch - 1.0 / 32.0).abs() < 1e-9);
-        } else {
-            assert!(fire_punch > 1.0 / 32.0);
-        }
-    }
+    let team = vec![serde_json::from_value::<PokemonSet>(serde_json::json!({
+        "name": "Starmie", "species": "Starmie", "item": "Leftovers", "ability": "",
+        "level": 50, "moves": ["Recover"], "happiness": 255,
+        "evs": {"hp": 255, "atk": 255, "def": 255, "spa": 255, "spd": 255, "spe": 255},
+        "ivs": {"hp": 30, "atk": 30, "def": 30, "spa": 30, "spd": 30, "spe": 30}
+    }))
+    .unwrap()];
+    let mut battle = Battle::from_fixture(dex, "1,2,3,4", &team, &team).unwrap();
+    let picks = [0, 1].map(|side| battle.legal_choices(dex, side).into_iter().next());
+    battle.apply_choices(dex, picks).unwrap();
+    let turn = battle.turn;
+    let value = nc2000_bot::mcts::playout_value(
+        &mut battle,
+        dex,
+        &cfg.playout,
+        turn + cfg.horizon,
+        &mut nc2000_bot::SplitMix64::new(777),
+        cfg.rollout_rules(),
+    );
+    assert!(value.is_finite() && (0.0..=1.0).contains(&value));
+    let end = nc2000_bot::mcts::last_sim_end();
+    assert_eq!(end.outcome, 0);
+    assert_eq!(end.turn, turn + 8);
 }

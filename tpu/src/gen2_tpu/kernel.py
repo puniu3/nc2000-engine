@@ -11,12 +11,8 @@ VPU vectorization rules:
 
 from __future__ import annotations
 
-import math
-from typing import NamedTuple
-
 import jax
 import jax.numpy as jnp
-import numpy as np
 
 from .prng import prng_random, prng_random_chance
 from .state import (
@@ -115,7 +111,7 @@ def _set2(
 
 
 # =========================================================================
-# 1. Precomputed Lookup Tables (STAT_NUM, ACC_NUM, ACC_LUT, CRIT_DEN, SIMD16_ROLLS)
+# 1. Precomputed Lookup Tables (STAT_NUM, ACC_NUM, CRIT_DEN)
 # =========================================================================
 
 STAT_NUM = jnp.array(
@@ -127,37 +123,6 @@ ACC_NUM = jnp.array(
 )
 
 CRIT_DEN = jnp.array([1, 16, 8, 4, 3, 2], dtype=jnp.uint32)
-
-SIMD16_ROLLS = jnp.array(
-    [217, 219, 222, 224, 227, 229, 232, 235, 237, 240, 242, 245, 247, 250, 252, 255],
-    dtype=jnp.int32,
-)
-
-
-def _build_acc_lut_np() -> np.ndarray:
-    pos_boost = [1.0, 1.33, 1.66, 2.0, 2.33, 2.66, 3.0]
-    neg_boost = [1.0, 0.75, 0.6, 0.5, 0.43, 0.36, 0.33]
-    table = np.ones((101, 13, 13), dtype=np.int32)
-    for pct in range(101):
-        base = math.floor(pct * 255.0 / 100.0)
-        for acc_idx in range(13):
-            acc_b = acc_idx - 6
-            after_acc = (
-                base * pos_boost[acc_b] if acc_b > 0 else base * neg_boost[-acc_b]
-            )
-            for eva_idx in range(13):
-                eva_b = eva_idx - 6
-                acc = after_acc
-                if eva_b > 0:
-                    acc *= neg_boost[eva_b]
-                elif eva_b < 0:
-                    acc *= pos_boost[-eva_b]
-                acc = max(1.0, min(255.0, math.floor(acc)))
-                table[pct, acc_idx, eva_idx] = int(acc)
-    return table
-
-
-ACC_LUT = jnp.asarray(_build_acc_lut_np(), dtype=jnp.int32)
 
 
 def _trunc_div(a: jax.Array, b: int | jax.Array) -> jax.Array:
@@ -286,87 +251,6 @@ def lookup_accuracy_threshold(
     return jnp.maximum(jnp.int32(0), raw - bp_sub)
 
 
-def get_damage_base_branchless(
-    level: int | jax.Array,
-    base_power: int | jax.Array,
-    atk: int | jax.Array,
-    defense: int | jax.Array,
-    is_physical: bool | jax.Array,
-    is_selfdestruct: bool | jax.Array,
-    is_crit: bool | jax.Array,
-    has_type_boost_item: bool | jax.Array,
-    weather: int | jax.Array,
-    is_water_move: bool | jax.Array,
-    is_fire_move: bool | jax.Array,
-    is_solarbeam: bool | jax.Array,
-    move_type: int | jax.Array,
-    attacker_type_mask: int | jax.Array,
-    total_type_mod: int | jax.Array,
-    is_immune: bool | jax.Array,
-) -> jax.Array:
-    """Branchless computation of pre-variance Gen 2 Stadium 2 damage (`[0, 3996]`)."""
-    lvl = jnp.int32(level)
-    bp = jnp.int32(base_power)
-    a = jnp.int32(atk)
-    d = jnp.int32(defense)
-    phys_b = jnp.asarray(is_physical, dtype=jnp.bool_)
-    sd_b = jnp.asarray(is_selfdestruct, dtype=jnp.bool_)
-    crit_b = jnp.asarray(is_crit, dtype=jnp.bool_)
-    boost_b = jnp.asarray(has_type_boost_item, dtype=jnp.bool_)
-    w = jnp.int32(weather)
-    water_b = jnp.asarray(is_water_move, dtype=jnp.bool_)
-    fire_b = jnp.asarray(is_fire_move, dtype=jnp.bool_)
-    sb_b = jnp.asarray(is_solarbeam, dtype=jnp.bool_)
-    mtype = jnp.uint32(move_type) & jnp.uint32(31)
-    atmask = jnp.uint32(attacker_type_mask)
-    tmod = jnp.int32(total_type_mod)
-    imm_b = jnp.asarray(is_immune, dtype=jnp.bool_)
-
-    # Stadium 2 >= 256 rollover
-    rollover_shift = jnp.where((a | d) >= 256, jnp.int32(2), jnp.int32(0))
-    a = jnp.maximum(jnp.int32(1), a >> rollover_shift)
-    d = jnp.maximum(jnp.int32(1), d >> rollover_shift)
-
-    # Self-Destruct / Explosion defense halving
-    sd_shift = jnp.where(sd_b & phys_b, jnp.int32(1), jnp.int32(0))
-    d = jnp.maximum(jnp.int32(1), d >> sd_shift)
-
-    # Core Gen 2 damage formula
-    dmg = _trunc_div(_trunc_div((_trunc_div(lvl * 2, 5) + 2) * bp * a, d), 50)
-
-    # Critical hit doubling
-    dmg = dmg << jnp.where(crit_b, jnp.int32(1), jnp.int32(0))
-
-    # 1.1x type-boost item
-    dmg = dmg + jnp.where(boost_b, _trunc_div(dmg, 10), jnp.int32(0))
-
-    # Clamp to [1, 997] + 2
-    dmg = jnp.clip(dmg, 1, 997) + jnp.int32(2)
-
-    # Weather modifier
-    rain = w == CompactWeather.RAIN
-    sun = w == CompactWeather.SUN
-    w_boost = (water_b & rain) | (fire_b & sun)
-    w_nerf = ((fire_b | sb_b) & rain) | (water_b & sun)
-    dmg = dmg + jnp.where(w_boost, dmg >> jnp.int32(1), jnp.int32(0))
-    dmg = dmg >> jnp.where(w_nerf, jnp.int32(1), jnp.int32(0))
-
-    # STAB
-    is_stab = ((atmask >> mtype) & jnp.uint32(1)) != jnp.uint32(0)
-    dmg = dmg + jnp.where(is_stab, dmg >> jnp.int32(1), jnp.int32(0))
-
-    # Type effectiveness
-    super_shift = jnp.where(
-        tmod > 0, jnp.where(tmod >= 2, jnp.int32(2), jnp.int32(1)), jnp.int32(0)
-    )
-    resist_shift = jnp.where(
-        tmod < 0, jnp.where(tmod <= -2, jnp.int32(2), jnp.int32(1)), jnp.int32(0)
-    )
-    dmg = (dmg << super_shift) >> resist_shift
-
-    return jnp.where(imm_b | (bp <= 0), jnp.int32(0), dmg)
-
-
 def apply_roll_branchless(
     base_dmg: int | jax.Array,
     roll_217_to_255: int | jax.Array,
@@ -380,53 +264,6 @@ def apply_roll_branchless(
     varied = jnp.maximum(jnp.int32(1), (bd * roll) // jnp.int32(255))
     raw = jnp.where(apply_var, varied, jnp.maximum(jnp.int32(1), bd))
     return jnp.where(bd <= 0, jnp.int32(0), raw)
-
-
-class Simd16HitOutcome(NamedTuple):
-    dealt: jax.Array
-    post_hp: jax.Array
-    post_sub_hp: jax.Array
-    ko_mask: jax.Array
-    sub_broke_mask: jax.Array
-
-
-def evaluate_hit_simd16(
-    base_dmg: int | jax.Array,
-    no_damage_variance: bool | jax.Array,
-    target_hp: int | jax.Array,
-    target_sub_hp: int | jax.Array,
-    bypasses_sub: bool | jax.Array,
-) -> Simd16HitOutcome:
-    """Vectorized 16-lane damage + Substitute/HP pool evaluator matching `evaluate_hit_simd16`."""
-    bd = jnp.int32(base_dmg)
-    no_var = jnp.asarray(no_damage_variance, dtype=jnp.bool_)
-    t_hp = jnp.int32(target_hp)
-    t_sub = jnp.int32(target_sub_hp)
-    byp = jnp.asarray(bypasses_sub, dtype=jnp.bool_)
-
-    hits_sub = (t_sub > 0) & (~byp)
-    d_lanes = apply_roll_branchless(bd, SIMD16_ROLLS, no_var)
-
-    before = jnp.where(hits_sub, t_sub, t_hp)
-    actual_dealt = jnp.minimum(d_lanes, before)
-    after = before - actual_dealt
-
-    post_hp = jnp.where(hits_sub, jnp.full((16,), t_hp, dtype=jnp.int32), after)
-    post_sub_hp = jnp.where(hits_sub, after, jnp.full((16,), t_sub, dtype=jnp.int32))
-
-    lane_bits = jnp.uint32(1) << jnp.arange(16, dtype=jnp.uint32)
-    ko_mask = jnp.sum(jnp.where(post_hp <= 0, lane_bits, jnp.uint32(0)))
-    sub_broke_mask = jnp.sum(
-        jnp.where(hits_sub & (post_sub_hp <= 0), lane_bits, jnp.uint32(0))
-    )
-
-    return Simd16HitOutcome(
-        dealt=actual_dealt,
-        post_hp=post_hp,
-        post_sub_hp=post_sub_hp,
-        ko_mask=ko_mask,
-        sub_broke_mask=sub_broke_mask,
-    )
 
 
 # =========================================================================
@@ -540,12 +377,17 @@ def action_sort_key(
     act = jnp.int32(action_code)
     p_idx = s * 3 + _get1(state.active_idx, s)
     speed = active_stat(state, table, s, 4, False, False)
-    is_switch = act >= 4
+    must_recharge = (_get1(state.slot_refs, p_idx) & jnp.int32(0x80)) != 0
+    is_switch = (~must_recharge) & (act >= 4)
     phase = jnp.where(
         is_switch, jnp.int32(ActionPhase.SWITCH), jnp.int32(ActionPhase.MOVE)
     )
     move_slot = act & jnp.int32(3)
-    prio = jnp.where(is_switch, jnp.int32(0), _get2(table.move_priority, p_idx, move_slot))
+    prio = jnp.where(
+        is_switch | must_recharge,
+        jnp.int32(0),
+        _get2(table.move_priority, p_idx, move_slot),
+    )
     has_qc_item = (_get1(state.item, p_idx) != 0) & (
         (_get1(table.item_flags, p_idx) & ItemFlag.QUICK_CLAW) != 0
     )
@@ -691,7 +533,7 @@ def exec_switch(
     saved_vols = _get1(state.vol_flags, old_idx) & pass_mask
     old_timers = _get1(state.timers, old_idx)
     saved_conf_t = old_timers[0]
-    saved_perish_t = old_timers[3]
+    saved_perish_t = old_timers[3] & jnp.int32(0x07)
 
     # Outgoing active cleanup
     old_st_raw = _get1(state.status_packed, old_idx) & jnp.int32(0x07)
@@ -702,7 +544,7 @@ def exec_switch(
         old_st_raw == Status.BRN, jnp.int32(VolBit.BRN_ATK_DROP), jnp.int32(0)
     )
     cleaned_old_vf = keep_par | keep_brn
-    cleaned_old_slot_refs = _get1(state.slot_refs, old_idx) & ~jnp.int32(0x80)
+    cleaned_old_slot_refs = jnp.int32(0)
 
     boosts = _set1(state.boosts, old_idx, jnp.zeros((7,), dtype=jnp.int32), en)
     hp_pool = _set2_col(state.hp_pool, old_idx, 1, jnp.int32(0), en)
@@ -710,9 +552,15 @@ def exec_switch(
     timers = _set1(state.timers, old_idx, jnp.zeros((4,), dtype=jnp.int32), en)
     slot_refs = _set1(state.slot_refs, old_idx, cleaned_old_slot_refs, en)
 
-    # Release Mean Look / Spider Web trap on foe if not Baton Pass
-    foe_vf_untrapped = _get1(vol_flags, foe_idx) & ~jnp.int32(VolBit.TRAPPED_OR_LOCKED)
-    vol_flags = _set1(vol_flags, foe_idx, foe_vf_untrapped, en & (~bp))
+    # Opponent switch-out expires active Destiny Bond (`onFoeSwitchOut`); non-Baton-Pass
+    # switching also releases Mean Look / Spider Web trap on the opposing active Pokemon.
+    foe_vf_cur = _get1(vol_flags, foe_idx)
+    foe_vf_next = foe_vf_cur & ~jnp.where(
+        bp,
+        jnp.int32(VolBit.DESTINY_BOND),
+        jnp.int32(VolBit.DESTINY_BOND | VolBit.TRAPPED_OR_LOCKED),
+    )
+    vol_flags = _set1(vol_flags, foe_idx, foe_vf_next, en)
 
     # Update active_idx
     active_idx = _set1(state.active_idx, s, tgt_slot, en)
@@ -732,7 +580,9 @@ def exec_switch(
     )
     vol_flags = _set1(vol_flags, new_idx, in_vf, en)
     timers = _set2_col(timers, new_idx, 0, saved_conf_t, en & bp)
-    timers = _set2_col(timers, new_idx, 3, saved_perish_t, en & bp)
+    new_t3_cur = _get2(timers, new_idx, 3)
+    new_t3_bp = (new_t3_cur & ~jnp.int32(0x07)) | (saved_perish_t & jnp.int32(0x07))
+    timers = _set2_col(timers, new_idx, 3, new_t3_bp, en & bp)
 
     tox_cnt = (new_st_packed >> jnp.int32(3)) & jnp.int32(0x0F)
     reverted_tox = jnp.int32(Status.PSN) | (tox_cnt << jnp.int32(3))
@@ -828,7 +678,7 @@ def try_inflict_status(
     ice_imm = (
         tmask & (jnp.uint32(1) << (jnp.uint32(table.ice_type) & jnp.uint32(31)))
     ) != jnp.uint32(0)
-    sun_imm = state.weather_kind == CompactWeather.SUN
+    sun_imm = (state.weather_turns > 0) & (state.weather_kind == CompactWeather.SUN)
     frz_succeeds = (
         can_attempt & (st_code == Status.FRZ) & (~ice_imm) & (~sun_imm) & (~any_frz)
     )
@@ -893,8 +743,19 @@ def exec_after_move_self(
     idx = s * 3 + _get1(state.active_idx, s)
     foe_idx = foe_s * 3 + _get1(state.active_idx, foe_s)
 
+    en_in = jnp.asarray(enable, dtype=jnp.bool_)
+    clear_foe_db = en_in & (_get1(state.hp_pool, foe_idx)[0] > 0)
+    state = state._replace(
+        vol_flags=_set1(
+            state.vol_flags,
+            foe_idx,
+            _get1(state.vol_flags, foe_idx) & ~jnp.int32(VolBit.DESTINY_BOND),
+            clear_foe_db,
+        )
+    )
+
     en = (
-        jnp.asarray(enable, dtype=jnp.bool_)
+        en_in
         & (_get1(state.hp_pool, idx)[0] > 0)
         & (_get1(state.hp_pool, foe_idx)[0] > 0)
     )
@@ -1003,6 +864,7 @@ def expected_hit_fraction(
     )
     bp = jnp.where(var_bp == 4, flail_bp, _get2(table.move_base_power, att_idx, m_slot))
     fixed_dmg = _get2(table.move_fixed_damage, att_idx, m_slot)
+    sp_kind = _get2(table.move_special_kind, att_idx, m_slot)
     mflags = _get2(table.move_flags, att_idx, m_slot)
     is_status = (mflags & MoveFlag.IS_STATUS) != 0
 
@@ -1049,15 +911,38 @@ def expected_hit_fraction(
 
     lvl_i = _get1(table.level, att_idx)
     lvl_term = _trunc_div(lvl_i * jnp.int32(2), jnp.int32(5)) + jnp.int32(2)
-    core_i = _trunc_div(
-        lvl_term * bp * atk_i, jnp.maximum(jnp.int32(1), def_i) * jnp.int32(50)
-    ) + jnp.int32(2)
+    dmg_i = _trunc_div(
+        _trunc_div(lvl_term * bp * atk_i, jnp.maximum(jnp.int32(1), def_i)),
+        jnp.int32(50),
+    )
+    has_type_boost = (
+        (_get1(state.item, att_idx) != 0)
+        & (mtype != jnp.int32(0xFF))
+        & (_get1(table.item_boost_type, att_idx) == mtype)
+    )
+    dmg_i = dmg_i + jnp.where(has_type_boost, _trunc_div(dmg_i, 10), jnp.int32(0))
+    core_i = jnp.clip(dmg_i, 1, 997) + jnp.int32(2)
+
+    w_active = state.weather_turns > 0
+    is_water = (mflags & MoveFlag.IS_WATER) != 0
+    is_fire = (mflags & MoveFlag.IS_FIRE) != 0
+    is_sb = (mflags & MoveFlag.IS_SOLARBEAM) != 0
+    w_rain = w_active & (state.weather_kind == CompactWeather.RAIN)
+    w_sun = w_active & (state.weather_kind == CompactWeather.SUN)
+    w_boost = (is_water & w_rain) | (is_fire & w_sun)
+    w_nerf = ((is_fire | is_sb) & w_rain) | (is_water & w_sun)
+    core_i = core_i + jnp.where(w_boost, core_i >> jnp.int32(1), jnp.int32(0))
+    core_i = core_i >> jnp.where(w_nerf, jnp.int32(1), jnp.int32(0))
+
     core = core_i.astype(jnp.float32)
     lvl_f = lvl_i.astype(jnp.float32)
-    stab_bit = (
-        _get1(table.type_mask, att_idx)
-        & (jnp.uint32(1) << (jnp.uint32(mtype) & jnp.uint32(31)))
-    ) != jnp.uint32(0)
+    stab_bit = (mtype >= 0) & (mtype < 32) & (
+        (
+            _get1(table.type_mask, att_idx)
+            & (jnp.uint32(1) << (jnp.uint32(mtype) & jnp.uint32(31)))
+        )
+        != jnp.uint32(0)
+    )
     stab = jnp.where(stab_bit, jnp.float32(1.5), jnp.float32(1.0))
     eff = jnp.where(
         type_mod == 2,
@@ -1077,9 +962,17 @@ def expected_hit_fraction(
     ) * jnp.float32(0.5)
     raw_normal = core * stab * eff * jnp.float32(236.0 / 255.0) * hits
     raw_fixed = jnp.where(fixed_dmg < 0, lvl_f, fixed_dmg.astype(jnp.float32))
-    raw = jnp.where(fixed_dmg != 0, raw_fixed, raw_normal)
+    raw_sfang = jnp.maximum(
+        jnp.int32(1),
+        _trunc_div(jnp.maximum(jnp.int32(0), _get1(state.hp_pool, def_idx)[0]), 2),
+    ).astype(jnp.float32)
+    raw = jnp.where(
+        sp_kind == 15,
+        raw_sfang,
+        jnp.where(fixed_dmg != 0, raw_fixed, raw_normal),
+    )
 
-    zero_out = ((fixed_dmg == 0) & (is_status | (bp <= 0))) | is_imm
+    zero_out = ((fixed_dmg == 0) & (sp_kind != 15) & (is_status | (bp <= 0))) | is_imm
     def_hp_f = jnp.maximum(jnp.int32(1), _get1(state.hp_pool, def_idx)[0]).astype(
         jnp.float32
     )
@@ -1162,16 +1055,60 @@ def exec_move(
     )
     active = active & (~has_recharge)
 
-    # 2. Flinch & Freeze check
-    flinched = active & ((_get1(state.vol_flags, att_idx) & VolBit.FLINCH) != 0)
+    # 2. Encore override, Disable/PP unusability check, Struggle fallback
+    num_m = _get1(table.num_moves, att_idx)
+    att_vf0 = _get1(state.vol_flags, att_idx)
+    att_srefs_post_rec = _get1(state.slot_refs, att_idx)
+    is_dis = (att_vf0 & VolBit.DISABLE) != 0
+    dis_slot = (att_srefs_post_rec >> jnp.int32(4)) & jnp.int32(0x03)
+    att_pp_row = _get1(state.pp, att_idx)
+    m_iota = jnp.arange(4, dtype=jnp.int32)
+    usable_mask = (
+        (m_iota < num_m)
+        & (att_pp_row > 0)
+        & (~(is_dis & (m_iota == dis_slot)))
+    )
+    has_usable = jnp.any(usable_mask)
+
+    is_enc = active & ((att_vf0 & VolBit.ENCORE) != 0)
+    enc_slot = (att_srefs_post_rec >> jnp.int32(2)) & jnp.int32(0x03)
+    enc_valid = (
+        (enc_slot < num_m)
+        & (_get1(att_pp_row, enc_slot) > 0)
+        & (~(is_dis & (enc_slot == dis_slot)))
+    )
+    m_slot = jnp.where(is_enc & enc_valid, enc_slot, m_slot)
+    enc_struggle = is_enc & (~enc_valid)
+
+    norm_check = active & (~is_enc)
+    norm_invalid = norm_check & (
+        (m_slot >= num_m)
+        | (_get1(att_pp_row, m_slot) <= 0)
+        | (is_dis & (m_slot == dis_slot))
+    )
+    norm_struggle = norm_invalid & (~has_usable)
+    unusable_abort = norm_invalid & has_usable
+    active = active & (~unusable_abort)
+    is_struggle = enc_struggle | norm_struggle
+
+    att_mflags_row = _get1(table.move_flags, att_idx)
+    struggle_flags = jnp.int32(
+        MoveFlag.IS_PHYSICAL | MoveFlag.BLOCKED_BY_PROTECT | MoveFlag.RECOIL_QUARTER
+    )
+    orig_flags = jnp.where(is_struggle, struggle_flags, _get1(att_mflags_row, m_slot))
+    orig_sleep_usable = (orig_flags & MoveFlag.IS_SLEEP_USABLE) != 0
+    orig_defrost = (orig_flags & MoveFlag.IS_DEFROST) != 0
+
+    # 3. Flinch & Freeze check
+    flinched = active & ((att_vf0 & VolBit.FLINCH) != 0)
     active = active & (~flinched)
 
     st_packed = _get1(state.status_packed, att_idx)
     st_raw = st_packed & jnp.int32(0x07)
-    frozen = active & (st_raw == Status.FRZ)
+    frozen = active & (st_raw == Status.FRZ) & (~orig_defrost)
     active = active & (~frozen)
 
-    # 3. Sleep check
+    # 4. Sleep check
     is_slp = active & (st_raw == Status.SLP)
     slp_cnt = (st_packed >> jnp.int32(3)) & jnp.int32(0x1F)
     slp_rem = jnp.maximum(jnp.int32(0), slp_cnt - jnp.int32(1))
@@ -1190,14 +1127,11 @@ def exec_move(
         status_packed=_set1(state.status_packed, att_idx, new_slp_packed, is_slp)
     )
 
-    att_mflags_row = _get1(table.move_flags, att_idx)
-    orig_flags = _get1(att_mflags_row, m_slot)
-    orig_sleep_usable = (orig_flags & MoveFlag.IS_SLEEP_USABLE) != 0
     slp_blocked = still_slp & (~orig_sleep_usable)
     active = active & (~slp_blocked)
     sleeping = still_slp & orig_sleep_usable
 
-    # 4. Confusion check
+    # 5. Confusion check
     att_vf = _get1(state.vol_flags, att_idx)
     is_conf = active & ((att_vf & VolBit.CONFUSION) != 0)
     conf_rem = jnp.maximum(jnp.int32(0), _get1(state.timers, att_idx)[0] - jnp.int32(1))
@@ -1229,7 +1163,7 @@ def exec_move(
     )
     active = active & (~conf_self_hit)
 
-    # 5. Paralysis 25% full-paralyze check
+    # 6. Paralysis 25% full-paralyze check
     is_par = active & ((_get1(state.status_packed, att_idx) & 0x07) == Status.PAR)
     next_seed_par, par_proc = prng_random_chance(state.prng_seed, 1, 4)
     state = state._replace(
@@ -1238,31 +1172,51 @@ def exec_move(
     full_par = is_par & par_proc
     active = active & (~full_par)
 
-    # 6. Clear Destiny Bond when attempting a move, check & deduct PP
+    # 7. Clear Destiny Bond on early abort OR normal move attempt; deduct PP & record last move
+    early_dbond_clear = (
+        has_recharge
+        | unusable_abort
+        | flinched
+        | frozen
+        | slp_blocked
+        | conf_self_hit
+        | full_par
+    )
     state = state._replace(
         vol_flags=_set1(
             state.vol_flags,
             att_idx,
             _get1(state.vol_flags, att_idx) & ~jnp.int32(VolBit.DESTINY_BOND),
-            active,
+            active | early_dbond_clear,
         )
     )
+
+    cur_srefs = _get1(state.slot_refs, att_idx)
+    struggle_exec = active & is_struggle
+    norm_exec = active & (~is_struggle)
     cur_pp = _get2(state.pp, att_idx, m_slot)
-    no_pp = active & (cur_pp <= 0)
+    no_pp = norm_exec & (cur_pp <= 0)
+    pp_ok = norm_exec & (cur_pp > 0)
     active = active & (~no_pp)
+    srefs_struggle = cur_srefs & ~jnp.int32(0x40)
+    srefs_norm = (cur_srefs & ~jnp.int32(0x43)) | (m_slot & jnp.int32(0x03)) | jnp.int32(0x40)
     state = state._replace(
-        pp=_set2(state.pp, att_idx, m_slot, cur_pp - jnp.int32(1), active)
+        pp=_set2(state.pp, att_idx, m_slot, cur_pp - jnp.int32(1), pp_ok),
+        slot_refs=_set1(
+            state.slot_refs,
+            att_idx,
+            jnp.where(struggle_exec, srefs_struggle, srefs_norm),
+            struggle_exec | pp_ok,
+        ),
     )
 
-    # 7. Sleep-usable moves fail when awake
+    # 8. Sleep-usable moves fail when awake
     awake_sleep_fail = active & orig_sleep_usable & (~sleeping)
     active = active & (~awake_sleep_fail)
 
-    # 8. Sleep Talk (`special_kind == 10`): pick random sleep-talkable move
+    # 9. Sleep Talk (`special_kind == 10`): pick random sleep-talkable move
     att_spkind_row = _get1(table.move_special_kind, att_idx)
-    is_sleeptalk = active & (_get1(att_spkind_row, m_slot) == 10)
-    num_m = _get1(table.num_moves, att_idx)
-    m_iota = jnp.arange(4, dtype=jnp.int32)
+    is_sleeptalk = active & (~is_struggle) & (_get1(att_spkind_row, m_slot) == 10)
     can_st_mask = (
         (m_iota < num_m)
         & (m_iota != m_slot)
@@ -1286,26 +1240,63 @@ def exec_move(
     ).astype(jnp.int32)
     eff_slot = jnp.where(st_has_cand, picked_slot, m_slot)
 
-    # Fetch effective move spec from `eff_slot`
-    mflags = _get1(att_mflags_row, eff_slot)
-    mspec_bp = _get2(table.move_base_power, att_idx, eff_slot)
-    mspec_fixed = _get2(table.move_fixed_damage, att_idx, eff_slot)
-    mspec_pvol = _get2(table.move_primary_vol, att_idx, eff_slot)
-    mspec_svol = _get2(table.move_sec_vol, att_idx, eff_slot)
-    mspec_type = _get2(table.move_type, att_idx, eff_slot)
-    mspec_acc = _get2(table.move_base_acc_pct, att_idx, eff_slot)
-    mspec_crit = _get2(table.move_crit_ratio, att_idx, eff_slot)
-    mspec_pstat = _get2(table.move_primary_status, att_idx, eff_slot)
-    mspec_schance = _get2(table.move_sec_chance_256, att_idx, eff_slot)
-    mspec_sstat = _get2(table.move_sec_status, att_idx, eff_slot)
-    mspec_sb_stat = _get2(table.move_sec_boost_stat, att_idx, eff_slot)
-    mspec_sb_delta = _get2(table.move_sec_boost_delta, att_idx, eff_slot)
-    mspec_b_stats = _get2(table.move_boost_stats, att_idx, eff_slot)
-    mspec_b_deltas = _get2(table.move_boost_deltas, att_idx, eff_slot)
-    mspec_spkind = _get1(att_spkind_row, eff_slot)
-    mspec_mh = _get2(table.move_multihit_mean_x2, att_idx, eff_slot)
+    # Fetch effective move spec from `eff_slot` (or Struggle override)
+    use_struggle_spec = is_struggle & (~st_has_cand)
+    mflags = jnp.where(use_struggle_spec, struggle_flags, _get1(att_mflags_row, eff_slot))
+    mspec_bp = jnp.where(
+        use_struggle_spec, jnp.int32(50), _get2(table.move_base_power, att_idx, eff_slot)
+    )
+    mspec_fixed = jnp.where(
+        use_struggle_spec, jnp.int32(0), _get2(table.move_fixed_damage, att_idx, eff_slot)
+    )
+    mspec_pvol = jnp.where(
+        use_struggle_spec, jnp.int32(0), _get2(table.move_primary_vol, att_idx, eff_slot)
+    )
+    mspec_svol = jnp.where(
+        use_struggle_spec, jnp.int32(0), _get2(table.move_sec_vol, att_idx, eff_slot)
+    )
+    mspec_type = jnp.where(
+        use_struggle_spec, jnp.int32(0xFF), _get2(table.move_type, att_idx, eff_slot)
+    )
+    mspec_acc = jnp.where(
+        use_struggle_spec, jnp.int32(100), _get2(table.move_base_acc_pct, att_idx, eff_slot)
+    )
+    mspec_crit = jnp.where(
+        use_struggle_spec, jnp.int32(1), _get2(table.move_crit_ratio, att_idx, eff_slot)
+    )
+    mspec_pstat = jnp.where(
+        use_struggle_spec, jnp.int32(0), _get2(table.move_primary_status, att_idx, eff_slot)
+    )
+    mspec_schance = jnp.where(
+        use_struggle_spec, jnp.int32(0), _get2(table.move_sec_chance_256, att_idx, eff_slot)
+    )
+    mspec_sstat = jnp.where(
+        use_struggle_spec, jnp.int32(0), _get2(table.move_sec_status, att_idx, eff_slot)
+    )
+    mspec_sb_stat = jnp.where(
+        use_struggle_spec, jnp.int32(0xFF), _get2(table.move_sec_boost_stat, att_idx, eff_slot)
+    )
+    mspec_sb_delta = jnp.where(
+        use_struggle_spec, jnp.int32(0), _get2(table.move_sec_boost_delta, att_idx, eff_slot)
+    )
+    mspec_b_stats = jnp.where(
+        use_struggle_spec,
+        jnp.full((3,), jnp.int32(0xFF), dtype=jnp.int32),
+        _get2(table.move_boost_stats, att_idx, eff_slot),
+    )
+    mspec_b_deltas = jnp.where(
+        use_struggle_spec,
+        jnp.zeros((3,), dtype=jnp.int32),
+        _get2(table.move_boost_deltas, att_idx, eff_slot),
+    )
+    mspec_spkind = jnp.where(
+        use_struggle_spec, jnp.int32(0), _get1(att_spkind_row, eff_slot)
+    )
+    mspec_mh = jnp.where(
+        use_struggle_spec, jnp.int32(2), _get2(table.move_multihit_mean_x2, att_idx, eff_slot)
+    )
 
-    # 9. Self-Destruct faints user upfront
+    # 10. Self-Destruct faints user upfront
     is_sd = active & ((mflags & MoveFlag.IS_SELFDESTRUCT) != 0)
     selfko_after = _set1(state.last_move_selfko, s, m_slot, is_sd)
     selfko_after = _set1(selfko_after, foe_s, jnp.int32(255), is_sd)
@@ -1315,7 +1306,7 @@ def exec_move(
         last_move_selfko=selfko_after,
     )
 
-    # 10. Common status self-moves (Rest, Half-Heal, Protect, Substitute)
+    # 11. Common status self-moves (Rest, Half-Heal, Weather-Heal, Protect/Endure, Substitute)
     att_maxhp = _get1(table.maxhp, att_idx)
     att_cur_hp = _get1(state.hp_pool, att_idx)[0]
     is_rest = active & ((mflags & MoveFlag.IS_REST) != 0)
@@ -1349,16 +1340,64 @@ def exec_move(
     )
     active = active & (~is_half_heal)
 
-    is_prot = active & ((mflags & MoveFlag.IS_PROTECT) != 0)
+    is_weather_heal = active & (mspec_spkind == 29)
+    w_heal_sun = (state.weather_turns > 0) & (state.weather_kind == CompactWeather.SUN)
+    w_heal_bad = (state.weather_turns > 0) & (
+        (state.weather_kind == CompactWeather.RAIN)
+        | (state.weather_kind == CompactWeather.SANDSTORM)
+    )
+    w_heal_amt = jnp.where(
+        w_heal_sun,
+        att_maxhp,
+        jnp.where(
+            w_heal_bad,
+            jnp.maximum(jnp.int32(1), _trunc_div(att_maxhp, 4)),
+            jnp.maximum(jnp.int32(1), _trunc_div(att_maxhp, 2)),
+        ),
+    )
+    state = state._replace(
+        hp_pool=_set2_col(
+            state.hp_pool,
+            att_idx,
+            0,
+            jnp.minimum(att_maxhp, _get1(state.hp_pool, att_idx)[0] + w_heal_amt),
+            is_weather_heal,
+        )
+    )
+    active = active & (~is_weather_heal)
+
+    is_prot_or_endure = active & (
+        ((mflags & MoveFlag.IS_PROTECT) != 0) | ((mflags & MoveFlag.IS_ENDURE) != 0)
+    )
+    att_t3 = _get2(state.timers, att_idx, 3)
+    att_sc = (att_t3 >> jnp.int32(3)) & jnp.int32(0x07)
+    stall_roll_needed = is_prot_or_endure & (~moved_sec) & (att_sc > 0)
+    stall_shift = jnp.minimum(
+        jnp.int32(6), jnp.maximum(jnp.int32(0), att_sc - jnp.int32(1))
+    )
+    stall_num = jnp.maximum(jnp.int32(1), jnp.int32(127) >> stall_shift)
+    next_seed_stall, stall_hit = prng_random_chance(state.prng_seed, stall_num, 255)
+    state = state._replace(
+        prng_seed=jnp.where(stall_roll_needed, next_seed_stall, state.prng_seed)
+    )
+    stall_ok = is_prot_or_endure & (~moved_sec) & ((att_sc == 0) | stall_hit)
+    prot_bit = jnp.where(
+        (mflags & MoveFlag.IS_PROTECT) != 0,
+        jnp.int32(VolBit.PROTECT),
+        jnp.int32(VolBit.ENDURE),
+    )
+    new_sc = jnp.minimum(jnp.int32(7), att_sc + jnp.int32(1))
+    new_att_t3 = (att_t3 & jnp.int32(0x07)) | ((new_sc & jnp.int32(0x07)) << jnp.int32(3))
     state = state._replace(
         vol_flags=_set1(
             state.vol_flags,
             att_idx,
-            _get1(state.vol_flags, att_idx) | jnp.int32(VolBit.PROTECT),
-            is_prot,
-        )
+            _get1(state.vol_flags, att_idx) | prot_bit,
+            stall_ok,
+        ),
+        timers=_set2_col(state.timers, att_idx, 3, new_att_t3, stall_ok),
     )
-    active = active & (~is_prot)
+    active = active & (~is_prot_or_endure)
 
     is_sub = active & ((mflags & MoveFlag.IS_SUBSTITUTE) != 0)
     sub_cost = _trunc_div(att_maxhp, 4)
@@ -1380,12 +1419,16 @@ def exec_move(
     )
     active = active & (~is_sub)
 
-    # 11. Target Protect check
+    # 12. Target Protect check (`blocked_by_protect`)
     def_vf = _get1(state.vol_flags, def_idx)
-    def_prot = active & ((def_vf & VolBit.PROTECT) != 0)
+    def_prot = (
+        active
+        & ((mflags & MoveFlag.BLOCKED_BY_PROTECT) != 0)
+        & ((def_vf & VolBit.PROTECT) != 0)
+    )
     active = active & (~def_prot)
 
-    # 12. Accuracy check
+    # 13. Accuracy check
     def_foresight = (def_vf & VolBit.FORESIGHT) != 0
     always_hit = (mflags & MoveFlag.ALWAYS_HIT) != 0
     def_bp = (_get1(state.item, def_idx) != 0) & (
@@ -1410,19 +1453,25 @@ def exec_move(
 
     early_after_self = (
         has_recharge
+        | unusable_abort
+        | flinched
+        | frozen
         | slp_blocked
         | conf_self_hit
+        | full_par
+        | no_pp
         | awake_sleep_fail
         | st_no_cand
         | is_rest
         | is_half_heal
-        | is_prot
+        | is_weather_heal
+        | is_prot_or_endure
         | is_sub
         | def_prot
         | missed
     )
 
-    # 13. Branch into Damaging vs Status move
+    # 14. Branch into Damaging vs Status move
     is_status = (mflags & MoveFlag.IS_STATUS) != 0
     is_damaging = (
         active
@@ -1435,9 +1484,13 @@ def exec_move(
     )
     is_status_exec = active & (~is_damaging) & is_status
 
-    # --- 13a. Damaging move path ---
+    # --- 14a. Damaging move path ---
     def_had_dbond = (_get1(state.vol_flags, def_idx) & VolBit.DESTINY_BOND) != 0
     bypasses_sub = (mflags & MoveFlag.BYPASSES_SUB) != 0
+    def_hp_pre = _get1(state.hp_pool, def_idx)
+    def_had_sub = (def_hp_pre[1] > 0) & (~bypasses_sub)
+    def_endure = ((_get1(state.vol_flags, def_idx) & VolBit.ENDURE) != 0) & (~def_had_sub)
+    max_endure_dmg = jnp.maximum(jnp.int32(0), def_hp_pre[0] - jnp.int32(1))
     type_mod, is_imm = effectiveness_ext(table, mspec_type, def_idx, def_foresight)
 
     is_counter = is_damaging & (mspec_spkind == 11)
@@ -1503,28 +1556,59 @@ def exec_move(
         ),
     )
     eff_bp = jnp.where(mspec_spkind == 13, flail_bp, mspec_bp)
-    has_type_boost = (_get1(state.item, att_idx) != 0) & (
-        _get1(table.item_boost_type, att_idx) == mspec_type
+    has_type_boost = (
+        (_get1(state.item, att_idx) != 0)
+        & (mspec_type != jnp.int32(0xFF))
+        & (_get1(table.item_boost_type, att_idx) == mspec_type)
     )
 
-    base_dmg = get_damage_base_branchless(
-        lvl_att,
-        eff_bp,
-        atk_val,
-        def_val,
-        is_phys,
-        (mflags & MoveFlag.IS_SELFDESTRUCT) != 0,
-        is_crit,
-        has_type_boost,
-        state.weather_kind,
-        (mflags & MoveFlag.IS_WATER) != 0,
-        (mflags & MoveFlag.IS_FIRE) != 0,
-        (mflags & MoveFlag.IS_SOLARBEAM) != 0,
-        mspec_type,
-        _get1(table.type_mask, att_idx),
-        type_mod,
-        is_imm,
+    # Inlined branchless Gen 2 Stadium 2 base damage calculation (`get_damage_base_branchless`)
+    rollover_shift = jnp.where((atk_val | def_val) >= 256, jnp.int32(2), jnp.int32(0))
+    dmg_atk = jnp.maximum(jnp.int32(1), atk_val >> rollover_shift)
+    dmg_def = jnp.maximum(jnp.int32(1), def_val >> rollover_shift)
+    sd_def_shift = jnp.where(
+        ((mflags & MoveFlag.IS_SELFDESTRUCT) != 0) & is_phys,
+        jnp.int32(1),
+        jnp.int32(0),
     )
+    dmg_def = jnp.maximum(jnp.int32(1), dmg_def >> sd_def_shift)
+
+    base_dmg = _trunc_div(
+        _trunc_div((_trunc_div(lvl_att * 2, 5) + 2) * eff_bp * dmg_atk, dmg_def),
+        50,
+    )
+    base_dmg = base_dmg << jnp.where(is_crit, jnp.int32(1), jnp.int32(0))
+    base_dmg = base_dmg + jnp.where(has_type_boost, _trunc_div(base_dmg, 10), jnp.int32(0))
+    base_dmg = jnp.clip(base_dmg, 1, 997) + jnp.int32(2)
+
+    w_active = state.weather_turns > 0
+    w_rain = w_active & (state.weather_kind == CompactWeather.RAIN)
+    w_sun = w_active & (state.weather_kind == CompactWeather.SUN)
+    is_water = (mflags & MoveFlag.IS_WATER) != 0
+    is_fire = (mflags & MoveFlag.IS_FIRE) != 0
+    is_sb = (mflags & MoveFlag.IS_SOLARBEAM) != 0
+    w_boost = (is_water & w_rain) | (is_fire & w_sun)
+    w_nerf = ((is_fire | is_sb) & w_rain) | (is_water & w_sun)
+    base_dmg = base_dmg + jnp.where(w_boost, base_dmg >> jnp.int32(1), jnp.int32(0))
+    base_dmg = base_dmg >> jnp.where(w_nerf, jnp.int32(1), jnp.int32(0))
+
+    is_stab = (mspec_type >= 0) & (mspec_type < 32) & (
+        (
+            _get1(table.type_mask, att_idx)
+            & (jnp.uint32(1) << (jnp.uint32(mspec_type) & jnp.uint32(31)))
+        )
+        != jnp.uint32(0)
+    )
+    base_dmg = base_dmg + jnp.where(is_stab, base_dmg >> jnp.int32(1), jnp.int32(0))
+
+    super_shift = jnp.where(
+        type_mod > 0, jnp.where(type_mod >= 2, jnp.int32(2), jnp.int32(1)), jnp.int32(0)
+    )
+    resist_shift = jnp.where(
+        type_mod < 0, jnp.where(type_mod <= -2, jnp.int32(2), jnp.int32(1)), jnp.int32(0)
+    )
+    base_dmg = (base_dmg << super_shift) >> resist_shift
+    base_dmg = jnp.where(is_imm | (eff_bp <= 0), jnp.int32(0), base_dmg)
 
     no_var = mspec_spkind == 13
     dmg_roll_needed = is_regular_dmg & (base_dmg > 0) & (~no_var)
@@ -1540,19 +1624,17 @@ def exec_move(
 
     hurt_cat_s = _get1(state.hurt_cat_this_turn, s)
     hurt_dmg_s = _get1(state.hurt_damage_this_turn, s)
-    counter_ok = is_counter & (hurt_cat_s == 1) & (hurt_dmg_s > 0)
+    counter_ok = is_counter & (~is_imm) & (hurt_cat_s == 1) & (hurt_dmg_s > 0)
     counter_dmg = jnp.minimum(jnp.int32(9999), hurt_dmg_s * 2)
 
-    mirror_ok = is_mirror & (hurt_cat_s == 2) & (hurt_dmg_s > 0)
+    mirror_ok = is_mirror & (~is_imm) & (hurt_cat_s == 2) & (hurt_dmg_s > 0)
     mirror_dmg = jnp.minimum(jnp.int32(9999), hurt_dmg_s * 2)
 
     fixed_ok = is_fixed & (~is_imm)
     fixed_dmg_val = jnp.where(mspec_fixed > 0, mspec_fixed, lvl_att)
 
     sf_ok = is_superfang & (~is_imm)
-    sf_dmg_val = jnp.maximum(
-        jnp.int32(1), _trunc_div(_get1(state.hp_pool, def_idx)[0], 2)
-    )
+    sf_dmg_val = jnp.maximum(jnp.int32(1), _trunc_div(def_hp_pre[0], 2))
 
     reg_ok = is_regular_dmg & (base_dmg > 0)
     reg_dmg_clamped = jnp.minimum(jnp.int32(9999), reg_final_dmg)
@@ -1571,23 +1653,25 @@ def exec_move(
             ),
         ),
     )
+    dmg_to_apply = jnp.where(
+        def_endure, jnp.minimum(dmg_to_apply, max_endure_dmg), dmg_to_apply
+    )
 
     state, dealt = apply_damage_to_mon(
         state, def_idx, dmg_to_apply, bypasses_sub, any_dmg_apply
     )
 
-    hurt_dmg = _set1(
-        state.hurt_damage_this_turn, foe_s, jnp.maximum(jnp.int32(0), dealt), reg_ok
-    )
+    record_hurt = is_damaging & (dealt > 0) & (~def_had_sub)
+    hurt_dmg = _set1(state.hurt_damage_this_turn, foe_s, dealt, record_hurt)
     hurt_cat = _set1(
         state.hurt_cat_this_turn,
         foe_s,
         jnp.where(is_phys, jnp.int32(1), jnp.int32(2)),
-        reg_ok,
+        record_hurt,
     )
     state = state._replace(hurt_damage_this_turn=hurt_dmg, hurt_cat_this_turn=hurt_cat)
 
-    # Drain & Recoil on regular damage
+    # Drain & Recoil
     drain_ok = reg_ok & ((mflags & MoveFlag.DRAIN_HALF) != 0) & (dealt > 0)
     drain_amt = jnp.maximum(jnp.int32(1), _trunc_div(dealt, 2))
     state = state._replace(
@@ -1599,14 +1683,72 @@ def exec_move(
             drain_ok,
         )
     )
+    is_1v1_ko = (
+        (_popcount3(_get1(state.alive_mask, 0)) == 1)
+        & (_popcount3(_get1(state.alive_mask, 1)) == 1)
+        & (_get1(state.hp_pool, def_idx)[0] <= 0)
+    )
     recoil_ok = (
-        reg_ok
+        is_damaging
         & ((mflags & MoveFlag.RECOIL_QUARTER) != 0)
         & (dealt > 0)
         & (_get1(state.hp_pool, att_idx)[0] > 0)
+        & (def_had_sub | (~is_1v1_ko))
     )
-    recoil_amt = jnp.maximum(jnp.int32(1), _trunc_div(dealt, 4))
+    recoil_amt = jnp.where(
+        def_had_sub,
+        jnp.int32(1),
+        jnp.maximum(jnp.int32(1), _trunc_div(dealt, 4)),
+    )
     state, _ = apply_damage_to_mon(state, att_idx, recoil_amt, jnp.bool_(True), recoil_ok)
+
+    # Hyper Beam recharge flag & Rapid Spin clear on non-immune hit
+    hit_landed = any_dmg_apply
+    att_alive_post = _get1(state.hp_pool, att_idx)[0] > 0
+    recharge_ok = hit_landed & ((mflags & MoveFlag.IS_RECHARGE) != 0) & att_alive_post
+    state = state._replace(
+        slot_refs=_set1(
+            state.slot_refs,
+            att_idx,
+            _get1(state.slot_refs, att_idx) | jnp.int32(0x80),
+            recharge_ok,
+        )
+    )
+    spin_ok = hit_landed & (mspec_spkind == 28) & att_alive_post
+    state = state._replace(
+        side_flags=_set1(
+            state.side_flags,
+            s,
+            _get1(state.side_flags, s) & ~jnp.int32(0x03),
+            spin_ok,
+        ),
+        vol_flags=_set1(
+            state.vol_flags,
+            att_idx,
+            _get1(state.vol_flags, att_idx)
+            & ~jnp.int32(VolBit.LEECH_SEED | VolBit.TRAPPED_OR_LOCKED),
+            spin_ok,
+        ),
+    )
+
+    # Defrost user (`Flame Wheel` / `Sacred Fire`) and frozen target hit by burn-secondary move
+    user_defrost = (
+        hit_landed
+        & att_alive_post
+        & ((mflags & MoveFlag.IS_DEFROST) != 0)
+        & ((_get1(state.status_packed, att_idx) & 0x07) == Status.FRZ)
+    )
+    target_defrost = (
+        is_damaging
+        & (dealt > 0)
+        & (~def_had_sub)
+        & (_get1(state.hp_pool, def_idx)[0] > 0)
+        & ((_get1(state.status_packed, def_idx) & 0x07) == Status.FRZ)
+        & (mspec_sstat == Status.BRN)
+    )
+    sp_defrost = _set1(state.status_packed, att_idx, jnp.int32(Status.NONE), user_defrost)
+    sp_defrost = _set1(sp_defrost, def_idx, jnp.int32(Status.NONE), target_defrost)
+    state = state._replace(status_packed=sp_defrost)
 
     # Destiny Bond trigger
     def_hp_after = _get1(state.hp_pool, def_idx)
@@ -1664,12 +1806,21 @@ def exec_move(
     sb_self = (mspec_sb_stat & 0x80) != 0
     sb_target = jnp.where(sb_self, att_idx, def_idx)
     sb_st_i = mspec_sb_stat & 0x7F
-    sb_valid = sec_boost_en & (sb_st_i < 7)
+    sb_omni = sec_boost_en & sb_self & (sb_st_i == 7)
+    sb_single = sec_boost_en & (~sb_omni) & (sb_st_i < 7)
     sb_safe_i = jnp.minimum(jnp.int32(6), jnp.maximum(jnp.int32(0), sb_st_i))
-    new_sb_val = jnp.clip(_get2(state.boosts, sb_target, sb_safe_i) + mspec_sb_delta, -6, 6)
-    state = state._replace(
-        boosts=_set2(state.boosts, sb_target, sb_safe_i, new_sb_val, sb_valid)
+    b_cur_row = _get1(state.boosts, sb_target)
+    b_omni_row = jnp.concatenate(
+        [jnp.clip(b_cur_row[:5] + mspec_sb_delta, -6, 6), b_cur_row[5:]]
     )
+    boosts_after_sb = _set1(state.boosts, sb_target, b_omni_row, sb_omni)
+    new_sb_val = jnp.clip(
+        _get2(boosts_after_sb, sb_target, sb_safe_i) + mspec_sb_delta, -6, 6
+    )
+    boosts_after_sb = _set2(
+        boosts_after_sb, sb_target, sb_safe_i, new_sb_val, sb_single
+    )
+    state = state._replace(boosts=boosts_after_sb)
 
     # Thief item steal
     def_item_cur = _get1(state.item, def_idx)
@@ -1685,7 +1836,7 @@ def exec_move(
     state = check_berry_triggers(state, table, foe_s, is_damaging)
     state = check_berry_triggers(state, table, s, is_damaging)
 
-    # --- 13b. Status move path (`exec_status_move`) ---
+    # --- 14b. Status move path (`exec_status_move`) ---
     state = exec_status_move(
         state,
         table,
@@ -1704,15 +1855,28 @@ def exec_move(
         is_status_exec,
     )
 
-    # 14. End-of-move `exec_after_move_self` (unified across all early & normal exits)
-    normal_after_self = active & (~((mflags & MoveFlag.IS_SELFDESTRUCT) != 0))
-    after_self_en = (
-        (early_after_self | normal_after_self)
-        & (_get1(state.hp_pool, att_idx)[0] > 0)
-        & (_get1(state.hp_pool, def_idx)[0] > 0)
+    # 15. End-of-move `exec_after_move_self` (unified across all early & normal exits)
+    normal_after_self = (
+        active
+        & (~((mflags & MoveFlag.IS_SELFDESTRUCT) != 0))
+        & (mspec_spkind != 18)
         & (state.outcome == 0)
     )
+    after_self_en = early_after_self | normal_after_self
     state = exec_after_move_self(state, table, s, after_self_en)
+    clear_def_db_fallback = (
+        active
+        & (~after_self_en)
+        & (_get1(state.hp_pool, def_idx)[0] > 0)
+    )
+    state = state._replace(
+        vol_flags=_set1(
+            state.vol_flags,
+            def_idx,
+            _get1(state.vol_flags, def_idx) & ~jnp.int32(VolBit.DESTINY_BOND),
+            clear_def_db_fallback,
+        )
+    )
     return state
 
 
@@ -1845,6 +2009,68 @@ def exec_status_move(
         _highest_bit3(roar_mask),
     )
 
+    # 8: Encore
+    def_vf_enc = _get1(state.vol_flags, def_idx)
+    def_sr_enc = _get1(state.slot_refs, def_idx)
+    enc_lm = def_sr_enc & jnp.int32(0x03)
+    enc_lm_pp = _get2(state.pp, def_idx, enc_lm)
+    enc_lm_spkind = _get2(table.move_special_kind, def_idx, enc_lm)
+    enc_ok = (
+        en
+        & (mspec_spkind == 8)
+        & (_get1(state.hp_pool, def_idx)[1] == 0)
+        & ((def_vf_enc & VolBit.ENCORE) == 0)
+        & ((def_sr_enc & 0x40) != 0)
+        & (enc_lm < _get1(table.num_moves, def_idx))
+        & (enc_lm_pp > 0)
+        & (enc_lm_spkind != 8)
+    )
+    next_seed_enc, enc_r = prng_random(state.prng_seed, 4)
+    new_sr_enc = (def_sr_enc & ~jnp.int32(0x03 << 2)) | (
+        (enc_lm & jnp.int32(0x03)) << jnp.int32(2)
+    )
+    state = state._replace(
+        vol_flags=_set1(
+            state.vol_flags,
+            def_idx,
+            def_vf_enc | jnp.int32(VolBit.ENCORE),
+            enc_ok,
+        ),
+        timers=_set2_col(state.timers, def_idx, 1, jnp.int32(3) + enc_r, enc_ok),
+        slot_refs=_set1(state.slot_refs, def_idx, new_sr_enc, enc_ok),
+        prng_seed=jnp.where(enc_ok, next_seed_enc, state.prng_seed),
+    )
+
+    # 9: Disable
+    def_vf_dis = _get1(state.vol_flags, def_idx)
+    def_sr_dis = _get1(state.slot_refs, def_idx)
+    dis_lm = def_sr_dis & jnp.int32(0x03)
+    dis_lm_pp = _get2(state.pp, def_idx, dis_lm)
+    dis_ok = (
+        en
+        & (mspec_spkind == 9)
+        & (_get1(state.hp_pool, def_idx)[1] == 0)
+        & ((def_vf_dis & VolBit.DISABLE) == 0)
+        & ((def_sr_dis & 0x40) != 0)
+        & (dis_lm < _get1(table.num_moves, def_idx))
+        & (dis_lm_pp > 0)
+    )
+    next_seed_dis, dis_r = prng_random(state.prng_seed, 6)
+    new_sr_dis = (def_sr_dis & ~jnp.int32(0x03 << 4)) | (
+        (dis_lm & jnp.int32(0x03)) << jnp.int32(4)
+    )
+    state = state._replace(
+        vol_flags=_set1(
+            state.vol_flags,
+            def_idx,
+            def_vf_dis | jnp.int32(VolBit.DISABLE),
+            dis_ok,
+        ),
+        timers=_set2_col(state.timers, def_idx, 2, jnp.int32(2) + dis_r, dis_ok),
+        slot_refs=_set1(state.slot_refs, def_idx, new_sr_dis, dis_ok),
+        prng_seed=jnp.where(dis_ok, next_seed_dis, state.prng_seed),
+    )
+
     # 17: Pain Split
     def_hp_pair = _get1(state.hp_pool, def_idx)
     ps_en = en & (mspec_spkind == 17) & (def_hp_pair[1] == 0)
@@ -1864,6 +2090,7 @@ def exec_status_move(
     s_act = _get1(state.active_idx, s)
     bp_mask = _get1(state.alive_mask, s) & ~(jnp.int32(1) << s_act)
     bp_en = en & (mspec_spkind == 18) & (bp_mask != 0)
+    bp_fix = (_get1(state.side_flags, 0) & 0x80) == 0
     bp_slot_init = _trailing_zeros3(bp_mask)
     passed_boosts = _get1(state.boosts, att_idx)
     has_off_boost = (passed_boosts[0] > 0) | (passed_boosts[2] > 0)
@@ -1875,13 +2102,20 @@ def exec_status_move(
 
     if jax.default_backend() == "tpu":
         best_sc = jnp.float32(-1.0)
-        bp_slot = bp_slot_init
+        bp_slot_fix = bp_slot_init
+        best_legacy = jnp.int32(-1)
+        bp_slot_legacy = bp_slot_init
         for s_i in range(3):
             cand_ok = bp_en & ((bp_mask & (1 << s_i)) != 0)
             c_idx = s * 3 + s_i
-            hp_frac = _get1(state.hp_pool, c_idx)[0].astype(jnp.float32) / jnp.maximum(
-                jnp.int32(1), _get1(table.maxhp, c_idx)
-            ).astype(jnp.float32)
+            c_hp = _get1(state.hp_pool, c_idx)[0]
+            c_max = jnp.maximum(jnp.int32(1), _get1(table.maxhp, c_idx))
+            leg_sc = _trunc_div(c_hp * jnp.int32(1024), c_max)
+            leg_better = cand_ok & (leg_sc > best_legacy)
+            best_legacy = jnp.where(leg_better, leg_sc, best_legacy)
+            bp_slot_legacy = jnp.where(leg_better, jnp.int32(s_i), bp_slot_legacy)
+
+            hp_frac = c_hp.astype(jnp.float32) / c_max.astype(jnp.float32)
             base_h = best_hit_fraction(state, table, s, s_i, foe_s, foe_act, True)
             boosted_state = state._replace(
                 boosts=_set1(state.boosts, c_idx, passed_boosts, jnp.bool_(True))
@@ -1895,17 +2129,20 @@ def exec_status_move(
             sc = hp_frac + boost_gain
             better = cand_ok & (sc > best_sc)
             best_sc = jnp.where(better, sc, best_sc)
-            bp_slot = jnp.where(better, jnp.int32(s_i), bp_slot)
+            bp_slot_fix = jnp.where(better, jnp.int32(s_i), bp_slot_fix)
     else:
         def _bp_cand_body(
-            s_i: jax.Array, carry: tuple[jax.Array, jax.Array]
-        ) -> tuple[jax.Array, jax.Array]:
-            best_sc, best_sl = carry
+            s_i: jax.Array,
+            carry: tuple[jax.Array, jax.Array, jax.Array, jax.Array],
+        ) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
+            best_sc, best_sl, best_leg, best_leg_sl = carry
             cand_ok = bp_en & ((bp_mask & (jnp.int32(1) << s_i)) != 0)
             c_idx = s * 3 + s_i
-            hp_frac = _get1(state.hp_pool, c_idx)[0].astype(jnp.float32) / jnp.maximum(
-                jnp.int32(1), _get1(table.maxhp, c_idx)
-            ).astype(jnp.float32)
+            c_hp = _get1(state.hp_pool, c_idx)[0]
+            c_max = jnp.maximum(jnp.int32(1), _get1(table.maxhp, c_idx))
+            leg_sc = _trunc_div(c_hp * jnp.int32(1024), c_max)
+            leg_better = cand_ok & (leg_sc > best_leg)
+            hp_frac = c_hp.astype(jnp.float32) / c_max.astype(jnp.float32)
             base_h = best_hit_fraction(state, table, s, s_i, foe_s, foe_act, True)
             boosted_state = state._replace(
                 boosts=_set1(state.boosts, c_idx, passed_boosts, jnp.bool_(True))
@@ -1918,12 +2155,21 @@ def exec_status_move(
             )
             sc = hp_frac + boost_gain
             better = cand_ok & (sc > best_sc)
-            return jnp.where(better, sc, best_sc), jnp.where(better, s_i, best_sl)
+            return (
+                jnp.where(better, sc, best_sc),
+                jnp.where(better, s_i, best_sl),
+                jnp.where(leg_better, leg_sc, best_leg),
+                jnp.where(leg_better, s_i, best_leg_sl),
+            )
 
-        _, bp_slot = jax.lax.fori_loop(
-            0, 3, _bp_cand_body, (jnp.float32(-1.0), bp_slot_init)
+        _, bp_slot_fix, _, bp_slot_legacy = jax.lax.fori_loop(
+            0,
+            3,
+            _bp_cand_body,
+            (jnp.float32(-1.0), bp_slot_init, jnp.int32(-1), bp_slot_init),
         )
 
+    bp_slot = jnp.where(bp_fix, bp_slot_fix, bp_slot_legacy)
     status_sw_side = jnp.where(roar_en, foe_s, s)
     status_sw_slot = jnp.where(roar_en, roar_slot, bp_slot)
     state = exec_switch(
@@ -1942,8 +2188,10 @@ def exec_status_move(
         state.vol_flags, att_idx, att_vf_cur | jnp.int32(VolBit.PERISH_SONG), att_p_add
     )
     vf_p = _set1(vf_p, def_idx, def_vf_cur | jnp.int32(VolBit.PERISH_SONG), def_p_add)
-    tm_p = _set2_col(state.timers, att_idx, 3, jnp.int32(4), att_p_add)
-    tm_p = _set2_col(tm_p, def_idx, 3, jnp.int32(4), def_p_add)
+    att_p_t3 = (_get2(state.timers, att_idx, 3) & ~jnp.int32(0x07)) | jnp.int32(4)
+    def_p_t3 = (_get2(state.timers, def_idx, 3) & ~jnp.int32(0x07)) | jnp.int32(4)
+    tm_p = _set2_col(state.timers, att_idx, 3, att_p_t3, att_p_add)
+    tm_p = _set2_col(tm_p, def_idx, 3, def_p_t3, def_p_add)
     state = state._replace(vol_flags=vf_p, timers=tm_p)
 
     # 20: Destiny Bond
@@ -1995,10 +2243,23 @@ def exec_status_move(
     boosts = _set1(state.boosts, att_idx, _get1(state.boosts, def_idx), pu_en)
     boosts = _set1(boosts, att_idx, jnp.zeros((7,), dtype=jnp.int32), haze_en)
     boosts = _set1(boosts, def_idx, jnp.zeros((7,), dtype=jnp.int32), haze_en)
+    drop_mask = ~jnp.int32(VolBit.PAR_SPEED_DROP | VolBit.BRN_ATK_DROP)
     vol_flags = _set1(
         state.vol_flags,
+        att_idx,
+        _get1(state.vol_flags, att_idx) & drop_mask,
+        haze_en,
+    )
+    vol_flags = _set1(
+        vol_flags,
         def_idx,
-        _get1(state.vol_flags, def_idx) | jnp.int32(VolBit.TRAPPED_OR_LOCKED),
+        _get1(vol_flags, def_idx) & drop_mask,
+        haze_en,
+    )
+    vol_flags = _set1(
+        vol_flags,
+        def_idx,
+        _get1(vol_flags, def_idx) | jnp.int32(VolBit.TRAPPED_OR_LOCKED),
         trap_en,
     )
     state = state._replace(
@@ -2031,9 +2292,18 @@ def exec_status_move(
     night_fail = ((mspec_pvol & VolBit.NIGHTMARE) != 0) & (
         (_get1(state.status_packed, def_idx) & 0x07) != Status.SLP
     )
+    pvol_excluded = (
+        (mspec_spkind == 5)
+        | (mspec_spkind == 8)
+        | (mspec_spkind == 9)
+        | (mspec_spkind == 19)
+        | (mspec_spkind == 20)
+        | (mspec_pvol == VolBit.DESTINY_BOND)
+    )
     pvol_en = (
         en
         & (mspec_pvol != 0)
+        & (~pvol_excluded)
         & (_get1(state.hp_pool, def_idx)[1] == 0)
         & (~seed_imm)
         & (~night_fail)
@@ -2122,7 +2392,7 @@ def check_faints(
     )
     state = state._replace(outcome=new_outcome)
 
-    any_forced_switch = jnp.bool_(False)
+    any_auto = jnp.bool_(False)
     for side in range(2):
         still_ongoing = both_alive & (state.outcome == 0)
         p_idx = state.active_idx[side]
@@ -2130,9 +2400,6 @@ def check_faints(
             (state.alive_mask[side] & (jnp.int32(1) << p_idx)) == 0
         )
         one_left = act_dead & (_popcount3(state.alive_mask[side]) == 1)
-        two_left = act_dead & (_popcount3(state.alive_mask[side]) > 1)
-        act_alive = still_ongoing & (~act_dead)
-
         next_slot = jnp.minimum(jnp.int32(2), _trailing_zeros3(state.alive_mask[side]))
         state = exec_switch(state, table, side, next_slot, False, one_left)
 
@@ -2143,28 +2410,43 @@ def check_faints(
             state.alive_mask[side] & ~(jnp.int32(1) << next_slot),
             state.alive_mask[side],
         )
-        side_wiped = spikes_ko & (new_mask == 0)
-        wiped_out = 2 if side == 0 else 1
-
-        req_val = jnp.where(
-            two_left,
-            jnp.int32(2),
-            jnp.where(one_left | act_alive, jnp.int32(1), state.request[side]),
-        )
         state = state._replace(
-            alive_mask=_set1(state.alive_mask, side, new_mask, jnp.bool_(True)),
-            outcome=jnp.where(side_wiped, jnp.int32(wiped_out), state.outcome),
-            request=_set1(state.request, side, req_val, ~side_wiped),
+            alive_mask=_set1(state.alive_mask, side, new_mask, spikes_ko)
         )
-        any_forced_switch = any_forced_switch | (two_left & (state.outcome == 0))
+        any_auto = any_auto | one_left
+
+    a0_post = state.alive_mask[0]
+    a1_post = state.alive_mask[1]
+    post_check = both_alive & (state.outcome == 0) & any_auto
+    post_both_zero = post_check & (a0_post == 0) & (a1_post == 0)
+    post_a0_zero = post_check & (a0_post == 0) & (a1_post != 0)
+    post_a1_zero = post_check & (a0_post != 0) & (a1_post == 0)
+    post_outcome = jnp.where(
+        post_both_zero,
+        selfko_out,
+        jnp.where(
+            post_a0_zero,
+            jnp.int32(2),
+            jnp.where(post_a1_zero, jnp.int32(1), state.outcome),
+        ),
+    )
+    state = state._replace(outcome=post_outcome)
+
+    any_forced_switch = jnp.bool_(False)
+    req_ongoing = both_alive & (state.outcome == 0)
+    for side in range(2):
+        p_idx = state.active_idx[side]
+        act_dead = req_ongoing & (
+            (state.alive_mask[side] & (jnp.int32(1) << p_idx)) == 0
+        )
+        req_val = jnp.where(act_dead, jnp.int32(2), jnp.int32(1))
+        state = state._replace(
+            request=_set1(state.request, side, req_val, req_ongoing)
+        )
+        any_forced_switch = any_forced_switch | act_dead
 
     for side in range(2):
-        wait_cond = (
-            both_alive
-            & (state.outcome == 0)
-            & any_forced_switch
-            & (state.request[side] != 2)
-        )
+        wait_cond = req_ongoing & any_forced_switch & (state.request[side] != 2)
         state = state._replace(
             request=_set1(state.request, side, jnp.int32(0), wait_cond)
         )
@@ -2204,41 +2486,104 @@ def exec_residuals(
         weather_kind=jnp.where(has_w, w_kind_after, state.weather_kind),
     )
 
+    halt_res = jnp.bool_(False)
     is_sand = has_w & (~w_expired) & (state.weather_kind == CompactWeather.SANDSTORM)
     for step_side in order:
-        idx = step_side * 3 + _get1(state.active_idx, step_side)
+        p_idx = _get1(state.active_idx, step_side)
+        idx = step_side * 3 + p_idx
         sand_imm = (
             _get1(table.type_mask, idx) & table.sandstorm_immune_mask
         ) != jnp.uint32(0)
-        sand_hit = is_sand & (_get1(state.hp_pool, idx)[0] > 0) & (~sand_imm)
+        sand_hit = (
+            is_sand
+            & (~halt_res)
+            & (_get1(state.hp_pool, idx)[0] > 0)
+            & (~sand_imm)
+        )
         state, _ = apply_damage_to_mon(
             state, idx, _get1(table.quantum_1_8, idx), jnp.bool_(True), sand_hit
         )
         state = check_berry_triggers(state, table, step_side, sand_hit)
 
+        sand_ko = sand_hit & (_get1(state.hp_pool, idx)[0] <= 0)
+        foe_side = step_side ^ jnp.int32(1)
+        foe_idx = foe_side * 3 + _get1(state.active_idx, foe_side)
+        new_am = _get1(state.alive_mask, step_side) & ~(jnp.int32(1) << p_idx)
+        sand_wiped = sand_ko & (new_am == 0)
+        wiped_out = jnp.where(step_side == 0, jnp.int32(2), jnp.int32(1))
+        state = state._replace(
+            alive_mask=_set1(state.alive_mask, step_side, new_am, sand_ko),
+            vol_flags=_set1(
+                state.vol_flags,
+                foe_idx,
+                _get1(state.vol_flags, foe_idx) & ~jnp.int32(VolBit.TRAPPED_OR_LOCKED),
+                sand_ko,
+            ),
+            outcome=jnp.where(sand_wiped, wiped_out, state.outcome),
+        )
+        halt_res = halt_res | sand_wiped
+
     for step_side in order:
-        idx = step_side * 3 + _get1(state.active_idx, step_side)
+        p_idx = _get1(state.active_idx, step_side)
+        idx = step_side * 3 + p_idx
         mon_hp = _get1(state.hp_pool, idx)[0]
-        mon_alive = en & (mon_hp > 0)
+        mon_alive = en & (~halt_res) & (mon_hp > 0)
+
+        is_frz = mon_alive & ((_get1(state.status_packed, idx) & 0x07) == Status.FRZ)
+        next_seed_thaw, thaw_hit = prng_random_chance(state.prng_seed, 25, 256)
+        state = state._replace(
+            prng_seed=jnp.where(is_frz, next_seed_thaw, state.prng_seed),
+            status_packed=_set1(
+                state.status_packed,
+                idx,
+                jnp.int32(Status.NONE),
+                is_frz & thaw_hit,
+            ),
+        )
+
         mon_vf = _get1(state.vol_flags, idx)
         has_perish = mon_alive & ((mon_vf & VolBit.PERISH_SONG) != 0)
-        p_rem = jnp.maximum(jnp.int32(0), _get1(state.timers, idx)[3] - jnp.int32(1))
+        cur_t3 = _get1(state.timers, idx)[3]
+        p_rem = jnp.maximum(jnp.int32(0), (cur_t3 & jnp.int32(0x07)) - jnp.int32(1))
+        new_t3 = (cur_t3 & ~jnp.int32(0x07)) | (p_rem & jnp.int32(0x07))
         perish_faint = has_perish & (p_rem == 0)
 
+        foe_side = step_side ^ jnp.int32(1)
+        foe_idx = foe_side * 3 + _get1(state.active_idx, foe_side)
+        new_am_p = _get1(state.alive_mask, step_side) & ~(jnp.int32(1) << p_idx)
+        perish_wiped = perish_faint & (new_am_p == 0)
+        p_wiped_out = jnp.where(step_side == 0, jnp.int32(2), jnp.int32(1))
+
         state = state._replace(
-            timers=_set2_col(state.timers, idx, 3, p_rem, has_perish),
             hp_pool=_set2_col(state.hp_pool, idx, 0, jnp.int32(0), perish_faint),
             status_packed=_set1(
                 state.status_packed, idx, jnp.int32(Status.FNT), perish_faint
             ),
             vol_flags=_set1(state.vol_flags, idx, jnp.int32(0), perish_faint),
+            timers=_set1(
+                _set2_col(state.timers, idx, 3, new_t3, has_perish),
+                idx,
+                jnp.zeros((4,), dtype=jnp.int32),
+                perish_faint,
+            ),
+            alive_mask=_set1(state.alive_mask, step_side, new_am_p, perish_faint),
+            outcome=jnp.where(perish_wiped, p_wiped_out, state.outcome),
         )
+        state = state._replace(
+            vol_flags=_set1(
+                state.vol_flags,
+                foe_idx,
+                _get1(state.vol_flags, foe_idx) & ~jnp.int32(VolBit.TRAPPED_OR_LOCKED),
+                perish_faint,
+            )
+        )
+        halt_res = halt_res | perish_wiped
+        cont_alive = mon_alive & (~perish_faint)
 
         maxhp_idx = _get1(table.maxhp, idx)
         cur_hp_idx = _get1(state.hp_pool, idx)[0]
         lefties_ok = (
-            mon_alive
-            & (~perish_faint)
+            cont_alive
             & (_get1(state.item, idx) != 0)
             & ((_get1(table.item_flags, idx) & ItemFlag.LEFTOVERS) != 0)
             & (cur_hp_idx < maxhp_idx)
@@ -2248,23 +2593,78 @@ def exec_residuals(
             hp_pool=_set2_col(state.hp_pool, idx, 0, healed_hp, lefties_ok)
         )
 
+        # Encore decay
+        vf_enc = _get1(state.vol_flags, idx)
+        has_enc = cont_alive & ((vf_enc & VolBit.ENCORE) != 0)
+        enc_slot = (_get1(state.slot_refs, idx) >> jnp.int32(2)) & jnp.int32(0x03)
+        enc_rem = jnp.maximum(jnp.int32(0), _get1(state.timers, idx)[1] - jnp.int32(1))
+        enc_end = has_enc & (
+            (enc_rem == 0)
+            | (enc_slot >= _get1(table.num_moves, idx))
+            | (_get2(state.pp, idx, enc_slot) <= 0)
+        )
+        state = state._replace(
+            timers=_set2_col(
+                state.timers,
+                idx,
+                1,
+                jnp.where(enc_end, jnp.int32(0), enc_rem),
+                has_enc,
+            ),
+            vol_flags=_set1(
+                state.vol_flags,
+                idx,
+                vf_enc & ~jnp.int32(VolBit.ENCORE),
+                enc_end,
+            ),
+        )
+
+        # Disable decay
+        vf_dis = _get1(state.vol_flags, idx)
+        has_dis = cont_alive & ((vf_dis & VolBit.DISABLE) != 0)
+        dis_rem = jnp.maximum(jnp.int32(0), _get1(state.timers, idx)[2] - jnp.int32(1))
+        state = state._replace(
+            timers=_set2_col(state.timers, idx, 2, dis_rem, has_dis),
+            vol_flags=_set1(
+                state.vol_flags,
+                idx,
+                vf_dis & ~jnp.int32(VolBit.DISABLE),
+                has_dis & (dis_rem == 0),
+            ),
+        )
+
+        # Stall reset and clear Protect/Endure/Flinch
+        vf_stall = _get1(state.vol_flags, idx)
+        stall_reset = cont_alive & ((vf_stall & (VolBit.PROTECT | VolBit.ENDURE)) == 0)
+        t3_reset = _get1(state.timers, idx)[3] & jnp.int32(0x07)
+        state = state._replace(
+            timers=_set2_col(state.timers, idx, 3, t3_reset, stall_reset),
+            vol_flags=_set1(
+                state.vol_flags,
+                idx,
+                vf_stall & ~jnp.int32(VolBit.PROTECT | VolBit.ENDURE | VolBit.FLINCH),
+                cont_alive,
+            ),
+        )
+
+    screen_en = en & (~halt_res)
     state = state._replace(
         reflect_turns=jnp.where(
-            en, jnp.maximum(jnp.int32(0), state.reflect_turns - 1), state.reflect_turns
+            screen_en, jnp.maximum(jnp.int32(0), state.reflect_turns - 1), state.reflect_turns
         ),
         lightscreen_turns=jnp.where(
-            en,
+            screen_en,
             jnp.maximum(jnp.int32(0), state.lightscreen_turns - 1),
             state.lightscreen_turns,
         ),
         safeguard_turns=jnp.where(
-            en,
+            screen_en,
             jnp.maximum(jnp.int32(0), state.safeguard_turns - 1),
             state.safeguard_turns,
         ),
     )
 
-    state = check_faints(state, table, en)
+    state = check_faints(state, table, screen_en)
     return state
 
 
@@ -2283,8 +2683,11 @@ def _exec_actor_action(
 ) -> CompactBattle:
     en = jnp.asarray(enable, dtype=jnp.bool_) & (state.outcome == 0)
     sec_b = jnp.asarray(is_second_step, dtype=jnp.bool_)
-    is_sw = en & (act_code >= 4) & (act_code < 7)
-    sw_slot = jnp.minimum(jnp.int32(2), act_code - jnp.int32(4))
+    p_actor = actor * jnp.int32(3) + jnp.minimum(jnp.int32(2), _get1(state.active_idx, actor))
+    must_recharge = (_get1(state.slot_refs, p_actor) & jnp.int32(0x80)) != 0
+    eff_act = jnp.where(must_recharge, jnp.int32(0), act_code)
+    is_sw = en & (eff_act >= 4) & (eff_act < 7)
+    sw_slot = jnp.minimum(jnp.int32(2), eff_act - jnp.int32(4))
     state = exec_switch(state, table, actor, sw_slot, False, is_sw)
 
     p0 = state.active_idx[0]
@@ -2292,9 +2695,9 @@ def _exec_actor_action(
     both_actives_alive = (
         (_get1(state.hp_pool, p0)[0] > 0) & (_get1(state.hp_pool, p1)[0] > 0)
     )
-    can_move = en & (act_code < 4) & ((~sec_b) | both_actives_alive)
+    can_move = en & (eff_act < 4) & ((~sec_b) | both_actives_alive)
     state = exec_move(
-        state, table, actor, act_code & jnp.int32(3), sec_b, can_move
+        state, table, actor, eff_act & jnp.int32(3), sec_b, can_move
     )
     return state
 
@@ -2322,17 +2725,26 @@ def _run_two_actor_steps(
 def _end_of_turn_residuals_and_advance(
     state: CompactBattle, table: MatchTable, en: jax.Array
 ) -> CompactBattle:
-    res_en = (
+    can_finish = (
         en
         & (state.outcome == 0)
         & (state.request[0] == 1)
         & (state.request[1] == 1)
     )
+    res_en = can_finish & ((state.side_flags[0] & 0x08) == 0)
+    state = state._replace(
+        side_flags=_set1(
+            state.side_flags,
+            0,
+            state.side_flags[0] | jnp.int32(0x08),
+            res_en,
+        )
+    )
     state = exec_residuals(state, table, res_en)
     state = check_faints(state, table, res_en)
 
     adv_turn_en = (
-        res_en
+        en
         & (state.outcome == 0)
         & (state.request[0] == 1)
         & (state.request[1] == 1)
@@ -2343,6 +2755,12 @@ def _end_of_turn_residuals_and_advance(
     next_seed_qc, qc_draw = prng_random_chance(state.prng_seed, 60, 256)
 
     return state._replace(
+        side_flags=_set1(
+            state.side_flags,
+            0,
+            state.side_flags[0] & ~jnp.int32(0x08),
+            adv_turn_en,
+        ),
         turn=jnp.where(adv_turn_en, next_turn, state.turn),
         outcome=jnp.where(turn_limit_hit, jnp.int32(3), state.outcome),
         quick_claw_roll=jnp.where(
@@ -2364,6 +2782,12 @@ def _prepare_turn_order(
     vf = _set1(state.vol_flags, i0, _get1(state.vol_flags, i0) & clear_mask, en)
     vf = _set1(vf, i1, _get1(vf, i1) & clear_mask, en)
     state = state._replace(
+        side_flags=_set1(
+            state.side_flags,
+            0,
+            state.side_flags[0] & ~jnp.int32(0x08),
+            en,
+        ),
         vol_flags=vf,
         hurt_damage_this_turn=jnp.where(
             en, jnp.zeros((2,), dtype=jnp.int32), state.hurt_damage_this_turn
@@ -2533,22 +2957,32 @@ def legal_actions_mask(
 
     num_m = _get1(table.num_moves, idx)
     vflags = _get1(state.vol_flags, idx)
+    srefs = _get1(state.slot_refs, idx)
+    must_recharge = (srefs & jnp.int32(0x80)) != 0
     is_dis = (vflags & VolBit.DISABLE) != 0
-    dis_slot = (_get1(state.slot_refs, idx) >> jnp.int32(4)) & jnp.int32(0x03)
+    dis_slot = (srefs >> jnp.int32(4)) & jnp.int32(0x03)
+    is_enc = (vflags & VolBit.ENCORE) != 0
+    enc_slot = (srefs >> jnp.int32(2)) & jnp.int32(0x03)
 
     m_slots = jnp.arange(4, dtype=jnp.int32)
-    m_legal = (
-        ongoing
-        & (req == 1)
-        & (m_slots < num_m)
+    base_m_legal = (
+        (m_slots < num_m)
         & (_get1(state.pp, idx) > 0)
         & (~(is_dis & (m_slots == dis_slot)))
     )
-    no_moves = ongoing & (req == 1) & (~jnp.any(m_legal))
+    enc_m_legal = base_m_legal & (m_slots == enc_slot)
+    m_legal = ongoing & (req == 1) & jnp.where(
+        must_recharge,
+        m_slots == 0,
+        jnp.where(is_enc, enc_m_legal, base_m_legal),
+    )
+    no_moves = ongoing & (req == 1) & (~must_recharge) & (~jnp.any(m_legal))
     m_legal = _set1(m_legal, 0, m_legal[0] | no_moves, jnp.bool_(True))
 
     trapped = (vflags & VolBit.TRAPPED_OR_LOCKED) != 0
-    can_sw_phase = ongoing & ((req == 2) | ((req == 1) & (~trapped)))
+    can_sw_phase = ongoing & (
+        (req == 2) | ((req == 1) & (~must_recharge) & (~trapped))
+    )
     p_slots = jnp.arange(3, dtype=jnp.int32)
     sw_legal = (
         can_sw_phase

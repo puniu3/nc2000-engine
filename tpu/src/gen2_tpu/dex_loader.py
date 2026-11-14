@@ -354,6 +354,9 @@ def _compile_move_spec(dex: DexData, mkey: str) -> dict[str, Any]:
                     sec_boost_stat = _BOOST_KEYS.index(k) | 0x80
                     sec_boost_delta = int(v)
                     break
+        if mkey == "ancientpower":
+            sec_boost_stat = 0x80 | 7
+            sec_boost_delta = 1
 
     target = md.get("target", "normal")
     boosts_self = target in ("self", "allySide", "adjacentAllyOrSelf")
@@ -405,7 +408,13 @@ def _compile_move_spec(dex: DexData, mkey: str) -> dict[str, Any]:
         "meanlook": 26,
         "spiderweb": 26,
         "haze": 27,
+        "rapidspin": 28,
+        "moonlight": 29,
+        "morningsun": 29,
+        "synthesis": 29,
     }.get(mkey, 0)
+    if target == "self" or special_kind in (5, 8, 9, 19, 20):
+        primary_vol = 0
 
     dmg_field = md.get("damage")
     if dmg_field == "level":
@@ -455,14 +464,7 @@ def _compile_move_spec(dex: DexData, mkey: str) -> dict[str, Any]:
         mflags |= MoveFlag.BYPASSES_SUB
     if mkey == "rest":
         mflags |= MoveFlag.IS_REST
-    if mkey in (
-        "recover",
-        "softboiled",
-        "milkdrink",
-        "moonlight",
-        "morningsun",
-        "synthesis",
-    ):
+    if mkey in ("recover", "softboiled", "milkdrink"):
         mflags |= MoveFlag.IS_HALF_HEAL
     if mkey in ("rest", "recover", "softboiled", "milkdrink"):
         mflags |= MoveFlag.IS_HEAL_CYCLE
@@ -472,6 +474,14 @@ def _compile_move_spec(dex: DexData, mkey: str) -> dict[str, Any]:
         mflags |= MoveFlag.CAN_SLEEP_TALK
     if mkey in ("protect", "detect"):
         mflags |= MoveFlag.IS_PROTECT
+    if mkey == "endure":
+        mflags |= MoveFlag.IS_ENDURE
+    if "protect" in flags_dict:
+        mflags |= MoveFlag.BLOCKED_BY_PROTECT
+    if "recharge" in flags_dict:
+        mflags |= MoveFlag.IS_RECHARGE
+    if "defrost" in flags_dict:
+        mflags |= MoveFlag.IS_DEFROST
     if mkey == "substitute":
         mflags |= MoveFlag.IS_SUBSTITUTE
     if md.get("drain") is not None:
@@ -669,8 +679,6 @@ def build_compact_battle(
                     iflags |= ItemFlag.LEFTOVERS
                 if ikey == "brightpowder":
                     iflags |= ItemFlag.BRIGHTPOWDER
-                if ikey == "focusband":
-                    iflags |= ItemFlag.FOCUSBAND
                 if ikey == "mintberry":
                     iflags |= ItemFlag.MINTBERRY
                 if ikey == "miracleberry":
@@ -679,8 +687,6 @@ def build_compact_battle(
                     iflags |= ItemFlag.GOLDBERRY
                 if ikey in ("berry", "berryjuice"):
                     iflags |= ItemFlag.BERRY
-                if ikey == "mysteryberry":
-                    iflags |= ItemFlag.MYSTERYBERRY
                 if ikey == "scopelens":
                     iflags |= ItemFlag.SCOPE_LENS
                 item_flags_arr[c_idx] = iflags

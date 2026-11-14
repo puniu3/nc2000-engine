@@ -133,7 +133,7 @@ impl<'d> ExactSolver<'d> {
             let Some((lo, hi)) = self.ival(b) else { break };
             best = Some(Certified { lo, hi, horizon: h });
             let w = hi - lo;
-            if w <= self.cfg.eps || prev_width - w < self.cfg.stall_gain {
+            if w <= self.cfg.eps || (w < 0.999 && prev_width - w < self.cfg.stall_gain) {
                 break;
             }
             prev_width = w;
@@ -197,6 +197,8 @@ impl<'d> ExactSolver<'d> {
         for (i, &c0) in a0.iter().enumerate() {
             for (j, &c1) in a1.iter().enumerate() {
                 let step = enumerate_step(self.dex, b, [c0, c1], self.cfg.leaf_cap)?;
+                self.stats.chance_runs += step.runs;
+                self.stats.leaves += step.leaves.len();
                 let mut agg: FxHashMap<u128, (f64, usize)> = FxHashMap::default();
                 for (idx, l) in step.leaves.iter().enumerate() {
                     let e = agg.entry(l.battle.state_key128()).or_insert((0.0, idx));
@@ -214,10 +216,29 @@ impl<'d> ExactSolver<'d> {
         }
         let sol = if n0 > 1 && n1 > 1 {
             solve_matrix_full(&mid, n0, n1)
+        } else if n0 == 1 && n1 > 1 {
+            // Side 0 is forced; Side 1 minimizes payoff over columns.
+            let (best_j, &best_v) = mid
+                .iter()
+                .enumerate()
+                .min_by(|a, b| a.1.total_cmp(b.1))
+                .expect("non-empty row");
+            let mut y = vec![0.0; n1];
+            y[best_j] = 1.0;
+            MatrixSolution { value: best_v, gap: 0.0, x: vec![1.0], y }
+        } else if n1 == 1 && n0 > 1 {
+            // Side 1 is forced; Side 0 maximizes payoff over rows.
+            let (best_i, &best_v) = mid
+                .iter()
+                .enumerate()
+                .max_by(|a, b| a.1.total_cmp(b.1))
+                .expect("non-empty col");
+            let mut x = vec![0.0; n0];
+            x[best_i] = 1.0;
+            MatrixSolution { value: best_v, gap: 0.0, x, y: vec![1.0] }
         } else {
-            // A degenerate side has one action; its mixture is that action.
             MatrixSolution {
-                value: mid.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
+                value: mid.first().copied().unwrap_or(0.5),
                 gap: 0.0,
                 x: vec![1.0; n0],
                 y: vec![1.0; n1],
@@ -563,5 +584,81 @@ mod tests {
         let (v, gap) = solve_matrix(&a, 2, 3);
         assert!((v - 1.0).abs() < 1e-9, "v={v}");
         assert!(gap < 1e-9, "gap={gap}");
+    }
+
+    #[test]
+    fn solve_root_handles_single_action_sides_and_unsettled_early_horizon() {
+        let dex = conformance::load_dex();
+        let p1_one_move: Vec<nc2000_engine::battle::PokemonSet> = serde_json::from_value(serde_json::json!([
+            {
+                "name": "Caterpie", "species": "Caterpie", "item": "", "level": 1,
+                "moves": ["Tackle"], "ability": "No Ability", "nature": "Hardy",
+                "evs": {"hp": 0, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 0},
+                "ivs": {"hp": 0, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 0}
+            }
+        ]))
+        .unwrap();
+        let p2_two_moves: Vec<nc2000_engine::battle::PokemonSet> = serde_json::from_value(serde_json::json!([
+            {
+                "name": "Mewtwo", "species": "Mewtwo", "item": "", "level": 55,
+                "moves": ["Splash", "Psychic"], "ability": "No Ability", "nature": "Hardy",
+                "evs": {"hp": 255, "atk": 255, "def": 255, "spa": 255, "spd": 255, "spe": 255},
+                "ivs": {"hp": 30, "atk": 30, "def": 30, "spa": 30, "spd": 30, "spe": 30}
+            }
+        ]))
+        .unwrap();
+
+        // n0 == 1, n1 > 1: Side 1 must minimize Side 0's payoff by picking Psychic (value 0.0).
+        let mut b01 = nc2000_engine::state::Battle::from_fixture(&dex, "1,2,3,4", &p1_one_move, &p2_two_moves).unwrap();
+        b01.choose(&dex, 0, "team 1").unwrap();
+        b01.choose(&dex, 1, "team 1").unwrap();
+        let mut s01 = super::ExactSolver::new(&dex, super::ExactConfig { horizons: &[1, 2], ..Default::default() });
+        let eq01 = s01.solve_root(&b01).unwrap();
+        assert_eq!(eq01.mix[0].len(), 1);
+        assert_eq!(eq01.mix[1].len(), 2);
+        assert!((eq01.mix[0].iter().sum::<f64>() - 1.0).abs() < 1e-12);
+        assert!((eq01.mix[1].iter().sum::<f64>() - 1.0).abs() < 1e-12);
+        assert!(eq01.value < 0.01, "Side 1 should pick Psychic to minimize P1 value, got {}", eq01.value);
+        assert!(s01.stats.chance_runs > 0 && s01.stats.leaves > 0);
+
+        // n0 > 1, n1 == 1: Side 1 has 1 action; Side 0 maximizes payoff by picking Psychic.
+        let mut b10 = nc2000_engine::state::Battle::from_fixture(&dex, "1,2,3,4", &p2_two_moves, &p1_one_move).unwrap();
+        b10.choose(&dex, 0, "team 1").unwrap();
+        b10.choose(&dex, 1, "team 1").unwrap();
+        let mut s10 = super::ExactSolver::new(&dex, super::ExactConfig { horizons: &[1, 2], ..Default::default() });
+        let eq10 = s10.solve_root(&b10).unwrap();
+        assert_eq!(eq10.mix[0].len(), 2);
+        assert_eq!(eq10.mix[1].len(), 1);
+        assert!((eq10.mix[0].iter().sum::<f64>() - 1.0).abs() < 1e-12);
+        assert!(eq10.value > 0.99, "Side 0 should pick Psychic to win, got {}", eq10.value);
+
+        // Early non-KO horizons (w == 1.0) must not stall before reaching a deeper lethal horizon.
+        let tank_1: Vec<nc2000_engine::battle::PokemonSet> = serde_json::from_value(serde_json::json!([
+            {
+                "name": "Snorlax", "species": "Snorlax", "item": "", "level": 50,
+                "moves": ["Splash"], "ability": "No Ability", "nature": "Hardy",
+                "evs": {"hp": 255, "atk": 255, "def": 255, "spa": 255, "spd": 255, "spe": 255},
+                "ivs": {"hp": 30, "atk": 30, "def": 30, "spa": 30, "spd": 30, "spe": 30}
+            }
+        ]))
+        .unwrap();
+        let hitter_2hko: Vec<nc2000_engine::battle::PokemonSet> = serde_json::from_value(serde_json::json!([
+            {
+                "name": "Machamp", "species": "Machamp", "item": "", "level": 55,
+                "moves": ["Submission"], "ability": "No Ability", "nature": "Hardy",
+                "evs": {"hp": 255, "atk": 255, "def": 255, "spa": 255, "spd": 255, "spe": 255},
+                "ivs": {"hp": 30, "atk": 30, "def": 30, "spa": 30, "spd": 30, "spe": 30}
+            }
+        ]))
+        .unwrap();
+        let mut b_stall = nc2000_engine::state::Battle::from_fixture(&dex, "1,2,3,4", &hitter_2hko, &tank_1).unwrap();
+        b_stall.choose(&dex, 0, "team 1").unwrap();
+        b_stall.choose(&dex, 1, "team 1").unwrap();
+        let mut s_stall = super::ExactSolver::new(
+            &dex,
+            super::ExactConfig { horizons: &[1, 2, 4], ..Default::default() },
+        );
+        let cert = s_stall.solve(&b_stall).unwrap();
+        assert!(cert.horizon >= 2 && cert.width() < 0.999, "expected deepening past unsettled h=1: {cert:?}");
     }
 }

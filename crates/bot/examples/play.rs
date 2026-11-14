@@ -538,12 +538,11 @@ fn main() {
     let max_turns: u16 = flag(&args, "--max-turns").map(|v| v.parse().unwrap()).unwrap_or(500);
 
     let dex = load_dex();
-    // M18 community belief prior: `--belief-prior FILE`, else the
-    // conventional data/belief-prior-v0.json when the owner put one there.
-    // Absent (the shipped state) => the fallback imputation is unchanged.
+    // M18 community belief prior: `--belief-prior FILE`, else no prior
+    // (the fallback imputation is unchanged).
     let prior = match flag(&args, "--belief-prior") {
         Some(path) => nc2000_bot::BeliefPrior::load(std::path::Path::new(&path)),
-        None => nc2000_bot::BeliefPrior::load_conventional(&repo_root()),
+        None => nc2000_bot::BeliefPrior::empty(),
     };
     for w in prior.warnings() {
         eprintln!("belief prior: {w}");

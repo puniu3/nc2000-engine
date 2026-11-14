@@ -52,6 +52,7 @@ const MIN_TEAM_SIZE: usize = 6; // server format: Min Team Size = 6
 const MAX_TEAM_SIZE: usize = 6;
 const MAX_MOVE_COUNT: usize = 4;
 const MAX_NICKNAME_LEN: usize = 18; // UTF-16 units, PS's limit
+const MAX_NICKNAME_BYTES: usize = 24; // UTF-8 byte cap shared with PokeName & Replay
 
 // ------------------------------------------------------------- learnsets
 
@@ -471,7 +472,7 @@ fn validate_set(dex: &Dex, ls: &Learnsets, set: &RawSet, slot: usize, out: &mut 
         if evs[3] != evs[4] {
             out.push(err("ev-spc", mon_with(json!({ "spa": evs[3], "spd": evs[4] }))));
         }
-        if evs.iter().sum::<i64>() == 0 {
+        if evs.iter().copied().fold(0i64, i64::saturating_add) == 0 {
             out.push(err("ev-zero", mon.clone()));
         }
     }
@@ -494,7 +495,8 @@ fn validate_set(dex: &Dex, ls: &Learnsets, set: &RawSet, slot: usize, out: &mut 
     // name is silently reset, never an error) and species impersonation
     if !set.name.is_empty() && set.name != species.name {
         let len = set.name.encode_utf16().count();
-        if len > MAX_NICKNAME_LEN {
+        let byte_len = set.name.len();
+        if len > MAX_NICKNAME_LEN || byte_len > MAX_NICKNAME_BYTES {
             out.push(err(
                 "nickname-length",
                 mon_with(json!({ "name": set.name, "len": len, "max": MAX_NICKNAME_LEN })),
@@ -564,14 +566,20 @@ fn analyze(dex: &Dex, ls: &Learnsets, sets: &[RawSet]) -> Vec<Value> {
         .collect();
     levels.sort_unstable();
     if levels.len() >= PICKED_TEAM_SIZE {
-        let sum: i64 = levels[..PICKED_TEAM_SIZE].iter().sum();
+        let sum: i64 = levels[..PICKED_TEAM_SIZE]
+            .iter()
+            .copied()
+            .fold(0i64, i64::saturating_add);
         if sum > MAX_TOTAL_LEVEL {
             out.push(err("level-sum", json!({ "sum": sum, "limit": MAX_TOTAL_LEVEL })));
         }
     }
     if levels.len() >= PICKED_TEAM_SIZE - 1 && !levels.is_empty() {
-        let sum: i64 =
-            levels[levels.len() - 1] + levels[..PICKED_TEAM_SIZE - 1].iter().sum::<i64>();
+        let low_sum = levels[..PICKED_TEAM_SIZE - 1]
+            .iter()
+            .copied()
+            .fold(0i64, i64::saturating_add);
+        let sum: i64 = levels[levels.len() - 1].saturating_add(low_sum);
         if sum > MAX_TOTAL_LEVEL {
             out.push(err(
                 "level-sum-highest",
@@ -718,12 +726,17 @@ fn canonicalize_set(
             }
         }
     }
-    if name != species_name && name.encode_utf16().count() > MAX_NICKNAME_LEN {
+    if name != species_name
+        && (name.encode_utf16().count() > MAX_NICKNAME_LEN || name.len() > MAX_NICKNAME_BYTES)
+    {
         note(fix("nickname-length", mon_with(json!({ "name": name }))));
-        name = {
+        if name.encode_utf16().count() > MAX_NICKNAME_LEN {
             let units: Vec<u16> = name.encode_utf16().take(MAX_NICKNAME_LEN).collect();
-            String::from_utf16_lossy(&units)
-        };
+            name = String::from_utf16_lossy(&units);
+        }
+        if name.len() > MAX_NICKNAME_BYTES {
+            name = crate::state::truncate_utf8_bytes(&name, MAX_NICKNAME_BYTES).to_string();
+        }
     }
 
     // moves: drop empties, dedupe by id, normalize to dex display names
@@ -1246,5 +1259,48 @@ mod tests {
         let sets: Vec<crate::battle::PokemonSet> = serde_json::from_str(&fixed).unwrap();
         let b = crate::state::Battle::from_fixture(&dex, "1,2,3,4", &sets, &sets.clone());
         assert!(b.is_ok(), "{:?}", b.err());
+    }
+
+    #[test]
+    fn multibyte_nickname_canonicalizes_without_panicking_or_failing_replay() {
+        let (dex, ls) = load();
+        let mut s = snorlax();
+        // 12 hiragana characters = 12 UTF-16 code units, 36 UTF-8 bytes (> 24-byte cap)
+        s["name"] = json!("あいうえおかきくけこさし");
+        let raw = team(vec![s, cloyster(), suicune()]);
+        let v = validate_team(&dex, &ls, &raw);
+        assert!(codes(&v).iter().any(|(_, c)| c == "nickname-length"), "{v}");
+
+        let c = canonicalize_team(&dex, &ls, &raw);
+        assert_eq!(c["ok"], true, "{c}");
+        let nick = c["team"][0]["name"].as_str().unwrap();
+        assert!(nick.len() <= 24, "canonicalized name must fit 24 UTF-8 bytes: {nick:?}");
+
+        let sets: Vec<crate::battle::PokemonSet> =
+            serde_json::from_value(c["team"].clone()).unwrap();
+        let mut battle =
+            crate::state::Battle::from_fixture(&dex, "1,2,3,4", &sets, &sets).unwrap();
+        let mut rec = crate::replay::Recorder::new(&dex, &battle, [sets.clone(), sets], "1,2,3,4");
+        rec.choose(&dex, &mut battle, 0, "team 1,2,3").unwrap();
+        rec.choose(&dex, &mut battle, 1, "team 1,2,3").unwrap();
+        let encoded = rec.replay.encode(&dex).unwrap();
+        assert!(encoded.starts_with("NC2-"));
+    }
+
+    #[test]
+    fn extreme_ev_and_level_sums_do_not_overflow() {
+        let (dex, ls) = load();
+        let mut s1 = snorlax();
+        s1["evs"] = json!({"hp":i64::MAX,"atk":i64::MAX,"def":0,"spa":0,"spd":0,"spe":0});
+        s1["level"] = json!(i64::MAX);
+        let mut s2 = cloyster();
+        s2["level"] = json!(i64::MAX);
+        let mut s3 = suicune();
+        s3["level"] = json!(i64::MAX);
+        let all_extreme = json!([s1, s2, s3, s1, s2, s3]).to_string();
+        let r = validate_team(&dex, &ls, &all_extreme);
+        assert!(codes(&r).iter().any(|(_, c)| c == "ev-range"), "{r}");
+        assert!(codes(&r).iter().any(|(_, c)| c == "level-sum"), "{r}");
+        assert!(codes(&r).iter().any(|(_, c)| c == "level-sum-highest"), "{r}");
     }
 }

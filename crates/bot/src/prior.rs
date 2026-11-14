@@ -58,11 +58,6 @@ use nc2000_engine::dex::toid;
 pub const FORMAT: &str = "nc2000-belief-prior";
 /// The format revision this interpreter was written against.
 pub const VERSION: u64 = 1;
-/// Conventional auto-pickup path, relative to the repo root. Note that the
-/// tracked sample lives next to it as `belief-prior-v0.sample.json`: shipping
-/// a table AT this path would silently activate M18 for every hidden-team
-/// game, and the design requires the no-file default to stay unchanged.
-pub const DEFAULT_PATH: &str = "data/belief-prior-v0.json";
 
 /// How many warnings are retained before the tail is summarised. A human
 /// reading a diagnostic does not need the thousandth instance of it.
@@ -245,18 +240,6 @@ impl BeliefPrior {
                 out.note(format!("cannot read {}: {e}", path.display()));
                 out
             }
-        }
-    }
-
-    /// The conventional auto-pickup path under `root`. Absent ⇒ the empty
-    /// table with **no** warning: not having a prior is the shipped default,
-    /// not a problem worth reporting.
-    pub fn load_conventional(root: &Path) -> BeliefPrior {
-        let path = root.join(DEFAULT_PATH);
-        if path.exists() {
-            BeliefPrior::load(&path)
-        } else {
-            BeliefPrior::empty()
         }
     }
 
@@ -466,9 +449,6 @@ mod tests {
         let p = BeliefPrior::load(Path::new("/nonexistent/belief-prior.json"));
         assert!(p.is_empty());
         assert!(p.warnings().iter().any(|w| w.contains("cannot read")));
-        let none = BeliefPrior::load_conventional(Path::new("/nonexistent"));
-        assert!(none.is_empty());
-        assert!(none.warnings().is_empty(), "the default absence is not a warning");
     }
 
     #[test]
@@ -484,18 +464,5 @@ mod tests {
             "mean move-probability sum {} (complete sets => 4.0)",
             p.mean_move_sum()
         );
-    }
-
-    #[test]
-    fn the_conventional_path_is_absent_so_the_default_stays_unchanged() {
-        // Shipping a table AT `data/belief-prior-v0.json` would silently turn
-        // M18 on for every hidden-team game. The sample deliberately sits
-        // beside it; activating the prior is the owner's explicit act.
-        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-        assert!(
-            !root.join(DEFAULT_PATH).exists(),
-            "{DEFAULT_PATH} is tracked; the no-prior default is no longer the default"
-        );
-        assert!(BeliefPrior::load_conventional(&root).is_empty());
     }
 }

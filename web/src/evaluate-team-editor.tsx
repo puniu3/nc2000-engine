@@ -29,9 +29,32 @@ const normalize = (text: string) =>
     .replace(/[ぁ-ゖ]/g, (char) =>
       String.fromCharCode(char.charCodeAt(0) + 0x60),
     );
+const HP_TYPES = [
+  "Fighting", "Flying", "Poison", "Ground", "Rock", "Bug", "Ghost", "Steel",
+  "Fire", "Water", "Grass", "Electric", "Psychic", "Ice", "Dragon", "Dark",
+];
+
+function hiddenPowerIvs(type: string): Record<string, number> | null {
+  const idx = HP_TYPES.indexOf(type);
+  if (idx < 0) return null;
+  const atkDv = 12 + Math.floor(idx / 4);
+  const defDv = 12 + (idx % 4);
+  const speDv = 15;
+  const spaDv = 15;
+  const hpDv = ((atkDv % 2) * 8) + ((defDv % 2) * 4) + ((speDv % 2) * 2) + (spaDv % 2);
+  return {
+    hp: hpDv * 2 + 1,
+    atk: atkDv * 2 + 1,
+    def: defDv * 2 + 1,
+    spa: spaDv * 2 + 1,
+    spd: spaDv * 2 + 1,
+    spe: speDv * 2 + 1,
+  };
+}
+
 const newMember = (): EditorSet => ({
   species: "",
-  level: 50,
+  level: 55,
   item: "",
   moves: [],
 });
@@ -301,13 +324,13 @@ export function TeamEditor({
               min="1"
               max="100"
               value={member.level ?? 55}
-              onInput={(e) =>
-                patch({
-                  level: e.currentTarget.value
-                    ? Number(e.currentTarget.value)
-                    : 0,
-                })
-              }
+              onInput={(e) => {
+                const raw = e.currentTarget.value.trim();
+                if (!raw) return;
+                const n = Number(raw);
+                if (!Number.isFinite(n)) return;
+                patch({ level: Math.max(1, Math.min(100, Math.round(n))) });
+              }}
             />
           </label>
           <NameChoice
@@ -332,7 +355,9 @@ export function TeamEditor({
                 const next = [...moves];
                 while (next.length < 4) next.push("");
                 next[slot] = value;
-                patch({ moves: next });
+                const hpMatch = /^Hidden Power ([A-Z][a-z]+)$/.exec(value);
+                const hpIvs = hpMatch ? hiddenPowerIvs(hpMatch[1]) : null;
+                patch(hpIvs ? { moves: next, ivs: hpIvs } : { moves: next });
               }}
             />
           ))}
@@ -377,19 +402,17 @@ export function TeamEditor({
                   !member.evs ||
                   Object.values(member.evs).every((v) => v === 255)
                     ? "max"
-                    : Object.values(member.evs).every((v) => v === 0)
-                      ? "none"
-                      : "custom"
+                    : "custom"
                 }
                 onChange={(e) => {
-                  const v = e.currentTarget.value === "max" ? 255 : 0;
-                  patch({
-                    evs: { hp: v, atk: v, def: v, spa: v, spd: v, spe: v },
-                  });
+                  if (e.currentTarget.value === "max") {
+                    patch({
+                      evs: { hp: 255, atk: 255, def: 255, spa: 255, spd: 255, spe: 255 },
+                    });
+                  }
                 }}
               >
                 <option value="max">{toolText("trainingMax")}</option>
-                <option value="none">{toolText("trainingNone")}</option>
                 <option value="custom" disabled>{toolText("trainingCustom")}</option>
               </select>
             </label>

@@ -113,6 +113,7 @@ async function handle(m: SolverRequest): Promise<void> {
     }
     case "extend": {
       if (!searcher) return;
+      gen += 1;
       stopping = false;
       plies = m.plies;
       await run(m.id, m.budget, gen);

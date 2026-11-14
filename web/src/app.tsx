@@ -114,7 +114,9 @@ export function App() {
   const [loc, setLoc] = useState<Locale>(locale());
   // A table the user once picked by hand; nothing here ever fetches one on
   // its own (crates/bot/src/prior.rs:491).
-  const [prior, setPrior] = useState<StoredPrior | null>(loadStoredPrior);
+  const [prior, setPrior] = useState<StoredPrior | null>(
+    () => (readDrawSourceFromQuery() !== null ? null : loadStoredPrior()),
+  );
 
   useEffect(() => {
     void (async () => {
@@ -192,6 +194,7 @@ export function App() {
       <Solver
         pool={catalog.pool.pool}
         poolJson={beliefJson}
+        priorJson={prior?.json}
         locale={loc}
         onLocale={(l) => {
           setLocale(l);

@@ -104,6 +104,8 @@ struct TrackMon {
     uses: Vec<(MoveId, i32)>,
     /// Mechanics-inferred thrash/rollout lock: (move, uses so far).
     locked: Option<(MoveId, i32)>,
+    /// Lock initiated by a called move (`Metronome`/`Mirror Move`/`Sleep Talk`).
+    called_locked: bool,
     /// Two-turn move charge pending release.
     charging: Option<MoveId>,
     must_recharge: bool,
@@ -141,6 +143,7 @@ impl TrackMon {
             vols: Vec::new(),
             uses: Vec::new(),
             locked: None,
+            called_locked: false,
             charging: None,
             must_recharge: false,
             transformed_into: None,
@@ -172,6 +175,7 @@ impl TrackMon {
         self.boosts = [0; 7];
         self.vols.clear();
         self.locked = None;
+        self.called_locked = false;
         self.charging = None;
         self.must_recharge = false;
         self.transformed_into = None;
@@ -497,7 +501,7 @@ impl ProtocolTracker {
                     mon.fainted = true;
                     mon.pixels = 0;
                     mon.clear_on_exit();
-                    self.clear_sourced_vols(s, m);
+                    self.clear_sourced_vols(s, m, None);
                 }
             }
             "move" => self.on_move(dex, &parts),
@@ -507,10 +511,11 @@ impl ProtocolTracker {
                     self.sides[s].acted_this_turn = true;
                     self.sides[s].pending_bp = false;
                     let mon = &mut self.sides[s].mons[m];
+                    mon.locked = None;
+                    mon.called_locked = false;
                     match arg(2) {
                         "slp" => {
                             mon.slept += 1;
-                            mon.locked = None; // lockedmove drops during sleep
                             mon.charging = None;
                         }
                         "recharge" => {
@@ -533,11 +538,14 @@ impl ProtocolTracker {
                         }
                     }
                     // a confusion self-hit spends the turn's move action and
-                    // drops any pending two-turn charge
+                    // drops any pending two-turn charge or lock
                     if parts.iter().any(|p| *p == "[from] confusion") {
                         self.sides[s].acted_this_turn = true;
                         self.sides[s].pending_bp = false;
-                        self.sides[s].mons[m].charging = None;
+                        let mon = &mut self.sides[s].mons[m];
+                        mon.charging = None;
+                        mon.locked = None;
+                        mon.called_locked = false;
                     }
                 }
             }
@@ -732,6 +740,7 @@ impl ProtocolTracker {
                     if let Some((lm, _)) = mon.locked {
                         if dex.moves.key(lm) == "rollout" {
                             mon.locked = None;
+                            mon.called_locked = false;
                         }
                     }
                     mon.vols.retain(|v| v.key != "furycutter");
@@ -746,6 +755,7 @@ impl ProtocolTracker {
                         if let Some((lm, _)) = mon.locked {
                             if dex.moves.key(lm) == "rollout" {
                                 mon.locked = None;
+                                mon.called_locked = false;
                             }
                         }
                     }
@@ -793,7 +803,7 @@ impl ProtocolTracker {
                     inherit = Some((om.boosts, vols, om.comp_res, om.comp_brn, om.comp_par));
                 }
                 om.clear_on_exit();
-                self.clear_sourced_vols(side, old);
+                self.clear_sourced_vols(side, old, bp.then_some(slot));
             }
         }
         self.sides[side].pending_bp = false;
@@ -858,7 +868,9 @@ impl ProtocolTracker {
         {
             let side = &mut self.sides[s];
             let mon = &mut side.mons[m];
-            if !called {
+            let continuing_called_lock =
+                mon.called_locked && mon.locked.is_some_and(|(lm, _)| lm == mid);
+            if !called && !continuing_called_lock {
                 mon.last_move = if matches!(
                     key,
                     "metronome" | "mimic" | "mirrormove" | "sketch" | "sleeptalk" | "transform"
@@ -883,7 +895,16 @@ impl ProtocolTracker {
             }
         }
         if called {
-            return; // Sleep Talk / Mirror Move calls: no PP, no lock changes
+            // Metronome/Mirror Move calling Outrage/Thrash/Petal Dance/Rollout locks into
+            // continuation turns on Turn 2+ (Sleep Talk never starts a multi-turn lock in Gen 2).
+            if (THRASH_CLASS.contains(&key) || key == "rollout")
+                && from_key.as_deref() != Some("sleeptalk")
+            {
+                let mon = &mut self.sides[s].mons[m];
+                mon.locked = Some((mid, 1));
+                mon.called_locked = true;
+            }
+            return;
         }
         if matches!(key, "struggle" | "recharge") {
             return;
@@ -903,10 +924,16 @@ impl ProtocolTracker {
                 // (a miss ends it — handled at the |-miss| line).
                 let cap = if key == "rollout" { 5 } else { 3 };
                 let uses = uses + 1;
-                mon.locked = if uses >= cap { None } else { Some((lm, uses)) };
+                if uses >= cap {
+                    mon.locked = None;
+                    mon.called_locked = false;
+                } else {
+                    mon.locked = Some((lm, uses));
+                }
                 return;
             }
             mon.locked = None;
+            mon.called_locked = false;
         }
         // A transformed mon is executing the copied set: track PP usage on its
         // temporary transformed slots without polluting submitted base-set PP.
@@ -917,6 +944,7 @@ impl ProtocolTracker {
         }
         if THRASH_CLASS.contains(&key) || key == "rollout" {
             mon.locked = Some((mid, 1));
+            mon.called_locked = false;
         }
         let turn = self.turn;
         let mon = &mut self.sides[s].mons[m];
@@ -975,6 +1003,7 @@ impl ProtocolTracker {
         if key == "confusion" {
             let mon = &mut self.sides[s].mons[m];
             mon.locked = None;
+            mon.called_locked = false;
             mon.vols.retain(|v| v.key != "confusion");
         }
         if dex.conds_id(&key).is_none() {
@@ -1070,6 +1099,7 @@ impl ProtocolTracker {
                 if let Some((lm, _)) = mon.locked {
                     if dex.moves.key(lm) == "rollout" {
                         mon.locked = None;
+                        mon.called_locked = false;
                     }
                 }
             }
@@ -1142,15 +1172,29 @@ impl ProtocolTracker {
     }
 
     /// Defensive: linked volatiles die with their source (mean look /
-    /// binding) — remove them when the source leaves the field. Attract's
-    /// end is always announced (`-end ... [silent]` is still a line), so it
-    /// is NOT cleared here (gen 2 keeps it when the attractor leaves).
-    fn clear_sourced_vols(&mut self, src_side: usize, src_slot: usize) {
+    /// binding) — remove them when the source leaves the field, except
+    /// Trap-Passing via Baton Pass which transfers `"trapped"` ownership
+    /// to the incoming recipient (`bp_new_slot`). Attract's end is always
+    /// announced (`-end ... [silent]` is still a line), so it is NOT cleared.
+    fn clear_sourced_vols(&mut self, src_side: usize, src_slot: usize, bp_new_slot: Option<usize>) {
         for s in 0..2 {
             for mon in self.sides[s].mons.iter_mut() {
-                mon.vols.retain(|v| {
-                    !(v.source == Some((src_side, src_slot))
-                        && matches!(v.key.as_str(), "trapped" | "partiallytrapped"))
+                mon.vols.retain_mut(|v| {
+                    if v.source != Some((src_side, src_slot)) {
+                        return true;
+                    }
+                    match v.key.as_str() {
+                        "trapped" => {
+                            if let Some(new_slot) = bp_new_slot {
+                                v.source = Some((src_side, new_slot));
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                        "partiallytrapped" => false,
+                        _ => true,
+                    }
                 });
             }
         }
@@ -1219,9 +1263,31 @@ fn estimate_sub_damage(
     if ms.category == Category::Status {
         return 1;
     }
+    let key = dex.moves.key(mid);
+    if key == "superfang" {
+        let def_sp = match def_mon.transformed_into {
+            Some((ts, tslot)) => sides
+                .get(ts)
+                .and_then(|s| s.mons.get(tslot))
+                .map(|m| m.species)
+                .unwrap_or(def_mon.species),
+            None => def_mon.species,
+        };
+        let def_data = dex.species.get(def_sp);
+        let def_maxhp =
+            (((2 * def_data.base_stats.hp as i32) * def_mon.level as i32) / 100
+                + def_mon.level as i32
+                + 10)
+            .max(1);
+        return ((def_maxhp / 2) as i64).max(1);
+    }
     let bp = if ms.base_power > 0 {
         ms.base_power
-    } else if dex.moves.key(mid).starts_with("hiddenpower") {
+    } else if key == "return" {
+        102
+    } else if key == "hiddenpower" {
+        31
+    } else if key.starts_with("hiddenpower") {
         70
     } else {
         return 1;
@@ -1293,7 +1359,8 @@ fn estimate_sub_damage(
     if crit {
         base_dmg *= 2;
     }
-    let mv_type = toid(dex.type_name(ms.move_type));
+    let mv_type_name = dex.type_name(ms.move_type);
+    let mv_type = toid(mv_type_name);
     if let Some((w, _)) = weather {
         if (w == "raindance" && mv_type == "water") || (w == "sunnyday" && mv_type == "fire") {
             base_dmg = base_dmg * 3 / 2;
@@ -1304,14 +1371,19 @@ fn estimate_sub_damage(
         }
     }
     base_dmg = base_dmg.min(997) + 2;
-    if att_data.types.iter().any(|t| toid(t) == mv_type) {
-        base_dmg += base_dmg / 2;
-    }
-    for dt in &def_data.types {
-        match dex.get_effectiveness(&mv_type, dt) {
-            1 => base_dmg *= 2,
-            -1 => base_dmg /= 2,
-            _ => {}
+    if key == "hiddenpower" {
+        // Un-typed Hidden Power can hit any non-immune type at conservative 0.25x min; never apply STAB.
+        base_dmg = (base_dmg / 4).max(1);
+    } else {
+        if att_data.types.iter().any(|t| toid(t) == mv_type) {
+            base_dmg += base_dmg / 2;
+        }
+        for dt in &def_data.types {
+            match dex.get_effectiveness(mv_type_name, dt) {
+                1 => base_dmg *= 2,
+                -1 => base_dmg /= 2,
+                _ => {}
+            }
         }
     }
     if base_dmg <= 1 {
@@ -1903,17 +1975,33 @@ impl ProtocolTracker {
                 && b.active_id(me).map(|a| !b.poke(a).fainted).unwrap_or(false);
             if foe_pending {
                 if let Some(fa) = b.active_id(opp) {
-                    let usable: Vec<MoveId> = b
-                        .poke(fa)
-                        .move_slots
-                        .iter()
-                        .filter(|s| s.pp > 0 && !s.disabled)
-                        .map(|s| s.id)
-                        .collect();
-                    let mid = if usable.is_empty() {
-                        dex.moves.id("struggle").ok_or("struggle id")?
+                    let forced = b
+                        .get_locked_move(dex, fa)
+                        .or_else(|| b.get_semi_locked_move(dex, fa))
+                        .and_then(|k| dex.moves.id(k))
+                        .or_else(|| {
+                            dex.conds_id("encore")
+                                .and_then(|c| b.poke(fa).volatile(c))
+                                .and_then(|v| v.get_move())
+                                .filter(|&m| {
+                                    b.poke(fa).move_slots.iter().any(|s| s.id == m && s.pp > 0)
+                                })
+                        });
+                    let mid = if let Some(mid) = forced {
+                        mid
                     } else {
-                        usable[rng.below(usable.len())]
+                        let usable: Vec<MoveId> = b
+                            .poke(fa)
+                            .move_slots
+                            .iter()
+                            .filter(|s| s.pp > 0 && !s.disabled)
+                            .map(|s| s.id)
+                            .collect();
+                        if usable.is_empty() {
+                            dex.moves.id("struggle").ok_or("struggle id")?
+                        } else {
+                            usable[rng.below(usable.len())]
+                        }
                     };
                     let speed = b.get_pokemon_action_speed(dex, fa) as f64;
                     b.queue.push(Action {
@@ -1929,6 +2017,11 @@ impl ProtocolTracker {
                         speed,
                         pokemon: Some(fa),
                     });
+                    if dex.moves.key(mid) == "pursuit" {
+                        if let Some(target) = b.active_id(me) {
+                            b.before_turn_callback(dex, mid, fa, target);
+                        }
+                    }
                 }
             }
             if !self.upkeep_this_turn {
@@ -2274,8 +2367,6 @@ pub struct ProtocolAgent {
     /// `None` (the default) leaves it exactly as shipped.
     prior: Option<std::sync::Arc<crate::prior::BeliefPrior>>,
     fallback_policy: crate::belief::FallbackPolicy,
-    pick_prior: Option<std::sync::Arc<crate::pick_prior::PickPrior>>,
-    pick_preview: bool,
     tracker: ProtocolTracker,
     history: Vec<String>,
     observer: Option<Observer>,
@@ -2312,8 +2403,6 @@ impl ProtocolAgent {
             pinned_sets: None,
             prior: None,
             fallback_policy: crate::belief::FallbackPolicy::default(),
-            pick_prior: None,
-            pick_preview: false,
             tracker: ProtocolTracker::new(side),
             history: Vec::new(),
             observer: None,
@@ -2338,22 +2427,25 @@ impl ProtocolAgent {
     }
 
     /// Open-team-sheet mode: the opponent's true sets are public.
-    pub fn pin_opponent(&mut self, sets: Vec<PokemonSet>) {
+    pub fn pin_opponent(&mut self, dex: &Dex, sets: Vec<PokemonSet>) -> Result<(), String> {
+        if sets.is_empty() {
+            return Err("pinned opponent team is empty".to_string());
+        }
+        if let Some(obs) = self.observer.as_ref() {
+            let belief = Belief::pinned_checked(dex, "opponent", &sets, obs)?;
+            self.belief = Some(belief);
+        }
         self.pinned_sets = Some(sets);
+        if let (Some(_), Some(req)) = (self.observer.as_ref(), self.request.clone()) {
+            self.install(dex, req)?;
+        }
+        Ok(())
     }
 
     /// M18: consume a community belief prior. Governs only the hidden-team
     /// fallback imputation; a pinned (open-sheet) belief ignores it.
     pub fn set_belief_prior(&mut self, prior: std::sync::Arc<crate::prior::BeliefPrior>) {
         self.prior = Some(prior);
-    }
-
-    pub fn set_pick_prior(&mut self, prior: std::sync::Arc<crate::pick_prior::PickPrior>) {
-        self.pick_prior = Some(prior);
-    }
-
-    pub fn set_pick_preview(&mut self, enabled: bool) {
-        self.pick_preview = enabled;
     }
 
     pub fn add_pair_json(&mut self, json: &str) -> Result<(), String> {
@@ -2428,6 +2520,19 @@ impl ProtocolAgent {
             self.observer = Some(obs);
             self.belief = Some(belief);
         }
+        let unlocked_choices = req
+            .active_moves
+            .iter()
+            .filter(|m| !m.disabled && m.pp != Some(0))
+            .count();
+        if !req.wait && !req.force_switch && !req.team_preview && unlocked_choices > 1 {
+            if let Some(slot) = self.tracker.sides[self.side].active {
+                if let Some(mon) = self.tracker.sides[self.side].mons.get_mut(slot) {
+                    mon.locked = None;
+                    mon.called_locked = false;
+                }
+            }
+        }
         self.install(dex, req)
     }
 
@@ -2440,17 +2545,6 @@ impl ProtocolAgent {
         let obs = self.observer.as_ref().unwrap();
         let belief = self.belief.as_mut().unwrap();
         belief.sync_checked(dex, obs)?;
-        if let Some(prior) = &self.pick_prior {
-            let preview: Vec<_> = self.tracker.sides[self.side].mons.iter().map(|mon| {
-                crate::pick_prior::PreviewMon {
-                    species: dex.species.key(mon.species).to_string(),
-                    level: mon.level,
-                    gender: mon.gender.as_str().to_string(),
-                    item: mon.preview_item,
-                }
-            }).collect();
-            belief.condition_pick_prior(dex, prior, &preview, obs);
-        }
 
         // Preserve player HP buckets across every candidate determinization.
         self.tracker.set_hp_observations(belief, 1-self.side);
@@ -2464,7 +2558,6 @@ impl ProtocolAgent {
         // search + preview policy
         let mut search =
             BlindSearch::from_observation(&crate::player_state::ObservedPosition::reconstructed(battle.clone()), dex, self.cfg.clone(), self.side, self.rng.next());
-        search.set_opponent_preview_prior(self.pick_preview);
         self.baked = None;
         self.forced = None;
         if search.is_preview() {
@@ -2479,7 +2572,7 @@ impl ProtocolAgent {
                 .iter()
                 .map(|c| match c {
                     SearchChoice::Team(slots) => battle.preview_level_caps[self.side]
-                        .map_or(true, |cap|team_total_level(&levels, slots) <= cap as i32),
+                        .map_or(true, |cap| team_total_level(&levels, slots) <= cap as i32),
                     _ => true,
                 })
                 .collect();
@@ -2580,11 +2673,6 @@ impl ProtocolAgent {
         let belief = self.belief.as_ref().ok_or("no belief")?;
         let obs = self.observer.as_ref().ok_or("no observer")?;
         Ok(search.step_observed(dex, belief, obs, n, trace))
-    }
-
-    pub fn prune_root(&mut self) -> Result<(), String> {
-        self.search.as_mut().ok_or("prune before on_request")?.prune_dominated();
-        Ok(())
     }
 
     /// The callback returns a side-0 reward in [0, 1]; the flag marks a newly expanded leaf.
@@ -2781,7 +2869,7 @@ fn filtered_open_preview(
 ) -> Option<SearchChoice> {
     let (tab, i_am_a) = tables.lookup(battle, side)?;
     let p = if i_am_a { &tab.sol.p_a } else { &tab.sol.p_b };
-    sample_filtered(tables, p, levels, rng)
+    sample_filtered(tables, p, levels, battle.preview_level_caps[side], rng)
 }
 
 /// `baked_preview_pick` restricted to Max-Total-Level-legal actions.
@@ -2800,7 +2888,7 @@ fn filtered_baked_preview(
     let me = tables.side_index(battle, side)?;
     let (tab, i_am_a) = tables.pair_by_idx(me, opp)?;
     let p = if i_am_a { &tab.sol.p_a } else { &tab.sol.p_b };
-    sample_filtered(tables, p, levels, rng)
+    sample_filtered(tables, p, levels, battle.preview_level_caps[side], rng)
 }
 
 /// Sample a mixed preview policy conditioned on the PS-legal action subset
@@ -2809,11 +2897,12 @@ fn sample_filtered(
     tables: &TableSet,
     p: &[f64],
     levels: &[i32],
+    cap: Option<u32>,
     rng: &mut SplitMix64,
 ) -> Option<SearchChoice> {
     let actions = tables.actions();
     let legal: Vec<usize> = (0..p.len())
-        .filter(|&i| team_total_level(levels, &actions[i]) <= MAX_TOTAL_LEVEL)
+        .filter(|&i| cap.is_none_or(|c| team_total_level(levels, &actions[i]) <= c as i32))
         .collect();
     if legal.is_empty() {
         return None;
@@ -3034,7 +3123,7 @@ mod m17a_tests {
         );
         let mut agent = ProtocolAgent::new(&dex, 0, pool, RmConfig::default(), 42);
         agent.set_own_team(own.clone());
-        agent.pin_opponent(foe.clone());
+        agent.pin_opponent(&dex, foe.clone()).unwrap();
         for line in poke_lines(&dex, "p1", &own)
             .into_iter()
             .chain(poke_lines(&dex, "p2", &foe))
@@ -3126,7 +3215,7 @@ mod m17a_tests {
         );
         let mut agent = ProtocolAgent::new(&dex, 0, pool.clone(), RmConfig::default(), 99);
         agent.set_own_team(own.clone());
-        agent.pin_opponent(foe.clone());
+        agent.pin_opponent(&dex, foe.clone()).unwrap();
         for line in poke_lines(&dex, "p1", &own)
             .into_iter()
             .chain(poke_lines(&dex, "p2", &foe))
@@ -3220,7 +3309,7 @@ mod m17a_tests {
         );
         let mut agent = ProtocolAgent::new(&dex, 0, pool.clone(), RmConfig::default(), 17);
         agent.set_own_team(own.clone());
-        agent.pin_opponent(foe.clone());
+        agent.pin_opponent(&dex, foe.clone()).unwrap();
         for line in poke_lines(&dex, "p1", &own)
             .into_iter()
             .chain(poke_lines(&dex, "p2", &foe))
@@ -3304,7 +3393,7 @@ mod m17a_tests {
             &dex,
             vec![
                 test_set("Zapdos", 55, "Leftovers", &["Thunderbolt", "Drill Peck", "Rest", "Sleep Talk"]),
-                test_set("Cloyster", 50, "Mint Berry", &["Surf", "Spikes", "Toxic", "Explosion"]),
+                test_set("Cloyster", 50, "Focus Band", &["Surf", "Spikes", "Toxic", "Explosion"]),
                 test_set("Exeggutor", 50, "Miracle Berry", &["Psychic", "Giga Drain", "Stun Spore", "Explosion"]),
                 test_set("Suicune", 50, "Gold Berry", &["Surf", "Ice Beam", "Rest", "Sleep Talk"]),
                 test_set("Misdreavus", 50, "Mystery Berry", &["Thunder", "Mean Look", "Perish Song", "Protect"]),
@@ -3313,7 +3402,7 @@ mod m17a_tests {
         );
         let mut agent = ProtocolAgent::new(&dex, 0, pool.clone(), RmConfig::default(), 91);
         agent.set_own_team(own.clone());
-        agent.pin_opponent(foe.clone());
+        agent.pin_opponent(&dex, foe.clone()).unwrap();
         for line in poke_lines(&dex, "p1", &own)
             .into_iter()
             .chain(poke_lines(&dex, "p2", &foe))
@@ -3370,7 +3459,7 @@ mod m17a_tests {
         let rebuilt_slot = rebuilt.poke(rebuilt.active_id(0).unwrap()).get_move_slot(rollout_id).unwrap();
         assert_eq!((rebuilt_slot.pp, rebuilt_slot.maxpp), (31, 32));
         let mut solver = ProtocolAgent::new(&dex, 0, pool.clone(), RmConfig::default(), 91);
-        solver.pin_opponent(foe.clone());
+        solver.pin_opponent(&dex, foe.clone()).unwrap();
         solver.set_position(&dex, &parsed).unwrap();
         solver.step(&dex, 8).unwrap();
         assert_eq!(solver.best(&dex).as_deref(), Some("move rollout"));
@@ -3401,7 +3490,7 @@ mod m17a_tests {
         );
         let mut t_agent = ProtocolAgent::new(&dex, 0, pool.clone(), RmConfig::default(), 92);
         t_agent.set_own_team(own_ditto.clone());
-        t_agent.pin_opponent(foe_rollout.clone());
+        t_agent.pin_opponent(&dex, foe_rollout.clone()).unwrap();
         for line in poke_lines(&dex, "p1", &own_ditto)
             .into_iter()
             .chain(poke_lines(&dex, "p2", &foe_rollout))
@@ -3476,7 +3565,7 @@ mod m17a_tests {
         .to_string();
         let mut s_agent = ProtocolAgent::new(&dex, 0, pool.clone(), RmConfig::default(), 93);
         s_agent.set_own_team(own.clone());
-        s_agent.pin_opponent(foe.clone());
+        s_agent.pin_opponent(&dex, foe.clone()).unwrap();
         for line in poke_lines(&dex, "p1", &own)
             .into_iter()
             .chain(poke_lines(&dex, "p2", &foe))
@@ -3545,6 +3634,234 @@ mod m17a_tests {
             }
         }
         assert!(checked > 900, "only {checked} buckets exercised");
+    }
+
+    #[test]
+    fn pin_opponent_after_on_request_updates_belief_and_resyncs_searcher() {
+        let dex = conformance::load_dex();
+        let own = canonical_team(
+            &dex,
+            vec![
+                test_set("Zapdos", 55, "Leftovers", &["Thunderbolt", "Drill Peck", "Rest", "Sleep Talk"]),
+                test_set("Snorlax", 50, "Mint Berry", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+                test_set("Starmie", 50, "Miracle Berry", &["Surf", "Psychic", "Recover", "Rapid Spin"]),
+                test_set("Gengar", 50, "Gold Berry", &["Thunderbolt", "Ice Punch", "Destiny Bond", "Explosion"]),
+                test_set("Raikou", 50, "Magnet", &["Thunderbolt", "Roar", "Rest", "Sleep Talk"]),
+                test_set("Exeggutor", 50, "Pink Bow", &["Psychic", "Giga Drain", "Stun Spore", "Explosion"]),
+            ],
+        );
+        let foe_a = canonical_team(
+            &dex,
+            vec![
+                test_set("Zapdos", 55, "Leftovers", &["Thunderbolt", "Drill Peck", "Rest", "Sleep Talk"]),
+                test_set("Raikou", 50, "Magnet", &["Thunderbolt", "Roar", "Rest", "Sleep Talk"]),
+                test_set("Misdreavus", 50, "Gold Berry", &["Thunder", "Mean Look", "Perish Song", "Protect"]),
+                test_set("Cloyster", 50, "Focus Band", &["Surf", "Spikes", "Toxic", "Explosion"]),
+                test_set("Suicune", 50, "Miracle Berry", &["Surf", "Ice Beam", "Rest", "Sleep Talk"]),
+                test_set("Exeggutor", 50, "Mystery Berry", &["Psychic", "Giga Drain", "Stun Spore", "Explosion"]),
+            ],
+        );
+        let foe_b = canonical_team(
+            &dex,
+            vec![
+                test_set("Zapdos", 55, "Leftovers", &["Thunderbolt", "Hidden Power Ice", "Rest", "Sleep Talk"]),
+                test_set("Raikou", 50, "Magnet", &["Thunder", "Roar", "Rest", "Sleep Talk"]),
+                test_set("Misdreavus", 50, "Gold Berry", &["Thunder", "Mean Look", "Perish Song", "Protect"]),
+                test_set("Cloyster", 50, "Focus Band", &["Surf", "Spikes", "Toxic", "Explosion"]),
+                test_set("Suicune", 50, "Miracle Berry", &["Surf", "Ice Beam", "Rest", "Sleep Talk"]),
+                test_set("Exeggutor", 50, "Mystery Berry", &["Psychic", "Giga Drain", "Stun Spore", "Explosion"]),
+            ],
+        );
+        let pool = MetaPool {
+            teams: vec![
+                crate::preview::MetaTeam { id: "a".into(), sets: foe_a, weight: None },
+                crate::preview::MetaTeam { id: "b".into(), sets: foe_b.clone(), weight: None },
+            ],
+        };
+        let mut agent = ProtocolAgent::new(&dex, 0, pool, RmConfig::default(), 77);
+        agent.set_own_team(own.clone());
+        for line in poke_lines(&dex, "p1", &own)
+            .into_iter()
+            .chain(poke_lines(&dex, "p2", &foe_b))
+            .chain([
+                "|teampreview|3".to_string(),
+                "|start".to_string(),
+                "|switch|p1a: Zapdos|Zapdos, L55|100/100".to_string(),
+                "|switch|p2a: Zapdos|Zapdos, L55|100/100".to_string(),
+                "|turn|1".to_string(),
+            ])
+        {
+            agent.push_line(&dex, &line);
+        }
+        let req = serde_json::json!({
+            "active": [{
+                "moves": [
+                    {"move": "Thunderbolt", "id": "thunderbolt", "pp": 24, "maxpp": 24, "disabled": false},
+                    {"move": "Drill Peck", "id": "drillpeck", "pp": 32, "maxpp": 32, "disabled": false},
+                    {"move": "Rest", "id": "rest", "pp": 16, "maxpp": 16, "disabled": false},
+                    {"move": "Sleep Talk", "id": "sleeptalk", "pp": 16, "maxpp": 16, "disabled": false}
+                ],
+                "trapped": false
+            }],
+            "side": {
+                "id": "p1",
+                "name": "p1",
+                "pokemon": [
+                    {"ident": "p1: Zapdos", "details": "Zapdos, L55", "condition": "205/205", "active": true, "item": "leftovers"},
+                    {"ident": "p1: Snorlax", "details": "Snorlax, L50, M", "condition": "266/266", "active": false, "item": "mintberry"},
+                    {"ident": "p1: Starmie", "details": "Starmie, L50", "condition": "166/166", "active": false, "item": "miracleberry"}
+                ]
+            },
+            "rqid": 1
+        })
+        .to_string();
+        assert!(agent.on_request(&dex, &req).unwrap());
+        assert_eq!(agent.belief().unwrap().candidate_count(), 2);
+
+        agent.pin_opponent(&dex, foe_b).unwrap();
+        assert_eq!(agent.belief().unwrap().candidate_count(), 1);
+        assert!(agent.search().is_some());
+    }
+
+    #[test]
+    fn safeguard_outrage_lock_clears_when_multi_move_request_arrives() {
+        let dex = conformance::load_dex();
+        let own = canonical_team(
+            &dex,
+            vec![
+                test_set("Dragonite", 55, "Leftovers", &["Outrage", "Safeguard", "Rest", "Hyper Beam"]),
+                test_set("Snorlax", 50, "Mint Berry", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+                test_set("Starmie", 50, "Miracle Berry", &["Surf", "Psychic", "Recover", "Rapid Spin"]),
+                test_set("Gengar", 50, "Gold Berry", &["Thunderbolt", "Ice Punch", "Destiny Bond", "Explosion"]),
+                test_set("Raikou", 50, "Magnet", &["Thunderbolt", "Roar", "Rest", "Sleep Talk"]),
+                test_set("Exeggutor", 50, "Pink Bow", &["Psychic", "Giga Drain", "Stun Spore", "Explosion"]),
+            ],
+        );
+        let foe = canonical_team(
+            &dex,
+            vec![
+                test_set("Zapdos", 55, "Leftovers", &["Thunderbolt", "Drill Peck", "Rest", "Sleep Talk"]),
+                test_set("Snorlax", 50, "Mint Berry", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+                test_set("Gengar", 50, "Gold Berry", &["Thunderbolt", "Ice Punch", "Destiny Bond", "Explosion"]),
+                test_set("Cloyster", 50, "Focus Band", &["Surf", "Spikes", "Toxic", "Explosion"]),
+                test_set("Suicune", 50, "Miracle Berry", &["Surf", "Ice Beam", "Rest", "Sleep Talk"]),
+                test_set("Forretress", 50, "Mystery Berry", &["Spikes", "Rapid Spin", "Explosion", "Hidden Power"]),
+            ],
+        );
+        let pool = MetaPool {
+            teams: vec![crate::preview::MetaTeam { id: "f".into(), sets: foe.clone(), weight: None }],
+        };
+        let mut agent = ProtocolAgent::new(&dex, 0, pool, RmConfig::default(), 88);
+        agent.set_own_team(own.clone());
+        agent.pin_opponent(&dex, foe.clone()).unwrap();
+        for line in poke_lines(&dex, "p1", &own)
+            .into_iter()
+            .chain(poke_lines(&dex, "p2", &foe))
+            .chain([
+                "|teampreview|3".to_string(),
+                "|start".to_string(),
+                "|switch|p1a: Dragonite|Dragonite, L55, M|100/100".to_string(),
+                "|switch|p2a: Zapdos|Zapdos, L55|100/100".to_string(),
+                "|turn|1".to_string(),
+                "|-sidestart|p1: Dragonite|Safeguard".to_string(),
+                "|move|p1a: Dragonite|Outrage|p2a: Zapdos".to_string(),
+                "|turn|2".to_string(),
+                "|move|p1a: Dragonite|Outrage|p2a: Zapdos".to_string(),
+                "|turn|3".to_string(),
+            ])
+        {
+            agent.push_line(&dex, &line);
+        }
+        assert!(agent.tracker().sides[0].mons[0].locked.is_some());
+        let req = serde_json::json!({
+            "active": [{
+                "moves": [
+                    {"move": "Outrage", "id": "outrage", "pp": 23, "maxpp": 24, "disabled": false},
+                    {"move": "Safeguard", "id": "safeguard", "pp": 40, "maxpp": 40, "disabled": false},
+                    {"move": "Rest", "id": "rest", "pp": 16, "maxpp": 16, "disabled": false},
+                    {"move": "Hyper Beam", "id": "hyperbeam", "pp": 8, "maxpp": 8, "disabled": false}
+                ],
+                "trapped": false
+            }],
+            "side": {
+                "id": "p1",
+                "name": "p1",
+                "pokemon": [
+                    {"ident": "p1: Dragonite", "details": "Dragonite, L55, M", "condition": "205/205", "active": true, "item": "leftovers"},
+                    {"ident": "p1: Snorlax", "details": "Snorlax, L50, M", "condition": "266/266", "active": false, "item": "mintberry"},
+                    {"ident": "p1: Starmie", "details": "Starmie, L50", "condition": "166/166", "active": false, "item": "miracleberry"}
+                ]
+            },
+            "rqid": 3
+        })
+        .to_string();
+        assert!(agent.on_request(&dex, &req).unwrap());
+        assert_eq!(agent.tracker().sides[0].mons[0].locked, None);
+        assert!(!agent.tracker().sides[0].mons[0].called_locked);
+        assert!(agent.battle().unwrap().clone().legal_choices(&dex, 0).len() > 1);
+        agent.step(&dex, 4).unwrap();
+        let _ = agent.best(&dex);
+        assert_eq!(agent.legality_drift, 0);
+    }
+
+    #[test]
+    fn called_locking_move_sets_called_locked_without_charging_base_pp() {
+        let dex = conformance::load_dex();
+        let mut tracker = ProtocolTracker::new(0);
+        for line in [
+            "|poke|p1|Clefable, L50, F|",
+            "|poke|p2|Snorlax, L50, M|",
+            "|switch|p1a: Clefable|Clefable, L50, F|100/100",
+            "|switch|p2a: Snorlax|Snorlax, L50, M|100/100",
+            "|turn|1",
+            "|move|p1a: Clefable|Metronome|p1a: Clefable",
+            "|move|p1a: Clefable|Outrage|p2a: Snorlax|[from] move: Metronome",
+        ] {
+            tracker.push_line(&dex, line);
+        }
+        let metro = dex.moves.id("metronome").unwrap();
+        let outrage = dex.moves.id("outrage").unwrap();
+        let mon = &tracker.sides[0].mons[0];
+        assert!(mon.called_locked);
+        assert_eq!(mon.locked, Some((outrage, 1)));
+        assert_eq!(mon.uses, vec![(metro, 1)]);
+
+        tracker.push_line(&dex, "|turn|2");
+        tracker.push_line(&dex, "|move|p1a: Clefable|Outrage|p2a: Snorlax");
+        let mon = &tracker.sides[0].mons[0];
+        assert_eq!(mon.locked, Some((outrage, 2)));
+        assert_eq!(mon.uses, vec![(metro, 1)]);
+
+        tracker.push_line(&dex, "|cant|p1a: Clefable|par");
+        let mon = &tracker.sides[0].mons[0];
+        assert_eq!(mon.locked, None);
+        assert!(!mon.called_locked);
+    }
+
+    #[test]
+    fn estimate_sub_damage_handles_return_hidden_power_type_and_super_fang() {
+        let dex = conformance::load_dex();
+        let mut tracker = ProtocolTracker::new(0);
+        for line in [
+            "|poke|p1|Snorlax, L55, M|item",
+            "|poke|p2|Rhydon, L50, M|item",
+            "|switch|p1a: Snorlax|Snorlax, L55, M|100/100",
+            "|switch|p2a: Rhydon|Rhydon, L50, M|100/100",
+            "|turn|1",
+        ] {
+            tracker.push_line(&dex, line);
+        }
+        let return_id = dex.moves.id("return").unwrap();
+        let superf_id = dex.moves.id("superfang").unwrap();
+        let hp_id = dex.moves.id("hiddenpower").unwrap();
+        let return_dmg = estimate_sub_damage(&dex, &tracker.sides, &tracker.weather, (0, 0), (1, 0), return_id, false);
+        let superf_dmg = estimate_sub_damage(&dex, &tracker.sides, &tracker.weather, (0, 0), (1, 0), superf_id, false);
+        let hp_dmg = estimate_sub_damage(&dex, &tracker.sides, &tracker.weather, (0, 0), (1, 0), hp_id, false);
+        let rhydon_hp_base = dex.species.get(tracker.sides[1].mons[0].species).base_stats.hp as i32;
+        let rhydon_maxhp = (((2 * rhydon_hp_base * 50) / 100 + 50 + 10).max(1)) as i64;
+        assert!(return_dmg > 15, "Return should use 102 BP, got {return_dmg}");
+        assert_eq!(superf_dmg, (rhydon_maxhp / 2).max(1));
+        assert!(hp_dmg >= 1, "plain hiddenpower should stay conservative >= 1, got {hp_dmg}");
     }
 }
 
@@ -3792,6 +4109,7 @@ impl ProtocolTracker {
             force_switch: req.force_switch,
             trapped: req.trapped,
             maybe_trapped: req.maybe_trapped,
+            preview_level_caps: req.preview_level_caps,
         }
     }
 
@@ -3876,7 +4194,7 @@ impl ProtocolAgent {
         let obs = Observer::from_position(dex, spec)?;
         let mut belief = match &self.pinned_sets {
             Some(sets) => Belief::pinned_checked(dex, "opponent", sets, &obs)?,
-            None => Belief::new(dex, &self.pool, &obs),
+            None => Belief::with_fallback_policy(dex, &self.pool, &obs, self.fallback_policy),
         };
         if let (Some(prior), None) = (self.prior.clone(), &self.pinned_sets) {
             belief.set_prior(prior);

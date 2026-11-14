@@ -3,7 +3,7 @@
 ## 1. Current Repository State
 - **Unified Location**: `tpu/` (integrated directly at the repository root).
 - **Shared Dex Data**: Reads [`../data/gen2stadium2.json`](../data/gen2stadium2.json) directly locally, and bundles it automatically via `uv run --project tpu gen2-tpu bundle-colab --out tmp/gen2_tpu_bundle.tar.gz` (or `./tools/colab-tpu.sh bundle`) for remote Colab execution.
-- **Test Status**: All tests in [`tests/test_tpu_gen2.py`](tests/test_tpu_gen2.py) pass (`uv run --project tpu pytest tpu/tests -v` locally, or `./tools/colab-tpu.sh pytest` on Google Colab) both on local 8-core CPU TPU emulation and on Google Colab runtimes (including TPU **`v6e1` Trillium**), with step-by-step bit-exact parity across 20 golden multi-turn games (488 steps) against Rust [`nc2000_engine::compact::CompactBattle`](../crates/engine/src/compact.rs).
+- **Test Status**: All tests in [`tests/test_tpu_gen2.py`](tests/test_tpu_gen2.py) pass (`uv run --project tpu pytest tpu/tests -v` locally, or `./tools/colab-tpu.sh pytest` on Google Colab) both on local 8-core CPU TPU emulation and on Google Colab runtimes (including TPU **`v6e1` Trillium**), with step-by-step bit-exact parity across 20 golden multi-turn games (486 steps) against Rust [`nc2000_engine::compact::CompactBattle`](../crates/engine/src/compact.rs).
 - **Empirical Google Colab TPU `v6e1` (Trillium, 32 GiB HBM, 32 MiB VMEM) Benchmarks**:
   - **Zero HLO `gather` / `scatter` Operations**: Replaced all dynamic `.at[...].set(...)` and array indexing in [`src/gen2_tpu/kernel.py`](src/gen2_tpu/kernel.py) and [`src/gen2_tpu/search.py`](src/gen2_tpu/search.py) with `_set1`, `_get1`, and static `jnp.stack`, achieving **`gather_ops = 0` and `scatter_ops = 0`** across `apply_actions`, `sample_heavy_playout_action`, and `eval_compact_leaf`.
   - **Actor-Loop HLO Compaction**: Using `jax.lax.fori_loop(0, 2, ...)` in `_run_two_actor_steps` ([`src/gen2_tpu/kernel.py`](src/gen2_tpu/kernel.py)) reduced `apply_actions` lowered HLO from `96,599` to `56,073` lines (`42%` smaller), cutting XLA TPU compile time by `2.2x` (`76.38 s -> 34.38 s`) and improving per-step VPU execution speed by `1.34x` (`0.923 ms -> 0.690 ms`).
@@ -28,7 +28,7 @@
 
 | File | Responsibility | Key Entry Points |
 | :--- | :--- | :--- |
-| [`tpu_emu.py`](src/gen2_tpu/tpu_emu.py) | 8-core CPU TPU emulation (`jax_enable_x64=False`), HLO static analysis, SPMD mesh (`TPU_V5E`, `TPU_V5P`, `TPU_V6E`) | `init_tpu_emulator`, `verify_tpu_compatibility`, `make_tpu_mesh` |
+| [`tpu_emu.py`](src/gen2_tpu/tpu_emu.py) | 8-core CPU TPU emulation (`jax_enable_x64=False`), HLO static analysis, SPMD mesh (`TPU_V5E`, `TPU_V6E`) | `init_tpu_emulator`, `verify_tpu_compatibility`, `make_tpu_mesh` |
 | [`prng.py`](src/gen2_tpu/prng.py) | 32-bit limb port of Showdown 64-bit Gen5 LCG (`uint32[2]`) | `prng_random`, `prng_random_chance`, `seed_from_str` |
 | [`state.py`](src/gen2_tpu/state.py) | SoA `MatchTable`, `CompactBattle` (`516 B`), bit-packed `PackedBattle` (`uint32[30] = 120 B`, 4.3x compression) | `MatchTable`, `CompactBattle`, `PackedBattle`, `pack_battle`, `unpack_battle` |
 | [`dex_loader.py`](src/gen2_tpu/dex_loader.py) | Loader for [`../data/gen2stadium2.json`](../data/gen2stadium2.json) and 3v3 state builder | `load_dex`, `build_compact_battle` |
