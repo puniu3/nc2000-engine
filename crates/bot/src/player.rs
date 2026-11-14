@@ -28,6 +28,10 @@ impl PlayerChannel {
         }
     }
 
+    pub fn log_cursor(&self) -> usize {
+        self.log_cursor
+    }
+
     pub fn frame(&mut self, battle: &mut Battle, dex: &Dex) -> Result<PlayerFrame, String> {
         if !battle.log_enabled {
             return Err("player channel requires the public battle log".into());

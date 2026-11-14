@@ -734,6 +734,61 @@ impl Belief {
         })
     }
 
+    /// Construct a singleton pinned belief from raw opponent `PokemonSet`s
+    /// without running the full pool validator (which rejects non-pool test
+    /// fixtures and 3-mon subteams). Uses `build_refs` to align slots to public
+    /// preview order, falling back to slot-for-slot `Battle::from_fixture` when
+    /// `sets.len() == obs.mons().len()`.
+    pub fn pinned_from_sets(
+        dex: &Dex,
+        id: &str,
+        sets: &[PokemonSet],
+        obs: &Observer,
+    ) -> Result<Belief, String> {
+        let refs = if let Some(refs) = build_refs(dex, sets, obs.mons()) {
+            refs
+        } else if sets.len() == obs.mons().len() {
+            Battle::from_fixture(dex, "1,2,3,4", sets, sets)
+                .map(|mut b| std::mem::take(&mut b.sides[0].roster))
+                .map_err(|e| format!("construct pinned opponent refs: {e:?}"))?
+        } else {
+            return Err("pinned opponent team does not match the public preview".to_string());
+        };
+        Ok(Belief {
+            hp_observations: None,
+            cands: vec![Candidate {
+                id: id.to_string(),
+                weight: None,
+                sets: sets.to_vec(),
+                refs: Some(refs),
+            }],
+            alive: vec![0],
+            fallback: None,
+            fallback_visible: None,
+            pinned: true,
+            fallback_policy: FallbackPolicy::Layered,
+            prior: None,
+            pick_draws: None,
+            draws: None,
+            loadout_draws: None,
+            fallback_cands: None,
+            synced: Some(obs.revision()),
+        })
+    }
+
+    /// The pinned opponent's Turn-0 `PokemonSet`s when constructed via
+    /// `pinned`, `pinned_checked`, or `pinned_from_sets`.
+    pub fn pinned_sets(&self) -> Option<&[PokemonSet]> {
+        self.pinned
+            .then(|| {
+                self.cands
+                    .first()
+                    .map(|c| c.sets.as_slice())
+                    .filter(|s| !s.is_empty())
+            })
+            .flatten()
+    }
+
     /// Open-team-sheet belief for a caller that holds the TRUE battle (the
     /// arena's `open` agent — the M12 product policy in native form):
     /// pinned to reference mons cloned straight from the opponent's true

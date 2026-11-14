@@ -889,7 +889,13 @@ fn play_omniscient_duel_game(
         } else {
             let is_preview = matches!(choices_red[0], SearchChoice::Team(_));
             if red_obs.is_none() || is_preview {
-                let obs = if corrected && tier==AttackerTier::T2RulesBayesianOracleBr {
+                let use_boundary = corrected
+                    && matches!(
+                        tier,
+                        AttackerTier::T2RulesBayesianOracleBr
+                            | AttackerTier::T3ClairvoyantOpenSheet
+                    );
+                let obs = if use_boundary {
                     let (local,obs)=LocalPlayer::new(&battle,dex,side_red).unwrap();red_local=Some(local);obs
                 } else {Observer::new(&battle,side_red)};
                 let bel = match tier {
@@ -901,8 +907,24 @@ fn play_omniscient_duel_game(
                             FallbackPolicy::default(),
                         )
                     }
-                    AttackerTier::T3ClairvoyantOpenSheet
-                    | AttackerTier::T4Clairvoyant3v3FullInfo
+                    AttackerTier::T3ClairvoyantOpenSheet => {
+                        if corrected {
+                            Belief::pinned_from_sets(
+                                dex,
+                                "opponent",
+                                &nc2000_bot::player_state::submitted_team(
+                                    &battle,
+                                    dex,
+                                    1 - side_red,
+                                ),
+                                &obs,
+                            )
+                            .unwrap()
+                        } else {
+                            Belief::pinned_from_battle(&battle, &obs)
+                        }
+                    }
+                    AttackerTier::T4Clairvoyant3v3FullInfo
                     | AttackerTier::T5OmniscientGodBr
                     | AttackerTier::T6PsychicMoveReaderGod => {
                         Belief::pinned_from_battle(&battle, &obs)
@@ -912,7 +934,7 @@ fn play_omniscient_duel_game(
                 red_obs = Some(obs);
                 red_belief = Some(bel);
 
-                let b_obs = if corrected && tier==AttackerTier::T2RulesBayesianOracleBr {
+                let b_obs = if use_boundary {
                     let (local,obs)=LocalPlayer::new(&battle,dex,side_blue).unwrap();blue_public_local=Some(local);obs
                 } else {Observer::new(&battle,side_blue)};
                 let b_bel = Belief::with_fallback_policy(
@@ -992,8 +1014,37 @@ fn play_omniscient_duel_game(
                     Some(choices_red[0])
                 } else {
                     let chosen = match tier {
-                        AttackerTier::T3ClairvoyantOpenSheet
-                        | AttackerTier::T4Clairvoyant3v3FullInfo => {
+                        AttackerTier::T3ClairvoyantOpenSheet => {
+                            let mut cfg = base_cfg.clone();
+                            cfg.iterations = if same_budget { base_iters } else { base_iters * 2 };
+                            let mut bs = if let Some(ref pos) = public_position {
+                                BlindSearch::from_observation(
+                                    pos,
+                                    dex,
+                                    cfg.clone(),
+                                    side_red,
+                                    red_rng.next(),
+                                )
+                            } else {
+                                let mut legacy = BlindSearch::new(
+                                    &battle,
+                                    dex,
+                                    cfg.clone(),
+                                    side_red,
+                                    red_rng.next(),
+                                );
+                                legacy.prune_dominated();
+                                legacy
+                            };
+                            for _ in 0..cfg.iterations {
+                                bs.step_one(dex, bel, obs);
+                                if bs.should_early_stop() {
+                                    break;
+                                }
+                            }
+                            bs.best().unwrap_or(choices_red[0])
+                        }
+                        AttackerTier::T4Clairvoyant3v3FullInfo => {
                             let mut cfg = base_cfg.clone();
                             cfg.iterations = if same_budget { base_iters } else { base_iters * 2 };
                             let mut bs = BlindSearch::new(

@@ -138,6 +138,10 @@ impl Agent for Timed {
         self.inner.name()
     }
 
+    fn requires_player_log(&self) -> bool {
+        self.inner.requires_player_log()
+    }
+
     fn choose(
         &mut self,
         battle: &Battle,
@@ -227,7 +231,11 @@ pub fn run_duel(
                         &teams[g.team_p2],
                     )
                     .unwrap();
-                    battle.set_log_enabled(spec.log_on);
+                    battle.set_log_enabled(
+                        spec.log_on
+                            || agent_a.requires_player_log()
+                            || agent_b.requires_player_log(),
+                    );
                     let (p1, p2): (&mut dyn Agent, &mut dyn Agent) = if g.a_is_p1 {
                         (&mut agent_a, &mut agent_b)
                     } else {

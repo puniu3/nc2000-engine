@@ -64,22 +64,56 @@
 use std::sync::Arc;
 
 use nc2000_engine::battle::enumerate::enumerate_step_with_damage_mode;
-use nc2000_engine::battle::SearchChoice;
+use nc2000_engine::battle::{PokemonSet, SearchChoice};
 use nc2000_engine::dex::{Dex, SpeciesId};
 use nc2000_engine::fxhash::FxHashMap;
 use nc2000_engine::prng::DamageRollMode;
-use nc2000_engine::state::{Battle, PokeId, Status, DK};
+use nc2000_engine::state::{Battle, PokeId, Pokemon, Status, DK};
 
 use crate::agent::{Agent, RootSearchStats};
 use crate::belief::{Belief, FallbackPolicy, TeamPlanPick};
 use crate::observe::Observer;
+use crate::player_state::{clean_sets_from_roster, submitted_team, LocalPlayer, ObservedPosition};
 use crate::preview::{MetaPool, TableSet};
 use crate::prior::BeliefPrior;
 use crate::rng::SplitMix64;
 use crate::smmcts::{key_of, key_of_cached, run_iteration_cached, Node, RmConfig, SkuctSearch};
 
-struct GameState {
-    local: Option<crate::player_state::LocalPlayer>,
+enum BeliefSource {
+    Pool {
+        pool: Arc<MetaPool>,
+        fallback_policy: FallbackPolicy,
+    },
+    OpenSheet {
+        explicit_sets: Option<Vec<PokemonSet>>,
+    },
+}
+
+struct PendingPreview {
+    side: usize,
+    rosters: [Vec<Pokemon>; 2],
+}
+
+impl PendingPreview {
+    fn matches(&self, battle: &Battle, side: usize) -> bool {
+        if self.side != side {
+            return false;
+        }
+        (0..2).all(|s| {
+            let cur = &battle.sides[s].roster;
+            let saved = &self.rosters[s];
+            cur.len() == saved.len()
+                && cur.iter().zip(saved.iter()).all(|(a, b)| {
+                    a.base_species == b.base_species
+                        && a.level == b.level
+                        && a.name == b.name
+                })
+        })
+    }
+}
+
+struct PlayerGameState {
+    local: LocalPlayer,
     side: usize,
     last_turn: u16,
     observer: Observer,
@@ -91,28 +125,436 @@ struct AdaptiveMixture {
     rng: SplitMix64,
 }
 
-pub struct BlindAgent {
+struct ImperfectInfoCore {
     cfg: RmConfig,
     rng: SplitMix64,
-    pool: Arc<MetaPool>,
     tables: Option<Arc<TableSet>>,
-    fallback_policy: FallbackPolicy,
-    /// M18 community belief prior. `None` (the default) leaves the fallback
-    /// imputation exactly as shipped.
+    source: BeliefSource,
+    /// M18 community belief prior (inert when `source` is `OpenSheet`).
     prior: Option<Arc<BeliefPrior>>,
-    /// Optional 60-action canonical preview policy (`crate::preview::preview_actions()`)
-    /// used directly at Team Preview (e.g., solved Bayesian Shell-vs-Shell Preview Nash).
     own_preview_policy: Option<Vec<f64>>,
-    /// Optional 60-action canonical preview distribution `(policy, smoothing)` used to
-    /// condition hidden opponent bench sampling (`Belief::condition_canonical_pick_policy`).
     opp_pick_policy: Option<(Vec<f64>, f64)>,
-    /// Optional dedicated iteration budget when `BlindSearch` runs at Team Preview (`60` legal actions).
     preview_iterations: Option<u32>,
-    game: Option<GameState>,
+    game: Option<PlayerGameState>,
+    pending_preview: Option<PendingPreview>,
     adaptive_mixture: Option<AdaptiveMixture>,
     decision_policy: Option<Vec<f64>>,
     root_stats: RootSearchStats,
     root_pruning: bool,
+    track_move_telemetry: bool,
+    move_marginals: [[f64; 4]; 6],
+    move_turns: [u32; 6],
+}
+
+impl ImperfectInfoCore {
+    fn new(
+        cfg: RmConfig,
+        source: BeliefSource,
+        tables: Option<Arc<TableSet>>,
+        seed: u64,
+        track_move_telemetry: bool,
+    ) -> Self {
+        Self {
+            cfg,
+            rng: SplitMix64::new(seed),
+            tables,
+            source,
+            prior: None,
+            own_preview_policy: None,
+            opp_pick_policy: None,
+            preview_iterations: None,
+            game: None,
+            pending_preview: None,
+            adaptive_mixture: None,
+            decision_policy: None,
+            root_stats: RootSearchStats::default(),
+            root_pruning: false,
+            track_move_telemetry,
+            move_marginals: [[0.0; 4]; 6],
+            move_turns: [0; 6],
+        }
+    }
+
+    fn set_adaptive_mixture(&mut self, probe_iterations: u32) {
+        assert!(probe_iterations < self.cfg.iterations);
+        self.adaptive_mixture = Some(AdaptiveMixture {
+            probe_iterations,
+            rng: SplitMix64::new(self.rng.0 ^ 0xa24baed4963ee407),
+        });
+    }
+
+    fn set_preview_iterations(&mut self, preview_iterations: u32) {
+        assert!(
+            preview_iterations > 0,
+            "preview search budget must be positive"
+        );
+        self.preview_iterations = Some(preview_iterations);
+    }
+
+    fn set_iterations(&mut self, iterations: u32) {
+        assert!(iterations > 0, "search budget must be positive");
+        self.cfg.iterations = iterations;
+    }
+
+    fn format_name(&self, prefix: &str) -> String {
+        let mut name = format!(
+            "{prefix}:{}:{}:{}",
+            self.cfg.iterations, self.cfg.c, self.cfg.hp_buckets
+        );
+        if let Some(mixture) = &self.adaptive_mixture {
+            name.push_str(&format!(":mix-probes={}", mixture.probe_iterations));
+        }
+        if self.root_pruning {
+            name.push_str(":root-prune");
+        }
+        if self.cfg.unseen_claw_root {
+            name.push_str(":unseen-claw-root");
+        }
+        if self.cfg.canonical_claw_key {
+            name.push_str(":canonical-claw");
+        }
+        if self.cfg.collapse_sleep_actions {
+            name.push_str(":sleep-collapse");
+        }
+        if self.cfg.root_revisit_interval > 0 {
+            name.push_str(&format!(":revisit-{}", self.cfg.root_revisit_interval));
+        }
+        name
+    }
+
+    fn record_move_telemetry(
+        &mut self,
+        model: &Battle,
+        side: usize,
+        choices: &[SearchChoice],
+        picked: SearchChoice,
+        search: &BlindSearch,
+    ) {
+        if !self.track_move_telemetry {
+            return;
+        }
+        if let Some(active_u8) = model.sides[side].active {
+            let slot = (active_u8 as usize).min(5);
+            if slot < model.sides[side].roster.len()
+                && choices.iter().any(|c| matches!(c, SearchChoice::Move(_)))
+            {
+                self.move_turns[slot] += 1;
+                if let SearchChoice::Move(chosen_mid) = picked {
+                    let means = search.means();
+                    let visits = search.visits();
+                    if let Some(chosen_idx) = choices.iter().position(|&c| c == picked) {
+                        let q_best = means[chosen_idx];
+                        let q_alt = (0..choices.len())
+                            .filter(|&i| i != chosen_idx && visits[i] > 0)
+                            .map(|i| means[i])
+                            .fold(f64::NEG_INFINITY, f64::max);
+                        if q_alt.is_finite() {
+                            let dq = (q_best - q_alt).max(0.0);
+                            let mon = &model.sides[side].roster[slot];
+                            for (m_idx, ms) in mon.base_move_slots.iter().enumerate().take(4) {
+                                if ms.id == chosen_mid {
+                                    self.move_marginals[slot][m_idx] += dq;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn preview_table_pick(&mut self, dex: &Dex) -> Option<SearchChoice> {
+        let tables = self.tables.as_ref()?;
+        let g = self
+            .game
+            .as_ref()
+            .expect("preview_table_pick after lifecycle setup");
+        match &self.source {
+            BeliefSource::Pool { .. } => {
+                baked_preview_pick_sets(tables, &g.belief, dex, g.local.own_sets(), &mut self.rng)
+            }
+            BeliefSource::OpenSheet { .. } => g.belief.pinned_sets().and_then(|opp_sets| {
+                open_preview_pick_sets(tables, dex, g.local.own_sets(), opp_sets, &mut self.rng)
+            }),
+        }
+    }
+
+    fn search(
+        &mut self,
+        dex: &Dex,
+        side: usize,
+        choices: &[SearchChoice],
+    ) -> SearchChoice {
+        let is_preview = matches!(choices[0], SearchChoice::Team(_));
+        let position = {
+            let g = self.game.as_mut().expect("search after lifecycle setup");
+            g.local
+                .position(dex, &mut g.belief, &g.observer, &mut self.rng)
+                .expect("player reconstruction failed")
+        };
+        let opp_prior = self.opp_pick_policy.is_some();
+        if !is_preview {
+            self.root_stats.searches += 1;
+            if let Some(mixture) = self.adaptive_mixture.as_mut() {
+                let mut search = BlindSearch::from_observation_with_rng(
+                    &position,
+                    dex,
+                    self.cfg.clone(),
+                    side,
+                    self.rng.clone(),
+                );
+                search.prune_preview_aliases(dex);
+                if opp_prior {
+                    search.set_opponent_preview_prior(true);
+                }
+                if self.root_pruning {
+                    search.prune_dominated();
+                }
+                debug_assert_eq!(search.actions(), choices);
+                let g = self.game.as_ref().expect("search after lifecycle setup");
+                let probes = search.finish_with_typed_mixed_probes(
+                    dex,
+                    &g.belief,
+                    &g.observer,
+                    self.cfg.iterations,
+                    mixture.probe_iterations,
+                );
+                self.root_stats.probed_searches += u64::from(probes > 0);
+                self.root_stats.probe_iterations += u64::from(probes);
+                self.rng = search.rng.clone();
+                self.decision_policy = search.mixed_policy().map(|mixed| mixed.policy);
+                let draw = mixture.rng.next_f64();
+                let picked = if let Some(policy) = &self.decision_policy {
+                    self.root_stats.mixed_searches += 1;
+                    draw_policy(choices, policy, draw).unwrap()
+                } else {
+                    search
+                        .best()
+                        .expect("search called with a non-empty choice list")
+                };
+                self.record_move_telemetry(position.model(), side, choices, picked, &search);
+                return picked;
+            }
+        }
+        let mut cfg = self.cfg.clone();
+        if is_preview {
+            if let Some(p_iters) = self.preview_iterations {
+                cfg.iterations = p_iters;
+            }
+        }
+        let mut bs = BlindSearch::from_observation_with_rng(
+            &position,
+            dex,
+            cfg.clone(),
+            side,
+            self.rng.clone(),
+        );
+        bs.prune_preview_aliases(dex);
+        if opp_prior {
+            bs.set_opponent_preview_prior(true);
+        }
+        if self.root_pruning {
+            bs.prune_dominated();
+        }
+        debug_assert_eq!(
+            bs.actions(),
+            choices,
+            "root action set drifted from caller's choices"
+        );
+        let picked = {
+            let g = self.game.as_ref().expect("search after lifecycle setup");
+            for _ in 0..cfg.iterations {
+                bs.step_one(dex, &g.belief, &g.observer);
+                if bs.should_early_stop() {
+                    break;
+                }
+            }
+            bs.best()
+                .expect("search called with a non-empty choice list")
+        };
+        self.rng = bs.rng.clone();
+        if !is_preview {
+            self.record_move_telemetry(position.model(), side, choices, picked, &bs);
+        }
+        picked
+    }
+
+    fn choose(
+        &mut self,
+        battle: &Battle,
+        dex: &Dex,
+        side: usize,
+        choices: &[SearchChoice],
+    ) -> SearchChoice {
+        let is_preview = matches!(choices[0], SearchChoice::Team(_));
+        self.decision_policy = None;
+        let stale = match &self.game {
+            None => true,
+            Some(g) => {
+                g.side != side
+                    || is_preview
+                    || battle.turn < g.last_turn
+                    || !g.local.is_compatible(battle)
+            }
+        };
+        if stale {
+            let pending = self
+                .pending_preview
+                .take()
+                .filter(|p| p.matches(battle, side));
+            let (own_sets, preview_opp_sets) = match pending {
+                Some(p) => (
+                    clean_sets_from_roster(&p.rosters[side], dex),
+                    Some(clean_sets_from_roster(&p.rosters[1 - side], dex)),
+                ),
+                None => (submitted_team(battle, dex, side), None),
+            };
+            let (local, observer) =
+                LocalPlayer::new_with_own_sets(battle, dex, side, own_sets)
+                    .expect("player observation failed");
+            let belief = match &self.source {
+                BeliefSource::Pool {
+                    pool,
+                    fallback_policy,
+                } => {
+                    let mut b = Belief::with_fallback_policy(
+                        dex,
+                        pool,
+                        &observer,
+                        *fallback_policy,
+                    );
+                    if let Some(prior) = self.prior.clone() {
+                        b.set_prior(prior);
+                    }
+                    b
+                }
+                BeliefSource::OpenSheet { explicit_sets } => {
+                    let opp_sets = explicit_sets
+                        .clone()
+                        .or(preview_opp_sets)
+                        .unwrap_or_else(|| submitted_team(battle, dex, 1 - side));
+                    Belief::pinned_from_sets(dex, "opponent", &opp_sets, &observer)
+                        .expect("pinned opponent team must match public preview")
+                }
+            };
+            self.game = Some(PlayerGameState {
+                local,
+                side,
+                last_turn: battle.turn,
+                observer,
+                belief,
+            });
+        }
+        {
+            let g = self.game.as_mut().unwrap();
+            g.last_turn = battle.turn;
+            g.local
+                .observe(battle, dex, &mut g.observer)
+                .expect("player observation failed");
+            g.belief.sync(dex, &g.observer);
+            if let Some((ref pol, smoothing)) = self.opp_pick_policy {
+                g.belief
+                    .condition_canonical_pick_policy(pol, smoothing, &g.observer);
+            }
+        }
+
+        if choices.len() == 1 {
+            return choices[0];
+        }
+        if is_preview {
+            if let Some(ref own_pol) = self.own_preview_policy {
+                let canon_acts = crate::preview::preview_actions();
+                if own_pol.len() == canon_acts.len() {
+                    let mut legal_probs = Vec::with_capacity(canon_acts.len());
+                    let mut legal_choices = Vec::with_capacity(canon_acts.len());
+                    let mut p_sum = 0.0f64;
+                    for (&triple, &prob) in canon_acts.iter().zip(own_pol.iter()) {
+                        let sc = SearchChoice::Team(triple);
+                        if prob > 0.0 && choices.contains(&sc) {
+                            legal_choices.push(sc);
+                            legal_probs.push(prob);
+                            p_sum += prob;
+                        }
+                    }
+                    if p_sum > 0.0 && !legal_choices.is_empty() {
+                        for p in &mut legal_probs {
+                            *p /= p_sum;
+                        }
+                        return legal_choices[sample_mixed(&legal_probs, &mut self.rng)];
+                    }
+                }
+            }
+            if let Some(c) = self.preview_table_pick(dex) {
+                debug_assert!(choices.contains(&c), "preview pick outside legal set");
+                if choices.contains(&c) {
+                    return c;
+                }
+            }
+        }
+        self.search(dex, side, choices)
+    }
+
+    fn root_policy(
+        &mut self,
+        battle: &Battle,
+        dex: &Dex,
+        side: usize,
+        choices: &[SearchChoice],
+    ) -> Vec<f64> {
+        let picked = self.choose(battle, dex, side, choices);
+        if let Some(policy) = &self.decision_policy {
+            return policy.clone();
+        }
+        if matches!(choices[0], SearchChoice::Team(_)) {
+            if let (Some(tables), Some(game)) = (&self.tables, &self.game) {
+                if let Some(me) = tables.set_index(dex, game.local.own_sets()) {
+                    let opp_idx = match &self.source {
+                        BeliefSource::Pool { .. } => (game.belief.candidate_count() == 1)
+                            .then(|| {
+                                let cid = game.belief.candidate_id(game.belief.alive()[0]);
+                                tables.ids.iter().position(|id| id == cid)
+                            })
+                            .flatten(),
+                        BeliefSource::OpenSheet { .. } => game
+                            .belief
+                            .pinned_sets()
+                            .and_then(|opp_sets| tables.set_index(dex, opp_sets)),
+                    };
+                    if let Some(opp) = opp_idx {
+                        if let Some((table, first)) = tables.pair_by_idx(me, opp) {
+                            let policy = if first {
+                                &table.sol.p_a
+                            } else {
+                                &table.sol.p_b
+                            };
+                            let aligned: Vec<f64> = choices
+                                .iter()
+                                .map(|action| {
+                                    tables
+                                        .actions()
+                                        .iter()
+                                        .position(|t| SearchChoice::Team(*t) == *action)
+                                        .map_or(0., |i| policy[i])
+                                })
+                                .collect();
+                            if (aligned.iter().sum::<f64>() - 1.).abs() < 1e-8 {
+                                return aligned;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        choices
+            .iter()
+            .map(|&c| if c == picked { 1. } else { 0. })
+            .collect()
+    }
+}
+
+pub struct BlindAgent {
+    core: ImperfectInfoCore,
 }
 
 impl BlindAgent {
@@ -136,203 +578,71 @@ impl BlindAgent {
         fallback_policy: FallbackPolicy,
     ) -> Self {
         BlindAgent {
-            cfg,
-            rng: SplitMix64::new(seed),
-            pool,
-            tables,
-            fallback_policy,
-            prior: None,
-            own_preview_policy: None,
-            opp_pick_policy: None,
-            preview_iterations: None,
-            game: None,
-            adaptive_mixture: None,
-            decision_policy: None,
-            root_stats: RootSearchStats::default(),
-            root_pruning: false,
+            core: ImperfectInfoCore::new(
+                cfg,
+                BeliefSource::Pool {
+                    pool,
+                    fallback_policy,
+                },
+                tables,
+                seed,
+                false,
+            ),
         }
     }
 
     pub fn with_own_preview_policy(mut self, policy: Vec<f64>) -> Self {
-        self.own_preview_policy = Some(policy);
+        self.core.own_preview_policy = Some(policy);
         self
     }
 
     pub fn with_opponent_pick_policy(mut self, policy: Vec<f64>, smoothing: f64) -> Self {
-        self.opp_pick_policy = Some((policy, smoothing));
+        self.core.opp_pick_policy = Some((policy, smoothing));
         self
     }
 
     pub fn with_preview_iterations(mut self, preview_iterations: u32) -> Self {
-        assert!(
-            preview_iterations > 0,
-            "preview search budget must be positive"
-        );
-        self.preview_iterations = Some(preview_iterations);
+        self.core.set_preview_iterations(preview_iterations);
         self
     }
 
     pub fn with_adaptive_mixture(mut self, probe_iterations: u32) -> Self {
-        assert!(probe_iterations < self.cfg.iterations);
-        self.adaptive_mixture = Some(AdaptiveMixture {
-            probe_iterations,
-            rng: SplitMix64::new(self.rng.0 ^ 0xa24baed4963ee407),
-        });
+        self.core.set_adaptive_mixture(probe_iterations);
         self
     }
 
     pub fn with_root_pruning(mut self) -> Self {
-        self.root_pruning = true;
+        self.core.root_pruning = true;
         self
     }
 
     /// Set the next decision's iteration budget without resetting observations
     /// or the search RNG. This only changes allocation, not the search policy.
     pub fn set_iterations(&mut self, iterations: u32) {
-        assert!(iterations > 0, "search budget must be positive");
-        self.cfg.iterations = iterations;
+        self.core.set_iterations(iterations);
     }
 
     /// M18: consume a community belief prior for the hidden-team fallback
     /// imputation. Takes effect from the next game/preview onward, and is
     /// inert on the open-sheet path (`OpenAgent` pins its belief).
     pub fn set_belief_prior(&mut self, prior: Arc<BeliefPrior>) {
-        self.prior = Some(prior);
-        if let Some(g) = self.game.as_mut() {
-            g.belief.set_prior(self.prior.clone().unwrap());
+        self.core.prior = Some(prior.clone());
+        if let Some(g) = self.core.game.as_mut() {
+            g.belief.set_prior(prior);
         }
     }
 
     pub fn search_rng_state(&self) -> u64 {
-        self.rng.0
+        self.core.rng.0
     }
 
     pub fn belief(&self) -> Option<&Belief> {
-        self.game.as_ref().map(|g| &g.belief)
+        self.core.game.as_ref().map(|g| &g.belief)
     }
 
     pub fn observer(&self) -> Option<&Observer> {
-        self.game.as_ref().map(|g| &g.observer)
+        self.core.game.as_ref().map(|g| &g.observer)
     }
-
-    // ------------------------------------------------------ baked preview
-
-    /// Belief-mediated M8 table lookup (see `baked_preview_pick`). `None` ⇔
-    /// fall through to the determinized preview search.
-    fn baked_pick(&mut self, battle: &Battle, side: usize) -> Option<SearchChoice> {
-        let tables = self.tables.as_ref()?;
-        let g = self
-            .game
-            .as_ref()
-            .expect("baked_pick after lifecycle setup");
-        baked_preview_pick(tables, &g.belief, battle, side, &mut self.rng)
-    }
-
-    // -------------------------------------------------------------- search
-
-    fn search(
-        &mut self,
-        dex: &Dex,
-        side: usize,
-        choices: &[SearchChoice],
-    ) -> SearchChoice {
-        let position = {
-            let g = self.game.as_mut().expect("search after lifecycle setup");
-            g.local.as_ref().expect("blind agent requires a player boundary")
-                .position(dex, &mut g.belief, &g.observer, &mut self.rng)
-                .expect("blind player reconstruction failed")
-        };
-        let battle = position.model();
-        let g = self.game.as_ref().expect("search after lifecycle setup");
-        if !matches!(choices[0], SearchChoice::Team(_)) {
-            self.root_stats.searches += 1;
-            if let Some(mixture) = self.adaptive_mixture.as_mut() {
-                let mut search =
-                    BlindSearch::with_rng(battle, dex, self.cfg.clone(), side, self.rng.clone());
-                search.use_public_exclusions(dex);
-                search.set_hidden_timers(position.hidden_timers().to_vec());
-                if self.root_pruning {
-                    search.prune_dominated();
-                }
-                debug_assert_eq!(search.actions(), choices);
-                let probes = search.finish_with_typed_mixed_probes(
-                    dex,
-                    &g.belief,
-                    &g.observer,
-                    self.cfg.iterations,
-                    mixture.probe_iterations,
-                );
-                self.root_stats.probed_searches += u64::from(probes > 0);
-                self.root_stats.probe_iterations += u64::from(probes);
-                self.rng = search.rng.clone();
-                self.decision_policy = search.mixed_policy().map(|mixed| mixed.policy);
-                let draw = mixture.rng.next_f64();
-                if let Some(policy) = &self.decision_policy {
-                    self.root_stats.mixed_searches += 1;
-                    return draw_policy(choices, policy, draw).unwrap();
-                }
-                return search
-                    .best()
-                    .expect("search called with a non-empty choice list");
-            }
-        }
-        let mut cfg = self.cfg.clone();
-        if matches!(choices[0], SearchChoice::Team(_)) {
-            if let Some(p_iters) = self.preview_iterations {
-                cfg.iterations = p_iters;
-            }
-        }
-        search_choose(
-            &cfg,
-            &mut self.rng,
-            g,
-            battle,
-            position.hidden_timers(),
-            dex,
-            side,
-            choices,
-            self.root_pruning,
-            self.opp_pick_policy.is_some(),
-        )
-    }
-}
-
-fn search_choose(
-    cfg: &RmConfig,
-    rng: &mut SplitMix64,
-    g: &GameState,
-    battle: &Battle,
-    hidden_timers: &[crate::player_state::HiddenTimerSpec],
-    dex: &Dex,
-    side: usize,
-    choices: &[SearchChoice],
-    prune: bool,
-    opp_preview_prior: bool,
-) -> SearchChoice {
-    let mut bs = BlindSearch::with_rng(battle, dex, cfg.clone(), side, rng.clone());
-    if g.local.is_some() { bs.use_public_exclusions(dex); }
-    bs.set_hidden_timers(hidden_timers.to_vec());
-    bs.prune_preview_aliases(dex);
-    if opp_preview_prior {
-        bs.set_opponent_preview_prior(true);
-    }
-    if prune {
-        bs.prune_dominated();
-    }
-    debug_assert_eq!(
-        bs.actions(),
-        choices,
-        "root action set drifted from caller's choices"
-    );
-    for _ in 0..cfg.iterations {
-        bs.step_one(dex, &g.belief, &g.observer);
-        if bs.should_early_stop() {
-            break;
-        }
-    }
-    *rng = bs.rng.clone();
-    bs.best()
-        .expect("search called with a non-empty choice list")
 }
 
 /// Belief-mediated M8 table lookup at team preview: own side by signature
@@ -363,6 +673,24 @@ pub fn baked_preview_pick(
     Some(SearchChoice::Team(tables.actions()[sample_mixed(p, rng)]))
 }
 
+pub(crate) fn baked_preview_pick_sets(
+    tables: &TableSet,
+    belief: &Belief,
+    dex: &Dex,
+    own_sets: &[PokemonSet],
+    rng: &mut SplitMix64,
+) -> Option<SearchChoice> {
+    if belief.candidate_count() != 1 {
+        return None;
+    }
+    let cand_id = belief.candidate_id(belief.alive()[0]);
+    let opp = tables.ids.iter().position(|id| id == cand_id)?;
+    let me = tables.set_index(dex, own_sets)?;
+    let (tab, i_am_a) = tables.pair_by_idx(me, opp)?;
+    let p = if i_am_a { &tab.sol.p_a } else { &tab.sol.p_b };
+    Some(SearchChoice::Team(tables.actions()[sample_mixed(p, rng)]))
+}
+
 /// Open-team-sheet M8 table lookup at team preview (the M12 product
 /// policy): BOTH sides resolved by full-set signature — legitimate because
 /// both sheets are public — so the collision pair resolves exactly and no
@@ -376,6 +704,20 @@ pub fn open_preview_pick(
     rng: &mut SplitMix64,
 ) -> Option<SearchChoice> {
     let (tab, i_am_a) = tables.lookup(battle, side)?;
+    let p = if i_am_a { &tab.sol.p_a } else { &tab.sol.p_b };
+    Some(SearchChoice::Team(tables.actions()[sample_mixed(p, rng)]))
+}
+
+pub(crate) fn open_preview_pick_sets(
+    tables: &TableSet,
+    dex: &Dex,
+    own_sets: &[PokemonSet],
+    opp_sets: &[PokemonSet],
+    rng: &mut SplitMix64,
+) -> Option<SearchChoice> {
+    let me = tables.set_index(dex, own_sets)?;
+    let opp = tables.set_index(dex, opp_sets)?;
+    let (tab, i_am_a) = tables.pair_by_idx(me, opp)?;
     let p = if i_am_a { &tab.sol.p_a } else { &tab.sol.p_b };
     Some(SearchChoice::Team(tables.actions()[sample_mixed(p, rng)]))
 }
@@ -561,9 +903,27 @@ impl BlindSearch {
     }
 
     /// Product search: only a player-protocol reconstruction can enter here.
-    pub fn from_observation(position: &crate::player_state::ObservedPosition, dex: &Dex,
-        cfg: RmConfig, side: usize, seed: u64) -> BlindSearch {
-        let mut search = Self::new(position.model(), dex, cfg, side, seed);
+    pub fn from_observation(
+        position: &ObservedPosition,
+        dex: &Dex,
+        cfg: RmConfig,
+        side: usize,
+        seed: u64,
+    ) -> BlindSearch {
+        Self::from_observation_with_rng(position, dex, cfg, side, SplitMix64::new(seed))
+    }
+
+    /// Product search with caller-threaded PRNG: skips full-state
+    /// `dominated_reason` pruning (`my_dominated` stays all-`false`) and
+    /// installs the reconstructed hidden condition timers.
+    pub(crate) fn from_observation_with_rng(
+        position: &ObservedPosition,
+        dex: &Dex,
+        cfg: RmConfig,
+        side: usize,
+        rng: SplitMix64,
+    ) -> BlindSearch {
+        let mut search = Self::with_rng_inner(position.model(), dex, cfg, side, rng, false);
         search.use_public_exclusions(dex);
         search.set_hidden_timers(position.hidden_timers().to_vec());
         search
@@ -589,9 +949,20 @@ impl BlindSearch {
     fn with_rng(
         battle: &Battle,
         dex: &Dex,
+        cfg: RmConfig,
+        side: usize,
+        rng: SplitMix64,
+    ) -> BlindSearch {
+        Self::with_rng_inner(battle, dex, cfg, side, rng, true)
+    }
+
+    fn with_rng_inner(
+        battle: &Battle,
+        dex: &Dex,
         mut cfg: RmConfig,
         side: usize,
         rng: SplitMix64,
+        compute_dominated: bool,
     ) -> BlindSearch {
         if cfg.key_no_damage
             && crate::smmcts::public_damage_bookkeeping_observable(battle, dex, side)
@@ -617,12 +988,16 @@ impl BlindSearch {
         }
         let turn_cap = base.turn.saturating_add(cfg.horizon);
         let my_acts = base.legal_choices(dex, side);
-        let my_dominated = my_acts
-            .iter()
-            .map(|&c| {
-                crate::smmcts::dominated_reason(&base, dex, side, c, cfg.mask_rules).is_some()
-            })
-            .collect();
+        let my_dominated = if compute_dominated {
+            my_acts
+                .iter()
+                .map(|&c| {
+                    crate::smmcts::dominated_reason(&base, dex, side, c, cfg.mask_rules).is_some()
+                })
+                .collect()
+        } else {
+            vec![false; my_acts.len()]
+        };
         let endgame = crate::smmcts::EndgameRootStats::new(&base, dex, side, &my_acts);
         let base_cache = crate::smmcts::build_search_cache(&cfg, dex, &base);
         let decision_seed = rng.0 ^ 0xa24baed4963ee407;
@@ -2491,13 +2866,7 @@ fn select_global_with_prior(
 /// shipped web bot plays; `skuct` (perfect info incl. picks) is its
 /// upper-bound opponent.
 pub struct OpenAgent {
-    cfg: RmConfig,
-    rng: SplitMix64,
-    tables: Option<Arc<TableSet>>,
-    opp_pick_policy: Option<(Vec<f64>, f64)>,
-    move_marginals: [[f64; 4]; 6],
-    move_turns: [u32; 6],
-    game: Option<GameState>,
+    core: ImperfectInfoCore,
 }
 
 impl OpenAgent {
@@ -2505,173 +2874,94 @@ impl OpenAgent {
     /// ignored — the blind/open play rule is argmax over the global root).
     pub fn new(cfg: RmConfig, tables: Option<Arc<TableSet>>, seed: u64) -> Self {
         OpenAgent {
-            cfg,
-            rng: SplitMix64::new(seed),
-            tables,
-            opp_pick_policy: None,
-            move_marginals: [[0.0; 4]; 6],
-            move_turns: [0; 6],
-            game: None,
+            core: ImperfectInfoCore::new(
+                cfg,
+                BeliefSource::OpenSheet { explicit_sets: None },
+                tables,
+                seed,
+                true,
+            ),
         }
+    }
+
+    pub fn with_opponent_sets(mut self, sets: Vec<PokemonSet>) -> Self {
+        self.core.source = BeliefSource::OpenSheet {
+            explicit_sets: Some(sets),
+        };
+        self
+    }
+
+    pub fn with_own_preview_policy(mut self, policy: Vec<f64>) -> Self {
+        self.core.own_preview_policy = Some(policy);
+        self
     }
 
     /// Condition hidden opponent bench sampling during battle on a 60-action
     /// canonical preview distribution `policy` (e.g., solved Nash equilibrium),
     /// mixed with `smoothing` over all 3-mon subsets containing already-revealed mons.
     pub fn with_opponent_pick_policy(mut self, policy: Vec<f64>, smoothing: f64) -> Self {
-        self.opp_pick_policy = Some((policy, smoothing));
+        self.core.opp_pick_policy = Some((policy, smoothing));
         self
+    }
+
+    pub fn with_preview_iterations(mut self, preview_iterations: u32) -> Self {
+        self.core.set_preview_iterations(preview_iterations);
+        self
+    }
+
+    pub fn with_adaptive_mixture(mut self, probe_iterations: u32) -> Self {
+        self.core.set_adaptive_mixture(probe_iterations);
+        self
+    }
+
+    pub fn with_root_pruning(mut self) -> Self {
+        self.core.root_pruning = true;
+        self
+    }
+
+    pub fn set_iterations(&mut self, iterations: u32) {
+        self.core.set_iterations(iterations);
+    }
+
+    pub fn search_rng_state(&self) -> u64 {
+        self.core.rng.0
     }
 
     /// Per-slot, per-move counterfactual root marginal values `\Delta Q_{-m_k}`
     /// accumulated over mid-battle move decisions, along with active move-decision
     /// turn counts per roster slot.
     pub fn move_telemetry(&self) -> ([[f64; 4]; 6], [u32; 6]) {
-        (self.move_marginals, self.move_turns)
+        (self.core.move_marginals, self.core.move_turns)
     }
 
-    /// Explicitly initialize the per-game observer & pinned belief at Team Preview
-    /// before an external forced Turn-0 preview choice is applied to `battle`.
+    /// Explicitly reset per-game state and capture clean Turn-0 rosters at
+    /// Team Preview before an external forced preview choice advances `battle`
+    /// to Turn 1.
     pub fn init_at_preview(&mut self, battle: &Battle, side: usize) {
-        let observer = Observer::new(battle, side);
-        let belief = Belief::pinned_from_battle(battle, &observer);
-        self.game = Some(GameState {
-            local: None,
+        self.core.game = None;
+        self.core.pending_preview = Some(PendingPreview {
             side,
-            last_turn: battle.turn,
-            observer,
-            belief,
+            rosters: [battle.sides[0].roster.clone(), battle.sides[1].roster.clone()],
         });
     }
 
     /// The live belief (None before the first decision) — test surface.
     pub fn belief(&self) -> Option<&Belief> {
-        self.game.as_ref().map(|g| &g.belief)
+        self.core.game.as_ref().map(|g| &g.belief)
+    }
+
+    pub fn observer(&self) -> Option<&Observer> {
+        self.core.game.as_ref().map(|g| &g.observer)
     }
 }
 
 impl Agent for OpenAgent {
-    fn name(&self) -> String {
-        format!(
-            "open:{}:{}:{}",
-            self.cfg.iterations, self.cfg.c, self.cfg.hp_buckets
-        )
-    }
-
-    fn choose(
-        &mut self,
-        battle: &Battle,
-        dex: &Dex,
-        side: usize,
-        choices: &[SearchChoice],
-    ) -> SearchChoice {
-        let is_preview = matches!(choices[0], SearchChoice::Team(_));
-
-        // ---- per-game lifecycle (mirrors BlindAgent): (re)build at
-        // preview / on a new game. The pinned belief snapshots the
-        // opponent's true roster, so it must be built at team preview
-        // (fresh mons); the defensive mid-game rebuild degrades gracefully
-        // (refs then carry live PP marks — still a superset of public).
-        let stale = match &self.game {
-            None => true,
-            Some(g) => g.side != side || is_preview || battle.turn < g.last_turn,
-        };
-        if stale {
-            let observer = Observer::new(battle, side);
-            let belief = Belief::pinned_from_battle(battle, &observer);
-            self.game = Some(GameState {
-                local: None,
-                side,
-                last_turn: battle.turn,
-                observer,
-                belief,
-            });
-        }
-        {
-            let g = self.game.as_mut().unwrap();
-            g.last_turn = battle.turn;
-            g.observer.observe(battle, dex);
-            g.belief.sync(dex, &g.observer);
-            if let Some((ref pol, smoothing)) = self.opp_pick_policy {
-                g.belief
-                    .condition_canonical_pick_policy(pol, smoothing, &g.observer);
-            }
-        }
-
-        if choices.len() == 1 {
-            return choices[0];
-        }
-        if is_preview {
-            // Open sheet: both rosters are public — resolve the pair by
-            // signature (no identification condition; the wasm worker's
-            // pinned-mode rule). None ⇔ off-pool team or unbaked pair.
-            if let Some(tables) = self.tables.as_ref() {
-                if let Some(c) = open_preview_pick(tables, battle, side, &mut self.rng) {
-                    debug_assert!(choices.contains(&c), "open preview outside legal set");
-                    if choices.contains(&c) {
-                        return c;
-                    }
-                }
-            }
-        }
-        let g = self.game.as_ref().expect("choose after lifecycle setup");
-        let mut bs = BlindSearch::with_rng(battle, dex, self.cfg.clone(), side, self.rng.clone());
-        bs.prune_preview_aliases(dex);
-        debug_assert_eq!(
-            bs.actions(),
-            choices,
-            "root action set drifted from caller's choices"
-        );
-        for _ in 0..self.cfg.iterations {
-            bs.step_one(dex, &g.belief, &g.observer);
-            if bs.should_early_stop() {
-                break;
-            }
-        }
-        self.rng = bs.rng.clone();
-        let picked = bs
-            .best()
-            .expect("search called with a non-empty choice list");
-
-        // Record mid-battle move-level counterfactual regret \Delta Q_{-m_k}
-        if !is_preview {
-            if let Some(active_u8) = battle.sides[side].active {
-                let slot = (active_u8 as usize).min(5);
-                if slot < battle.sides[side].roster.len()
-                    && choices.iter().any(|c| matches!(c, SearchChoice::Move(_)))
-                {
-                    self.move_turns[slot] += 1;
-                    if let SearchChoice::Move(chosen_mid) = picked {
-                        let means = bs.means();
-                        let visits = bs.visits();
-                        if let Some(chosen_idx) = choices.iter().position(|&c| c == picked) {
-                            let q_best = means[chosen_idx];
-                            let q_alt = (0..choices.len())
-                                .filter(|&i| i != chosen_idx && visits[i] > 0)
-                                .map(|i| means[i])
-                                .fold(f64::NEG_INFINITY, f64::max);
-                            if q_alt.is_finite() {
-                                let dq = (q_best - q_alt).max(0.0);
-                                let mon = &battle.sides[side].roster[slot];
-                                for (m_idx, ms) in mon.base_move_slots.iter().enumerate().take(4) {
-                                    if ms.id == chosen_mid {
-                                        self.move_marginals[slot][m_idx] += dq;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        picked
-    }
-}
-
-impl Agent for BlindAgent {
     fn root_search_stats(&self) -> Option<RootSearchStats> {
-        Some(self.root_stats)
+        Some(self.core.root_stats)
+    }
+
+    fn requires_player_log(&self) -> bool {
+        true
     }
 
     fn root_policy(
@@ -2681,69 +2971,11 @@ impl Agent for BlindAgent {
         side: usize,
         choices: &[SearchChoice],
     ) -> Vec<f64> {
-        let picked = self.choose(battle, dex, side, choices);
-        if let Some(policy) = &self.decision_policy {
-            return policy.clone();
-        }
-        if matches!(choices[0], SearchChoice::Team(_)) {
-            if let (Some(tables), Some(game)) = (&self.tables, &self.game) {
-                if game.belief.candidate_count() == 1 {
-                    if let Some(me) = tables.side_index(battle, side) {
-                        if let Some((table, first)) = tables.pair_by_idx(me, game.belief.alive()[0])
-                        {
-                            let policy = if first {
-                                &table.sol.p_a
-                            } else {
-                                &table.sol.p_b
-                            };
-                            let aligned: Vec<f64> = choices
-                                .iter()
-                                .map(|action| {
-                                    tables
-                                        .actions()
-                                        .iter()
-                                        .position(|t| SearchChoice::Team(*t) == *action)
-                                        .map_or(0., |i| policy[i])
-                                })
-                                .collect();
-                            if (aligned.iter().sum::<f64>() - 1.).abs() < 1e-8 {
-                                return aligned;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        choices
-            .iter()
-            .map(|&c| if c == picked { 1. } else { 0. })
-            .collect()
+        self.core.root_policy(battle, dex, side, choices)
     }
 
     fn name(&self) -> String {
-        let mut name = format!(
-            "blind:{}:{}:{}",
-            self.cfg.iterations, self.cfg.c, self.cfg.hp_buckets
-        );
-        if let Some(mixture) = &self.adaptive_mixture {
-            name.push_str(&format!(":mix-probes={}", mixture.probe_iterations));
-        }
-        if self.root_pruning {
-            name.push_str(":root-prune");
-        }
-        if self.cfg.unseen_claw_root {
-            name.push_str(":unseen-claw-root");
-        }
-        if self.cfg.canonical_claw_key {
-            name.push_str(":canonical-claw");
-        }
-        if self.cfg.collapse_sleep_actions {
-            name.push_str(":sleep-collapse");
-        }
-        if self.cfg.root_revisit_interval > 0 {
-            name.push_str(&format!(":revisit-{}", self.cfg.root_revisit_interval));
-        }
-        name
+        self.core.format_name("open")
     }
 
     fn choose(
@@ -2753,75 +2985,41 @@ impl Agent for BlindAgent {
         side: usize,
         choices: &[SearchChoice],
     ) -> SearchChoice {
-        let is_preview = matches!(choices[0], SearchChoice::Team(_));
+        self.core.choose(battle, dex, side, choices)
+    }
+}
 
-        self.decision_policy = None;
-        let stale = match &self.game {
-            None => true,
-            Some(g) => g.side != side || is_preview || battle.turn < g.last_turn,
-        };
-        if stale {
-            let (local, observer) = crate::player_state::LocalPlayer::new(battle, dex, side)
-                .expect("blind player observation failed");
-            let mut belief =
-                Belief::with_fallback_policy(dex, &self.pool, &observer, self.fallback_policy);
-            if let Some(prior) = self.prior.clone() {
-                belief.set_prior(prior);
-            }
-            self.game = Some(GameState {
-                local: Some(local),
-                side,
-                last_turn: battle.turn,
-                observer,
-                belief,
-            });
-        }
-        {
-            let g = self.game.as_mut().unwrap();
-            g.last_turn = battle.turn;
-            g.local.as_mut().expect("blind agent requires a player boundary")
-                .observe(battle, dex, &mut g.observer).expect("blind player observation failed");
-            g.belief.sync(dex, &g.observer);
-            if let Some((ref pol, smoothing)) = self.opp_pick_policy {
-                g.belief
-                    .condition_canonical_pick_policy(pol, smoothing, &g.observer);
-            }
-        }
+impl Agent for BlindAgent {
+    fn root_search_stats(&self) -> Option<RootSearchStats> {
+        Some(self.core.root_stats)
+    }
 
-        if choices.len() == 1 {
-            return choices[0];
-        }
-        if is_preview {
-            if let Some(ref own_pol) = self.own_preview_policy {
-                let canon_acts = crate::preview::preview_actions();
-                if own_pol.len() == canon_acts.len() {
-                    let mut legal_probs = Vec::with_capacity(canon_acts.len());
-                    let mut legal_choices = Vec::with_capacity(canon_acts.len());
-                    let mut p_sum = 0.0f64;
-                    for (&triple, &prob) in canon_acts.iter().zip(own_pol.iter()) {
-                        let sc = SearchChoice::Team(triple);
-                        if prob > 0.0 && choices.contains(&sc) {
-                            legal_choices.push(sc);
-                            legal_probs.push(prob);
-                            p_sum += prob;
-                        }
-                    }
-                    if p_sum > 0.0 && !legal_choices.is_empty() {
-                        for p in &mut legal_probs {
-                            *p /= p_sum;
-                        }
-                        return legal_choices[sample_mixed(&legal_probs, &mut self.rng)];
-                    }
-                }
-            }
-            if let Some(c) = self.baked_pick(battle, side) {
-                debug_assert!(choices.contains(&c), "baked preview outside legal set");
-                if choices.contains(&c) {
-                    return c;
-                }
-            }
-        }
-        self.search(dex, side, choices)
+    fn requires_player_log(&self) -> bool {
+        true
+    }
+
+    fn root_policy(
+        &mut self,
+        battle: &Battle,
+        dex: &Dex,
+        side: usize,
+        choices: &[SearchChoice],
+    ) -> Vec<f64> {
+        self.core.root_policy(battle, dex, side, choices)
+    }
+
+    fn name(&self) -> String {
+        self.core.format_name("blind")
+    }
+
+    fn choose(
+        &mut self,
+        battle: &Battle,
+        dex: &Dex,
+        side: usize,
+        choices: &[SearchChoice],
+    ) -> SearchChoice {
+        self.core.choose(battle, dex, side, choices)
     }
 }
 
@@ -3127,18 +3325,18 @@ mod mixed_selection_tests {
         let cfg=RmConfig{iterations:1000,c:0.4,..Default::default()};
         let mut chooser=BlindAgent::new(cfg.clone(),Arc::new(MetaPool{teams:vec![]}),None,7).with_adaptive_mixture(400);
         let mut exporter=BlindAgent::new(cfg,Arc::new(MetaPool{teams:vec![]}),None,7).with_adaptive_mixture(400);
-        let before=chooser.adaptive_mixture.as_ref().unwrap().rng.0;
+        let before=chooser.core.adaptive_mixture.as_ref().unwrap().rng.0;
         let mut draw=SplitMix64::new(before);draw.next_f64();
         let choices=battle.legal_choices(&dex,0);
         let chosen=chooser.choose(&battle,&dex,0,&choices);
         let policy=exporter.root_policy(&battle,&dex,0,&choices);
-        let expected=chooser.decision_policy.clone().unwrap_or_else(||choices.iter().map(|&c|if c==chosen {1.} else {0.}).collect());
+        let expected=chooser.core.decision_policy.clone().unwrap_or_else(||choices.iter().map(|&c|if c==chosen {1.} else {0.}).collect());
         assert_eq!(policy,expected);
-        assert_eq!(chooser.adaptive_mixture.as_ref().unwrap().rng.0,draw.0);
+        assert_eq!(chooser.core.adaptive_mixture.as_ref().unwrap().rng.0,draw.0);
         assert_eq!(chooser.search_rng_state(),exporter.search_rng_state());
         assert_eq!(chooser.root_search_stats(),exporter.root_search_stats());
-        assert_eq!(chooser.root_stats.searches,1);
-        assert!(chooser.root_stats.probe_iterations<=400);
+        assert_eq!(chooser.core.root_stats.searches,1);
+        assert!(chooser.core.root_stats.probe_iterations<=400);
         assert!((policy.iter().sum::<f64>()-1.).abs()<1e-10);
     }
 

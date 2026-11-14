@@ -470,6 +470,12 @@ impl TableSet {
         self.sig_to_idx.get(&roster_sig(battle, side)).copied()
     }
 
+    /// Pool index of a team of `PokemonSet`s by full-set signature.
+    pub fn set_index(&self, dex: &Dex, sets: &[PokemonSet]) -> Option<usize> {
+        let b = Battle::from_fixture(dex, "1,2,3,4", sets, sets).ok()?;
+        self.sig_to_idx.get(&roster_sig(&b, 0)).copied()
+    }
+
     /// Pair table by pool indices (same order as the `MetaPool` the set was
     /// built from), orientation included: `(table, me_is_a)`.
     pub fn pair_by_idx(&self, me: usize, opp: usize) -> Option<(&PairTable, bool)> {
@@ -544,6 +550,10 @@ impl Agent for BakedPreviewAgent {
             PreviewMode::Argmax => "bakedarg",
         };
         format!("{m}({})", self.inner.name())
+    }
+
+    fn requires_player_log(&self) -> bool {
+        self.inner.requires_player_log()
     }
 
     fn choose(
@@ -660,6 +670,10 @@ impl Agent for CounterPickAgent {
             PreviewMode::Argmax => "counterarg",
         };
         format!("{t}({})", self.inner.name())
+    }
+
+    fn requires_player_log(&self) -> bool {
+        self.inner.requires_player_log()
     }
 
     fn choose(

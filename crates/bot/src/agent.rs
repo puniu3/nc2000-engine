@@ -30,6 +30,10 @@ pub trait Agent {
 
     fn root_search_stats(&self) -> Option<RootSearchStats> { None }
 
+    /// Whether this agent reconstructs observations through `LocalPlayer` /
+    /// `PlayerChannel` and therefore requires `battle.log_enabled == true`.
+    fn requires_player_log(&self) -> bool { false }
+
     /// Pick one of `choices` for `side`. `choices` is non-empty and was
     /// enumerated by the caller via `Battle::legal_choices` at this exact
     /// state; the return value must be a member of it.

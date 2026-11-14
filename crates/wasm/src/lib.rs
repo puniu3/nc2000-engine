@@ -593,12 +593,12 @@ impl WasmBlindSearcher {
             // directly by signature, no identification condition. Else the
             // M10 belief-mediated lookup (singleton identification only).
             let pick = if self.pinned {
-                open_preview_pick(&self.tables, &battle.battle, self.side, &mut self.rng)
+                open_preview_pick(&self.tables, position.model(), self.side, &mut self.rng)
             } else {
                 baked_preview_pick(
                     &self.tables,
                     &self.belief,
-                    &battle.battle,
+                    position.model(),
                     self.side,
                     &mut self.rng,
                 )
@@ -612,7 +612,7 @@ impl WasmBlindSearcher {
                 search.prune_preview_aliases(&self.dex);
             }
         }
-        self.preview_cache_info = self.preview_cache_identity.info(&battle.battle, &self.observer);
+        self.preview_cache_info = self.preview_cache_identity.info(position.model(), &self.observer);
         self.search = Some(search);
         Ok(())
     }
