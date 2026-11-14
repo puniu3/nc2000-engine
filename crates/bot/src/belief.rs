@@ -518,6 +518,58 @@ impl LoadoutDraw {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum TeamPlanPick {
+    Pool(usize),
+    FallbackCand(usize),
+    FallbackDefault,
+}
+
+impl TeamPlanPick {
+    #[inline]
+    pub(crate) fn pool_index(self) -> Option<usize> {
+        match self {
+            TeamPlanPick::Pool(idx) => Some(idx),
+            TeamPlanPick::FallbackCand(_) | TeamPlanPick::FallbackDefault => None,
+        }
+    }
+}
+
+fn systematic_resample_indices(weights: &[f64], k: usize, rng: &mut SplitMix64) -> Vec<usize> {
+    let mut picked = Vec::with_capacity(k);
+    if k == 0 || weights.is_empty() {
+        return picked;
+    }
+    let pos: Vec<(usize, f64)> = weights
+        .iter()
+        .enumerate()
+        .filter_map(|(i, &w)| (w.is_finite() && w > 0.0).then_some((i, w)))
+        .collect();
+    let items: Vec<(usize, f64)> = if pos.is_empty() {
+        (0..weights.len()).map(|i| (i, 1.0)).collect()
+    } else {
+        pos
+    };
+    let total: f64 = items.iter().map(|&(_, w)| w).sum();
+    let step = total / (k as f64);
+    let u0 = rng.next_f64() * step;
+    let mut idx = 0usize;
+    let mut cum = items[0].1;
+    for j in 0..k {
+        let target = u0 + (j as f64) * step;
+        while idx + 1 < items.len() && cum <= target {
+            idx += 1;
+            cum += items[idx].1;
+        }
+        picked.push(items[idx].0);
+    }
+    for i in (1..picked.len()).rev() {
+        let j = rng.below(i + 1);
+        picked.swap(i, j);
+    }
+    picked
+}
+
 #[derive(Clone)]
 struct FallbackCandPool {
     entries: Vec<(Vec<Pokemon>, f64)>,
@@ -931,6 +983,35 @@ impl Belief {
         self.alive.last().copied()
     }
 
+    pub(crate) fn root_sampling_plan(&self, k: usize, rng: &mut SplitMix64) -> Vec<TeamPlanPick> {
+        if k == 0 {
+            return Vec::new();
+        }
+        if !self.alive.is_empty() {
+            let weights: Vec<f64> = self
+                .alive
+                .iter()
+                .map(|&i| self.cands[i].weight.unwrap_or(1.0))
+                .collect();
+            return systematic_resample_indices(&weights, k, rng)
+                .into_iter()
+                .map(|pos| TeamPlanPick::Pool(self.alive[pos]))
+                .collect();
+        }
+        if !self.pinned && self.draws.is_none() {
+            if let Some(pool) = &self.fallback_cands {
+                if !pool.entries.is_empty() {
+                    let weights: Vec<f64> = pool.entries.iter().map(|(_, w)| *w).collect();
+                    return systematic_resample_indices(&weights, k, rng)
+                        .into_iter()
+                        .map(TeamPlanPick::FallbackCand)
+                        .collect();
+                }
+            }
+        }
+        vec![TeamPlanPick::FallbackDefault; k]
+    }
+
     fn is_weighted_prior(&self) -> bool {
         self.cands.iter().any(|c| c.weight.is_some())
     }
@@ -1018,6 +1099,51 @@ impl Belief {
                 .as_deref()
                 .expect("determinize_with: fallback roster not built (call sync first)"),
         };
+        self.determinize_with_refs_in_place(dex, out, obs, pick, refs, rng);
+    }
+
+    pub(crate) fn determinize_in_place_planned(
+        &self,
+        dex: &Dex,
+        out: &mut Battle,
+        obs: &Observer,
+        plan_pick: TeamPlanPick,
+        rng: &mut SplitMix64,
+    ) {
+        match plan_pick {
+            TeamPlanPick::Pool(i) => {
+                let refs = self.cands[i]
+                    .refs
+                    .as_deref()
+                    .expect("determinize_with: candidate is preview-inconsistent");
+                self.determinize_with_refs_in_place(dex, out, obs, Some(i), refs, rng);
+            }
+            TeamPlanPick::FallbackCand(idx)
+                if !self.pinned
+                    && self.draws.is_none()
+                    && self
+                        .fallback_cands
+                        .as_ref()
+                        .is_some_and(|pool| idx < pool.entries.len()) =>
+            {
+                let refs = &self.fallback_cands.as_ref().unwrap().entries[idx].0;
+                self.determinize_with_refs_in_place(dex, out, obs, None, refs, rng);
+            }
+            TeamPlanPick::FallbackCand(_) | TeamPlanPick::FallbackDefault => {
+                self.determinize_in_place(dex, out, obs, None, rng);
+            }
+        }
+    }
+
+    fn determinize_with_refs_in_place(
+        &self,
+        dex: &Dex,
+        out: &mut Battle,
+        obs: &Observer,
+        pick: Option<usize>,
+        refs: &[Pokemon],
+        rng: &mut SplitMix64,
+    ) {
         audit_battle_hidden(out);
 
         out.set_log_enabled(false);
@@ -1416,6 +1542,32 @@ impl Belief {
             })
             .collect();
         draws.iter().any(Option::is_some).then_some(draws)
+    }
+
+    #[inline]
+    pub(crate) fn predict_plan_draws(
+        &self,
+        plan_pick: TeamPlanPick,
+        battle: &Battle,
+        opp: usize,
+        rng: &mut SplitMix64,
+    ) -> Option<u64> {
+        match plan_pick {
+            TeamPlanPick::Pool(_) => Some(0),
+            TeamPlanPick::FallbackCand(idx)
+                if !self.pinned
+                    && self.draws.is_none()
+                    && self
+                        .fallback_cands
+                        .as_ref()
+                        .is_some_and(|pool| idx < pool.entries.len()) =>
+            {
+                Some((idx as u64) + 1)
+            }
+            TeamPlanPick::FallbackCand(_) | TeamPlanPick::FallbackDefault => {
+                self.predict_fallback_draws(None, battle, opp, rng)
+            }
+        }
     }
 
     /// Predicts the fallback loadout draw indices for `BlindSearch::det_cache`
@@ -2749,11 +2901,11 @@ impl Belief {
                 }
             }
             source1.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-            source1.truncate(12);
+            source1.truncate(4);
         }
 
-        // Source 2: Joint 6-Mon Beam Product enforcing global Item Clause
-        const BEAM_WIDTH: usize = 32;
+        // Source 2: 8-Stratum Latin-Hypercube Quantile Coupling enforcing global Item Clause
+        const NUM_STRATA: usize = 8;
         let mut slot_order: Vec<usize> = (0..n_mons).collect();
         slot_order.sort_by_key(|&s| {
             (
@@ -2763,72 +2915,94 @@ impl Belief {
                 s,
             )
         });
-        let mut beams: Vec<(Vec<(usize, Pokemon)>, Vec<ItemId>, f64)> =
-            vec![(Vec::with_capacity(n_mons), Vec::new(), 1.0)];
-        for &slot in &slot_order {
-            let mo = &obs_mons[slot];
-            let slot_total: f64 = slot_opts[slot].iter().map(|(_, w)| *w).sum::<f64>().max(1e-12);
-            let mut next_beams: Vec<(Vec<(usize, Pokemon)>, Vec<ItemId>, f64)> = Vec::new();
-            for (chosen, used, bw) in &beams {
-                let mut pushed_for_beam = 0usize;
-                for (opt_mon, opt_w) in &slot_opts[slot] {
-                    if let Some(id) = opt_mon.item {
-                        if used.contains(&id) {
-                            continue;
-                        }
-                    }
-                    let mut next_chosen = chosen.clone();
-                    next_chosen.push((slot, opt_mon.clone()));
-                    let mut next_used = used.clone();
-                    if let Some(id) = opt_mon.item {
-                        next_used.push(id);
-                    }
-                    next_beams.push((next_chosen, next_used, bw * (opt_w / slot_total)));
-                    pushed_for_beam += 1;
-                }
-                if pushed_for_beam == 0 {
-                    let (top_mon, top_w) = &slot_opts[slot][0];
-                    if mo.preview_has_item && mo.item.original.is_none() {
-                        if let Some(alt_id) =
-                            choose_fallback_item_for_slot(dex, obs_mons, slot, used)
-                        {
-                            let mut next_chosen = chosen.clone();
-                            next_chosen.push((slot, clone_mon_with_item(top_mon, Some(alt_id))));
-                            let mut next_used = used.clone();
-                            next_used.push(alt_id);
-                            next_beams.push((
-                                next_chosen,
-                                next_used,
-                                bw * (top_w / slot_total).max(0.05) * 0.35,
-                            ));
-                            pushed_for_beam += 1;
-                        }
-                    }
-                    if pushed_for_beam == 0 {
-                        let mut next_chosen = chosen.clone();
-                        next_chosen.push((slot, top_mon.clone()));
-                        next_beams.push((next_chosen, used.clone(), bw * 0.1));
+        let slot_cdfs: Vec<Vec<f64>> = (0..n_mons)
+            .map(|slot| {
+                let total: f64 = slot_opts[slot]
+                    .iter()
+                    .map(|(_, w)| (*w).max(0.0))
+                    .sum::<f64>()
+                    .max(1e-12);
+                let mut cum = 0.0;
+                slot_opts[slot]
+                    .iter()
+                    .map(|(_, w)| {
+                        cum += (*w).max(0.0) / total;
+                        cum
+                    })
+                    .collect()
+            })
+            .collect();
+        let mut source2: Vec<(Vec<Pokemon>, f64)> = Vec::with_capacity(NUM_STRATA);
+        let mut s2_sigs: Vec<TeamSig> = Vec::with_capacity(NUM_STRATA);
+        for b in 0..NUM_STRATA {
+            let mut used_items: Vec<ItemId> = Vec::with_capacity(n_mons);
+            for mo in obs_mons.iter().take(n_mons) {
+                if let Some(Some(id)) = mo.item.original {
+                    if !used_items.contains(&id) {
+                        used_items.push(id);
                     }
                 }
             }
-            next_beams.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
-            next_beams.truncate(BEAM_WIDTH);
-            beams = next_beams;
+            let mut team_slots: Vec<Option<Pokemon>> = vec![None; n_mons];
+            for &slot in &slot_order {
+                let mo = &obs_mons[slot];
+                let opts = &slot_opts[slot];
+                let k_stratum = if b == 0 {
+                    0
+                } else {
+                    1 + ((b - 1 + slot * 2) % (NUM_STRATA - 1))
+                };
+                let q = (k_stratum as f64 + 0.5) / (NUM_STRATA as f64);
+                let pref_idx = if k_stratum + 1 == NUM_STRATA && opts.len() > 1 {
+                    opts.len() - 1
+                } else {
+                    slot_cdfs[slot]
+                        .iter()
+                        .position(|&c| q < c)
+                        .unwrap_or(opts.len() - 1)
+                };
+                let chosen = if mo.item.original.is_some()
+                    || opts[pref_idx]
+                        .0
+                        .item
+                        .is_none_or(|id| !used_items.contains(&id))
+                {
+                    opts[pref_idx].0.clone()
+                } else if let Some((alt_p, _)) = opts
+                    .iter()
+                    .find(|(p, _)| p.item.is_none_or(|id| !used_items.contains(&id)))
+                {
+                    alt_p.clone()
+                } else if mo.preview_has_item && mo.item.original.is_none() {
+                    if let Some(alt_id) =
+                        choose_fallback_item_for_slot(dex, obs_mons, slot, &used_items)
+                    {
+                        clone_mon_with_item(&opts[pref_idx].0, Some(alt_id))
+                    } else {
+                        opts[pref_idx].0.clone()
+                    }
+                } else {
+                    opts[pref_idx].0.clone()
+                };
+                if mo.item.original.is_none() {
+                    if let Some(id) = chosen.item {
+                        if !used_items.contains(&id) {
+                            used_items.push(id);
+                        }
+                    }
+                }
+                team_slots[slot] = Some(chosen);
+            }
+            let team: Vec<Pokemon> = team_slots.into_iter().map(Option::unwrap).collect();
+            let sig = team_signature(&team);
+            let w = 1.0 / (NUM_STRATA as f64);
+            if let Some(pos) = s2_sigs.iter().position(|existing| *existing == sig) {
+                source2[pos].1 += w;
+            } else {
+                s2_sigs.push(sig);
+                source2.push((team, w));
+            }
         }
-
-        let mut source2: Vec<(Vec<Pokemon>, f64)> = beams
-            .into_iter()
-            .filter_map(|(chosen, _, w)| {
-                if chosen.len() != n_mons || !(w > 0.0) {
-                    return None;
-                }
-                let mut ordered: Vec<Option<Pokemon>> = vec![None; n_mons];
-                for (slot, mon) in chosen {
-                    ordered[slot] = Some(mon);
-                }
-                Some((ordered.into_iter().map(Option::unwrap).collect(), w))
-            })
-            .collect();
 
         let s2_sum: f64 = source2.iter().map(|(_, w)| *w).sum();
         if s2_sum > 0.0 {
@@ -2876,7 +3050,7 @@ impl Belief {
         }
 
         merged.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-        merged.truncate(24);
+        merged.truncate(8);
         if merged.is_empty() {
             return None;
         }
@@ -4581,6 +4755,33 @@ mod fallback_tests {
                         "active slot 0 must not receive excluded Leftovers"
                     );
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn systematic_resample_respects_skewed_weights_and_skips_zero() {
+        let weights = [0.0, 0.7, 0.2, 0.1, 0.0];
+        let k = 24;
+        for seed in 0..16 {
+            let mut rng = SplitMix64::new(seed);
+            let picked = systematic_resample_indices(&weights, k, &mut rng);
+            assert_eq!(picked.len(), k);
+            let mut counts = [0usize; 5];
+            for idx in picked {
+                counts[idx] += 1;
+            }
+            assert_eq!(counts[0], 0);
+            assert_eq!(counts[4], 0);
+            for i in 1..4 {
+                let exp = k as f64 * weights[i];
+                let lo = exp.floor() as usize;
+                let hi = exp.ceil() as usize;
+                assert!(
+                    counts[i] >= lo && counts[i] <= hi,
+                    "seed {seed}: slot {i} count {} not in [{lo}, {hi}]",
+                    counts[i]
+                );
             }
         }
     }

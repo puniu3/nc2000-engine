@@ -71,7 +71,7 @@ use nc2000_engine::prng::DamageRollMode;
 use nc2000_engine::state::{Battle, PokeId, Status, DK};
 
 use crate::agent::{Agent, RootSearchStats};
-use crate::belief::{Belief, FallbackPolicy};
+use crate::belief::{Belief, FallbackPolicy, TeamPlanPick};
 use crate::observe::Observer;
 use crate::preview::{MetaPool, TableSet};
 use crate::prior::BeliefPrior;
@@ -418,7 +418,6 @@ enum ForcedRoot {
 }
 
 const MAX_SUBSAMPLED_WORLDS: usize = 24;
-const WORLD_WARMUP_SAMPLES: u32 = 96;
 const CELL_WARMUP_SAMPLES: u32 = 6;
 
 struct RootTypeStats {
@@ -499,9 +498,12 @@ pub struct BlindSearch {
     scratch: Option<Box<Battle>>,
     scratch_world_id: u64,
     next_world_id: u64,
-    det_cache: FxHashMap<(Option<usize>, u64, [u8; 6], bool), CachedDetRoot>,
+    det_cache: FxHashMap<(TeamPlanPick, u64, [u8; 6], bool), CachedDetRoot>,
     det_cache_obs_rev: u64,
     world_pool: Vec<SampledWorld>,
+    planned_team_picks: Vec<TeamPlanPick>,
+    planned_obs_rev: Option<u64>,
+    max_worlds_override: Option<usize>,
     bayesian_row_q: Option<Vec<f64>>,
     turn_cap: u16,
     side: usize,
@@ -544,6 +546,18 @@ pub struct BlindSearch {
 impl BlindSearch {
     pub fn set_opponent_preview_prior(&mut self, enabled: bool) {
         self.opponent_preview_prior = enabled;
+    }
+
+    pub fn with_max_worlds(mut self, k: usize) -> Self {
+        self.max_worlds_override = Some(k.max(1));
+        self
+    }
+
+    #[inline]
+    fn target_worlds(&self) -> usize {
+        self.max_worlds_override
+            .unwrap_or(MAX_SUBSAMPLED_WORLDS)
+            .max(1)
     }
 
     /// Product search: only a player-protocol reconstruction can enter here.
@@ -627,6 +641,9 @@ impl BlindSearch {
             det_cache: FxHashMap::default(),
             det_cache_obs_rev: u64::MAX,
             world_pool: Vec::new(),
+            planned_team_picks: Vec::new(),
+            planned_obs_rev: None,
+            max_worlds_override: None,
             bayesian_row_q: None,
             turn_cap,
             side,
@@ -816,7 +833,7 @@ impl BlindSearch {
         dex: &Dex,
         belief: &Belief,
         obs: &Observer,
-        pick: Option<usize>,
+        plan_pick: TeamPlanPick,
     ) -> (
         Box<Battle>,
         usize,
@@ -833,11 +850,11 @@ impl BlindSearch {
         if self.base.queue.is_empty() && !belief.has_active_pick_draws(obs) {
             let mut rng_probe = self.rng.clone();
             if let Some(fb_key) =
-                belief.predict_fallback_draws(pick, &self.base, 1 - self.side, &mut rng_probe)
+                belief.predict_plan_draws(plan_pick, &self.base, 1 - self.side, &mut rng_probe)
             {
                 let (post_qc_seed, qc, party_key, party_len) =
                     self.predict_determinization_draws(obs, &mut rng_probe);
-                let cache_key = (pick, fb_key, party_key, qc);
+                let cache_key = (plan_pick, fb_key, party_key, qc);
                 if let Some(cached) = self.det_cache.get(&cache_key) {
                     self.rng = rng_probe;
                     let cache = cached.cache.clone();
@@ -867,7 +884,7 @@ impl BlindSearch {
                     }
                     None => Box::new(self.base.clone()),
                 };
-                belief.determinize_in_place(dex, &mut sim, obs, pick, &mut self.rng);
+                belief.determinize_in_place_planned(dex, &mut sim, obs, plan_pick, &mut self.rng);
                 if self.cfg.unseen_claw_root && sim.is_idle_move_request() {
                     sim.update_all_speeds(dex);
                 }
@@ -912,7 +929,7 @@ impl BlindSearch {
             }
             None => Box::new(self.base.clone()),
         };
-        belief.determinize_in_place(dex, &mut sim, obs, pick, &mut self.rng);
+        belief.determinize_in_place_planned(dex, &mut sim, obs, plan_pick, &mut self.rng);
         if self.cfg.unseen_claw_root && sim.is_idle_move_request() {
             sim.update_all_speeds(dex);
         }
@@ -949,10 +966,29 @@ impl BlindSearch {
             self.world_pool.clear();
             self.det_cache_obs_rev = obs_rev;
         }
-        if self.is_preview() || self.world_pool.len() < MAX_SUBSAMPLED_WORLDS {
-            let pick = belief.sample(&mut self.rng);
+        let target_k = self.target_worlds();
+        if self.is_preview() || self.world_pool.len() < target_k {
+            let plan_pick = if self.is_preview() {
+                belief
+                    .sample(&mut self.rng)
+                    .map(TeamPlanPick::Pool)
+                    .unwrap_or(TeamPlanPick::FallbackDefault)
+            } else {
+                if self.planned_obs_rev != Some(obs_rev) || self.planned_team_picks.len() != target_k
+                {
+                    let mut plan_rng = SplitMix64::new(
+                        self.decision_seed
+                            ^ obs_rev.wrapping_mul(0x9e37_79b9_7f4a_7c15)
+                            ^ (target_k as u64).wrapping_mul(0xbf58_476d_1ce4_e5b9),
+                    );
+                    self.planned_team_picks = belief.root_sampling_plan(target_k, &mut plan_rng);
+                    self.planned_obs_rev = Some(obs_rev);
+                }
+                self.planned_team_picks[self.world_pool.len()]
+            };
+            let pick = plan_pick.pool_index();
             let (mut sim, root, type_index, cache, world_id) =
-                self.determinize_and_resolve_root(dex, belief, obs, pick);
+                self.determinize_and_resolve_root(dex, belief, obs, plan_pick);
             if !self.is_preview() {
                 std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
                 let cached_sim = (*sim).clone();
@@ -1469,6 +1505,7 @@ impl BlindSearch {
         );
         let opp = 1 - self.side;
         let acts = &self.nodes[root].acts[opp];
+        let world_warmup = (192 / self.root_types.len().max(2)).clamp(48, 96) as u32;
         let stats = &mut self.root_types[type_index];
         stats.samples += 1;
         if joint[opp] < stats.replies {
@@ -1476,7 +1513,7 @@ impl BlindSearch {
             let cell = &mut stats.cells[cell_idx];
             cell.0 += 1;
             cell.1 += mine;
-            if stats.samples > WORLD_WARMUP_SAMPLES && cell.0 > CELL_WARMUP_SAMPLES {
+            if stats.samples > world_warmup && cell.0 > CELL_WARMUP_SAMPLES {
                 stats.late_samples += 1;
                 let late_cell = &mut stats.late_cells[cell_idx];
                 late_cell.0 += 1;
@@ -3404,5 +3441,117 @@ mod mixed_selection_tests {
         assert!(seen_pt[2] && seen_pt[3] && seen_pt[4]);
         assert!(seen_bide[1] && seen_bide[2]);
         assert!(seen_locked[1] && seen_locked[2]);
+    }
+
+    #[test]
+    fn systematic_resampling_respects_strata_and_shuffle_bounds() {
+        let dex = conformance::load_dex();
+        let mut pool = crate::preview::load_meta_pool(std::path::Path::new(
+            "../../data/meta-pool-v0/meta-pool.json",
+        ));
+        let base_team = pool.teams[0].clone();
+        pool.teams = (0..4)
+            .map(|i| {
+                let mut t = base_team.clone();
+                t.id = format!("variant-{i}");
+                t
+            })
+            .collect();
+        let t0 = &pool.teams[0].sets;
+        let t1 = &pool.teams[0].sets;
+        let battle = Battle::from_fixture(&dex, "1,2,3,4", t0, t1).unwrap();
+        let obs = Observer::new(&battle, 0);
+        let belief = Belief::new(&dex, &pool, &obs);
+        let alive = belief.alive();
+        let n = alive.len();
+        assert_eq!(n, 4, "expected 4 surviving variants for shared preview");
+
+        let k = n * 2 + 3;
+        let mut counts = std::collections::HashMap::new();
+        let mut r1 = SplitMix64::new(0x1111_2222_3333_4444);
+        let plan1 = belief.root_sampling_plan(k, &mut r1);
+        assert_eq!(plan1.len(), k);
+        for pick in &plan1 {
+            match pick {
+                TeamPlanPick::Pool(idx) => *counts.entry(*idx).or_insert(0usize) += 1,
+                other => panic!("expected Pool pick while alive non-empty, got {other:?}"),
+            }
+        }
+        let expected = k as f64 / n as f64;
+        let lo = expected.floor() as usize;
+        let hi = expected.ceil() as usize;
+        for &idx in alive {
+            let c = counts.get(&idx).copied().unwrap_or(0);
+            assert!(
+                c >= lo && c <= hi,
+                "pool cand {idx} count {c} outside strata bounds [{lo}, {hi}]"
+            );
+        }
+        let mut r2 = SplitMix64::new(0x5555_6666_7777_8888);
+        let plan2 = belief.root_sampling_plan(k, &mut r2);
+        assert_ne!(plan1, plan2, "Fisher-Yates shuffle must vary order across seeds");
+    }
+
+    #[test]
+    fn with_max_worlds_and_det_cache_parity_on_fallback_cands() {
+        let dex = conformance::load_dex();
+        let pool: MetaPool = serde_json::from_str(include_str!(
+            "../../../data/belief-pool-v3/belief-pool.json"
+        ))
+        .unwrap();
+        let p1 = pool.teams[0].sets.clone();
+        let mut p2 = pool.teams[1].sets.clone();
+        p2[0] = serde_json::from_value(serde_json::json!({
+            "species": "Pinsir",
+            "name": "Pinsir",
+            "item": "BrightPowder",
+            "ability": "No Ability",
+            "moves": ["Swords Dance", "Submission", "Body Slam", "Rock Throw"],
+            "level": 50
+        }))
+        .unwrap();
+
+        let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
+        battle.set_log_enabled(true);
+        let mut obs = Observer::new(&battle, 0);
+        let mut belief = Belief::new(&dex, &pool, &obs);
+        let c0 = battle.legal_choices(&dex, 0)[0];
+        let c1 = battle.legal_choices(&dex, 1)[0];
+        battle.apply_choices(&dex, [Some(c0), Some(c1)]).unwrap();
+        obs.observe(&battle, &dex);
+        belief.sync(&dex, &obs);
+        assert!(belief.is_fallback());
+        assert!(belief.fallback_cand_count() > 1);
+
+        let cfg = RmConfig::default();
+        let mut cached = BlindSearch::new(&battle, &dex, cfg.clone(), 0, 0xFACE_B00C)
+            .with_max_worlds(12);
+        cached.step(&dex, &belief, &obs, 200);
+        assert_eq!(cached.world_pool.len(), 12);
+        assert!(
+            !cached.det_cache.is_empty(),
+            "det_cache should populate on FallbackCandPool worlds"
+        );
+        assert!(
+            cached
+                .det_cache
+                .keys()
+                .all(|(pick, _, _, _)| matches!(pick, TeamPlanPick::FallbackCand(_))),
+            "det_cache keys should record TeamPlanPick::FallbackCand"
+        );
+
+        let mut uncached = BlindSearch::new(&battle, &dex, cfg, 0, 0xFACE_B00C)
+            .with_max_worlds(12);
+        for _ in 0..200 {
+            uncached.det_cache.clear();
+            uncached.step_one(&dex, &belief, &obs);
+        }
+        assert_eq!(cached.visits(), uncached.visits());
+        assert_eq!(cached.means(), uncached.means());
+        assert_eq!(cached.best(), uncached.best());
+        assert_eq!(cached.search_rng_state(), uncached.search_rng_state());
+        assert_eq!(cached.node_count(), uncached.node_count());
+        assert_eq!(cached.root_matrix(), uncached.root_matrix());
+        assert_eq!(cached.root_replies(), uncached.root_replies());
     }
 }
