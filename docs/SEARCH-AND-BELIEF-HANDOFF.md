@@ -1,6 +1,6 @@
 # Search Speed & Belief Inference Handoff
 
-> **Status (`2026-11-14`)**: Active diagnostic and architectural handoff for future sessions working on playing strength (`Track 2`: off-pool belief inference & world-subsampling) and throughput (`Track 3`: zero-drift search optimizations & native server execution).
+> **Status (`2026-11-15`)**: **Track 3** zero-drift speedups (`69c49c3b`) and **Track 2** Phases 1–5 Imperfect-Information Architecture Upgrade (`a2e19a26`–`baa4f977`) are landed, re-baked (`990/990` preview policies), and verified across Rust, Node WASM, Web Worker/Policy, and Playwright E2E suites.
 >
 > This document replaces the parked Residual NN / TPU track (`docs/RESIDUAL-NN-HANDOFF.md`), whose runtime code and JAX/Colab pipeline were removed to eliminate dual-engine technical debt while retaining generated datasets under [`data/`](../data/).
 
@@ -97,7 +97,48 @@ That experiment bundled six unrelated changes together:
 
 - **Avoid self-play-only validation**: [`crates/bot/examples/offpool_fallback_gauntlet.rs`](../crates/bot/examples/offpool_fallback_gauntlet.rs) runs `BlindAgent` vs `BlindAgent` self-play, which hides shared evaluation blind spots. Pair off-pool benchmarks against non-self-play controls (e.g., `OpenAgent` oracle or external human/held-out rosters) and check exact belief likelihood / action agreement too.
 - **Avoid skewed corpus priors**: Spectator logs average `~2.35 / 4.0` observed moves per mon, systematically under-counting passive/reactive moves (`Whirlwind`, `Protect`, `Rest`, `Toxic`, `Sleep Talk`). Follow the unforced-distribution lessons documented alongside `early-rest-natural-v1` when fitting marginal priors.
-- **Pre-existing test check**: [`data/training-v3/README.md`](../data/training-v3/README.md) previously noted 8 unit failures in `cargo test -p nc2000-bot --lib belief::`. Verify current `belief::` test status cleanly before editing `belief.rs`.
+- **Pre-existing test check**: [`data/training-v3/README.md`](../data/training-v3/README.md) previously noted 8 unit failures in `cargo test -p nc2000-bot --lib belief::`. All workspace `belief::` and `nc2000-bot` unit/integration tests pass after Phases 1–4 (`226` bot lib tests, `0` failed).
+
+---
+
+### 1.5 Landed Imperfect-Information Upgrade (Phases 1–5, `a2e19a26`–`baa4f977`)
+
+Design boundary (**Choice A — Strict Pool Trust Until Contradiction & Turn 0 Invariance**): while `!self.alive.is_empty()`, candidate pool filtering and Turn 0 Team Preview sampling behave identically to baseline. Near-pool soft shell repair, quantile-coupled fallback synthesis, and unappeared-bench `LoadoutDraw` diversification activate only once `self.alive.is_empty()` and in-battle (`obs.mons().iter().any(|m| m.appeared)`).
+
+1. **Phase 1 (`a2e19a26`) — Symmetric Hidden Runtime Timer Resampling & `belief_probe` Harness**:
+   - [`crates/bot/src/player_state.rs`](../crates/bot/src/player_state.rs), [`crates/bot/src/import.rs`](../crates/bot/src/import.rs), [`crates/bot/src/blind.rs`](../crates/bot/src/blind.rs): track `HiddenTimerSpec` (`Sleep`, `Confusion`, `Encore`, `Disable`, `PartiallyTrapped`, `Bide`, `LockedMove`) symmetrically across both sides and resample conditioned uniform remaining durations in `BlindSearch` on a dedicated `timer_rng` (including between reused `world_pool` evaluations).
+   - [`crates/bot/examples/belief_probe.rs`](../crates/bot/examples/belief_probe.rs): non-self-play evaluation suite with `corpus_audit` (simulated + spectator corpus false-exclusion/drop audit), `calibration` (posterior recall, unrevealed item likelihood, Hidden Power accuracy, effective loadout entropy), and `gauntlet` (`BlindAgent` vs `OpenAgent` oracle across `offpool` and `catalog`).
+2. **Phase 2 (`6407a92b`) — Live Hidden Power Narrowing, Deductive Item Exclusions & `|split|` Parity**:
+   - [`crates/bot/src/hp_evidence.rs`](../crates/bot/src/hp_evidence.rs), [`crates/bot/src/observe.rs`](../crates/bot/src/observe.rs), [`crates/bot/src/position.rs`](../crates/bot/src/position.rs), [`web/src/position.ts`](../web/src/position.ts): live `Hidden Power` effectiveness narrowing (`hp_type_mask`), safe passive item exclusions (`Leftovers` missing when end-of-turn HP `< 100%`, auto-cure berries inconsistent with remaining status, `Berserk Gene` absent on switch-in, `Thief` state), `|split|` parity, `Heal Bell`/`Safeguard` handling, `excluded_items` serialization round-trip, unprojected `fallback` vs projected `fallback_visible`, and `resolve_non_excluded_item`.
+3. **Phase 3 (`8682fe58`) — Near-Pool Repair, Joint Fallback Synthesis & Loadout Diversity**:
+   - [`crates/bot/src/belief.rs`](../crates/bot/src/belief.rs): per-slot `bayesian_prior_carriers` item + explicit HP mask scoring; `bayesian_loadout_draw` supporting Tier A (`locked_staples`, secondary item variants, unappeared-bench `LoadoutDraw` once in battle), Tier B novel move combinations, and unprojected `"hiddenpower"` preservation; and `build_fallback_cands` (`FallbackCandPool`) combining Source 1 Near-Pool Soft Shell Repair (retaining exact untouched pool slots) with Source 2 joint synthesis enforcing global Item Clause and per-slot exclusions.
+4. **Phase 4 (`baa4f977`) — Low-Discrepancy Systematic World Resampling & Quantile-Coupled Fallback Pool**:
+   - [`crates/bot/src/belief.rs`](../crates/bot/src/belief.rs), [`crates/bot/src/blind.rs`](../crates/bot/src/blind.rs): replaced Cartesian `BEAM_WIDTH = 32` dilution (`24` flat-weight rosters, which fragmented `3k`-budget MCTS subtrees and dropped `offpool 128 @ 3k` to `0.3984..0.4414`) with **8-stratum Latin-Hypercube Quantile Coupling** capped at `8` joint fallback rosters (`source1.truncate(4)`, `merged.truncate(8)`), `TeamPlanPick` (`Pool`, `FallbackCand`, `FallbackDefault`), `Belief::root_sampling_plan` with `systematic_resample_indices` + Fisher-Yates shuffle on a dedicated `SplitMix64` stream (preserving `belief.sample` at `is_preview()`), `predict_plan_draws` / `determinize_in_place_planned` `det_cache` parity, `BlindSearch::with_max_worlds`, and adaptive `world_warmup = (192 / self.root_types.len().max(2)).clamp(48, 96)` in `BlindSearch::record_joint`.
+
+#### Measured Phase 0 vs Final Verification (`belief_probe`)
+
+- **`corpus_audit`** (18 simulated games / 361 decisions + 570 human spectator battles / 3,414 decisions): `0` across all 5 safety counters (`in_pool_drops`, `hp_false_exclusions`, `item_false_exclusions`, `corpus_hp_false_exclusions`, `corpus_item_false_exclusions`).
+- **`calibration`** (48 off-pool games, 111 positions):
+
+| Metric | Phase 0 (`69c49c3b`) | Final (Phase 4, `baa4f977`) |
+| --- | ---: | ---: |
+| `active_unseen_move_recall` | `0.8082` | **`0.8301`** |
+| `bench_unseen_move_recall` | `0.8571` | **`0.8966`** |
+| `item_log_likelihood` | `-2.7839` | **`-2.6411`** |
+| `hp_type_acc` (`4` HP slots) | `0.5000` | **`0.5625`** |
+| `eff_distinct_loadouts` | `1.1475` | **`2.8525`** |
+
+- **`gauntlet`** (`BlindAgent` vs `OpenAgent` oracle; `0` capped, `0` invalids across all 1,408 scored games):
+
+| Matchup & Budget | Pairs (Games) | Phase 0 | Final |
+| --- | ---: | ---: | ---: |
+| `offpool` @ `3000` | `128` (`256`) | `0.4688` (`64`p, `-21.7` Elo) | **`0.4883`** (`-8.1` Elo) |
+| `offpool` @ `3000` | `256` (`512`) | — | **`0.5000`** (`±0.0` Elo) |
+| `offpool` @ `9000` | `128` (`256`) | — | **`0.4805`** (`-13.6` Elo) |
+| `offpool` @ `27000` | `64` (`128`) | — | **`0.5156`** (`+10.9` Elo) |
+| `catalog` @ `3000` | `128` (`256`) | `0.4375` (`48`p, `-43.7` Elo) | **`0.5117`** (`+8.1` Elo) |
+
+- **Phase 5 Verification & Bake**: Re-baked `data/compiled-preview-v1.json` (`990/990` policies); all workspace Rust tests (`cargo t` + `sleep_clause`, `kifu`, `replay`, `conformance_suite`, `bot_suite`), 11 WASM/Node suites, Core SDK bundle, Vite build, `test:worker`, `test:evaluate-worker`, `test:policy`, `compiled-preview-production.mjs` (`1089` catalog pairs / `2178` cases, `hiddenLoadoutInvariant: true`), and Playwright `test:e2e` passed.
 
 ---
 
@@ -164,11 +205,8 @@ Every change inside `crates/engine/src/` modifies `ENGINE_FINGERPRINT` ([`crates
 
 ---
 
-## 3. Recommended Sequence for Next Session
+## 3. Recommended Sequence for Future Work
 
-1. **Profile `HEAD` first**: Capture fresh native (`perf_probe`, `profile_blind`) and WASM (`web/tests/portable-perf.mjs`) baselines before choosing optimization targets.
-2. **Audit `belief::` tests & instrument off-pool failures**: Check current `cargo test -p nc2000-bot --lib belief::` status, then measure how often each Track 2 gap (16 missing species, hard-filtering cliff, `!mo.appeared` / switched-out frozen bench slots, item collapse, passive negative item evidence) occurs on held-out off-prior games against `OpenAgent`.
-3. **Land Track 2 changes one mechanism at a time**:
-   - Safe passive negative item evidence + unappeared/benched slot `loadout_draws` + near-pool fallback repair.
-   - Fix `predict_fallback_draws` cache compatibility and benchmark **adaptive** `MAX_SUBSAMPLED_WORLDS` widening (`24 -> 48..64` on fallback/high uncertainty with tuned warmup) in isolation at matched wall-clock time.
-4. **Land verified zero-drift Track 3 wins**: Prioritize flat `(Id, Cb)` callback tables, lazy `resolve_priority`, post-move `hash_state_impl` batching, and static `MatchTable` caching; shift Node server runners to native `ProtocolAgent` where applicable.
+1. **Profile `HEAD` before touching hot paths**: Capture fresh native (`perf_probe`, `profile_blind`) and WASM (`web/tests/portable-perf.mjs`) baselines before choosing optimization targets.
+2. **Remaining Track 2 Belief Gaps**: Fill priors/synthetic set generation for the 16 zero-prior Gen 2 species and uncommon EV spreads, and benchmark adaptive `with_max_worlds` widening above `24` exclusively at high search budgets (`>= 27k`) / high belief entropy under equal wall-clock time.
+3. **Remaining Zero-Drift Track 3 & Deployment Wins**: Explore remaining items in Section 2.3 (post-move `hash_state_impl` batching, PP-deduction step-cache split, Team Preview bench hashing, static `MatchTable` caching) and migrate Node server runners to native `ProtocolAgent` ([`docs/NATIVE-FORK-HANDOFF.md`](./NATIVE-FORK-HANDOFF.md)).
