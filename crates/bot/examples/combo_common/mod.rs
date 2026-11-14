@@ -16,8 +16,6 @@ pub struct Spec {
     c: f64,
     perish: bool,
     combo: bool,
-    residual_scale: f64,
-    rollout_residual: bool,
     baton_pass: bool,
     settlement: nc2000_bot::LeafSettlementMode,
 }
@@ -33,8 +31,6 @@ impl Spec {
         let mut nums = Vec::new();
         let shipped = RmConfig::default();
         let (mut perish, mut combo) = (shipped.rollout_perish, shipped.rollout_combo);
-        let mut residual_scale = 0.0;
-        let mut rollout_residual = shipped.rollout_residual;
         let mut baton_pass = shipped.rollout_baton_pass;
         let mut settlement = shipped.settlement;
         for p in &parts[1..] {
@@ -42,10 +38,6 @@ impl Spec {
                 "perish_escape" => (perish, combo) = (true, false),
                 "perish_combo" => (perish, combo) = (false, true),
                 "-perish_combo" | "-perish_escape" => (perish, combo) = (false, false),
-                "res" => residual_scale = 1.0,
-                "-res" => residual_scale = 0.0,
-                "rres" => rollout_residual = true,
-                "-rres" => rollout_residual = false,
                 "bp" => baton_pass = true,
                 "-bp" => baton_pass = false,
                 "legacy" => settlement = nc2000_bot::LeafSettlementMode::LegacyRollout,
@@ -61,28 +53,22 @@ impl Spec {
             c: nums.get(1).copied().unwrap_or(1.0),
             perish,
             combo,
-            residual_scale,
-            rollout_residual,
             baton_pass,
             settlement,
         }
     }
 
     pub fn build(&self, seed: u64, pool: &Arc<MetaPool>) -> Box<dyn Agent> {
-        let mut cfg = RmConfig {
+        let cfg = RmConfig {
             iterations: self.iterations,
             rule: SelRule::Ucb,
             c: self.c,
             rollout_perish: self.perish,
             rollout_combo: self.combo,
-            rollout_residual: self.rollout_residual,
             rollout_baton_pass: self.baton_pass,
             settlement: self.settlement,
             ..Default::default()
         };
-        if let nc2000_bot::mcts::Playout::Heavy { ref mut weights, .. } = cfg.playout {
-            weights.residual_scale = self.residual_scale;
-        }
         if self.blind {
             Box::new(BlindAgent::new(cfg, pool.clone(), None, seed))
         } else {

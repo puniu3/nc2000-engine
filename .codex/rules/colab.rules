@@ -1,5 +1,0 @@
-# Allow unrestricted headless Google Colab CLI usage inside nc2000-engine.
-prefix_rule(pattern=["colab"], decision="allow")
-prefix_rule(pattern=["/Users/puniu/.local/bin/colab"], decision="allow")
-prefix_rule(pattern=["tools/colab-tpu.sh"], decision="allow")
-prefix_rule(pattern=["./tools/colab-tpu.sh"], decision="allow")

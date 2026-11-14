@@ -129,7 +129,6 @@ pub struct RmConfig {
     /// (`mcts::perish_combo`); implies `rollout_perish`'s escape. Shipped
     /// ON; gates and measurements in `data/perish-rollout-v1/README.md`.
     pub rollout_combo: bool,
-    pub rollout_residual: bool,
     pub rollout_baton_pass: bool,
     /// Drop damage-history fields from the node key. Sound only when no mon
     /// can read them (Counter/Mirror Coat); the search checks that once at
@@ -914,7 +913,6 @@ impl RmConfig {
             switch: self.rollout_switch,
             perish_escape: self.rollout_perish,
             perish_combo: self.rollout_combo,
-            rollout_residual: self.rollout_residual,
             baton_pass: self.rollout_baton_pass,
             settlement: self.settlement,
         }
@@ -942,7 +940,6 @@ impl Default for RmConfig {
             rollout_switch: false,
             rollout_perish: false,
             rollout_combo: true,
-            rollout_residual: false,
             rollout_baton_pass: true,
             key_no_damage: false,
             mask_rules: MaskRules::default(),

@@ -93,19 +93,13 @@ fn measure(p: &Position, dex: &Dex, pool: &MetaPool, mode: &str, iters: u32, id:
     let mut belief = Belief::new(dex, pool, &p.observer);
     belief.sync(dex, &p.observer);
     let nobp = mode.ends_with("-nobp");
-    let with_res = mode.ends_with("-res");
     let base_mode = mode
         .strip_suffix("-nobp")
-        .or_else(|| mode.strip_suffix("-res"))
-        .or_else(|| mode.strip_suffix("-nores"))
         .unwrap_or(mode);
     let playout = nc2000_bot::Playout::Heavy {
         eps: 0.2,
         turns: 8,
-        weights: nc2000_bot::EvalWeights {
-            residual_scale: if with_res { 1.0 } else { 0.0 },
-            ..nc2000_bot::EvalWeights::default()
-        },
+        weights: nc2000_bot::EvalWeights::default(),
     };
     let cfg = RmConfig {
         iterations: iters,

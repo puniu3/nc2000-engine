@@ -272,7 +272,6 @@ pub struct RolloutRules {
     /// Rollout sides play the Perish trap and its counter ([`perish_combo`]).
     /// Implies `perish_escape`, without which the combo kills its own singer.
     pub perish_combo: bool,
-    pub rollout_residual: bool,
     pub baton_pass: bool,
     pub settlement: crate::accounting::LeafSettlementMode,
 }
@@ -284,7 +283,6 @@ impl Default for RolloutRules {
             switch: false,
             perish_escape: false,
             perish_combo: false,
-            rollout_residual: false,
             baton_pass: true,
             settlement: crate::accounting::LeafSettlementMode::LegacyRollout,
         }
@@ -1013,39 +1011,6 @@ fn compact_greedy_pick(
                         if off > stay + ROLLOUT_SWITCH_MARGIN {
                             return c;
                         }
-                    }
-                }
-            }
-        }
-        if rules.rollout_residual {
-            let stay_dmg = best.map_or(0.0, |(_, s, _)| s) as f32;
-            if let Some(deltas) =
-                crate::eval::compute_rollout_action_residuals(cb, table, side, cs, stay_dmg)
-            {
-                for (i, &c) in cs.iter().take(7).enumerate() {
-                    if suicidal(c) {
-                        continue;
-                    }
-                    let dq = deltas[i] as f64;
-                    if dq <= 0.0 {
-                        continue;
-                    }
-                    let base = if c < 4 {
-                        cb.expected_hit_fraction(
-                            table,
-                            side,
-                            att_slot,
-                            def_side,
-                            def_slot,
-                            c as usize,
-                            true,
-                        )
-                    } else {
-                        0.0
-                    };
-                    let total = base + dq;
-                    if best.map_or(true, |(_, old_score, _)| total > old_score) {
-                        best = Some((c, total, base));
                     }
                 }
             }

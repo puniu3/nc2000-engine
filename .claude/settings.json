@@ -1,12 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "Bash(colab:*)",
-      "Bash(colab *)",
-      "Bash(./tools/colab-tpu.sh*)",
-      "Bash(tools/colab-tpu.sh*)",
-      "Bash(uv run --project tpu *)",
-      "Bash(python3 -m gen2_tpu*)",
       "Bash(cargo t*)",
       "Bash(cargo test*)",
       "Bash(cargo build*)"

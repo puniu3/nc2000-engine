@@ -1,6 +1,6 @@
 # nc2000-engine
 
-Rust battle engine, imperfect-information search bot, WebAssembly/Preact client, and JAX/TPU pipeline for Pokemon Showdown's `[Gen 2] Nintendo Cup 2000 No OHKO Stadium2 Strict` (`gen2stadium2nc2000`).
+Rust battle engine, imperfect-information search bot, and WebAssembly/Preact client for Pokemon Showdown's `[Gen 2] Nintendo Cup 2000 No OHKO Stadium2 Strict` (`gen2stadium2nc2000`).
 
 ## Invariants
 
@@ -24,10 +24,9 @@ Rust battle engine, imperfect-information search bot, WebAssembly/Preact client,
   3. **Historical solved mixtures (`data/kodoku-r3/conclusion-equilibrium-deme.json` primary; `data/kodoku-r3/conclusion-equilibrium-r1.json` and `data/meta-nash-v3/pool-artifact.json` preserved under `<details>`)**: Bot party draw when mixture draw (`?nash` or setup selector) is active.
 - **Budgets & compiled preview**: Search coefficients and iteration budgets are read from `data/search-profiles.json` and `data/live-search.json` (never hardcoded in docs). The [training-v3 preview bake](data/preview-training-v3/README.md) retains 810 compatible keys after the known-party prior expansion. The 180 affected keys are excluded from production bundles and use live preview search, as do unrecorded matchups. Source/data guards remain active; conditional distributions within both public shells determine prior compatibility. See [prior compatibility](docs/PREVIEW-PRIOR-COMPATIBILITY.md).
 
-### 3. WASM, Web App & TPU (`crates/wasm`, `web`, `tpu`)
+### 3. WASM & Web App (`crates/wasm`, `web`)
 - **WASM bridge (`crates/wasm/src/lib.rs`)**: Exposes `Dex`, `Battle`, `Searcher`, `BlindSearcher`, `ProtocolSearcher`, `Validator`, and `ForkArena`. Verified against native behavior via `crates/wasm/tests-node/`.
 - **Web app (`web/src/app.tsx`, `web/src/info-mode.ts`)**: Doors are `/` (`?blind` alias; `?nash` / `?nash=v3` pre-selects bot mixture draw), `?evaluate` (`web/src/evaluate.tsx`), `?fork` (`web/src/fork.tsx`), and `?solver` (`web/src/solver.tsx`). Runtime data is fetched from `<base>data/*` and copied during deploy (`.github/workflows/pages.yml`), never bundled into JS chunks.
-- **TPU mirror (`tpu/`)**: 32-bit branchless JAX kernel (`gen2_tpu`) mirroring `crates/engine/src/compact.rs` and `crates/bot/src/eval.rs` (`no x64`, no dynamic shapes, no host callbacks). Used for batched rollouts, Depth-2 counterfactual oracle, residual training, and 6v6 Kodoku / Shell-Nash solving (`crates/bot/examples/meta_eco.rs`).
 
 ## Pointers
 
@@ -42,16 +41,15 @@ Rust battle engine, imperfect-information search bot, WebAssembly/Preact client,
 - Web application & E2E suites: [`web/src/app.tsx`](web/src/app.tsx), [`web/src/data.ts`](web/src/data.ts), [`web/package.json`](web/package.json), [`web/tests/`](web/tests/)
 - PS local/websocket interop & preview cache helper: [`tools/ps-arena.js`](tools/ps-arena.js), [`tools/ps-client.js`](tools/ps-client.js), [`tools/preview-cache.js`](tools/preview-cache.js)
 - Core Engine SDK builder & deterministic position diagnosis CLI: [`tools/bundle-core-sdk.js`](tools/bundle-core-sdk.js), [`tools/diagnose-position.js`](tools/diagnose-position.js) (downstream environment adapters like Gym Leader's Castle live in the operational fork [`hm0615g/nc2000-engine`](https://github.com/hm0615g/nc2000-engine))
-- JAX/TPU package & Google Colab runner: [`tpu/README.md`](tpu/README.md), [`tpu/HANDOFF.md`](tpu/HANDOFF.md), [`tools/colab-tpu.sh`](tools/colab-tpu.sh), [`AGENTS.md`](AGENTS.md)
 - CI / GitHub Pages deployment contract: [`.github/workflows/pages.yml`](.github/workflows/pages.yml)
 
 ### Specifications & Reference Docs
 - Format mechanics & PS porting notes: [`PORT-NOTES.md`](PORT-NOTES.md), [`PORTING.md`](PORTING.md)
 - Server-side preview cache specification: [`docs/PREVIEW-CACHE.md`](docs/PREVIEW-CACHE.md) (rendered by [`tools/render-preview-cache-doc.py`](tools/render-preview-cache-doc.py))
 - Native fork integration handoff: [`docs/NATIVE-FORK-HANDOFF.md`](docs/NATIVE-FORK-HANDOFF.md) (rendered by [`tools/render-native-handoff.py`](tools/render-native-handoff.py))
+- Search speed & off-pool belief diagnostics handoff: [`docs/SEARCH-AND-BELIEF-HANDOFF.md`](docs/SEARCH-AND-BELIEF-HANDOFF.md)
 - Engine anomaly report & triage protocol: [`.github/ISSUE_TEMPLATE/engine_anomaly_report.yml`](.github/ISSUE_TEMPLATE/engine_anomaly_report.yml)
 - Compact replay (`NC2-…`) specification: [`docs/replay.md`](docs/replay.md)
-- Residual eval & rollout NN handoff: [`docs/RESIDUAL-NN-HANDOFF.md`](docs/RESIDUAL-NN-HANDOFF.md)
 - Endgame exact/bound solver specification: [`ENDGAME-SOLVER-ALGORITHM.md`](ENDGAME-SOLVER-ALGORITHM.md)
 - Team catalog, belief prior & Nash rebuild protocol: [`docs/TEAM-POOL-REBUILD-PLAN.md`](docs/TEAM-POOL-REBUILD-PLAN.md)
 - License & third-party notices: [`LICENSE`](LICENSE), [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md)
@@ -71,8 +69,4 @@ done
 # Web build + worker & Playwright E2E gates
 crates/wasm/build.sh
 cd web && npm run build && npm run test:worker && npm run test:evaluate-worker && npm run test:policy && npm run test:e2e
-
-# TPU test suite (local 8-core TPU emulation, or remote Google Colab via tools/colab-tpu.sh)
-uv run --project tpu pytest tpu/tests -v
-./tools/colab-tpu.sh pytest
 ```

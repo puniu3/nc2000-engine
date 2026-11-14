@@ -1,7 +1,5 @@
 /target
 __pycache__/
-/tpu/.venv
-/tpu/.pytest_cache
 node_modules
 /tmp
 /web/dist
@@ -53,5 +51,4 @@ data/pbs-castle-logs/
 data/pbs-castle-logs.zip
 .claude/settings.local.json
 .gemini/settings.local.json
-*.colab.log
 

@@ -1,10 +1,6 @@
 {
   "tools": {
     "allowed": [
-      "run_shell_command(colab)",
-      "run_shell_command(./tools/colab-tpu.sh)",
-      "run_shell_command(tools/colab-tpu.sh)",
-      "run_shell_command(uv)",
       "run_shell_command(cargo)"
     ]
   }
