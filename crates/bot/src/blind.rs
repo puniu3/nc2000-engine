@@ -68,7 +68,7 @@ use nc2000_engine::battle::SearchChoice;
 use nc2000_engine::dex::{Dex, SpeciesId};
 use nc2000_engine::fxhash::FxHashMap;
 use nc2000_engine::prng::DamageRollMode;
-use nc2000_engine::state::Battle;
+use nc2000_engine::state::{Battle, PokeId, Status, DK};
 
 use crate::agent::{Agent, RootSearchStats};
 use crate::belief::{Belief, FallbackPolicy};
@@ -250,6 +250,7 @@ impl BlindAgent {
                 let mut search =
                     BlindSearch::with_rng(battle, dex, self.cfg.clone(), side, self.rng.clone());
                 search.use_public_exclusions(dex);
+                search.set_hidden_timers(position.hidden_timers().to_vec());
                 if self.root_pruning {
                     search.prune_dominated();
                 }
@@ -286,6 +287,7 @@ impl BlindAgent {
             &mut self.rng,
             g,
             battle,
+            position.hidden_timers(),
             dex,
             side,
             choices,
@@ -300,6 +302,7 @@ fn search_choose(
     rng: &mut SplitMix64,
     g: &GameState,
     battle: &Battle,
+    hidden_timers: &[crate::player_state::HiddenTimerSpec],
     dex: &Dex,
     side: usize,
     choices: &[SearchChoice],
@@ -308,6 +311,7 @@ fn search_choose(
 ) -> SearchChoice {
     let mut bs = BlindSearch::with_rng(battle, dex, cfg.clone(), side, rng.clone());
     if g.local.is_some() { bs.use_public_exclusions(dex); }
+    bs.set_hidden_timers(hidden_timers.to_vec());
     bs.prune_preview_aliases(dex);
     if opp_preview_prior {
         bs.set_opponent_preview_prior(true);
@@ -486,7 +490,9 @@ struct SampledWorld {
 pub struct BlindSearch {
     cfg: RmConfig,
     rng: SplitMix64,
+    timer_rng: SplitMix64,
     decision_seed: u64,
+    hidden_timers: Vec<crate::player_state::HiddenTimerSpec>,
     /// Search resets omit the observer's protocol log.
     base: Battle,
     base_cache: nc2000_engine::battle::BattleSearchCache,
@@ -545,7 +551,12 @@ impl BlindSearch {
         cfg: RmConfig, side: usize, seed: u64) -> BlindSearch {
         let mut search = Self::new(position.model(), dex, cfg, side, seed);
         search.use_public_exclusions(dex);
+        search.set_hidden_timers(position.hidden_timers().to_vec());
         search
+    }
+
+    pub(crate) fn set_hidden_timers(&mut self, timers: Vec<crate::player_state::HiddenTimerSpec>) {
+        self.hidden_timers = timers;
     }
 
     fn use_public_exclusions(&mut self, _dex: &Dex) {
@@ -601,10 +612,13 @@ impl BlindSearch {
         let endgame = crate::smmcts::EndgameRootStats::new(&base, dex, side, &my_acts);
         let base_cache = crate::smmcts::build_search_cache(&cfg, dex, &base);
         let decision_seed = rng.0 ^ 0xa24baed4963ee407;
+        let timer_rng = SplitMix64(decision_seed ^ 0x714e_525f_726e_6701);
         BlindSearch {
             cfg,
             rng,
+            timer_rng,
             decision_seed,
+            hidden_timers: Vec::new(),
             base,
             base_cache,
             scratch: None,
@@ -951,6 +965,14 @@ impl BlindSearch {
                     cache: cache.clone(),
                     world_id,
                 });
+                if !self.hidden_timers.is_empty() {
+                    resample_hidden_timers(
+                        dex,
+                        &mut sim,
+                        &self.hidden_timers,
+                        &mut self.timer_rng,
+                    );
+                }
             }
             return (sim, root, type_index, pick, cache);
         }
@@ -979,6 +1001,9 @@ impl BlindSearch {
             sim.update_all_speeds(dex);
         }
         std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
+        if !self.hidden_timers.is_empty() {
+            resample_hidden_timers(dex, &mut sim, &self.hidden_timers, &mut self.timer_rng);
+        }
         (sim, root, type_index, pick, cache)
     }
 
@@ -2859,6 +2884,100 @@ pub struct PrincipalLine {
     pub steps: Vec<LineStep>,
 }
 
+#[inline]
+fn draw_remaining_uniform(rng: &mut SplitMix64, min_d: u8, max_d: u8, elapsed: u8) -> i32 {
+    let lo = min_d.max(elapsed.saturating_add(1));
+    if lo >= max_d {
+        return 1;
+    }
+    let span = (max_d - lo + 1) as usize;
+    let d = lo + rng.below(span) as u8;
+    (d - elapsed).max(1) as i32
+}
+
+fn resample_hidden_timers(
+    dex: &Dex,
+    sim: &mut Battle,
+    specs: &[crate::player_state::HiddenTimerSpec],
+    rng: &mut SplitMix64,
+) {
+    use crate::player_state::HiddenTimerKind;
+    for &spec in specs {
+        let side = spec.side as usize;
+        let slot = spec.slot as usize;
+        if side >= 2 || slot >= sim.sides[side].roster.len() {
+            continue;
+        }
+        let id = PokeId {
+            side: spec.side,
+            slot: spec.slot,
+        };
+        if sim.poke(id).hp <= 0 || sim.poke(id).fainted {
+            continue;
+        }
+        match spec.kind {
+            HiddenTimerKind::Sleep { slept } => {
+                if sim.poke(id).status == Status::Slp {
+                    let rem = draw_remaining_uniform(rng, 2, 4, slept) as i64;
+                    sim.poke_mut(id).status_state.set_int(DK::Time, rem);
+                }
+            }
+            HiddenTimerKind::Confusion { ticks } => {
+                if let Some(cid) = dex.conds_id("confusion") {
+                    if let Some(vs) = sim.poke_mut(id).volatile_mut(cid) {
+                        let rem = draw_remaining_uniform(rng, 2, 5, ticks) as i64;
+                        vs.set_int(DK::Time, rem);
+                    }
+                }
+            }
+            HiddenTimerKind::Encore { upkeeps } => {
+                if let Some(cid) = dex.conds_id("encore") {
+                    if let Some(vs) = sim.poke_mut(id).volatile_mut(cid) {
+                        vs.duration = Some(draw_remaining_uniform(rng, 3, 6, upkeeps));
+                    }
+                }
+            }
+            HiddenTimerKind::Disable {
+                upkeeps,
+                acted_on_start,
+            } => {
+                if let Some(cid) = dex.conds_id("disable") {
+                    if let Some(vs) = sim.poke_mut(id).volatile_mut(cid) {
+                        let bonus = u8::from(acted_on_start);
+                        vs.duration = Some(draw_remaining_uniform(
+                            rng,
+                            2 + bonus,
+                            5 + bonus,
+                            upkeeps,
+                        ));
+                    }
+                }
+            }
+            HiddenTimerKind::PartiallyTrapped { upkeeps } => {
+                if let Some(cid) = dex.conds_id("partiallytrapped") {
+                    if let Some(vs) = sim.poke_mut(id).volatile_mut(cid) {
+                        vs.duration = Some(draw_remaining_uniform(rng, 3, 5, upkeeps));
+                    }
+                }
+            }
+            HiddenTimerKind::Bide { upkeeps } => {
+                if let Some(cid) = dex.conds_id("bide") {
+                    if let Some(vs) = sim.poke_mut(id).volatile_mut(cid) {
+                        vs.duration = Some(draw_remaining_uniform(rng, 3, 4, upkeeps));
+                    }
+                }
+            }
+            HiddenTimerKind::LockedMove { upkeeps } => {
+                if let Some(cid) = dex.conds_id("lockedmove") {
+                    if let Some(vs) = sim.poke_mut(id).volatile_mut(cid) {
+                        vs.duration = Some(draw_remaining_uniform(rng, 2, 3, upkeeps));
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod mixed_selection_tests {
     use super::*;
@@ -3184,5 +3303,106 @@ mod mixed_selection_tests {
         assert_eq!(cached.node_count(), uncached.node_count());
         assert_eq!(cached.root_matrix(), uncached.root_matrix());
         assert_eq!(cached.root_replies(), uncached.root_replies());
+    }
+
+    #[test]
+    fn hidden_timer_distributions_and_resampling() {
+        use crate::player_state::{HiddenTimerKind, HiddenTimerSpec};
+        let mut rng = SplitMix64::new(0x1234_5678_9ABC_DEF0);
+        let wake_prob = |slept: u8, n: usize, r: &mut SplitMix64| -> f64 {
+            let mut wakes = 0usize;
+            for _ in 0..n {
+                if draw_remaining_uniform(r, 2, 4, slept) == 1 {
+                    wakes += 1;
+                }
+            }
+            wakes as f64 / n as f64
+        };
+        assert_eq!(wake_prob(0, 1000, &mut rng), 0.0);
+        let p1 = wake_prob(1, 6000, &mut rng);
+        assert!((p1 - 1.0 / 3.0).abs() < 0.025, "p1={p1}");
+        let p2 = wake_prob(2, 6000, &mut rng);
+        assert!((p2 - 0.5).abs() < 0.025, "p2={p2}");
+        assert_eq!(wake_prob(3, 1000, &mut rng), 1.0);
+
+        // Disable acted_on_start = true shifts D in {2..=5} -> {3..=6};
+        // at upkeeps=2, rem is uniform in {1,2,3,4}.
+        let mut disable_rem = [0usize; 5];
+        for _ in 0..4000 {
+            let rem = draw_remaining_uniform(&mut rng, 3, 6, 2) as usize;
+            disable_rem[rem] += 1;
+        }
+        for c in &disable_rem[1..=4] {
+            assert!(*c > 850 && *c < 1150, "disable histogram={disable_rem:?}");
+        }
+
+        // Confusion ticks=1 => rem in {1,2,3,4}; Encore upkeeps=2 => rem in {1,2,3,4};
+        // PartiallyTrapped upkeeps=1 => rem in {2,3,4}; Bide upkeeps=2 => {1,2};
+        // LockedMove upkeeps=1 => {1,2}.
+        let dex = conformance::load_dex();
+        let set = |species: &str, moves: &[&str]| -> nc2000_engine::battle::PokemonSet {
+            serde_json::from_value(
+                serde_json::json!({"species":species,"name":species,"level":50,"moves":moves}),
+            )
+            .unwrap()
+        };
+        let mut sim = Battle::from_fixture(
+            &dex,
+            "1,2,3,4",
+            &[set("Snorlax", &["Body Slam", "Rest"])],
+            &[set("Zapdos", &["Thunderbolt", "Rest"])],
+        )
+        .unwrap();
+        sim.choose(&dex, 0, "team 1").unwrap();
+        sim.choose(&dex, 1, "team 1").unwrap();
+        let opp = PokeId { side: 1, slot: 0 };
+        let tbolt = dex.moves.id("thunderbolt").unwrap();
+        sim.poke_mut(opp).last_move = Some(tbolt);
+        sim.poke_mut(opp).last_move_encore = Some(tbolt);
+        sim.restore_status(&dex, opp, Status::Slp, None);
+        sim.add_volatile(&dex, opp, "confusion", None, nc2000_engine::battle::EffectHandle::None);
+        sim.add_volatile(&dex, opp, "encore", None, nc2000_engine::battle::EffectHandle::None);
+        sim.add_volatile(&dex, opp, "disable", None, nc2000_engine::battle::EffectHandle::None);
+        sim.add_volatile(&dex, opp, "partiallytrapped", None, nc2000_engine::battle::EffectHandle::MoveEff(tbolt));
+        sim.add_volatile(&dex, opp, "bide", None, nc2000_engine::battle::EffectHandle::None);
+        sim.add_volatile(&dex, opp, "lockedmove", None, nc2000_engine::battle::EffectHandle::MoveEff(tbolt));
+        let specs = vec![
+            HiddenTimerSpec { side: 1, slot: 0, kind: HiddenTimerKind::Sleep { slept: 1 } },
+            HiddenTimerSpec { side: 1, slot: 0, kind: HiddenTimerKind::Confusion { ticks: 1 } },
+            HiddenTimerSpec { side: 1, slot: 0, kind: HiddenTimerKind::Encore { upkeeps: 2 } },
+            HiddenTimerSpec { side: 1, slot: 0, kind: HiddenTimerKind::Disable { upkeeps: 2, acted_on_start: true } },
+            HiddenTimerSpec { side: 1, slot: 0, kind: HiddenTimerKind::PartiallyTrapped { upkeeps: 1 } },
+            HiddenTimerSpec { side: 1, slot: 0, kind: HiddenTimerKind::Bide { upkeeps: 2 } },
+            HiddenTimerSpec { side: 1, slot: 0, kind: HiddenTimerKind::LockedMove { upkeeps: 1 } },
+        ];
+        let mut seen_sleep = [false; 4];
+        let mut seen_pt = [false; 5];
+        let mut seen_bide = [false; 3];
+        let mut seen_locked = [false; 3];
+        for _ in 0..200 {
+            resample_hidden_timers(&dex, &mut sim, &specs, &mut rng);
+            let st = sim.poke(opp).status_state.get_int(DK::Time) as usize;
+            assert!((1..=3).contains(&st), "sleep time={st}");
+            seen_sleep[st] = true;
+            let cf = sim.poke(opp).volatile(dex.conds_id("confusion").unwrap()).unwrap().get_int(DK::Time);
+            assert!((1..=4).contains(&cf), "confusion time={cf}");
+            let enc = sim.poke(opp).volatile(dex.conds_id("encore").unwrap()).unwrap().duration.unwrap();
+            assert!((1..=4).contains(&enc), "encore dur={enc}");
+            let dis = sim.poke(opp).volatile(dex.conds_id("disable").unwrap()).unwrap().duration.unwrap();
+            assert!((1..=4).contains(&dis), "disable dur={dis}");
+            let pt = sim.poke(opp).volatile(dex.conds_id("partiallytrapped").unwrap()).unwrap().duration.unwrap() as usize;
+            assert!((2..=4).contains(&pt), "pt dur={pt}");
+            seen_pt[pt] = true;
+            let bd = sim.poke(opp).volatile(dex.conds_id("bide").unwrap()).unwrap().duration.unwrap() as usize;
+            assert!((1..=2).contains(&bd), "bide dur={bd}");
+            seen_bide[bd] = true;
+            let lm = sim.poke(opp).volatile(dex.conds_id("lockedmove").unwrap()).unwrap().duration.unwrap() as usize;
+            assert!((1..=2).contains(&lm), "locked dur={lm}");
+            seen_locked[lm] = true;
+        }
+        assert!(seen_sleep[1] && seen_sleep[2] && seen_sleep[3]);
+        assert!(seen_pt[2] && seen_pt[3] && seen_pt[4]);
+        assert!(seen_bide[1] && seen_bide[2]);
+        assert!(seen_locked[1] && seen_locked[2]);
     }
 }

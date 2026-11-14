@@ -104,6 +104,8 @@ struct TrackMon {
     uses: Vec<(MoveId, i32)>,
     /// Mechanics-inferred thrash/rollout lock: (move, uses so far).
     locked: Option<(MoveId, i32)>,
+    /// Upkeeps observed while `locked` is active (for Thrash/Outrage/Petal Dance).
+    locked_upkeeps: u8,
     /// Lock initiated by a called move (`Metronome`/`Mirror Move`/`Sleep Talk`).
     called_locked: bool,
     /// Two-turn move charge pending release.
@@ -143,6 +145,7 @@ impl TrackMon {
             vols: Vec::new(),
             uses: Vec::new(),
             locked: None,
+            locked_upkeeps: 0,
             called_locked: false,
             charging: None,
             must_recharge: false,
@@ -175,6 +178,7 @@ impl TrackMon {
         self.boosts = [0; 7];
         self.vols.clear();
         self.locked = None;
+        self.locked_upkeeps = 0;
         self.called_locked = false;
         self.charging = None;
         self.must_recharge = false;
@@ -229,6 +233,10 @@ struct TVol {
     /// Engine condition key ("confusion", "substitute", ...).
     key: String,
     start_turn: u16,
+    /// Number of `|upkeep|` boundaries elapsed since start.
+    upkeeps: u8,
+    /// Whether the target had already acted this turn when the volatile started (Disable +1).
+    acted_on_start: bool,
     /// encore/disable: the locked move; partiallytrapped: the binding move.
     move_id: Option<MoveId>,
     /// (side, slot) of the volatile's source, when it matters.
@@ -487,6 +495,19 @@ impl ProtocolTracker {
             "upkeep" => {
                 self.upkeep_this_turn = true;
                 self.cur_move = None;
+                for side in self.sides.iter_mut() {
+                    if let Some(a) = side.active {
+                        let m = &mut side.mons[a];
+                        if !m.fainted {
+                            for v in &mut m.vols {
+                                v.upkeeps = v.upkeeps.saturating_add(1);
+                            }
+                            if m.locked.is_some() {
+                                m.locked_upkeeps = m.locked_upkeeps.saturating_add(1);
+                            }
+                        }
+                    }
+                }
             }
             "switch" | "drag" => {
                 self.cur_move = None;
@@ -658,6 +679,8 @@ impl ProtocolTracker {
                             mon.vols.push(TVol {
                                 key,
                                 start_turn: turn,
+                                upkeeps: 0,
+                                acted_on_start: false,
                                 move_id: None,
                                 source: None,
                                 counter: None,
@@ -902,6 +925,7 @@ impl ProtocolTracker {
             {
                 let mon = &mut self.sides[s].mons[m];
                 mon.locked = Some((mid, 1));
+                mon.locked_upkeeps = 0;
                 mon.called_locked = true;
             }
             return;
@@ -926,6 +950,7 @@ impl ProtocolTracker {
                 let uses = uses + 1;
                 if uses >= cap {
                     mon.locked = None;
+                    mon.locked_upkeeps = 0;
                     mon.called_locked = false;
                 } else {
                     mon.locked = Some((lm, uses));
@@ -933,6 +958,7 @@ impl ProtocolTracker {
                 return;
             }
             mon.locked = None;
+            mon.locked_upkeeps = 0;
             mon.called_locked = false;
         }
         // A transformed mon is executing the copied set: track PP usage on its
@@ -944,6 +970,7 @@ impl ProtocolTracker {
         }
         if THRASH_CLASS.contains(&key) || key == "rollout" {
             mon.locked = Some((mid, 1));
+            mon.locked_upkeeps = 0;
             mon.called_locked = false;
         }
         let turn = self.turn;
@@ -955,6 +982,8 @@ impl ProtocolTracker {
                     mon.vols.push(TVol {
                         key: key.to_string(),
                         start_turn: turn,
+                        upkeeps: 0,
+                        acted_on_start: false,
                         move_id: None,
                         source: None,
                         counter: None,
@@ -967,6 +996,8 @@ impl ProtocolTracker {
                     None => mon.vols.push(TVol {
                         key: "furycutter".to_string(),
                         start_turn: turn,
+                        upkeeps: 0,
+                        acted_on_start: false,
                         move_id: None,
                         source: None,
                         counter: Some(1),
@@ -989,6 +1020,8 @@ impl ProtocolTracker {
                 None => mon.vols.push(TVol {
                     key: "perishsong".to_string(),
                     start_turn: turn,
+                    upkeeps: 0,
+                    acted_on_start: false,
                     move_id: None,
                     source: None,
                     counter: Some(n),
@@ -1003,6 +1036,7 @@ impl ProtocolTracker {
         if key == "confusion" {
             let mon = &mut self.sides[s].mons[m];
             mon.locked = None;
+            mon.locked_upkeeps = 0;
             mon.called_locked = false;
             mon.vols.retain(|v| v.key != "confusion");
         }
@@ -1015,6 +1049,8 @@ impl ProtocolTracker {
             mon.vols.push(TVol {
                 key,
                 start_turn: turn,
+                upkeeps: 0,
+                acted_on_start: false,
                 move_id: None,
                 source: Some((s, m)),
                 counter: Some(0),
@@ -1030,12 +1066,21 @@ impl ProtocolTracker {
                 .or(self.sides[s].mons[m].last_move),
             _ => None,
         };
+        let acted_on_start = self.sides[s].acted_this_turn;
         let source = self.sides[1 - s].active.map(|a| (1 - s, a));
         let mon = &mut self.sides[s].mons[m];
         if mon.vols.iter().any(|v| v.key == key) {
             return;
         }
-        mon.vols.push(TVol { key, start_turn: turn, move_id, source, counter: None });
+        mon.vols.push(TVol {
+            key,
+            start_turn: turn,
+            upkeeps: 0,
+            acted_on_start,
+            move_id,
+            source,
+            counter: None,
+        });
     }
 
     fn on_activate(&mut self, dex: &Dex, parts: &[&str]) {
@@ -1050,6 +1095,8 @@ impl ProtocolTracker {
                 None => mon.vols.push(TVol {
                     key: "confusion".to_string(),
                     start_turn: turn,
+                    upkeeps: 0,
+                    acted_on_start: false,
                     move_id: None,
                     source: None,
                     counter: Some(1),
@@ -1070,6 +1117,8 @@ impl ProtocolTracker {
                 None => mon.vols.push(TVol {
                     key: "substitute".to_string(),
                     start_turn: turn,
+                    upkeeps: 0,
+                    acted_on_start: false,
                     move_id: None,
                     source: Some((s, m)),
                     counter: Some(dmg),
@@ -1084,6 +1133,8 @@ impl ProtocolTracker {
                 mon.vols.push(TVol {
                     key: "trapped".to_string(),
                     start_turn: turn,
+                    upkeeps: 0,
+                    acted_on_start: false,
                     move_id: None,
                     source,
                     counter: None,
@@ -1162,6 +1213,8 @@ impl ProtocolTracker {
                     mon.vols.push(TVol {
                         key: "partiallytrapped".to_string(),
                         start_turn: turn,
+                        upkeeps: 0,
+                        acted_on_start: false,
                         move_id: mid,
                         source,
                         counter: None,
@@ -2251,6 +2304,81 @@ impl ProtocolTracker {
         }
         let _ = rng;
     }
+
+    pub(crate) fn hidden_timer_specs(
+        &self,
+        dex: &Dex,
+        battle: &Battle,
+    ) -> Vec<crate::player_state::HiddenTimerSpec> {
+        use crate::player_state::{HiddenTimerKind, HiddenTimerSpec};
+        let mut out = Vec::new();
+        for s in 0..2 {
+            let len = self.sides[s].mons.len().min(battle.sides[s].roster.len());
+            for slot in 0..len {
+                let p = &battle.sides[s].roster[slot];
+                let tm = &self.sides[s].mons[slot];
+                if p.hp == 0 || tm.fainted {
+                    continue;
+                }
+                let side = s as u8;
+                let slot_u8 = slot as u8;
+                if tm.status == Status::Slp && !tm.rest && p.status == Status::Slp {
+                    out.push(HiddenTimerSpec {
+                        side,
+                        slot: slot_u8,
+                        kind: HiddenTimerKind::Sleep {
+                            slept: tm.slept.min(255) as u8,
+                        },
+                    });
+                }
+                if !p.is_active {
+                    continue;
+                }
+                for v in &tm.vols {
+                    let Some(cid) = dex.conds_id(&v.key) else {
+                        continue;
+                    };
+                    if p.volatile(cid).is_none() {
+                        continue;
+                    }
+                    let kind = match v.key.as_str() {
+                        "confusion" => HiddenTimerKind::Confusion {
+                            ticks: v.counter.unwrap_or(0).clamp(0, 255) as u8,
+                        },
+                        "encore" => HiddenTimerKind::Encore { upkeeps: v.upkeeps },
+                        "disable" => HiddenTimerKind::Disable {
+                            upkeeps: v.upkeeps,
+                            acted_on_start: v.acted_on_start,
+                        },
+                        "partiallytrapped" => {
+                            HiddenTimerKind::PartiallyTrapped { upkeeps: v.upkeeps }
+                        }
+                        "bide" => HiddenTimerKind::Bide { upkeeps: v.upkeeps },
+                        _ => continue,
+                    };
+                    out.push(HiddenTimerSpec {
+                        side,
+                        slot: slot_u8,
+                        kind,
+                    });
+                }
+                if let Some((m, _)) = tm.locked {
+                    if dex.moves.key(m) != "rollout"
+                        && dex.conds_id("lockedmove").is_some_and(|c| p.volatile(c).is_some())
+                    {
+                        out.push(HiddenTimerSpec {
+                            side,
+                            slot: slot_u8,
+                            kind: HiddenTimerKind::LockedMove {
+                                upkeeps: tm.locked_upkeeps,
+                            },
+                        });
+                    }
+                }
+            }
+        }
+        out
+    }
 }
 
 /// party := `slots` (display order); positions canonical (party index for
@@ -2555,9 +2683,14 @@ impl ProtocolAgent {
             self.tracker.synthesize(dex, &self.own_sets, refs, obs, &req, &mut self.rng)?
         };
 
+        let specs = self.tracker.hidden_timer_specs(dex, &battle);
+        let pos = crate::player_state::ObservedPosition::reconstructed_with_timers(
+            battle.clone(),
+            specs,
+        );
         // search + preview policy
         let mut search =
-            BlindSearch::from_observation(&crate::player_state::ObservedPosition::reconstructed(battle.clone()), dex, self.cfg.clone(), self.side, self.rng.next());
+            BlindSearch::from_observation(&pos, dex, self.cfg.clone(), self.side, self.rng.next());
         self.baked = None;
         self.forced = None;
         if search.is_preview() {
@@ -3863,6 +3996,96 @@ mod m17a_tests {
         assert_eq!(superf_dmg, (rhydon_maxhp / 2).max(1));
         assert!(hp_dmg >= 1, "plain hiddenpower should stay conservative >= 1, got {hp_dmg}");
     }
+
+    #[test]
+    fn hidden_timer_specs_exclude_rest_and_track_disable_acted_and_upkeeps() {
+        use crate::player_state::HiddenTimerKind;
+        let dex = conformance::load_dex();
+        let own = vec![test_set("Snorlax", 55, "leftovers", &["Rest", "Return", "Curse", "Earthquake"])];
+        let refs = vec![test_set("Zapdos", 50, "mintberry", &["Thunderbolt", "Rest", "Sleep Talk", "Hidden Power Ice"])];
+        let mut tracker = ProtocolTracker::new(0);
+        for line in poke_lines(&dex, "p1", &own)
+            .into_iter()
+            .chain(poke_lines(&dex, "p2", &refs))
+            .chain([
+                "|switch|p1a: Snorlax|Snorlax, L55, M|100/100".to_string(),
+                "|switch|p2a: Zapdos|Zapdos, L50|100/100".to_string(),
+                "|turn|1".to_string(),
+                "|move|p2a: Zapdos|Rest|p2a: Zapdos".to_string(),
+                "|-status|p2a: Zapdos|slp|[from] move: Rest".to_string(),
+                "|move|p1a: Snorlax|Disable|p2a: Zapdos".to_string(),
+                "|-start|p2a: Zapdos|Disable|Rest".to_string(),
+                "|upkeep".to_string(),
+                "|turn|2".to_string(),
+            ])
+        {
+            tracker.push_line(&dex, &line);
+        }
+        let req_json = serde_json::json!({
+            "active": [{"moves": [
+                {"id": "rest", "pp": 16, "maxpp": 16, "disabled": false},
+                {"id": "return", "pp": 32, "maxpp": 32, "disabled": false},
+                {"id": "curse", "pp": 16, "maxpp": 16, "disabled": false},
+                {"id": "earthquake", "pp": 16, "maxpp": 16, "disabled": false}
+            ]}],
+            "side": {"pokemon": [{
+                "ident": "p1: Snorlax",
+                "details": "Snorlax, L55, M",
+                "active": true,
+                "condition": "240/240",
+                "moves": ["rest", "return", "curse", "earthquake"],
+                "item": "leftovers"
+            }]}
+        })
+        .to_string();
+        let req = Request::parse(&dex, &req_json).unwrap();
+        let mut rng = SplitMix64::new(42);
+        let obs = Observer::from_mons(0, tracker.observer_mons());
+        let ref_mons = Battle::from_fixture(&dex, "1,2,3,4", &own, &refs)
+            .unwrap()
+            .sides[1]
+            .roster
+            .clone();
+        let battle = tracker.synthesize(&dex, &own, &ref_mons, &obs, &req, &mut rng).unwrap();
+        let specs = tracker.hidden_timer_specs(&dex, &battle);
+        // Rest sleep must NOT produce a Sleep timer, whereas Disable after Zapdos acted
+        // must carry acted_on_start = true and upkeeps = 1.
+        assert!(!specs.iter().any(|s| matches!(s.kind, HiddenTimerKind::Sleep { .. })));
+        assert!(specs.contains(&crate::player_state::HiddenTimerSpec {
+            side: 1,
+            slot: 0,
+            kind: HiddenTimerKind::Disable {
+                upkeeps: 1,
+                acted_on_start: true,
+            },
+        }));
+
+        // Non-Rest sleep (e.g. Lovely Kiss) DOES emit Sleep { slept: 1 }.
+        let mut t2 = ProtocolTracker::new(0);
+        for line in poke_lines(&dex, "p1", &own)
+            .into_iter()
+            .chain(poke_lines(&dex, "p2", &refs))
+            .chain([
+                "|switch|p1a: Snorlax|Snorlax, L55, M|100/100".to_string(),
+                "|switch|p2a: Zapdos|Zapdos, L50|100/100".to_string(),
+                "|turn|1".to_string(),
+                "|move|p1a: Snorlax|Lovely Kiss|p2a: Zapdos".to_string(),
+                "|-status|p2a: Zapdos|slp".to_string(),
+                "|cant|p2a: Zapdos|slp".to_string(),
+                "|upkeep".to_string(),
+                "|turn|2".to_string(),
+            ])
+        {
+            t2.push_line(&dex, &line);
+        }
+        let b2 = t2.synthesize(&dex, &own, &ref_mons, &obs, &req, &mut rng).unwrap();
+        let s2 = t2.hidden_timer_specs(&dex, &b2);
+        assert!(s2.contains(&crate::player_state::HiddenTimerSpec {
+            side: 1,
+            slot: 0,
+            kind: HiddenTimerKind::Sleep { slept: 1 },
+        }));
+    }
 }
 
 // ================================================== hand-entered positions
@@ -3982,6 +4205,8 @@ impl TrackMon {
             tm.vols.push(TVol {
                 key: v.key.clone(),
                 start_turn: v.start_turn,
+                upkeeps: 0,
+                acted_on_start: false,
                 move_id: v.move_key.as_deref().map(|k| move_id_of(dex, k)).transpose()?,
                 source: v.source.map(|[s, slot]| (s, slot)),
                 counter: v.counter,
@@ -3994,6 +4219,7 @@ impl TrackMon {
             Some(u) => Some((move_id_of(dex, &u.move_key)?, u.n)),
             None => None,
         };
+        tm.locked_upkeeps = tm.locked.map_or(0, |(_, u)| (u - 1).clamp(0, 2) as u8);
         tm.charging = m.charging.as_deref().map(|k| move_id_of(dex, k)).transpose()?;
         tm.must_recharge = m.must_recharge;
         tm.transformed_into = m.transformed_into.map(|[s, slot]| (s, slot));
