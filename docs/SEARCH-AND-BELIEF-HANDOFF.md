@@ -1,6 +1,6 @@
 # Search Speed & Belief Inference Handoff
 
-> **Status (`2026-11-15`)**: **Track 3** zero-drift speedups (`69c49c3b`) and **Track 2** Phases 1–5 Imperfect-Information Architecture Upgrade (`a2e19a26`–`baa4f977`) are landed, re-baked (`990/990` preview policies), and verified across Rust, Node WASM, Web Worker/Policy, and Playwright E2E suites.
+> **Status (`2026-11-15`)**: **Track 3** zero-drift speedups (`69c49c3b`), **Track 2** Phases 1–5 Imperfect-Information Architecture Upgrade (`a2e19a26`–`4f516159`), and the non-optional player-boundary unification (`ce6485d9`, routing `OpenAgent`, `omniscient_audit` T3, and WASM preview helpers through `LocalPlayer` / `ObservedPosition`) are landed, re-baked (`990/990` preview policies), and verified across Rust, Node WASM, Web Worker/Policy, and Playwright E2E suites.
 >
 > This document replaces the parked Residual NN / TPU track (`docs/RESIDUAL-NN-HANDOFF.md`), whose runtime code and JAX/Colab pipeline were removed to eliminate dual-engine technical debt while retaining generated datasets under [`data/`](../data/).
 
@@ -138,7 +138,7 @@ Design boundary (**Choice A — Strict Pool Trust Until Contradiction & Turn 0 I
 | `offpool` @ `27000` | `64` (`128`) | — | **`0.5156`** (`+10.9` Elo) |
 | `catalog` @ `3000` | `128` (`256`) | `0.4375` (`48`p, `-43.7` Elo) | **`0.5117`** (`+8.1` Elo) |
 
-- **Phase 5 Verification & Bake**: Re-baked `data/compiled-preview-v1.json` (`990/990` policies); all workspace Rust tests (`cargo t` + `sleep_clause`, `kifu`, `replay`, `conformance_suite`, `bot_suite`), 11 WASM/Node suites, Core SDK bundle, Vite build, `test:worker`, `test:evaluate-worker`, `test:policy`, `compiled-preview-production.mjs` (`1089` catalog pairs / `2178` cases, `hiddenLoadoutInvariant: true`), and Playwright `test:e2e` passed.
+- **Phase 5 Verification & Bake (`4f516159`, `ce6485d9`)**: Re-baked `data/compiled-preview-v1.json` (`990/990` policies); all workspace Rust tests (`cargo t` + `sleep_clause`, `kifu`, `replay`, `conformance_suite`, `bot_suite`), all 12 WASM/Node suites (`smoke`..`endgame`..`preview-cache`), Core SDK bundle, Vite build, `test:worker`, `test:evaluate-worker`, `test:policy`, `compiled-preview-coverage.mjs` (`1089` matchups / `990` valid keys / `69,696` slot checks), `compiled-preview-production.mjs` (`1089` catalog pairs / `2178` cases, `hiddenLoadoutInvariant: true`), and Playwright `test:e2e` (`70/70`) passed.
 
 ---
 
