@@ -14,7 +14,8 @@ use nc2000_bot::preview::load_meta_pool;
 use nc2000_bot::smmcts::{RmAgent, RmConfig, SelRule};
 use nc2000_bot::tempo::{
     analyze_turn_matrix, analyze_turn_matrix_variant, evaluate_tempo, format_tempo_explanation,
-    search_tempo_mcts, TempoAgent, TempoLeafMode, TempoMctsAgent, TempoMctsConfig, TempoVariant,
+    search_tempo_mcts, SkuctGolfAgent, SkuctGolfConfig, TempoAgent, TempoLeafMode, TempoMctsAgent,
+    TempoMctsConfig, TempoVariant,
 };
 use nc2000_bot::{Agent, MaxDamageAgent};
 use nc2000_engine::battle::PokemonSet;
@@ -369,8 +370,59 @@ fn run_scenarios(dex: &Dex) {
     }
 }
 
+struct FixedPreviewWrap(Box<dyn Agent>);
+
+impl Agent for FixedPreviewWrap {
+    fn name(&self) -> String {
+        self.0.name()
+    }
+
+    fn choose(
+        &mut self,
+        battle: &Battle,
+        dex: &Dex,
+        side: usize,
+        choices: &[nc2000_engine::battle::SearchChoice],
+    ) -> nc2000_engine::battle::SearchChoice {
+        if matches!(choices.first(), Some(nc2000_engine::battle::SearchChoice::Team(_))) {
+            let d = nc2000_engine::battle::SearchChoice::Team([1, 2, 3]);
+            return if choices.contains(&d) { d } else { choices[0] };
+        }
+        self.0.choose(battle, dex, side, choices)
+    }
+
+    fn root_policy(
+        &mut self,
+        battle: &Battle,
+        dex: &Dex,
+        side: usize,
+        choices: &[nc2000_engine::battle::SearchChoice],
+    ) -> Vec<f64> {
+        if matches!(choices.first(), Some(nc2000_engine::battle::SearchChoice::Team(_))) {
+            let pick = self.choose(battle, dex, side, choices);
+            return choices.iter().map(|&c| if c == pick { 1.0 } else { 0.0 }).collect();
+        }
+        self.0.root_policy(battle, dex, side, choices)
+    }
+}
+
+fn parse_leaf_rollout(rest: &str) -> Option<(TempoLeafMode, u16, u32)> {
+    // Parses e.g. `golf-0r:1000`, `golf-4r:2500`, `bs-8r:1000`, `eval-0r:1000`
+    let (head, it_s) = rest.split_once(':')?;
+    let iters: u32 = it_s.parse().ok()?;
+    let (leaf_s, r_s) = head.split_once('-')?;
+    let leaf = match leaf_s {
+        "golf" | "v2" => TempoLeafMode::FastGolf,
+        "bs" | "blindspot" => TempoLeafMode::EvalBlindspot,
+        "eval" => TempoLeafMode::EvalStatic,
+        _ => return None,
+    };
+    let turns: u16 = r_s.strip_suffix('r')?.parse().ok()?;
+    Some((leaf, turns, iters))
+}
+
 fn build_agent(spec: &str, seed: u64, fixed_preview: bool) -> Box<dyn Agent> {
-    if spec == "greedy" {
+    let raw: Box<dyn Agent> = if spec == "greedy" {
         Box::new(MaxDamageAgent::conformant())
     } else if spec == "maxdamage" {
         Box::new(MaxDamageAgent::new())
@@ -383,6 +435,70 @@ fn build_agent(spec: &str, seed: u64, fixed_preview: bool) -> Box<dyn Agent> {
             ..RmConfig::default()
         };
         Box::new(RmAgent::new(cfg, seed))
+    } else if let Some(rest) = spec.strip_prefix("skuct-") {
+        let (leaf, rollout_turns, iterations) =
+            parse_leaf_rollout(rest).unwrap_or_else(|| panic!("bad skuct-* spec: {spec}"));
+        Box::new(SkuctGolfAgent::new(
+            SkuctGolfConfig {
+                iterations,
+                c: 0.4,
+                leaf,
+                rollout_turns,
+                fixed_preview,
+            },
+            seed,
+        ))
+    } else if let Some(rest) = spec.strip_prefix("cmcts-") {
+        let (leaf, rollout_turns, iterations) =
+            parse_leaf_rollout(rest).unwrap_or_else(|| panic!("bad cmcts-* spec: {spec}"));
+        Box::new(TempoMctsAgent::new(
+            TempoMctsConfig {
+                iterations,
+                c: 0.4,
+                max_depth: 64,
+                leaf,
+                deterministic: true,
+                fixed_preview,
+                minimax_backup: true,
+                argmax_root: true,
+                rollout_turns,
+            },
+            seed,
+        ))
+    } else if let Some(rest) = spec.strip_prefix("nmcts-") {
+        let (leaf, rollout_turns, iterations) =
+            parse_leaf_rollout(rest).unwrap_or_else(|| panic!("bad nmcts-* spec: {spec}"));
+        Box::new(TempoMctsAgent::new(
+            TempoMctsConfig {
+                iterations,
+                c: 0.4,
+                max_depth: 64,
+                leaf,
+                deterministic: false,
+                fixed_preview,
+                minimax_backup: true,
+                argmax_root: false,
+                rollout_turns,
+            },
+            seed,
+        ))
+    } else if let Some(rest) = spec.strip_prefix("amcts-") {
+        let (leaf, rollout_turns, iterations) =
+            parse_leaf_rollout(rest).unwrap_or_else(|| panic!("bad amcts-* spec: {spec}"));
+        Box::new(TempoMctsAgent::new(
+            TempoMctsConfig {
+                iterations,
+                c: 0.4,
+                max_depth: 64,
+                leaf,
+                deterministic: true,
+                fixed_preview,
+                minimax_backup: false,
+                argmax_root: true,
+                rollout_turns,
+            },
+            seed,
+        ))
     } else if let Some(rest) = spec.strip_prefix("1ply-full:") {
         let k: usize = rest.parse().unwrap_or(8);
         let mut a = TempoAgent::with_variant(seed, k, false, TempoVariant::Full);
@@ -450,6 +566,11 @@ fn build_agent(spec: &str, seed: u64, fixed_preview: bool) -> Box<dyn Agent> {
         ))
     } else {
         panic!("unknown agent spec: {spec}");
+    };
+    if fixed_preview {
+        Box::new(FixedPreviewWrap(raw))
+    } else {
+        raw
     }
 }
 
@@ -1223,6 +1344,82 @@ fn run_calib(dex: &Dex, args: &[String]) {
     );
 }
 
+/// Controlled rollout-necessity & search-engine ablation benchmark (100% symmetric fixed preview!).
+fn run_rollout_bench(dex: &Dex, args: &[String]) {
+    let flag = |name: &str| -> Option<String> {
+        args.iter()
+            .position(|a| a == name)
+            .and_then(|i| args.get(i + 1).cloned())
+    };
+    let games: usize = flag("--games").map_or(160, |v| v.parse().unwrap());
+    let seed: u64 = flag("--seed").map_or(2026112500, |v| v.parse().unwrap());
+    let threads: usize = flag("--threads").map_or(10, |v| v.parse().unwrap());
+
+    let root = repo_root();
+    let pool = load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
+    let teams: Vec<Vec<PokemonSet>> = pool.teams.iter().map(|t| t.sets.clone()).collect();
+
+    // 1. Inside EXACT `SkuctSearch` engine (`step_with_leaf`), symmetric fixed preview:
+    //    Tests whether `FastGolf` needs rollouts (`0r` vs `2r` vs `4r` vs `8r`) vs `eval_blindspot` (`0r` vs shipped `8r`).
+    let skuct_engine_pairs = [
+        ("skuct-bs-0r:1000", "skuct:1000"),
+        ("skuct-golf-0r:1000", "skuct:1000"),
+        ("skuct-golf-2r:1000", "skuct:1000"),
+        ("skuct-golf-4r:1000", "skuct:1000"),
+        ("skuct-golf-8r:1000", "skuct:1000"),
+        ("skuct-golf-0r:1000", "skuct-golf-8r:1000"),
+        ("skuct-golf-0r:2200", "skuct:1000"),
+    ];
+    let mut skuct_engine = Vec::new();
+    for (idx, &(a, b)) in skuct_engine_pairs.iter().enumerate() {
+        skuct_engine.push(run_one_duel(
+            dex,
+            &teams,
+            a,
+            b,
+            games,
+            seed + idx as u64,
+            true,
+            true,
+            threads,
+        ));
+    }
+
+    // 2. Inside CompactBattle-native Minimax-UCT (`cmcts`, 5x faster than Battle-based `SkuctSearch`!):
+    //    Measures step-by-step search upgrades & rollout necessity at equal wall-clock (~10 ms vs `skuct:1000`).
+    let cmcts_pairs = [
+        ("mcts-v2:5000", "skuct:1000"),
+        ("cmcts-golf-0r:5000", "skuct:1000"),
+        ("cmcts-bs-0r:7500", "skuct:1000"),
+        ("cmcts-golf-2r:3500", "skuct:1000"),
+        ("cmcts-golf-4r:2500", "skuct:1000"),
+        ("cmcts-golf-8r:1600", "skuct:1000"),
+        ("cmcts-golf-0r:5000", "cmcts-golf-8r:1600"),
+    ];
+    let mut cmcts = Vec::new();
+    for (idx, &(a, b)) in cmcts_pairs.iter().enumerate() {
+        cmcts.push(run_one_duel(
+            dex,
+            &teams,
+            a,
+            b,
+            games,
+            seed + 100 + idx as u64,
+            true,
+            true,
+            threads,
+        ));
+    }
+
+    println!(
+        "{}",
+        json!({
+            "skuct_engine": skuct_engine,
+            "cmcts_engine": cmcts,
+        })
+    );
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let dex = load_dex();
@@ -1230,6 +1427,7 @@ fn main() {
         Some("duel") => run_duel_bench(&dex, &args[1..]),
         Some("scale") => run_scale_suite(&dex, &args[1..]),
         Some("v2bench") => run_v2_bench(&dex, &args[1..]),
+        Some("rolloutbench") => run_rollout_bench(&dex, &args[1..]),
         Some("autopsy") => run_autopsy(&dex, &args[1..]),
         Some("calib") => run_calib(&dex, &args[1..]),
         _ => run_scenarios(&dex),

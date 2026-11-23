@@ -12,17 +12,21 @@
 use nc2000_engine::battle::{Outcome, SearchChoice};
 use nc2000_engine::compact::{
     get_stat_branchless, role_bit, vol_bit, CompactBattle, CompactMoveSpec, CompactWeather,
-    ItemStatKind, MatchTable, SpecialMoveKind,
+    ItemStatKind, MatchTable, RosterCompactCache, SpecialMoveKind,
 };
 use nc2000_engine::dex::Dex;
 use nc2000_engine::fxhash::FxHashMap;
 use nc2000_engine::state::{stat_idx, Battle, Status};
 
 use crate::agent::Agent;
-use crate::eval::{compact_eval01, compact_eval_leaf_blindspot, EvalWeights};
+use crate::eval::{
+    compact_eval01, compact_eval_leaf_blindspot, compact_turn_limit_outcome, EvalWeights,
+};
 use crate::exact::solve_matrix_full;
 use crate::linear::DmgKernel1D;
+use crate::mask::dominated_reason;
 use crate::rng::SplitMix64;
+use crate::smmcts::{RmConfig, SelRule, SkuctSearch};
 
 /// Ablation switch between the smoothed 1-ply-safe Golf model (`Full`) and the
 /// unsmoothed minimal Golf model (`Raw`, without HP/Rest/overflow/phaze-cap workarounds).
@@ -2397,6 +2401,12 @@ pub struct TempoMctsConfig {
     pub leaf: TempoLeafMode,
     pub deterministic: bool,
     pub fixed_preview: bool,
+    /// Use empirical-Bayes minimax backup (`backed_up_value`, matching `smmcts.rs`) instead of raw average backup.
+    pub minimax_backup: bool,
+    /// Use `argmax visits` (with `dominated_reason` guard, matching `skuct`) instead of whole-history Nash LP at root.
+    pub argmax_root: bool,
+    /// Optional `CompactBattle` heavy rollout turns (`0` = pure zero-rollout leaf eval).
+    pub rollout_turns: u16,
 }
 
 impl Default for TempoMctsConfig {
@@ -2408,6 +2418,9 @@ impl Default for TempoMctsConfig {
             leaf: TempoLeafMode::TempoFull,
             deterministic: false,
             fixed_preview: false,
+            minimax_backup: false,
+            argmax_root: false,
+            rollout_turns: 0,
         }
     }
 }
@@ -2447,14 +2460,34 @@ impl DuctNode {
     }
 
     #[inline]
-    fn select_ucb(&self, side: usize, c: f64) -> usize {
+    fn select_ucb(&self, side: usize, c: f64, rng: &mut SplitMix64, rand_untried: bool) -> usize {
         let n = self.n_acts[side] as usize;
         if n <= 1 {
             return 0;
         }
-        for i in 0..n {
-            if self.visits[side][i] == 0 {
-                return i;
+        if rand_untried {
+            let mut n_untried = 0usize;
+            for i in 0..n {
+                if self.visits[side][i] == 0 {
+                    n_untried += 1;
+                }
+            }
+            if n_untried > 0 {
+                let mut target = rng.below(n_untried);
+                for i in 0..n {
+                    if self.visits[side][i] == 0 {
+                        if target == 0 {
+                            return i;
+                        }
+                        target -= 1;
+                    }
+                }
+            }
+        } else {
+            for i in 0..n {
+                if self.visits[side][i] == 0 {
+                    return i;
+                }
             }
         }
         let log_n = (self.total.max(1) as f64).ln();
@@ -2471,6 +2504,72 @@ impl DuctNode {
             }
         }
         best_i
+    }
+
+    /// Empirical-Bayes minimax value contraction matching `smmcts::Node::backed_up_value`.
+    #[inline]
+    fn backed_up_value(&self, raw_val0: f64) -> f64 {
+        let n0_len = self.n_acts[0] as usize;
+        let n1_len = self.n_acts[1] as usize;
+        let mut n0 = 0u32;
+        let mut w0 = 0.0f64;
+        for i in 0..n0_len {
+            n0 += self.visits[0][i];
+            w0 += self.sums[0][i];
+        }
+        let mut n1 = 0u32;
+        let mut w1_s0 = 0.0f64;
+        for j in 0..n1_len {
+            n1 += self.visits[1][j];
+            w1_s0 += self.sums[1][j];
+        }
+        let n = n0.max(n1);
+        if n < 2 {
+            return raw_val0;
+        }
+        let r_bar0 = if n0 > 0 {
+            w0 / f64::from(n0)
+        } else if n1 > 0 {
+            w1_s0 / f64::from(n1)
+        } else {
+            return raw_val0;
+        };
+        const TAU: f64 = 1.5;
+        let gain0 = if n0_len > 1 && n0 >= 2 {
+            let mut mu0 = r_bar0;
+            for i in 0..n0_len {
+                let na = self.visits[0][i];
+                if na > 0 {
+                    let est = (self.sums[0][i] + TAU * r_bar0) / (f64::from(na) + TAU);
+                    if est > mu0 {
+                        mu0 = est;
+                    }
+                }
+            }
+            (mu0 - r_bar0).max(0.0)
+        } else {
+            0.0
+        };
+        let blunder1 = if n1_len > 1 && n1 >= 2 {
+            let r_bar1 = 1.0 - (w1_s0 / f64::from(n1));
+            let mut mu1 = r_bar1;
+            for j in 0..n1_len {
+                let nb = self.visits[1][j];
+                if nb > 0 {
+                    let wb1 = f64::from(nb) - self.sums[1][j];
+                    let est = (wb1 + TAU * r_bar1) / (f64::from(nb) + TAU);
+                    if est > mu1 {
+                        mu1 = est;
+                    }
+                }
+            }
+            (mu1 - r_bar1).max(0.0)
+        } else {
+            0.0
+        };
+        let v_star = (r_bar0 + gain0 - blunder1).clamp(0.000_002, 0.999_998);
+        let lambda = 0.85 * (f64::from(n) / (f64::from(n) + 6.0));
+        ((1.0 - lambda) * raw_val0 + lambda * v_star).clamp(0.000_002, 0.999_998)
     }
 }
 
@@ -2571,6 +2670,9 @@ fn eval_duct_leaf(
             _ => 0.5,
         };
     }
+    if let Some(v) = compact_turn_limit_outcome(cb, table) {
+        return v;
+    }
     match mode {
         TempoLeafMode::TempoFull => {
             evaluate_compact_tempo_variant(cb, table, TempoVariant::Full).win_prob
@@ -2584,6 +2686,164 @@ fn eval_duct_leaf(
             compact_eval_leaf_blindspot(cb, table, &EvalWeights::default())
         }
     }
+}
+
+/// Fast `CompactBattle`-native ε-greedy (`eps=0.20`) heavy rollout action picker for controlled
+/// rollout-vs-zero-rollout ablations (`rollout_turns = 0, 2, 4, 8`).
+#[inline]
+fn compact_rollout_pick_fast(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    side: usize,
+    cs: &[u8],
+    rng: &mut SplitMix64,
+) -> u8 {
+    if cs.len() == 1 {
+        return cs[0];
+    }
+    let att_slot = cb.sides[side].active_idx as usize;
+    let att_idx = side * 3 + att_slot;
+    let def_side = 1 - side;
+    let def_slot = cb.sides[def_side].active_idx as usize;
+    let last_mon = cb.sides[side].alive_mask.count_ones() == 1;
+    let suicidal = |act: u8| -> bool {
+        act < 4 && last_mon && table.move_specs[att_idx][act as usize].is_selfdestruct
+    };
+    let rand_safe = |rng: &mut SplitMix64| -> u8 {
+        if last_mon {
+            let mut safe = [0u8; 7];
+            let mut ns = 0usize;
+            for &c in cs {
+                if !suicidal(c) {
+                    safe[ns] = c;
+                    ns += 1;
+                }
+            }
+            if ns > 0 {
+                return safe[rng.below(ns)];
+            }
+        }
+        cs[rng.below(cs.len())]
+    };
+
+    // Perish Song last-turn escape (matches mcts.rs heavy playout).
+    if cb.sides[side].request == 1
+        && (cb.mons[att_idx].vol_flags & vol_bit::PERISH_SONG) != 0
+        && cb.mons[att_idx].perish_turns() == 1
+    {
+        let foe_alive = (cb.sides[def_side].alive_mask & (1 << def_slot)) != 0
+            && cb.mons[def_side * 3 + def_slot].hp() > 0;
+        let mut best_sw = None;
+        let mut best_score = f64::NEG_INFINITY;
+        for &c in cs {
+            if (4..7).contains(&c) {
+                let sl = (c - 4) as usize;
+                let inc = if foe_alive {
+                    cb.best_hit_fraction(table, def_side, def_slot, side, sl)
+                } else {
+                    0.0
+                };
+                let sc = 1.0 - inc;
+                if sc > best_score {
+                    best_score = sc;
+                    best_sw = Some(c);
+                }
+            }
+        }
+        if let Some(sw) = best_sw {
+            return sw;
+        }
+    }
+
+    if rng.next_f64() < 0.20 {
+        return rand_safe(rng);
+    }
+
+    if cb.sides[side].request == 1
+        && (cb.sides[side].alive_mask & (1 << att_slot)) != 0
+        && (cb.sides[def_side].alive_mask & (1 << def_slot)) != 0
+    {
+        let mut best_c = None;
+        let mut best_s = 0.0f64;
+        for &c in cs {
+            if c < 4 && !suicidal(c) {
+                let (score, _) = cb.expected_hit_fraction_with_acc(
+                    table, side, att_slot, def_side, def_slot, c as usize,
+                );
+                if score > best_s {
+                    best_s = score;
+                    best_c = Some(c);
+                }
+            }
+        }
+        if let Some(c) = best_c {
+            return c;
+        }
+        return rand_safe(rng);
+    }
+
+    // Forced switch: pick best immediate matchup (`own_hit - foe_hit`).
+    let foe_alive = (cb.sides[def_side].alive_mask & (1 << def_slot)) != 0
+        && cb.mons[def_side * 3 + def_slot].hp() > 0;
+    let mut best_sw = cs[0];
+    let mut best_s = f64::NEG_INFINITY;
+    for &c in cs {
+        if (4..7).contains(&c) {
+            let sl = (c - 4) as usize;
+            let sc = if foe_alive {
+                cb.best_hit_fraction(table, side, sl, def_side, def_slot).min(1.5)
+                    - cb.best_hit_fraction(table, def_side, def_slot, side, sl).min(1.5)
+            } else {
+                (cb.mons[side * 3 + sl].hp() as f64) / (table.mons[side * 3 + sl].maxhp.max(1) as f64)
+            };
+            if sc > best_s {
+                best_s = sc;
+                best_sw = c;
+            }
+        }
+    }
+    best_sw
+}
+
+/// Optionally roll out `cb` for up to `rollout_turns` turns on `CompactBattle`, then score with `mode`.
+#[inline]
+fn eval_duct_leaf_with_rollout(
+    cb: &mut CompactBattle,
+    table: &MatchTable,
+    mode: TempoLeafMode,
+    rollout_turns: u16,
+    cache: Option<&TempoMatchCache>,
+    rng: &mut SplitMix64,
+) -> f64 {
+    if rollout_turns == 0 || cb.outcome != 0 {
+        return eval_duct_leaf(cb, table, mode, cache);
+    }
+    let raw_cutoff = cb.turn.saturating_add(rollout_turns.saturating_sub(1));
+    let cutoff = table
+        .ruleset
+        .turn_limit()
+        .map_or(raw_cutoff, |lim| raw_cutoff.min(lim));
+    let mut safety = 0u8;
+    while cb.outcome == 0 && cb.turn <= cutoff && safety < 32 {
+        safety += 1;
+        if let Some(v) = compact_turn_limit_outcome(cb, table) {
+            return v;
+        }
+        let mut picks = [7u8; 2];
+        for s in 0..2usize {
+            if cb.sides[s].request == 0 {
+                continue;
+            }
+            let mut cs = [0u8; 7];
+            let n = cb.legal_actions(table, s, &mut cs);
+            if n > 0 {
+                picks[s] = compact_rollout_pick_fast(cb, table, s, &cs[..n], rng);
+            }
+        }
+        cb.prng_seed = rng.next();
+        cb.apply_actions(table, picks);
+    }
+    eval_duct_leaf(cb, table, mode, cache)
 }
 
 // =========================================================================
@@ -4741,7 +5001,11 @@ pub fn search_tempo_mcts(
     let mut path: Vec<(usize, usize, usize)> = Vec::with_capacity(cfg.max_depth as usize + 1);
     let mut depth_sum = 0u64;
 
-    let warmup_pairs = (root_n0 * root_n1).min(cfg.iterations as usize);
+    let warmup_pairs = if cfg.argmax_root {
+        0
+    } else {
+        (root_n0 * root_n1).min(cfg.iterations as usize)
+    };
 
     for iter in 0..cfg.iterations as usize {
         let mut cb = base_cb;
@@ -4750,14 +5014,19 @@ pub fn search_tempo_mcts(
         path.clear();
 
         let leaf_val = loop {
+            let n0_cur = nodes[cur_id].n_acts[0] as usize;
+            let n1_cur = nodes[cur_id].n_acts[1] as usize;
             let (i0, i1) = if depth == 0 && iter < warmup_pairs {
                 (iter / root_n1.max(1), iter % root_n1.max(1))
             } else {
                 let node = &nodes[cur_id];
-                (node.select_ucb(0, cfg.c), node.select_ucb(1, cfg.c))
+                (
+                    node.select_ucb(0, cfg.c, &mut rng, cfg.argmax_root),
+                    node.select_ucb(1, cfg.c, &mut rng, cfg.argmax_root),
+                )
             };
-            let a0 = nodes[cur_id].acts[0][i0];
-            let a1 = nodes[cur_id].acts[1][i1];
+            let a0 = if n0_cur > 0 { nodes[cur_id].acts[0][i0] } else { 7 };
+            let a1 = if n1_cur > 0 { nodes[cur_id].acts[1][i1] } else { 7 };
             path.push((cur_id, i0, i1));
 
             cb.prng_seed = rng.next();
@@ -4766,6 +5035,9 @@ pub fn search_tempo_mcts(
 
             if cb.outcome != 0 {
                 break eval_duct_leaf(&cb, &table, cfg.leaf, fast_cache.as_ref());
+            }
+            if let Some(v) = compact_turn_limit_outcome(&cb, &table) {
+                break v;
             }
             if depth >= cfg.max_depth {
                 break eval_duct_leaf(&cb, &table, cfg.leaf, fast_cache.as_ref());
@@ -4778,22 +5050,56 @@ pub fn search_tempo_mcts(
                 let new_id = nodes.len();
                 nodes.push(DuctNode::new(&cb, &table));
                 index.insert(next_key, new_id);
-                break eval_duct_leaf(&cb, &table, cfg.leaf, fast_cache.as_ref());
+                break eval_duct_leaf_with_rollout(
+                    &mut cb,
+                    &table,
+                    cfg.leaf,
+                    cfg.rollout_turns,
+                    fast_cache.as_ref(),
+                    &mut rng,
+                );
             }
         };
 
         depth_sum += depth as u64;
-        for &(nid, i0, i1) in &path {
-            let n = &mut nodes[nid];
-            n.total += 1;
-            n.visits[0][i0] += 1;
-            n.sums[0][i0] += leaf_val;
-            n.visits[1][i1] += 1;
-            n.sums[1][i1] += leaf_val;
-        }
-        if let Some(&(_, r0, r1)) = path.first() {
-            joint_v[r0][r1] += 1;
-            joint_s[r0][r1] += leaf_val;
+        if cfg.minimax_backup {
+            let mut val = leaf_val;
+            for &(nid, i0, i1) in path.iter().rev() {
+                let n = &mut nodes[nid];
+                n.total += 1;
+                if n.n_acts[0] > 0 {
+                    n.visits[0][i0] += 1;
+                    n.sums[0][i0] += val;
+                }
+                if n.n_acts[1] > 0 {
+                    n.visits[1][i1] += 1;
+                    n.sums[1][i1] += val;
+                }
+                if nid != 0 && val > 0.000_001 && val < 0.999_999 {
+                    val = n.backed_up_value(val);
+                }
+            }
+            if let Some(&(_, r0, r1)) = path.first() {
+                joint_v[r0][r1] += 1;
+                joint_s[r0][r1] += val;
+            }
+        } else {
+            for &(nid, i0, i1) in &path {
+                let n = &mut nodes[nid];
+                n.total += 1;
+                if n.n_acts[0] > 0 {
+                    n.visits[0][i0] += 1;
+                    n.sums[0][i0] += leaf_val;
+                }
+                if n.n_acts[1] > 0 {
+                    n.visits[1][i1] += 1;
+                    n.sums[1][i1] += leaf_val;
+                }
+            }
+            if let Some(&(_, r0, r1)) = path.first() {
+                joint_v[r0][r1] += 1;
+                joint_s[r0][r1] += leaf_val;
+            }
         }
     }
 
@@ -4813,11 +5119,17 @@ pub fn search_tempo_mcts(
         }
     }
 
-    // Root readout: solve shrunken joint matrix over active support (`visits >= max_v / 8`) via exact Nash LP.
+    // Root readout: either `argmax visits` + dominated guard (matching `skuct`) or shrunken Nash LP.
     let (own_policy, eq_win_prob) = if n_my <= 1 {
         (vec![1.0; n_my], means.first().copied().unwrap_or(0.5))
-    } else if n_op <= 1 {
+    } else if cfg.argmax_root || n_op <= 1 {
+        let dom: Vec<bool> = own_choices
+            .iter()
+            .map(|&c| dominated_reason(battle, dex, side, c).is_some())
+            .collect();
+        let any_safe = dom.iter().any(|&d| !d);
         let best_i = (0..n_my)
+            .filter(|&i| !any_safe || !dom[i])
             .max_by(|&a, &b| visits[a].cmp(&visits[b]).then_with(|| means[a].total_cmp(&means[b])))
             .unwrap_or(0);
         let mut pol = vec![0.0; n_my];
@@ -4993,6 +5305,114 @@ impl Agent for TempoMctsAgent {
         }
         let seed = self.rng.next();
         search_tempo_mcts(battle, dex, side, choices, self.cfg, seed).own_policy
+    }
+}
+
+// =========================================================================
+// Exact `SkuctSearch` Wrapper (`SkuctGolfAgent`) — Zero-Edit Control Bridge
+// =========================================================================
+
+#[derive(Clone, Copy, Debug)]
+pub struct SkuctGolfConfig {
+    pub iterations: u32,
+    pub c: f64,
+    pub leaf: TempoLeafMode,
+    pub rollout_turns: u16,
+    pub fixed_preview: bool,
+}
+
+impl Default for SkuctGolfConfig {
+    fn default() -> Self {
+        Self {
+            iterations: 1000,
+            c: 0.4,
+            leaf: TempoLeafMode::FastGolf,
+            rollout_turns: 0,
+            fixed_preview: true,
+        }
+    }
+}
+
+/// Runs the exact shipped `SkuctSearch` engine (`BattleSearchCache` keying, `backed_up_value`
+/// minimax backup, `endgame_root`, `dominated_reason`) via `step_with_leaf`, swapping ONLY the
+/// leaf evaluator (`FastGolf` vs `EvalBlindspot`) and rollout depth (`0, 2, 4, 8` turns).
+pub struct SkuctGolfAgent {
+    pub cfg: SkuctGolfConfig,
+    rng: SplitMix64,
+}
+
+impl SkuctGolfAgent {
+    pub fn new(cfg: SkuctGolfConfig, seed: u64) -> Self {
+        Self {
+            cfg,
+            rng: SplitMix64::new(seed),
+        }
+    }
+}
+
+impl Agent for SkuctGolfAgent {
+    fn name(&self) -> String {
+        let tag = match self.cfg.leaf {
+            TempoLeafMode::FastGolf => "golf",
+            TempoLeafMode::EvalBlindspot => "bs",
+            TempoLeafMode::EvalStatic => "eval",
+            TempoLeafMode::TempoFull => "full",
+            TempoLeafMode::TempoRaw => "raw",
+        };
+        format!("skuct-{tag}-{}r:{}", self.cfg.rollout_turns, self.cfg.iterations)
+    }
+
+    fn choose(
+        &mut self,
+        battle: &Battle,
+        dex: &Dex,
+        side: usize,
+        choices: &[SearchChoice],
+    ) -> SearchChoice {
+        if choices.len() == 1 {
+            return choices[0];
+        }
+        if matches!(choices[0], SearchChoice::Team(_)) {
+            if self.cfg.fixed_preview {
+                let d = SearchChoice::Team([1, 2, 3]);
+                return if choices.contains(&d) { d } else { choices[0] };
+            }
+            return fast_tempo_team_preview(
+                battle,
+                dex,
+                side,
+                choices,
+                TempoVariant::Full,
+                self.cfg.leaf == TempoLeafMode::FastGolf,
+            );
+        }
+
+        let rm_cfg = RmConfig {
+            iterations: self.cfg.iterations,
+            c: self.cfg.c,
+            rule: SelRule::Ucb,
+            ..RmConfig::default()
+        };
+        let roster_cache = RosterCompactCache::from_battle(battle, dex);
+        let (root_table, root_cb) =
+            CompactBattle::from_battle_with_roster_cache(battle, dex, Some(&roster_cache));
+        let fast_cache = if self.cfg.leaf == TempoLeafMode::FastGolf {
+            Some(TempoMatchCache::build(&root_cb, &root_table))
+        } else {
+            None
+        };
+
+        let seed = self.rng.next();
+        let mut search = SkuctSearch::new(battle, dex, rm_cfg, seed);
+        let leaf_mode = self.cfg.leaf;
+        let rollout_turns = self.cfg.rollout_turns;
+        search.step_with_leaf(dex, self.cfg.iterations, &mut |sim, rng, do_rollout| {
+            let (tbl, mut cb) =
+                CompactBattle::from_battle_with_roster_cache(sim, dex, Some(&roster_cache));
+            let turns = if do_rollout { rollout_turns } else { 0 };
+            eval_duct_leaf_with_rollout(&mut cb, &tbl, leaf_mode, turns, fast_cache.as_ref(), rng)
+        });
+        search.best(side).unwrap_or(choices[0])
     }
 }
 
@@ -5279,5 +5699,36 @@ mod tests {
             fg_r1.turn_advantage,
             fg_r5.turn_advantage
         );
+
+        // 10. Minimax-backup + argmax-root + micro-rollout (`cmcts`) & `SkuctGolfAgent` smoke + dominated guard.
+        let mut cmcts_agent = TempoMctsAgent::new(
+            TempoMctsConfig {
+                iterations: 60,
+                c: 0.4,
+                max_depth: 64,
+                leaf: TempoLeafMode::FastGolf,
+                deterministic: true,
+                fixed_preview: true,
+                minimax_backup: true,
+                argmax_root: true,
+                rollout_turns: 2,
+            },
+            99,
+        );
+        let pick_cmcts = cmcts_agent.choose(&b_mcts, &dex, 0, &cs_mcts);
+        assert!(cs_mcts.contains(&pick_cmcts));
+
+        let mut skuct_golf = SkuctGolfAgent::new(
+            SkuctGolfConfig {
+                iterations: 40,
+                c: 0.4,
+                leaf: TempoLeafMode::FastGolf,
+                rollout_turns: 2,
+                fixed_preview: true,
+            },
+            99,
+        );
+        let pick_skuct = skuct_golf.choose(&b_mcts, &dex, 0, &cs_mcts);
+        assert!(cs_mcts.contains(&pick_skuct));
     }
 }
