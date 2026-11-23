@@ -33,6 +33,8 @@ pub mod analysis;
 pub mod belief;
 pub mod blind;
 pub mod bounds;
+pub mod compact_az;
+pub(crate) mod compact_az_weights;
 pub mod corpus;
 pub mod compiled_preview;
 pub mod decision;

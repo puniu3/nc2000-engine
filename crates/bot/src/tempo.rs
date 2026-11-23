@@ -59,6 +59,9 @@ pub enum TempoLeafMode {
     TempoRaw,
     FastGolf,
     HybridGolf,
+    Stage3Log,
+    Stage3Mlp,
+    AzValue,
     EvalStatic,
     EvalBlindspot,
 }
@@ -191,7 +194,7 @@ pub struct TurnMatrixAnalysis {
 // =========================================================================
 
 #[inline]
-fn effective_speed(cb: &CompactBattle, table: &MatchTable, side: usize, slot: usize) -> i32 {
+pub(crate) fn effective_speed(cb: &CompactBattle, table: &MatchTable, side: usize, slot: usize) -> i32 {
     if table.ruleset.is_castle() {
         return cb.castle_speed_x3360(table, side, slot) as i32;
     }
@@ -247,13 +250,13 @@ fn is_grounded(table: &MatchTable, idx: usize) -> bool {
 }
 
 #[inline]
-fn spikes_layers(cb: &CompactBattle, side: usize) -> u8 {
+pub(crate) fn spikes_layers(cb: &CompactBattle, side: usize) -> u8 {
     cb.sides[side].side_flags & 0x03
 }
 
 /// Effective starting HP for a mon if it fights now (deducting Spikes if benched & grounded).
 #[inline]
-fn entry_hp(cb: &CompactBattle, table: &MatchTable, side: usize, slot: usize) -> i16 {
+pub(crate) fn entry_hp(cb: &CompactBattle, table: &MatchTable, side: usize, slot: usize) -> i16 {
     let idx = side * 3 + slot;
     let mut hp = cb.mons[idx].hp();
     if hp <= 0 {
@@ -295,7 +298,7 @@ fn instant_heal_frac(cb: &CompactBattle, ms: &CompactMoveSpec) -> Option<f64> {
 
 /// Expected remaining asleep turns before waking (0 if not asleep).
 #[inline]
-fn expected_sleep_turns(cb: &CompactBattle, side: usize, slot: usize) -> f64 {
+pub(crate) fn expected_sleep_turns(cb: &CompactBattle, side: usize, slot: usize) -> f64 {
     let mon = &cb.mons[side * 3 + slot];
     if mon.status_raw() != Status::Slp as u8 {
         return 0.0;
@@ -2549,6 +2552,9 @@ struct DuctNode {
     acts: [[u8; 7]; 2],
     visits: [[u32; 7]; 2],
     sums: [[f64; 7]; 2],
+    priors: [[f32; 7]; 2],
+    noop_mask: [u8; 2],
+    priors_ready: bool,
     total: u32,
 }
 
@@ -2562,8 +2568,93 @@ impl DuctNode {
             acts,
             visits: [[0; 7]; 2],
             sums: [[0.0; 7]; 2],
+            priors: [[0.0; 7]; 2],
+            noop_mask: [0; 2],
+            priors_ready: false,
             total: 0,
         }
+    }
+
+    #[inline]
+    fn ensure_puct_priors(
+        &mut self,
+        cb: &CompactBattle,
+        table: &MatchTable,
+        cache: Option<&TempoMatchCache>,
+        eps_p: f32,
+    ) {
+        if self.priors_ready {
+            return;
+        }
+        for s in 0..2usize {
+            let k = self.n_acts[s] as usize;
+            if k > 1 {
+                let (p, m) = crate::compact_az::policy_priors(
+                    cb,
+                    table,
+                    cache,
+                    s,
+                    &self.acts[s],
+                    k,
+                    eps_p,
+                );
+                self.priors[s] = p;
+                self.noop_mask[s] = m;
+            } else if k == 1 {
+                self.priors[s][0] = 1.0;
+            }
+        }
+        self.priors_ready = true;
+    }
+
+    #[inline]
+    fn select_puct(&self, side: usize, c_puct: f64, fpu_red: f64) -> usize {
+        let n = self.n_acts[side] as usize;
+        if n <= 1 {
+            return 0;
+        }
+        let mask = self.noop_mask[side];
+        if self.total == 0 {
+            let mut best_i = 0usize;
+            let mut best_p = f32::NEG_INFINITY;
+            for i in 0..n {
+                if ((mask >> i) & 1) == 0 && self.priors[side][i] > best_p {
+                    best_p = self.priors[side][i];
+                    best_i = i;
+                }
+            }
+            return best_i;
+        }
+        let mut n_tot = 0u32;
+        let mut w_tot = 0.0f64;
+        for i in 0..n {
+            n_tot += self.visits[side][i];
+            w_tot += self.sums[side][i];
+        }
+        let r_bar0 = if n_tot > 0 { w_tot / f64::from(n_tot) } else { 0.5 };
+        let r_bar_s = if side == 0 { r_bar0 } else { 1.0 - r_bar0 };
+        let fpu = (r_bar_s - fpu_red).clamp(0.01, 0.99);
+        let sqrt_n = f64::from(self.total.max(1)).sqrt();
+        let mut best_i = 0usize;
+        let mut best_u = f64::NEG_INFINITY;
+        for i in 0..n {
+            if ((mask >> i) & 1) != 0 {
+                continue;
+            }
+            let vi = self.visits[side][i];
+            let q = if vi > 0 {
+                let raw = self.sums[side][i] / f64::from(vi);
+                if side == 0 { raw } else { 1.0 - raw }
+            } else {
+                fpu
+            };
+            let u = q + c_puct * f64::from(self.priors[side][i]) * sqrt_n / f64::from(vi + 1);
+            if u > best_u {
+                best_u = u;
+                best_i = i;
+            }
+        }
+        best_i
     }
 
     #[inline]
@@ -2616,6 +2707,14 @@ impl DuctNode {
     /// Empirical-Bayes minimax value contraction matching `smmcts::Node::backed_up_value`.
     #[inline]
     fn backed_up_value(&self, raw_val0: f64) -> f64 {
+        self.backed_up_value_cfg(raw_val0, 0.85, 1.5)
+    }
+
+    #[inline]
+    fn backed_up_value_cfg(&self, raw_val0: f64, lambda_max: f64, tau: f64) -> f64 {
+        if lambda_max <= 0.0 {
+            return raw_val0;
+        }
         let n0_len = self.n_acts[0] as usize;
         let n1_len = self.n_acts[1] as usize;
         let mut n0 = 0u32;
@@ -2641,13 +2740,12 @@ impl DuctNode {
         } else {
             return raw_val0;
         };
-        const TAU: f64 = 1.5;
         let gain0 = if n0_len > 1 && n0 >= 2 {
             let mut mu0 = r_bar0;
             for i in 0..n0_len {
                 let na = self.visits[0][i];
                 if na > 0 {
-                    let est = (self.sums[0][i] + TAU * r_bar0) / (f64::from(na) + TAU);
+                    let est = (self.sums[0][i] + tau * r_bar0) / (f64::from(na) + tau);
                     if est > mu0 {
                         mu0 = est;
                     }
@@ -2664,7 +2762,7 @@ impl DuctNode {
                 let nb = self.visits[1][j];
                 if nb > 0 {
                     let wb1 = f64::from(nb) - self.sums[1][j];
-                    let est = (wb1 + TAU * r_bar1) / (f64::from(nb) + TAU);
+                    let est = (wb1 + tau * r_bar1) / (f64::from(nb) + tau);
                     if est > mu1 {
                         mu1 = est;
                     }
@@ -2675,7 +2773,7 @@ impl DuctNode {
             0.0
         };
         let v_star = (r_bar0 + gain0 - blunder1).clamp(0.000_002, 0.999_998);
-        let lambda = 0.85 * (f64::from(n) / (f64::from(n) + 6.0));
+        let lambda = lambda_max * (f64::from(n) / (f64::from(n) + 6.0));
         ((1.0 - lambda) * raw_val0 + lambda * v_star).clamp(0.000_002, 0.999_998)
     }
 }
@@ -2791,10 +2889,12 @@ fn compact_duct_key_seeded_qc(
             let mon = &cb.mons[idx];
             let maxhp = table.mons[idx].maxhp.max(1) as i32;
             let hp = mon.hp().max(0) as i32;
+            // Floor HP bucketing (parity with Battle::search_key / CompactBattle::search_key):
+            // isolates `hp == maxhp` (100% HP where Rest fails!) in bucket 16 vs 94-99.9% in bucket 15.
             let hp_b = if hp == 0 {
                 0u64
             } else {
-                (((hp * 16 + maxhp - 1) / maxhp).clamp(1, 16)) as u64
+                ((hp * 16) / maxhp) as u64
             };
             let st = mon.status_raw() as u64;
             let st_c = if st == Status::Slp as u64 {
@@ -2804,9 +2904,14 @@ fn compact_duct_key_seeded_qc(
             } else {
                 0
             };
+            let pp_exact = u32::from_le_bytes(mon.pp) as u64;
             let mut mword = ((idx as u64) << 0) | (hp_b << 4) | (st << 9) | (st_c << 12);
             if slot == act {
-                let sub = (mon.sub_hp() > 0) as u64;
+                let sub_b = if mon.sub_hp() <= 0 {
+                    0u64
+                } else {
+                    (((mon.sub_hp() as i32 * 16) / maxhp).max(1).min(15)) as u64
+                };
                 let perish = mon.perish_turns() as u64;
                 let ptrap = mon.partially_trapped() as u64;
                 let vol = (mon.vol_flags
@@ -2822,20 +2927,12 @@ fn compact_duct_key_seeded_qc(
                         | vol_bit::NIGHTMARE
                         | vol_bit::FORESIGHT
                         | vol_bit::DESTINY_BOND)) as u64;
-                // Encodes encore_slot (bits 2..3), disable_slot (bits 4..5), must_recharge (bit 7).
-                let slot_ctrl = (mon.slot_refs & 0xBC) as u64;
+                // Keep FULL `slot_refs` (including `last_move_slot` for Encore/Disable!).
+                let slot_ctrl = mon.slot_refs as u64;
                 let lock_ctrl = mon.rollout_rage as u64;
-                let mut pp_nz = 0u64;
-                for m in 0..4usize {
-                    if mon.pp[m] > 0 {
-                        pp_nz |= 1u64 << m;
-                    }
-                }
-                // Zero bit overlap: mword uses bits 0..58; mon.item lives in bword bits 48..56.
-                mword |= (sub << 17)
-                    | (perish << 18)
-                    | (ptrap << 21)
-                    | (pp_nz << 22)
+                mword |= (sub_b << 17)
+                    | (perish << 21)
+                    | (ptrap << 24)
                     | (vol << 26)
                     | (slot_ctrl << 42)
                     | (lock_ctrl << 50);
@@ -2854,8 +2951,15 @@ fn compact_duct_key_seeded_qc(
                     | ((mon.ext_timers[3] as u64) << 56);
                 h = mix64(h, bword);
                 h = mix64(h, tword);
+                h = mix64(
+                    h,
+                    pp_exact
+                        | ((cb.speed_order as u64) << 32)
+                        | ((cb.hurt_cat_this_turn[side] as u64) << 40)
+                        | (((cb.hurt_damage_this_turn[side] / 16) as u64) << 48),
+                );
             } else {
-                mword |= (mon.item as u64) << 17;
+                mword |= ((mon.item as u64) << 17) | (pp_exact << 25);
                 h = mix64(h, mword);
             }
         }
@@ -2869,6 +2973,17 @@ fn eval_duct_leaf(
     table: &MatchTable,
     mode: TempoLeafMode,
     cache: Option<&TempoMatchCache>,
+) -> f64 {
+    eval_duct_leaf_temp(cb, table, mode, cache, 1.0)
+}
+
+#[inline]
+fn eval_duct_leaf_temp(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    mode: TempoLeafMode,
+    cache: Option<&TempoMatchCache>,
+    leaf_temp: f64,
 ) -> f64 {
     if cb.outcome != 0 {
         return match cb.outcome {
@@ -2888,14 +3003,31 @@ fn eval_duct_leaf(
             evaluate_compact_tempo_variant(cb, table, TempoVariant::Raw).win_prob
         }
         TempoLeafMode::FastGolf => evaluate_fast_golf(cb, table, cache).win_prob,
-        TempoLeafMode::HybridGolf => evaluate_hybrid_golf(cb, table, cache),
-        TempoLeafMode::EvalStatic => compact_eval01(cb, table, &EvalWeights::default()),
+        TempoLeafMode::HybridGolf => {
+            return if (leaf_temp - 1.0).abs() <= 1e-9 {
+                evaluate_hybrid_golf(cb, table, cache)
+            } else {
+                evaluate_hybrid_golf_temp(cb, table, cache, leaf_temp)
+            };
+        }
+        TempoLeafMode::Stage3Log => {
+            return evaluate_stage3_log(cb, table, cache, leaf_temp);
+        }
+        TempoLeafMode::Stage3Mlp => {
+            return evaluate_stage3_mlp(cb, table, cache, leaf_temp);
+        }
+        TempoLeafMode::AzValue => {
+            return crate::compact_az::evaluate_az_value(cb, table, cache, leaf_temp);
+        }
+        TempoLeafMode::EvalStatic => {
+            return compact_eval01(cb, table, &EvalWeights::default());
+        }
         TempoLeafMode::EvalBlindspot => {
-            compact_eval_leaf_blindspot(cb, table, &EvalWeights::default())
+            return compact_eval_leaf_blindspot(cb, table, &EvalWeights::default());
         }
     };
-    // Keep non-terminal heuristic leaves strictly away from exact 0/1 terminal thresholds
-    // so `backed_up_value` and `EndgameRootStats::is_win/is_loss` never misclassify leaves as terminals.
+    // Keep non-terminal heuristic Golf leaves strictly away from exact 0/1 terminal thresholds
+    // so `backed_up_value` and `EndgameRootStats::is_win/is_loss` never misclassify heuristic leaves.
     raw.clamp(0.000_1, 0.999_9)
 }
 
@@ -3141,41 +3273,49 @@ const MOVE_FLAG_WATER: u16 = 1 << 3;
 const MOVE_FLAG_FIRE: u16 = 1 << 4;
 const MOVE_FLAG_SOLARBEAM: u16 = 1 << 5;
 const MOVE_FLAG_SELFDESTRUCT: u16 = 1 << 6;
-const MOVE_FLAG_RECHARGE: u16 = 1 << 7;
+pub(crate) const MOVE_FLAG_RECHARGE: u16 = 1 << 7;
 const MOVE_FLAG_ALWAYS_HIT: u16 = 1 << 8;
 
 #[derive(Clone, Copy, Default)]
-struct CachedMoveDmg {
-    mean_dmg: f32,
-    min_norm: f32,
-    max_norm: f32,
-    max_crit: f32,
-    p_hit: f32,
-    p_crit: f32,
-    flags: u16,
+pub(crate) struct CachedMoveDmg {
+    pub(crate) mean_dmg: f32,
+    pub(crate) min_norm: f32,
+    pub(crate) max_norm: f32,
+    pub(crate) max_crit: f32,
+    pub(crate) p_hit: f32,
+    pub(crate) p_crit: f32,
+    pub(crate) flags: u16,
 }
 
 #[derive(Clone, Copy)]
-struct StaticMonCache {
-    half_heal_slot: u8,
-    half_heal_is_weather: bool,
-    rest_slot: u8,
-    sleep_talk_slot: u8,
-    phaze_slot: u8,
-    haze_slot: u8,
-    bp_slot: u8,
-    perish_slot: u8,
-    dbond_slot: u8,
-    st_attack_rate: f64,
-    inv_maxhp: f64,
-    q16_frac: f64,
-    q8_frac: f64,
-    sand_immune: bool,
-    init_boost_type: u8,
-    init_castle_boost_type: u8,
-    init_stat_kind: nc2000_engine::compact::ItemStatKind,
-    init_brightpowder: bool,
-    init_scope_lens: bool,
+pub(crate) struct StaticMonCache {
+    pub(crate) half_heal_slot: u8,
+    pub(crate) half_heal_is_weather: bool,
+    pub(crate) rest_slot: u8,
+    pub(crate) sleep_talk_slot: u8,
+    pub(crate) phaze_slot: u8,
+    pub(crate) haze_slot: u8,
+    pub(crate) bp_slot: u8,
+    pub(crate) perish_slot: u8,
+    pub(crate) dbond_slot: u8,
+    pub(crate) encore_slot: u8,
+    pub(crate) meanlook_slot: u8,
+    pub(crate) pursuit_slot: u8,
+    pub(crate) healbell_slot: u8,
+    pub(crate) setup_mask: u8,
+    pub(crate) sleep_mask: u8,
+    pub(crate) toxic_mask: u8,
+    pub(crate) twave_mask: u8,
+    pub(crate) st_attack_rate: f64,
+    pub(crate) inv_maxhp: f64,
+    pub(crate) q16_frac: f64,
+    pub(crate) q8_frac: f64,
+    pub(crate) sand_immune: bool,
+    pub(crate) init_boost_type: u8,
+    pub(crate) init_castle_boost_type: u8,
+    pub(crate) init_stat_kind: nc2000_engine::compact::ItemStatKind,
+    pub(crate) init_brightpowder: bool,
+    pub(crate) init_scope_lens: bool,
 }
 
 impl Default for StaticMonCache {
@@ -3190,6 +3330,14 @@ impl Default for StaticMonCache {
             bp_slot: 0xFF,
             perish_slot: 0xFF,
             dbond_slot: 0xFF,
+            encore_slot: 0xFF,
+            meanlook_slot: 0xFF,
+            pursuit_slot: 0xFF,
+            healbell_slot: 0xFF,
+            setup_mask: 0,
+            sleep_mask: 0,
+            toxic_mask: 0,
+            twave_mask: 0,
             st_attack_rate: 0.0,
             inv_maxhp: 1.0,
             q16_frac: 0.0625,
@@ -3205,14 +3353,14 @@ impl Default for StaticMonCache {
 }
 
 #[derive(Clone, Copy)]
-struct CachedPairEntry {
-    moves: [CachedMoveDmg; 4],
-    best_norm_slot: u8,
-    boom_slot: u8,
-    any_dynamic_bp: bool,
-    has_weather_acc: bool,
-    has_drain: bool,
-    has_recharge: bool,
+pub(crate) struct CachedPairEntry {
+    pub(crate) moves: [CachedMoveDmg; 4],
+    pub(crate) best_norm_slot: u8,
+    pub(crate) boom_slot: u8,
+    pub(crate) any_dynamic_bp: bool,
+    pub(crate) has_weather_acc: bool,
+    pub(crate) has_drain: bool,
+    pub(crate) has_recharge: bool,
 }
 
 impl Default for CachedPairEntry {
@@ -3241,19 +3389,19 @@ pub struct TempoMatchCache {
 }
 
 #[derive(Clone, Copy)]
-struct CacheView<'a> {
+pub(crate) struct CacheView<'a> {
     cache: &'a TempoMatchCache,
     map: [[usize; 3]; 2],
 }
 
 impl<'a> CacheView<'a> {
     #[inline(always)]
-    fn mon(&self, side: usize, slot: usize) -> &'a StaticMonCache {
+    pub(crate) fn mon(&self, side: usize, slot: usize) -> &'a StaticMonCache {
         &self.cache.mons[side * 3 + self.map[side][slot]]
     }
 
     #[inline(always)]
-    fn pair(&self, att_side: usize, att_slot: usize, def_slot: usize) -> &'a CachedPairEntry {
+    pub(crate) fn pair(&self, att_side: usize, att_slot: usize, def_slot: usize) -> &'a CachedPairEntry {
         let ca = self.map[att_side][att_slot];
         let cd = self.map[1 - att_side][def_slot];
         &self.cache.entries[att_side][ca][cd]
@@ -3262,7 +3410,7 @@ impl<'a> CacheView<'a> {
 
 impl TempoMatchCache {
     #[inline]
-    fn view_for(&self, cb: &CompactBattle) -> Option<CacheView<'_>> {
+    pub(crate) fn view_for(&self, cb: &CompactBattle) -> Option<CacheView<'_>> {
         if cb.sides[0].party_roster == self.party_roster[0]
             && cb.sides[1].party_roster == self.party_roster[1]
         {
@@ -3307,6 +3455,14 @@ impl TempoMatchCache {
             let mut bp_slot = 0xFFu8;
             let mut perish_slot = 0xFFu8;
             let mut dbond_slot = 0xFFu8;
+            let mut encore_slot = 0xFFu8;
+            let mut meanlook_slot = 0xFFu8;
+            let mut pursuit_slot = 0xFFu8;
+            let mut healbell_slot = 0xFFu8;
+            let mut setup_mask = 0u8;
+            let mut sleep_mask = 0u8;
+            let mut toxic_mask = 0u8;
+            let mut twave_mask = 0u8;
             let mut usable_st_attacks = 0usize;
             for m in 0..n_moves {
                 clean_cb.mons[i].pp[m] = table.mons[i].max_pp[m].max(1);
@@ -3337,6 +3493,34 @@ impl TempoMatchCache {
                 if ms.special_kind == SpecialMoveKind::DestinyBond && dbond_slot == 0xFF {
                     dbond_slot = m as u8;
                 }
+                if ms.special_kind == SpecialMoveKind::Encore && encore_slot == 0xFF {
+                    encore_slot = m as u8;
+                }
+                if ms.special_kind == SpecialMoveKind::MeanLook && meanlook_slot == 0xFF {
+                    meanlook_slot = m as u8;
+                }
+                if ms.special_kind == SpecialMoveKind::Pursuit && pursuit_slot == 0xFF {
+                    pursuit_slot = m as u8;
+                }
+                if ms.special_kind == SpecialMoveKind::HealBell && healbell_slot == 0xFF {
+                    healbell_slot = m as u8;
+                }
+                let is_ghost = (table.mons[i].type_mask & (1u32 << (table.ghost_type & 31))) != 0;
+                if (ms.special_kind == SpecialMoveKind::Curse && !is_ghost)
+                    || ms.special_kind == SpecialMoveKind::BellyDrum
+                    || (ms.is_status
+                        && ms.boosts_self
+                        && ms.boosts.iter().any(|&(st, d)| st < 5 && d > 0))
+                {
+                    setup_mask |= 1u8 << m;
+                }
+                if ms.primary_status == Status::Slp as u8 {
+                    sleep_mask |= 1u8 << m;
+                } else if ms.primary_status == Status::Tox as u8 {
+                    toxic_mask |= 1u8 << m;
+                } else if ms.primary_status == Status::Par as u8 {
+                    twave_mask |= 1u8 << m;
+                }
                 if ms.special_kind == SpecialMoveKind::SleepTalk {
                     sleep_talk_slot = m as u8;
                 } else if !ms.is_status && !ms.is_selfdestruct && ms.can_sleep_talk {
@@ -3355,6 +3539,14 @@ impl TempoMatchCache {
                 bp_slot,
                 perish_slot,
                 dbond_slot,
+                encore_slot,
+                meanlook_slot,
+                pursuit_slot,
+                healbell_slot,
+                setup_mask,
+                sleep_mask,
+                toxic_mask,
+                twave_mask,
                 st_attack_rate: if sleep_talk_slot != 0xFF && n_moves > 1 {
                     usable_st_attacks as f64 / (n_moves - 1) as f64
                 } else {
@@ -3522,7 +3714,7 @@ fn summarize_kernel(kern: &DmgKernel1D, ms: &CompactMoveSpec) -> CachedMoveDmg {
 
 /// Apply Gen 2 boosts, Burn, duration-weighted Screens, Weather, and Acc/Eva to a cached clean `CachedMoveDmg` in O(1).
 #[inline(always)]
-fn scale_cached_move(
+pub(crate) fn scale_cached_move(
     md: CachedMoveDmg,
     att_boosts: &[i8; 7],
     def_boosts: &[i8; 7],
@@ -3607,7 +3799,7 @@ fn scale_cached_move(
 }
 
 #[inline(always)]
-fn fast_ko_prob(m: &CachedMoveDmg, hp: f32) -> f64 {
+pub(crate) fn fast_ko_prob(m: &CachedMoveDmg, hp: f32) -> f64 {
     if hp <= 0.0 {
         return 1.0;
     }
@@ -3631,20 +3823,20 @@ fn fast_ko_prob(m: &CachedMoveDmg, hp: f32) -> f64 {
 }
 
 #[derive(Clone, Copy, Default)]
-struct FastPair {
-    raw_ttk: f64,
-    eff_ttk: f64,
-    net_dmg: f64,
-    raw_dmg: f64,
-    max_norm_frac: f64,
-    ohko_prob: f64,
-    boom_ko_prob: f64,
-    boom_dmg_frac: f64,
-    heal_duty: f64,
-    def_sustain: bool,
-    speed_cmp: i8,
-    perish_capped: bool,
-    best_pp: u8,
+pub(crate) struct FastPair {
+    pub(crate) raw_ttk: f64,
+    pub(crate) eff_ttk: f64,
+    pub(crate) net_dmg: f64,
+    pub(crate) raw_dmg: f64,
+    pub(crate) max_norm_frac: f64,
+    pub(crate) ohko_prob: f64,
+    pub(crate) boom_ko_prob: f64,
+    pub(crate) boom_dmg_frac: f64,
+    pub(crate) heal_duty: f64,
+    pub(crate) def_sustain: bool,
+    pub(crate) speed_cmp: i8,
+    pub(crate) perish_capped: bool,
+    pub(crate) best_pp: u8,
 }
 
 #[inline]
@@ -4957,6 +5149,15 @@ pub fn evaluate_fast_golf(
     table: &MatchTable,
     cache: Option<&TempoMatchCache>,
 ) -> FastGolfEval {
+    compute_fast_golf_core(cb, table, cache).0
+}
+
+#[inline]
+pub(crate) fn compute_fast_golf_core(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    cache: Option<&TempoMatchCache>,
+) -> (FastGolfEval, [[[FastPair; 3]; 3]; 2], [i16; 6]) {
     if let Some(wp) = compact_turn_limit_outcome(cb, table) {
         let (g0, g1) = if wp > 0.75 {
             (0.0, 6.0)
@@ -4965,7 +5166,11 @@ pub fn evaluate_fast_golf(
         } else {
             (0.0, 0.0)
         };
-        return FastGolfEval { g_turns: [g0, g1], turn_advantage: g1 - g0, win_prob: wp };
+        return (
+            FastGolfEval { g_turns: [g0, g1], turn_advantage: g1 - g0, win_prob: wp },
+            [[[FastPair::default(); 3]; 3]; 2],
+            [0i16; 6],
+        );
     }
 
     let n0 = cb.sides[0].alive_mask.count_ones();
@@ -5301,7 +5506,7 @@ pub fn evaluate_fast_golf(
         let sigma = (var_per_turn * (g0 + g1).max(1.0)).sqrt();
         normal_cdf(adv / sigma)
     };
-    FastGolfEval { g_turns: [g0, g1], turn_advantage: adv, win_prob: wp }
+    (FastGolfEval { g_turns: [g0, g1], turn_advantage: adv, win_prob: wp }, ttk, entry_hps)
 }
 
 /// Strictly-antisymmetric Hybrid leaf evaluator combining:
@@ -5322,24 +5527,723 @@ pub fn evaluate_hybrid_golf(
     let w = EvalWeights::default();
     let n0 = cb.sides[0].alive_mask.count_ones();
     let n1 = cb.sides[1].alive_mask.count_ones();
-    let fg = evaluate_fast_golf(cb, table, cache);
     let bs_nr = crate::eval::compact_eval01_blindspot_norelay(cb, table, &w);
+    // Preserve exact 1v1 `linear.rs` (Toeplitz/Schur-Bellman coupled stopping-time race):
+    // never dilute exact 1v1 valuation with FastGolf's Brownian approximation.
+    if n0 <= 1 && n1 <= 1 {
+        return bs_nr;
+    }
+    let fg = evaluate_fast_golf(cb, table, cache);
     let logit = |p: f64| -> f64 {
         let q = p.clamp(0.000_5, 0.999_5);
         (q / (1.0 - q)).ln()
     };
-    // Cross-policy calibrated log-odds weights across 20,690 team-pool-v2 states
-    // (sum ~1.05-1.20 prevents over-confident LogLoss while preserving exact antisymmetry).
+    // Normalized (`w_fg + w_bs == 1.00`) strictly-antisymmetric log-odds blend so DUCT MCTS
+    // (`c = 0.4`) is never over-sharpened toward 0/1.
     let (w_fg, w_bs) = match (n0.min(n1), n0.max(n1)) {
-        (1, 1) => (0.75, 0.35),
-        (1, 2) => (0.65, 0.45),
-        (2, 2) => (0.55, 0.50),
-        (3, 3) => (0.75, 0.48),
-        _ => (0.80, 0.30),
+        (1, 2) => (0.55, 0.45),
+        (2, 2) => (0.50, 0.50),
+        (3, 3) => (0.60, 0.40),
+        _ => (0.65, 0.35),
     };
     let z = w_fg * logit(fg.win_prob) + w_bs * logit(bs_nr);
     let v_base = 1.0 / (1.0 + (-z).exp());
     crate::relay::apply_relay_leaf_lift(cb, table, &w, v_base).clamp(0.000_1, 0.999_9)
+}
+
+#[inline]
+pub fn evaluate_hybrid_golf_temp(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    cache: Option<&TempoMatchCache>,
+    leaf_temp: f64,
+) -> f64 {
+    if let Some(v) = compact_turn_limit_outcome(cb, table) {
+        return v;
+    }
+    let w = EvalWeights::default();
+    let n0 = cb.sides[0].alive_mask.count_ones();
+    let n1 = cb.sides[1].alive_mask.count_ones();
+    let bs_nr = crate::eval::compact_eval01_blindspot_norelay(cb, table, &w);
+    if n0 <= 1 && n1 <= 1 {
+        return bs_nr;
+    }
+    let fg = evaluate_fast_golf(cb, table, cache);
+    let (w_fg, w_bs) = match (n0.min(n1), n0.max(n1)) {
+        (1, 2) => (0.55, 0.45),
+        (2, 2) => (0.50, 0.50),
+        (3, 3) => (0.60, 0.40),
+        _ => (0.65, 0.35),
+    };
+    let z = (w_fg * stage3_logit(fg.win_prob) + w_bs * stage3_logit(bs_nr)) / leaf_temp.max(0.1);
+    let v_base = 1.0 / (1.0 + (-z.clamp(-20.0, 20.0)).exp());
+    crate::relay::apply_relay_leaf_lift(cb, table, &w, v_base).clamp(0.000_1, 0.999_9)
+}
+
+// Stage-3 strictly antisymmetric value-head weights trained on 3,992 strong BlindAgent (3k)
+// `team-pool-v2` self-play games (causally monotone: 0-ULP odd symmetry, zero team-confounded cols).
+const STAGE3_LOG_W: [[f32; 20]; 3] = [
+    [0.172490, 0.165056, 0.776459, 0.656873, 0.060817, 0.262741, 0.228946, 0.987666, 0.000000, 0.000000, 0.000000, 0.000000, 0.038072, 1.024143, 0.000000, 0.066815, 0.000000, 1.401289, 0.344979, 0.000000],
+    [0.314939, 0.092967, 1.419599, 0.019691, 0.124642, 0.051862, 0.240639, 0.141182, 0.364278, 0.000000, 0.000000, 0.074280, 0.146601, 0.233786, 0.000000, 0.187076, 0.000000, 0.155128, 0.115697, 0.092967],
+    [0.371568, 0.163857, 1.261636, 0.475417, 0.049469, 0.094951, 0.026140, 0.000000, 0.019046, 0.000000, 0.000000, 0.174369, 0.077783, 0.141131, 0.000000, 0.041447, 0.209782, 0.290184, 0.213897, 0.163857],
+];
+const STAGE3_MLP_SKIP: [f32; 20] = [0.223643, 0.116987, 0.994357, 0.241815, 0.082985, 0.062663, 0.068278, 0.139250, 0.089701, 0.000000, 0.000000, 0.047775, 0.081063, 0.146598, 0.000000, 0.069843, -0.002902, 0.196186, 0.098161, 0.139558];
+const STAGE3_MLP_W2: [f32; 16] = [0.161152, -0.161187, 0.094266, -0.113487, -0.007915, -0.057771, 0.116091, -0.054518, 0.146989, 0.017536, 0.126540, 0.166339, -0.039143, -0.063993, 0.144016, 0.119273];
+const STAGE3_MLP_W1: [[f32; 20]; 16] = [
+    [0.059539, 0.031006, 0.212235, 0.034762, -0.001038, 0.012451, 0.035337, 0.027508, 0.008824, 0.000000, 0.000000, 0.060773, 0.027507, 0.022307, 0.000000, 0.018647, 0.009509, 0.009689, 0.022533, 0.032180],
+    [-0.049388, -0.025349, -0.219455, -0.079552, -0.026939, -0.003507, -0.003496, -0.013532, -0.047286, 0.000000, 0.000000, -0.009470, -0.020316, -0.043814, 0.000000, -0.022986, -0.006578, -0.037670, -0.021214, -0.035058],
+    [0.038310, 0.015905, 0.169606, 0.024797, 0.000568, -0.012558, -0.010583, -0.001004, 0.007063, 0.000000, 0.000000, 0.042513, 0.019178, 0.029083, 0.000000, 0.014257, -0.020662, -0.026805, 0.030944, 0.021073],
+    [-0.042497, -0.019800, -0.166991, -0.055097, -0.028138, -0.010488, -0.030683, -0.019153, 0.013655, 0.000000, 0.000000, -0.005327, -0.006396, -0.029107, 0.000000, -0.010598, 0.002199, -0.048786, -0.014684, -0.025543],
+    [-0.009846, -0.004864, -0.041027, -0.008840, 0.007813, -0.011873, -0.009301, -0.012277, -0.021037, 0.000000, 0.000000, 0.025027, -0.004993, 0.010327, 0.000000, 0.011889, 0.030214, -0.017812, -0.002226, -0.003537],
+    [-0.023142, -0.016738, -0.096008, 0.027733, 0.000791, 0.001480, 0.003134, -0.030355, 0.024850, 0.000000, 0.000000, -0.013382, -0.008022, 0.014236, 0.000000, -0.013024, 0.001317, -0.026803, -0.018275, -0.015918],
+    [0.040512, 0.019592, 0.140716, 0.002676, 0.006995, 0.017875, -0.011907, 0.046403, -0.040647, 0.000000, 0.000000, 0.065386, 0.011114, 0.034260, 0.000000, 0.013661, 0.014491, 0.052645, 0.021627, 0.036211],
+    [-0.029586, -0.007387, -0.097120, -0.044955, 0.003178, 0.001011, 0.002697, -0.044352, -0.033615, 0.000000, 0.000000, 0.004729, -0.002238, -0.024821, 0.000000, -0.005004, 0.006808, -0.059526, -0.020575, -0.009200],
+    [0.054051, 0.025978, 0.257129, 0.084040, 0.006077, 0.020179, -0.017746, 0.001586, 0.050134, 0.000000, 0.000000, 0.062592, 0.019382, 0.069158, 0.000000, 0.020763, -0.020087, -0.008254, 0.032361, 0.026386],
+    [-0.001331, 0.004821, 0.013405, -0.023814, 0.008103, -0.018220, -0.011350, 0.019283, 0.055517, 0.000000, 0.000000, 0.015918, -0.000862, -0.024892, 0.000000, -0.007079, 0.007395, 0.003456, 0.003641, 0.001055],
+    [0.039103, 0.018581, 0.165757, 0.067931, -0.007797, 0.009828, 0.037533, 0.047078, -0.024836, 0.000000, 0.000000, 0.064502, 0.014701, 0.030172, 0.000000, 0.005277, 0.018360, -0.035127, 0.029140, 0.032456],
+    [0.045934, 0.026876, 0.225383, 0.086581, 0.018817, 0.014668, 0.038656, 0.018860, -0.033166, 0.000000, 0.000000, 0.029194, 0.024999, 0.019784, 0.000000, 0.013250, -0.054120, 0.028341, 0.029617, 0.034488],
+    [-0.018012, -0.013576, -0.087572, 0.010153, 0.011016, 0.016822, 0.017435, -0.004450, 0.104672, 0.000000, 0.000000, -0.009730, -0.007300, 0.005871, 0.000000, -0.013414, -0.009089, 0.018229, -0.020402, -0.009677],
+    [-0.018376, -0.015947, -0.089276, -0.027482, -0.004447, -0.017155, -0.029364, -0.025744, -0.027626, 0.000000, 0.000000, -0.031312, -0.007428, 0.011470, 0.000000, -0.014427, -0.015322, 0.022872, -0.020335, -0.015299],
+    [0.047883, 0.025237, 0.185231, 0.055887, 0.030026, -0.010745, 0.021258, 0.039957, 0.037166, 0.000000, 0.000000, 0.007890, 0.005333, -0.019994, 0.000000, 0.015078, 0.001584, 0.058166, 0.026907, 0.033701],
+    [0.041325, 0.020259, 0.155033, 0.055656, 0.027580, 0.022344, 0.029237, 0.005875, 0.006850, 0.000000, 0.000000, 0.034992, 0.010291, 0.052910, 0.000000, 0.014742, 0.013229, -0.013649, 0.016547, 0.032570],
+];
+
+#[inline(always)]
+fn stage3_fast_tanh(x: f32) -> f32 {
+    let x2 = x * x;
+    (x * (27.0 + x2) / (27.0 + 9.0 * x2)).clamp(-1.0, 1.0)
+}
+
+/// Strictly antisymmetric Stage-3 Option-A (3-regime L2 logistic) leaf evaluator.
+/// Preserves exact 1v1 `linear.rs` (`bs_nr`) and wraps `relay::apply_relay_leaf_lift` outside.
+#[inline]
+pub fn evaluate_stage3_log(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    cache: Option<&TempoMatchCache>,
+    leaf_temp: f64,
+) -> f64 {
+    if let Some(v) = compact_turn_limit_outcome(cb, table) {
+        return v;
+    }
+    let w = EvalWeights::default();
+    let n0 = cb.sides[0].alive_mask.count_ones();
+    let n1 = cb.sides[1].alive_mask.count_ones();
+    if n0 <= 1 && n1 <= 1 {
+        return crate::eval::compact_eval01_blindspot_norelay(cb, table, &w);
+    }
+    let (phi, _, _, _) = extract_stage3_phi(cb, table, cache, &w);
+    let reg = if n0 + n1 == 3 {
+        0usize
+    } else if n0 + n1 == 4 {
+        1usize
+    } else {
+        2usize
+    };
+    let wt = &STAGE3_LOG_W[reg];
+    let mut z = 0.0f32;
+    for k in 0..20usize {
+        z += wt[k] * phi[k];
+    }
+    let z64 = (f64::from(z) / leaf_temp.max(0.1)).clamp(-20.0, 20.0);
+    let v_base = 1.0 / (1.0 + (-z64).exp());
+    crate::relay::apply_relay_leaf_lift(cb, table, &w, v_base).clamp(0.000_1, 0.999_9)
+}
+
+/// Strictly antisymmetric Stage-3 Option-B (zero-bias odd residual MLP `20 -> 16 -> 1`) leaf evaluator.
+/// Guarantees `v(A,B) + v(B,A) == 1.0` to 0 ULP, preserves exact 1v1 `linear.rs`, and wraps `relay` outside.
+#[inline]
+pub fn evaluate_stage3_mlp(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    cache: Option<&TempoMatchCache>,
+    leaf_temp: f64,
+) -> f64 {
+    if let Some(v) = compact_turn_limit_outcome(cb, table) {
+        return v;
+    }
+    let w = EvalWeights::default();
+    let n0 = cb.sides[0].alive_mask.count_ones();
+    let n1 = cb.sides[1].alive_mask.count_ones();
+    if n0 <= 1 && n1 <= 1 {
+        return crate::eval::compact_eval01_blindspot_norelay(cb, table, &w);
+    }
+    let (phi, _, _, _) = extract_stage3_phi(cb, table, cache, &w);
+    let mut z = 0.0f32;
+    for k in 0..20usize {
+        z += STAGE3_MLP_SKIP[k] * phi[k];
+    }
+    for h in 0..16usize {
+        let row = &STAGE3_MLP_W1[h];
+        let mut dot = 0.0f32;
+        for k in 0..20usize {
+            dot += row[k] * phi[k];
+        }
+        z += STAGE3_MLP_W2[h] * stage3_fast_tanh(dot);
+    }
+    let z64 = (f64::from(z) / leaf_temp.max(0.1)).clamp(-20.0, 20.0);
+    let v_base = 1.0 / (1.0 + (-z64).exp());
+    crate::relay::apply_relay_leaf_lift(cb, table, &w, v_base).clamp(0.000_1, 0.999_9)
+}
+
+/// Public wrapper over `mask::public_noop_reason` for data-collection exploration filtering.
+pub fn is_public_noop_choice(b: &Battle, dex: &Dex, side: usize, c: SearchChoice) -> bool {
+    public_noop_reason(b, dex, side, c).is_some()
+}
+
+/// Strictly antisymmetric 20-feature Stage-3 leaf representation (`phi(B, A) == -phi(A, B)` to 0 ULP).
+#[derive(Clone, Copy, Debug)]
+pub struct Stage3Features {
+    pub phi: [f32; 20],
+    pub g_stag: f32,
+    pub fg_p: f64,
+    pub bs_p: f64,
+    pub hy_p: f64,
+    pub n0: u8,
+    pub n1: u8,
+    pub relay_elig: bool,
+}
+
+#[inline(always)]
+pub(crate) fn stage3_logit(p: f64) -> f64 {
+    let q = p.clamp(0.000_5, 0.999_5);
+    (q / (1.0 - q)).ln()
+}
+
+/// Extract the 20 strictly antisymmetric Stage-3 features directly from `FastGolf`'s `ttk`/`entry_hps`
+/// intermediates + O(1) `CompactBattle` / `TempoMatchCache` lookups (zero extra `DmgKernel1D` calls,
+/// zero heap allocation, zero redundant `relay` calls on the hot path).
+#[inline]
+fn extract_stage3_phi(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    cache: Option<&TempoMatchCache>,
+    w: &EvalWeights,
+) -> ([f32; 20], f32, f64, f64) {
+    let n0 = cb.sides[0].alive_mask.count_ones() as u8;
+    let n1 = cb.sides[1].alive_mask.count_ones() as u8;
+    let bs_nr = crate::eval::compact_eval01_blindspot_norelay(cb, table, w);
+    let (fg, ttk, entry_hps) = compute_fast_golf_core(cb, table, cache);
+
+    let logit_fg = stage3_logit(fg.win_prob);
+    let logit_bs = stage3_logit(bs_nr);
+
+    let view_opt = cache.and_then(|c| c.view_for(cb));
+    let cview = view_opt.as_ref();
+    let mid_switch = cb.sides[0].request == 2 || cb.sides[1].request == 2;
+    let alive_cnt = [n0 as usize, n1 as usize];
+    let acts = [cb.sides[0].active_idx as usize, cb.sides[1].active_idx as usize];
+    let flying_bit = 1u32 << (table.flying_type & 31);
+    let ground_bit = 1u32 << (table.ground_type & 31);
+
+    // Precompute per-side symmetric helpers (identical formula for s=0 and s=1 -> 0-ULP antisymmetry).
+    let mut entry_hp_sum = [0.0f64; 2];
+    let mut wall_hard = [0.0f64; 2];
+    let mut no_boom_best_ttk = [[0.0f64; 3]; 2];
+    let mut rec_res = [0.0f64; 2];
+    let mut tot_pp_res = [0.0f64; 2];
+    let mut grounded_alive = [0.0f64; 2];
+    let mut has_live_toxic = [0.0f64; 2];
+    let mut has_live_phaze = [0.0f64; 2];
+    let mut has_live_healbell = [0.0f64; 2];
+    let mut opp_disrupt_cnt = [0u32; 2]; // how many healthy disruptors side `s` has
+    let mut opp_boom_cnt = [0u32; 2]; // how many living boomers side `s` has
+    let mut has_asleep = [false; 2];
+    let mut status_berry_cnt = [0.0f64; 2];
+    let mut unstatused_tox_targets = [0.0f64; 2];
+    let mut unstatused_par_targets = [0.0f64; 2];
+    let mut item_shield = [0.0f64; 2];
+
+    for s in 0..2usize {
+        let mask = cb.sides[s].alive_mask;
+        for slot in 0..3usize {
+            if (mask & (1 << slot)) == 0 {
+                continue;
+            }
+            let idx = s * 3 + slot;
+            let mon = &cb.mons[idx];
+            let maxhp = table.mons[idx].maxhp.max(1) as f64;
+            let hp_frac = (mon.hp().max(0) as f64) / maxhp;
+            entry_hp_sum[s] += (entry_hps[idx].max(0) as f64) / maxhp;
+
+            let tmask = table.mons[idx].type_mask;
+            if (tmask & flying_bit) == 0 {
+                grounded_alive[s] += 1.0;
+            }
+
+            let st = mon.status_raw();
+            if st == Status::Slp as u8 {
+                has_asleep[s] = true;
+            }
+            let ispec = table.item_spec(mon.item);
+            let hp_w = 0.4 + 0.6 * hp_frac;
+            if ispec.is_miracleberry {
+                status_berry_cnt[s] += 1.0;
+                item_shield[s] += 1.0 * hp_w;
+            } else if ispec.is_mintberry {
+                status_berry_cnt[s] += 0.6;
+                let has_rest = if let Some(cv) = cview {
+                    cv.mon(s, slot).rest_slot < 4
+                } else {
+                    (0..table.mons[idx].num_moves as usize)
+                        .any(|m| table.move_specs[idx][m].is_rest)
+                };
+                item_shield[s] += (if has_rest { 0.75 } else { 0.40 }) * hp_w;
+            } else if ispec.is_przcure_berry {
+                item_shield[s] += 0.40 * hp_w;
+            } else if ispec.is_leftovers {
+                item_shield[s] += 0.50 * hp_w;
+            } else if ispec.is_goldberry || ispec.is_berry_juice {
+                item_shield[s] += 0.35 * hp_w;
+            }
+
+            let mut half_pp = 0.0f64;
+            let mut rest_pp = 0.0f64;
+            let mut tot_pp = 0.0f64;
+            let mut has_disrupt = false;
+            let mut has_boom = false;
+            let mut has_rest_move = false;
+            let n_moves = table.mons[idx].num_moves as usize;
+            if let Some(cv) = cview {
+                let cm = cv.mon(s, slot);
+                for m in 0..n_moves {
+                    tot_pp += f64::from(mon.pp[m]);
+                    if table.move_specs[idx][m].is_selfdestruct && mon.pp[m] > 0 {
+                        has_boom = true;
+                    }
+                }
+                if (cm.half_heal_slot as usize) < 4 {
+                    half_pp = f64::from(mon.pp[cm.half_heal_slot as usize]);
+                }
+                if (cm.rest_slot as usize) < 4 {
+                    rest_pp = f64::from(mon.pp[cm.rest_slot as usize]);
+                    has_rest_move = mon.pp[cm.rest_slot as usize] > 0;
+                }
+                if cm.toxic_mask != 0
+                    && (0..n_moves).any(|m| ((cm.toxic_mask >> m) & 1) != 0 && mon.pp[m] > 0)
+                {
+                    has_live_toxic[s] = 1.0;
+                }
+                if (cm.phaze_slot as usize) < 4 && mon.pp[cm.phaze_slot as usize] > 0 {
+                    has_live_phaze[s] = 1.0;
+                    has_disrupt = true;
+                }
+                if ((cm.haze_slot as usize) < 4 && mon.pp[cm.haze_slot as usize] > 0)
+                    || ((cm.encore_slot as usize) < 4 && mon.pp[cm.encore_slot as usize] > 0)
+                {
+                    has_disrupt = true;
+                }
+                if (cm.healbell_slot as usize) < 4 && mon.pp[cm.healbell_slot as usize] > 0 {
+                    has_live_healbell[s] = 1.0;
+                }
+            } else {
+                for m in 0..n_moves {
+                    let pp = mon.pp[m];
+                    tot_pp += f64::from(pp);
+                    let ms = &table.move_specs[idx][m];
+                    if ms.is_half_heal || ms.special_kind == SpecialMoveKind::WeatherHeal {
+                        half_pp = half_pp.max(f64::from(pp));
+                    }
+                    if ms.is_rest {
+                        rest_pp = rest_pp.max(f64::from(pp));
+                        if pp > 0 {
+                            has_rest_move = true;
+                        }
+                    }
+                    if pp > 0 {
+                        if ms.is_selfdestruct {
+                            has_boom = true;
+                        }
+                        if ms.primary_status == Status::Tox as u8 {
+                            has_live_toxic[s] = 1.0;
+                        }
+                        match ms.special_kind {
+                            SpecialMoveKind::Phaze => {
+                                has_live_phaze[s] = 1.0;
+                                has_disrupt = true;
+                            }
+                            SpecialMoveKind::Haze | SpecialMoveKind::Encore => {
+                                has_disrupt = true;
+                            }
+                            SpecialMoveKind::HealBell => {
+                                has_live_healbell[s] = 1.0;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            rec_res[s] += (1.0 + (half_pp + 2.2 * rest_pp) / 8.0).ln();
+            tot_pp_res[s] += (tot_pp / 64.0).sqrt();
+            if has_disrupt && hp_frac >= 0.30 && st != Status::Frz as u8 {
+                opp_disrupt_cnt[s] += 1;
+            }
+            if has_boom && st != Status::Frz as u8 {
+                opp_boom_cnt[s] += 1;
+            }
+            if st == Status::None as u8 && !ispec.is_miracleberry {
+                if !has_rest_move && (tmask & table.poison_immune_mask) == 0 {
+                    unstatused_tox_targets[s] += 1.0;
+                }
+                if (tmask & ground_bit) == 0 && !ispec.is_przcure_berry {
+                    unstatused_par_targets[s] += 1.0;
+                }
+            }
+        }
+    }
+
+    // Minimax wall hardness per side: hardest-to-break opponent mon for side `s` (both with and without Boom).
+    for s in 0..2usize {
+        let opp = 1 - s;
+        let opp_mask = cb.sides[opp].alive_mask;
+        let my_mask = cb.sides[s].alive_mask;
+        let mut hard = 0.0f64;
+        for e in 0..3usize {
+            if (opp_mask & (1 << e)) == 0 {
+                continue;
+            }
+            let mut best_break = 7.5f64;
+            let mut best_no_boom = 7.5f64;
+            for a in 0..3usize {
+                if (my_mask & (1 << a)) == 0 {
+                    continue;
+                }
+                let p = ttk[s][a][e];
+                if p.eff_ttk < best_no_boom {
+                    best_no_boom = p.eff_ttk;
+                }
+                let mut t = p.eff_ttk;
+                if alive_cnt[s] >= 2 && p.boom_dmg_frac >= 0.72 {
+                    t = t.min(1.6 / p.boom_dmg_frac.max(0.5));
+                }
+                if t < best_break {
+                    best_break = t;
+                }
+            }
+            no_boom_best_ttk[s][e] = best_no_boom;
+            if best_break > hard {
+                hard = best_break;
+            }
+        }
+        wall_hard[s] = hard;
+    }
+
+    // Symmetric mutual-stagnation gate `g_stag ∈ [0, 1]` for Frontier #1 (`n0 + n1 >= 4`).
+    let g_stag = if n0 + n1 >= 4 {
+        let h_mut = wall_hard[0].min(wall_hard[1]);
+        ((h_mut - 4.2) / 2.8).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+
+    // Per-side interaction features: forced-switch trap, unphazed setup, sleep/status threat, boom leverage, trap/pursuit.
+    let mut trap_press = [0.0f64; 2];
+    let mut stag_prog = [0.0f64; 2];
+    let mut setup_wincon = [0.0f64; 2];
+    let mut sleep_thr = [0.0f64; 2];
+    let mut status_thr = [0.0f64; 2];
+    let mut boom_lev = [0.0f64; 2];
+    let mut trap_pursuit = [0.0f64; 2];
+
+    for s in 0..2usize {
+        let opp = 1 - s;
+        // Dead Spikes on a 1-alive opponent can never trigger again.
+        let opp_spikes = if alive_cnt[opp] >= 2 {
+            f64::from(spikes_layers(cb, opp))
+        } else {
+            0.0
+        };
+        stag_prog[s] = 0.50 * opp_spikes * (grounded_alive[opp] / 3.0)
+            + 0.35 * has_live_toxic[s]
+            + 0.25 * has_live_phaze[s]
+            + 0.35 * has_live_healbell[s];
+
+        // Forced-switch trap pressure (`s` forcing `opp` active out into heavy bench hit + Spikes).
+        if !mid_switch && alive_cnt[opp] >= 2 {
+            let a_s = acts[s];
+            let a_o = acts[opp];
+            if (cb.sides[s].alive_mask & (1 << a_s)) != 0
+                && (cb.sides[opp].alive_mask & (1 << a_o)) != 0
+            {
+                let p_ao = ttk[s][a_s][a_o];
+                let p_oa = ttk[opp][a_o][a_s];
+                let slower_ohkod = p_ao.speed_cmp < 0 && p_oa.ohko_prob >= 0.5;
+                let force = if !slower_ohkod
+                    && (p_ao.raw_ttk <= 1.35 || (p_ao.speed_cmp > 0 && p_ao.ohko_prob >= 0.4))
+                {
+                    1.0
+                } else if !slower_ohkod && p_ao.raw_ttk <= 2.15 && p_oa.raw_ttk >= 2.8 {
+                    0.55
+                } else {
+                    0.0
+                };
+                if force > 0.0 {
+                    let mut min_sw = f64::INFINITY;
+                    for b in 0..3usize {
+                        if b == a_o || (cb.sides[opp].alive_mask & (1 << b)) == 0 {
+                            continue;
+                        }
+                        let b_idx = opp * 3 + b;
+                        let spk_d = if opp_spikes > 0.0
+                            && (table.mons[b_idx].type_mask & flying_bit) == 0
+                        {
+                            0.125
+                        } else {
+                            0.0
+                        };
+                        let sw_dmg = spk_d + ttk[s][a_s][b].raw_dmg.min(1.1);
+                        if sw_dmg < min_sw {
+                            min_sw = sw_dmg;
+                        }
+                    }
+                    if min_sw.is_finite() {
+                        trap_press[s] = force * min_sw.min(1.25);
+                    }
+                }
+            }
+        }
+
+        // Unphazed setup win-con, sleep/status threats, boom leverage, MeanLook+Perish & Pursuit.
+        let disrupt_disc = match opp_disrupt_cnt[opp] {
+            0 => 1.0,
+            1 => 0.30,
+            _ => 0.0,
+        };
+        let boom_disc = match opp_boom_cnt[opp] {
+            0 => 1.0,
+            1 => 0.78,
+            _ => 0.55,
+        };
+        let sleep_clause_open =
+            ((cb.clause_flags & 1) == 0 && !table.ruleset.is_castle()) || !has_asleep[opp];
+        let opp_berry_frac = status_berry_cnt[opp] / (alive_cnt[opp].max(1) as f64);
+        let opp_hb_disc = if has_live_healbell[opp] > 0.0 { 0.45 } else { 1.0 };
+
+        let my_mask = cb.sides[s].alive_mask;
+        let opp_mask = cb.sides[opp].alive_mask;
+        for slot in 0..3usize {
+            if (my_mask & (1 << slot)) == 0 {
+                continue;
+            }
+            let idx = s * 3 + slot;
+            let mon = &cb.mons[idx];
+            let maxhp = table.mons[idx].maxhp.max(1) as f64;
+            let hp_frac = (mon.hp().max(0) as f64) / maxhp;
+            let st = mon.status_raw();
+            let can_act = st != Status::Frz as u8 && st != Status::Slp as u8;
+            let n_moves = table.mons[idx].num_moves as usize;
+            let is_ghost = (table.mons[idx].type_mask & (1u32 << (table.ghost_type & 31))) != 0;
+
+            let (has_setup, has_rec, has_sleep, has_tox, has_par, has_ml_perish, pursuit_slot) =
+                if let Some(cv) = cview {
+                    let cm = cv.mon(s, slot);
+                    let su = cm.setup_mask != 0
+                        && (0..n_moves).any(|m| ((cm.setup_mask >> m) & 1) != 0 && mon.pp[m] > 0);
+                    let rc = ((cm.half_heal_slot as usize) < 4
+                        && mon.pp[cm.half_heal_slot as usize] > 0)
+                        || ((cm.rest_slot as usize) < 4 && mon.pp[cm.rest_slot as usize] > 0);
+                    let sl = cm.sleep_mask != 0
+                        && (0..n_moves).any(|m| ((cm.sleep_mask >> m) & 1) != 0 && mon.pp[m] > 0);
+                    let tx = cm.toxic_mask != 0
+                        && (0..n_moves).any(|m| ((cm.toxic_mask >> m) & 1) != 0 && mon.pp[m] > 0);
+                    let pr = cm.twave_mask != 0
+                        && (0..n_moves).any(|m| ((cm.twave_mask >> m) & 1) != 0 && mon.pp[m] > 0);
+                    let mlp = (cm.meanlook_slot as usize) < 4
+                        && mon.pp[cm.meanlook_slot as usize] > 0
+                        && (cm.perish_slot as usize) < 4
+                        && mon.pp[cm.perish_slot as usize] > 0;
+                    let ps = if (cm.pursuit_slot as usize) < 4
+                        && mon.pp[cm.pursuit_slot as usize] > 0
+                    {
+                        cm.pursuit_slot as usize
+                    } else {
+                        0xFF
+                    };
+                    (su, rc, sl, tx, pr, mlp, ps)
+                } else {
+                    let mut su = false;
+                    let mut rc = false;
+                    let mut sl = false;
+                    let mut tx = false;
+                    let mut pr = false;
+                    let mut ml = false;
+                    let mut pe = false;
+                    let mut ps = 0xFFusize;
+                    for m in 0..n_moves {
+                        if mon.pp[m] == 0 {
+                            continue;
+                        }
+                        let ms = &table.move_specs[idx][m];
+                        if (ms.special_kind == SpecialMoveKind::Curse && !is_ghost)
+                            || ms.special_kind == SpecialMoveKind::BellyDrum
+                            || (ms.is_status
+                                && ms.boosts_self
+                                && ms.boosts.iter().any(|&(st_i, d)| st_i < 5 && d > 0))
+                        {
+                            su = true;
+                        }
+                        if ms.is_rest
+                            || ms.is_half_heal
+                            || ms.special_kind == SpecialMoveKind::WeatherHeal
+                        {
+                            rc = true;
+                        }
+                        if ms.primary_status == Status::Slp as u8 {
+                            sl = true;
+                        } else if ms.primary_status == Status::Tox as u8 {
+                            tx = true;
+                        } else if ms.primary_status == Status::Par as u8 {
+                            pr = true;
+                        }
+                        if ms.special_kind == SpecialMoveKind::MeanLook {
+                            ml = true;
+                        }
+                        if ms.special_kind == SpecialMoveKind::PerishSong {
+                            pe = true;
+                        }
+                        if ms.special_kind == SpecialMoveKind::Pursuit && ps == 0xFF {
+                            ps = m;
+                        }
+                    }
+                    (su, rc, sl, tx, pr, ml && pe, ps)
+                };
+
+            if has_setup && st != Status::Frz as u8 {
+                let rec_bonus = if has_rec { 1.35 } else { 1.0 };
+                setup_wincon[s] += hp_frac * rec_bonus * disrupt_disc * boom_disc;
+            }
+            if has_sleep && can_act && sleep_clause_open {
+                sleep_thr[s] = sleep_thr[s].max(hp_frac * (1.0 - 0.35 * opp_berry_frac));
+            }
+            if can_act {
+                if has_tox {
+                    status_thr[s] += 0.35
+                        * (unstatused_tox_targets[opp] / 3.0)
+                        * opp_hb_disc
+                        * (0.5 + 0.5 * hp_frac);
+                }
+                if has_par {
+                    status_thr[s] += 0.35
+                        * (unstatused_par_targets[opp] / 3.0)
+                        * opp_hb_disc
+                        * (0.5 + 0.5 * hp_frac);
+                }
+            }
+            if alive_cnt[s] >= 2 {
+                // Permutation-invariant wall-breaking Boom leverage weighted by pre-Boom wall hardness.
+                for e in 0..3usize {
+                    if (opp_mask & (1 << e)) == 0 {
+                        continue;
+                    }
+                    let bd = ttk[s][slot][e].boom_dmg_frac;
+                    if bd > 0.0 {
+                        let bval = bd * (no_boom_best_ttk[s][e] / 7.5) * (0.4 + 0.6 * hp_frac);
+                        if bval > boom_lev[s] {
+                            boom_lev[s] = bval;
+                        }
+                    }
+                }
+            }
+            if has_ml_perish && hp_frac > 0.35 && st != Status::Frz as u8 {
+                let opp_act_mon = &cb.mons[opp * 3 + acts[opp]];
+                let active_trap = !mid_switch
+                    && slot == acts[s]
+                    && (opp_act_mon.vol_flags & vol_bit::TRAPPED_OR_LOCKED) != 0
+                    && opp_act_mon.perish_turns() > 0;
+                trap_pursuit[s] += if active_trap { 1.2 * hp_frac } else { 0.65 * hp_frac };
+            }
+            if pursuit_slot < 4 && alive_cnt[opp] >= 2 && can_act {
+                let pm_type = table.move_specs[idx][pursuit_slot].move_type as usize;
+                let is_weak = |e: usize| -> bool {
+                    let e_idx = opp * 3 + e;
+                    let eff = table.type_chart[pm_type][table.mons[e_idx].types[0] as usize]
+                        + if table.mons[e_idx].num_types > 1 {
+                            table.type_chart[pm_type][table.mons[e_idx].types[1] as usize]
+                        } else {
+                            0
+                        };
+                    eff > 0
+                };
+                let a_o = acts[opp];
+                let act_weak =
+                    !mid_switch && (opp_mask & (1 << a_o)) != 0 && is_weak(a_o);
+                if act_weak && slot == acts[s] && ttk[s][slot][a_o].raw_ttk <= 2.2 {
+                    trap_pursuit[s] += 0.45 * (0.5 + 0.5 * hp_frac);
+                } else if (0..3usize).any(|e| (opp_mask & (1 << e)) != 0 && is_weak(e)) {
+                    trap_pursuit[s] += 0.15 * (0.5 + 0.5 * hp_frac);
+                }
+            }
+        }
+    }
+
+    let active_duel = if mid_switch
+        || (cb.sides[0].alive_mask & (1 << acts[0])) == 0
+        || (cb.sides[1].alive_mask & (1 << acts[1])) == 0
+    {
+        0.0
+    } else {
+        ((ttk[1][acts[1]][acts[0]].eff_ttk - ttk[0][acts[0]][acts[1]].eff_ttk) / 7.5)
+            .clamp(-1.0, 1.0)
+    };
+    let spk0_live = if alive_cnt[0] >= 2 { f64::from(spikes_layers(cb, 0)) } else { 0.0 };
+    let spk1_live = if alive_cnt[1] >= 2 { f64::from(spikes_layers(cb, 1)) } else { 0.0 };
+    let spikes_gnd_diff =
+        (spk1_live * grounded_alive[1] - spk0_live * grounded_alive[0]) / 3.0;
+    let man_asym = ((i32::from(n0) - i32::from(n1)).abs() as f64) * 0.5;
+    let multi4 = if n0 + n1 >= 4 { 1.0 } else { 0.0 };
+
+    let phi: [f32; 20] = [
+        logit_fg as f32,
+        logit_bs as f32,
+        ((fg.g_turns[1] - fg.g_turns[0]) / (fg.g_turns[0] + fg.g_turns[1]).max(1.0)) as f32,
+        ((f64::from(n0) - f64::from(n1)) / 3.0) as f32,
+        (entry_hp_sum[0] - entry_hp_sum[1]) as f32,
+        active_duel as f32,
+        (trap_press[0] - trap_press[1]) as f32,
+        ((wall_hard[1] - wall_hard[0]) / 7.5).clamp(-1.0, 1.0) as f32,
+        (g_stag * (rec_res[0] - rec_res[1])) as f32,
+        (g_stag * (tot_pp_res[0] - tot_pp_res[1])) as f32,
+        (g_stag * (stag_prog[0] - stag_prog[1])) as f32,
+        spikes_gnd_diff as f32,
+        (setup_wincon[0] - setup_wincon[1]) as f32,
+        (sleep_thr[0] - sleep_thr[1]) as f32,
+        (status_thr[0] - status_thr[1]) as f32,
+        (item_shield[0] - item_shield[1]) as f32,
+        (boom_lev[0] - boom_lev[1]) as f32,
+        (trap_pursuit[0] - trap_pursuit[1]) as f32,
+        (logit_fg * man_asym) as f32,
+        (logit_bs * multi4) as f32,
+    ];
+
+    (phi, g_stag as f32, fg.win_prob, bs_nr)
+}
+
+/// Full Stage-3 feature extraction including `hy_p` and `relay_elig` for offline dataset generation.
+#[inline]
+pub fn extract_stage3_features(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    cache: Option<&TempoMatchCache>,
+) -> Stage3Features {
+    let w = EvalWeights::default();
+    let n0 = cb.sides[0].alive_mask.count_ones() as u8;
+    let n1 = cb.sides[1].alive_mask.count_ones() as u8;
+    let (phi, g_stag, fg_p, bs_p) = extract_stage3_phi(cb, table, cache, &w);
+    let relay_elig = crate::relay::is_relay_eligible(cb, table, 0)
+        || crate::relay::is_relay_eligible(cb, table, 1);
+    let hy_p = if n0 <= 1 && n1 <= 1 {
+        bs_p
+    } else {
+        let (w_fg, w_bs) = match (n0.min(n1), n0.max(n1)) {
+            (1, 2) => (0.55, 0.45),
+            (2, 2) => (0.50, 0.50),
+            (3, 3) => (0.60, 0.40),
+            _ => (0.65, 0.35),
+        };
+        let vb = 1.0 / (1.0 + (-(w_fg * f64::from(phi[0]) + w_bs * f64::from(phi[1]))).exp());
+        crate::relay::apply_relay_leaf_lift(cb, table, &w, vb).clamp(0.000_1, 0.999_9)
+    };
+    Stage3Features { phi, g_stag, fg_p, bs_p, hy_p, n0, n1, relay_elig }
 }
 
 /// Diagnostic breakdown of `evaluate_fast_golf` for offline calibration & autopsy (not used in hot path).
@@ -5690,6 +6594,9 @@ impl Agent for TempoMctsAgent {
             TempoLeafMode::TempoRaw => "raw",
             TempoLeafMode::FastGolf => "v2",
             TempoLeafMode::HybridGolf => "hybrid",
+            TempoLeafMode::Stage3Log => "s3log",
+            TempoLeafMode::Stage3Mlp => "s3mlp",
+            TempoLeafMode::AzValue => "azv",
             TempoLeafMode::EvalStatic => "eval",
             TempoLeafMode::EvalBlindspot => "blindspot",
         };
@@ -5812,6 +6719,9 @@ impl Agent for SkuctGolfAgent {
         let tag = match self.cfg.leaf {
             TempoLeafMode::FastGolf => "golf",
             TempoLeafMode::HybridGolf => "hybrid",
+            TempoLeafMode::Stage3Log => "s3log",
+            TempoLeafMode::Stage3Mlp => "s3mlp",
+            TempoLeafMode::AzValue => "azv",
             TempoLeafMode::EvalBlindspot => "bs",
             TempoLeafMode::EvalStatic => "eval",
             TempoLeafMode::TempoFull => "full",
@@ -6078,6 +6988,9 @@ impl Agent for BlindGolfAgent {
         let tag = match self.cfg.leaf {
             TempoLeafMode::FastGolf => "golf",
             TempoLeafMode::HybridGolf => "hybrid",
+            TempoLeafMode::Stage3Log => "s3log",
+            TempoLeafMode::Stage3Mlp => "s3mlp",
+            TempoLeafMode::AzValue => "azv",
             TempoLeafMode::EvalBlindspot => "bs",
             TempoLeafMode::EvalStatic => "eval",
             TempoLeafMode::TempoFull => "full",
@@ -6263,9 +7176,9 @@ fn reply_pool_key(sim: &Battle, opp: usize, choice: SearchChoice) -> ReplyPoolKe
     }
 }
 
-/// Deterministic forced-switch / mid-turn Baton Pass resolver for the 1-ply prior sweep.
+/// Deterministic forced-switch / mid-turn Baton Pass resolver for the 1-ply prior sweep and `0r` leaves.
 #[inline]
-fn resolve_compact_forced_switches(
+pub(crate) fn resolve_compact_forced_switches(
     cb: &mut CompactBattle,
     table: &MatchTable,
     weights: &EvalWeights,
@@ -6342,13 +7255,12 @@ struct CompactWorld {
     table: MatchTable,
     cb: CompactBattle,
     cache: Option<TempoMatchCache>,
-    world_sig: u64,
-    any_qc: bool,
     root_node_id: usize,
     type_index: usize,
 }
 
 struct CompactRootTypeStats {
+    tkey: u64,
     samples: u32,
     late_samples: u32,
     replies: usize,
@@ -6470,6 +7382,30 @@ pub struct BlindCmctsConfig {
     /// policy-evaluated opponent root UCB, gap-gated threat cross-sampling, semantic pooling,
     /// and capped Stage-2 Bayesian LP).
     pub stage2_root: bool,
+    /// Pool `Switch(pos)` opponent root priors by target `SpeciesId` (semantic pooling) without
+    /// altering opponent root UCB.
+    pub sempool: bool,
+    /// Exponentially halve `late_cells` at power-of-2 milestones (`>= 1024`) so the readout LP
+    /// reads mature-tree returns rather than early shallow iterations.
+    pub mature_window: bool,
+    /// On contested turns (when `adaptive` does not early-stop Tree 0, or on fixed budget when >1),
+    /// aggregate root stats across `K` independent full-depth trees (`1` = single tree).
+    pub contested_trees: u8,
+    /// Post-fit logit temperature `T` applied to `Stage3Log`/`Stage3Mlp`/`HybridGolf`/`AzValue` (`1.0` = raw).
+    pub leaf_temp: f64,
+    /// Enable interior Simultaneous-Move PUCT (`depth >= 1`) with sound `compact_interior_noop_mask`
+    /// and lazy species-free `P_net` policy prior (root remains 100% shipped UCB1 + Bayesian LP).
+    pub use_puct: bool,
+    /// Interior PUCT exploration constant `c_puct` (scaled for `Q ∈ [0, 1]`, default `1.0`).
+    pub c_puct: f64,
+    /// Interior PUCT First-Play Urgency reduction below node's running mean (`r_bar_s - fpu_red`).
+    pub fpu_red: f64,
+    /// Uniform floor `eps_p` mixed into `P_net` over safe unmasked interior actions (default `0.02`).
+    pub puct_eps: f32,
+    /// Empirical-Bayes minimax backup contraction cap (`0.85` = shipped, `0.0` = pure MC backup).
+    pub backup_lambda: f64,
+    /// Empirical-Bayes minimax backup pseudo-count (`1.5` = shipped, `4.0` = soft backup for `0r`).
+    pub backup_tau: f64,
 }
 
 impl Default for BlindCmctsConfig {
@@ -6477,7 +7413,7 @@ impl Default for BlindCmctsConfig {
         Self {
             iterations: 36_000,
             c: 0.4,
-            max_depth: 128,
+            max_depth: 250,
             leaf: TempoLeafMode::FastGolf,
             rollout_turns: 0,
             max_worlds: 24,
@@ -6487,6 +7423,16 @@ impl Default for BlindCmctsConfig {
             adaptive_interval: 13_500,
             adaptive_min_gap: 0.01,
             stage2_root: false,
+            sempool: false,
+            mature_window: false,
+            contested_trees: 1,
+            leaf_temp: 1.0,
+            use_puct: false,
+            c_puct: 1.0,
+            fpu_red: 0.09,
+            puct_eps: 0.02,
+            backup_lambda: 0.85,
+            backup_tau: 1.5,
         }
     }
 }
@@ -6563,6 +7509,9 @@ impl Agent for BlindCmctsAgent {
         let tag = match self.cfg.leaf {
             TempoLeafMode::FastGolf => "golf",
             TempoLeafMode::HybridGolf => "hybrid",
+            TempoLeafMode::Stage3Log => "s3log",
+            TempoLeafMode::Stage3Mlp => "s3mlp",
+            TempoLeafMode::AzValue => "azv",
             TempoLeafMode::EvalBlindspot => "bs",
             TempoLeafMode::EvalStatic => "eval",
             TempoLeafMode::TempoFull => "full",
@@ -6647,162 +7596,253 @@ impl Agent for BlindCmctsAgent {
             return my_acts[only];
         }
 
+        // Exact fallback to shipped `BlindSearch` whenever the public root board uses a mechanic
+        // outside `CompactBattle`'s supported subset (e.g. `Solar Beam`, `Bide`, mid-turn `Counter`/
+        // `Mirror Coat`, `Transform`, or `SleepClauseMod`), matching `blind.rs::try_build_compact_world`.
+        let has_bide = hidden_timers
+            .iter()
+            .any(|t| matches!(t.kind, HiddenTimerKind::Bide { .. }));
+        if has_bide || !nc2000_engine::compact::is_compact_tree_supported(&base, dex) {
+            let rm_cfg = RmConfig {
+                iterations: self.cfg.iterations,
+                c: self.cfg.c,
+                rule: SelRule::Ucb,
+                ..RmConfig::default()
+            };
+            let mut bs = BlindSearch::from_observation(&pos, dex, rm_cfg, side, self.rng.0);
+            if self.cfg.adaptive {
+                let mut budget = crate::adaptive_budget::AdaptiveBattleBudget::default();
+                budget.step(&mut bs, dex, &g.belief, &g.observer, self.cfg.iterations);
+            } else {
+                bs.step(dex, &g.belief, &g.observer, self.cfg.iterations);
+            }
+            let pick = bs.best().unwrap_or(my_acts[0]);
+            self.rng = SplitMix64::new(bs.search_rng_state());
+            return pick;
+        }
+
         let stage2_root = self.cfg.stage2_root;
+        let use_sempool = stage2_root || self.cfg.sempool;
+        let mature_window = self.cfg.mature_window;
+        let leaf_temp = self.cfg.leaf_temp;
+        let max_trees = self.cfg.contested_trees.max(1) as usize;
         let decision_seed = self.rng.0 ^ 0xA24B_AED4_963E_E407;
         let mut timer_rng = SplitMix64::new(decision_seed ^ 0x714E_525F_726E_6701);
         let obs_rev = g.observer.revision();
         let target_k = self.cfg.max_worlds.max(1).min(self.cfg.iterations.max(1) as usize);
-        let mut plan_rng = SplitMix64::new(
-            decision_seed
-                ^ obs_rev.wrapping_mul(0x9E37_79B9_7F4A_7C15)
-                ^ (target_k as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9),
-        );
-        let team_picks = g.belief.root_sampling_plan(target_k, &mut plan_rng);
 
-        let use_fast = matches!(self.cfg.leaf, TempoLeafMode::FastGolf | TempoLeafMode::HybridGolf);
+        let use_puct = self.cfg.use_puct;
+        let c_puct = self.cfg.c_puct;
+        let fpu_red = self.cfg.fpu_red;
+        let puct_eps = self.cfg.puct_eps;
+        let backup_lambda = self.cfg.backup_lambda;
+        let backup_tau = self.cfg.backup_tau;
+        let use_fast = use_puct
+            || matches!(
+                self.cfg.leaf,
+                TempoLeafMode::FastGolf
+                    | TempoLeafMode::HybridGolf
+                    | TempoLeafMode::Stage3Log
+                    | TempoLeafMode::Stage3Mlp
+                    | TempoLeafMode::AzValue
+            );
         let target_cap = if self.cfg.adaptive {
             (self.cfg.adaptive_interval.saturating_mul(2) as usize).clamp(64, 32_768)
         } else {
             (self.cfg.iterations as usize / 2).clamp(64, 131_072)
         };
         let mut nodes = std::mem::take(&mut self.nodes_buf);
-        nodes.clear();
-        if nodes.capacity() < target_cap {
-            nodes.reserve(target_cap);
-        }
         let mut index = std::mem::take(&mut self.index_buf);
-        index.clear();
-        if index.capacity() < target_cap {
-            index.reserve(target_cap);
-        }
 
-        let mut worlds: Vec<CompactWorld> = Vec::with_capacity(target_k);
-        let mut root_types: Vec<CompactRootTypeStats> = Vec::new();
-        let mut root_type_index: FxHashMap<u64, usize> = FxHashMap::default();
-        let mut world_root_index: FxHashMap<u64, usize> = FxHashMap::default();
-
-        for plan_pick in team_picks {
-            let mut sim = base.clone();
-            g.belief
-                .determinize_in_place_planned(dex, &mut sim, &g.observer, plan_pick, &mut self.rng);
-            if base_idle && (sim.quick_claw_rolls[0] || sim.quick_claw_rolls[1]) {
-                sim.quick_claw_rolls = [false, false];
-                if let Some(a) = sim.active_id(opp) {
-                    if !sim.poke(a).fainted {
-                        sim.update_speed(dex, a);
-                    }
-                }
-            }
-            // Collapse redundant `[lead, A, B]` / `[lead, B, A]` unseen bench permutations (parity with `blind.rs`).
-            crate::blind::canonicalize_unseen_bench(dex, &mut sim, opp);
-            let (table, cb) = CompactBattle::from_battle(&sim, dex);
-            let wsig = compact_world_sig(&cb, &table);
-            let any_qc = compact_world_has_qc(&cb, &table);
-            let opp_choices = sim.legal_choices(dex, opp);
-
-            let mut encoded_opp: Vec<(SearchChoice, u8)> = Vec::with_capacity(opp_choices.len().min(7));
-            for &c in &opp_choices {
-                if encoded_opp.len() < 7 {
-                    if let Some(code) = encode_choice(&table, &cb, dex, opp, c) {
-                        encoded_opp.push((c, code));
-                    }
-                }
-            }
-            let root_node_id = *world_root_index.entry(wsig).or_insert_with(|| {
-                let mut rnode = DuctNode::new(&cb, &table);
-                let mut own_codes = [0u8; 7];
-                let mut n_own = 0usize;
-                for &c in &my_acts {
-                    if n_own < 7 {
-                        if let Some(code) = encode_choice(&table, &cb, dex, side, c) {
-                            own_codes[n_own] = code;
-                            n_own += 1;
-                        }
-                    }
-                }
-                debug_assert_eq!(n_own, n_my.min(7));
-                rnode.n_acts[side] = n_own as u8;
-                rnode.acts[side] = own_codes;
-
-                if !encoded_opp.is_empty() {
-                    let mut opp_codes = [0u8; 7];
-                    for (j, &(_, code)) in encoded_opp.iter().enumerate() {
-                        opp_codes[j] = code;
-                    }
-                    rnode.n_acts[opp] = encoded_opp.len() as u8;
-                    rnode.acts[opp] = opp_codes;
-                }
-                let nid = nodes.len();
-                nodes.push(rnode);
-                let rkey = compact_duct_key_seeded_qc(&cb, &table, wsig, 0);
-                index.insert(rkey, nid);
-                nid
-            });
-
-            let rep_world_idx = worlds.len();
-            let type_index = *root_type_index.entry(wsig).or_insert_with(|| {
-                let replies = if cb.sides[opp].request == 0 {
-                    0
-                } else {
-                    encoded_opp.len()
-                };
-                let reply_keys: Vec<ReplyPoolKey> = encoded_opp
-                    .iter()
-                    .take(replies)
-                    .map(|&(c, _)| {
-                        if stage2_root {
-                            reply_pool_key(&sim, opp, c)
-                        } else {
-                            ReplyPoolKey::Other(c)
-                        }
-                    })
-                    .collect();
-                let ti = root_types.len();
-                root_types.push(CompactRootTypeStats {
-                    samples: 0,
-                    late_samples: 0,
-                    replies,
-                    reply_keys,
-                    cells: vec![(0, 0.0); n_my * replies],
-                    late_cells: vec![(0, 0.0); n_my * replies],
-                    col_visits: vec![0; replies],
-                    rep_world_idx,
-                    world_count: 0,
-                    prior_cells: vec![0.5; n_my * replies.max(1)],
-                    cal_prior_buf: Vec::new(),
-                    prior_valid: false,
-                    prior_delta: 0.0,
-                    opp_eq_policy: vec![0.0; replies],
-                    active_cols: Vec::new(),
-                    search_v: vec![0.5; n_my * replies],
-                    type_eq_value: 0.5,
-                });
-                ti
-            });
-            root_types[type_index].world_count += 1;
-
-            let cache = if use_fast {
-                Some(TempoMatchCache::build(&cb, &table))
-            } else {
-                None
-            };
-            worlds.push(CompactWorld {
-                table,
-                cb,
-                cache,
-                world_sig: wsig,
-                any_qc,
-                root_node_id,
-                type_index,
-            });
-        }
-
-        let mut my_n = vec![0u32; n_my];
-        let mut my_w = vec![0.0f64; n_my];
-        let mut joint: Vec<(usize, ReplyPoolKey, u32, f64)> = Vec::new();
-        let mut joint_index: FxHashMap<(usize, ReplyPoolKey), usize> = FxHashMap::default();
         let mut endgame = EndgameRootStats::new(&base, dex, side, &my_acts);
-        let mut bayesian_row_q: Option<Vec<f64>> = None;
+        let mut agg_my_n = vec![0u32; n_my];
+        let mut agg_my_w = vec![0.0f64; n_my];
+        let mut agg_ord_n = vec![0u32; n_my];
+        let mut agg_ord_w = vec![0.0f64; n_my];
+        let mut agg_root_types: Vec<CompactRootTypeStats> = Vec::new();
+        let mut agg_root_type_index: FxHashMap<u64, usize> = FxHashMap::default();
+        let mut agg_joint: Vec<(usize, ReplyPoolKey, u32, f64)> = Vec::new();
+        let mut agg_joint_index: FxHashMap<(usize, ReplyPoolKey), usize> = FxHashMap::default();
+        let mut total_done = 0u32;
+        let mut chosen_opt: Option<SearchChoice> = None;
+
+        for tree_k in 0..max_trees {
+            let tree_mix = (tree_k as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+            let mut plan_rng = SplitMix64::new(
+                (decision_seed ^ tree_mix)
+                    ^ obs_rev.wrapping_mul(0x9E37_79B9_7F4A_7C15)
+                    ^ (target_k as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9),
+            );
+            let team_picks = g.belief.root_sampling_plan(target_k, &mut plan_rng);
+
+            nodes.clear();
+            if nodes.capacity() < target_cap {
+                nodes.reserve(target_cap);
+            }
+            index.clear();
+            if index.capacity() < target_cap {
+                index.reserve(target_cap);
+            }
+
+            let mut worlds: Vec<CompactWorld> = Vec::with_capacity(target_k);
+            let mut root_types: Vec<CompactRootTypeStats> = Vec::new();
+            let mut root_type_index: FxHashMap<u64, usize> = FxHashMap::default();
+            let mut world_root_index: FxHashMap<u64, usize> = FxHashMap::default();
+
+            for plan_pick in team_picks {
+                let mut sim = base.clone();
+                g.belief.determinize_in_place_planned(
+                    dex,
+                    &mut sim,
+                    &g.observer,
+                    plan_pick,
+                    &mut self.rng,
+                );
+                if base_idle && (sim.quick_claw_rolls[0] || sim.quick_claw_rolls[1]) {
+                    sim.quick_claw_rolls = [false, false];
+                    if let Some(a) = sim.active_id(opp) {
+                        if !sim.poke(a).fainted {
+                            sim.update_speed(dex, a);
+                        }
+                    }
+                }
+                // Collapse redundant `[lead, A, B]` / `[lead, B, A]` unseen bench permutations (parity with `blind.rs`).
+                crate::blind::canonicalize_unseen_bench(dex, &mut sim, opp);
+                // Per-world parity guard: if an imputed hidden bench/moveset contains a move outside
+                // `CompactBattle`'s supported subset (e.g. hidden Solar Beam / Transform), delegate to
+                // shipped `BlindSearch` just like `blind.rs::try_build_compact_world`.
+                if !nc2000_engine::compact::is_compact_tree_supported(&sim, dex) {
+                    self.nodes_buf = nodes;
+                    self.index_buf = index;
+                    let rm_cfg = RmConfig {
+                        iterations: self.cfg.iterations,
+                        c: self.cfg.c,
+                        rule: SelRule::Ucb,
+                        ..RmConfig::default()
+                    };
+                    let mut bs = BlindSearch::from_observation(&pos, dex, rm_cfg, side, self.rng.0);
+                    if self.cfg.adaptive {
+                        let mut budget = crate::adaptive_budget::AdaptiveBattleBudget::default();
+                        budget.step(&mut bs, dex, &g.belief, &g.observer, self.cfg.iterations);
+                    } else {
+                        bs.step(dex, &g.belief, &g.observer, self.cfg.iterations);
+                    }
+                    let pick = bs.best().unwrap_or(my_acts[0]);
+                    self.rng = SplitMix64::new(bs.search_rng_state());
+                    return pick;
+                }
+                let (table, mut cb) = CompactBattle::from_battle(&sim, dex);
+                if base_idle {
+                    cb.quick_claw_roll = 0;
+                }
+                let rkey =
+                    cb.search_key(&table, 16, base_idle || !cb.quick_claw_observable(&table));
+                let tkey = cb.search_key(&table, 0, true);
+                let opp_choices = sim.legal_choices(dex, opp);
+
+                let mut encoded_opp: Vec<(SearchChoice, u8)> =
+                    Vec::with_capacity(opp_choices.len().min(7));
+                for &c in &opp_choices {
+                    if encoded_opp.len() < 7 {
+                        if let Some(code) = encode_choice(&table, &cb, dex, opp, c) {
+                            encoded_opp.push((c, code));
+                        }
+                    }
+                }
+                let root_node_id = *world_root_index.entry(rkey).or_insert_with(|| {
+                    let mut rnode = DuctNode::new(&cb, &table);
+                    let mut own_codes = [0u8; 7];
+                    let mut n_own = 0usize;
+                    for &c in &my_acts {
+                        if n_own < 7 {
+                            if let Some(code) = encode_choice(&table, &cb, dex, side, c) {
+                                own_codes[n_own] = code;
+                                n_own += 1;
+                            }
+                        }
+                    }
+                    debug_assert_eq!(n_own, n_my.min(7));
+                    rnode.n_acts[side] = n_own as u8;
+                    rnode.acts[side] = own_codes;
+
+                    if !encoded_opp.is_empty() {
+                        let mut opp_codes = [0u8; 7];
+                        for (j, &(_, code)) in encoded_opp.iter().enumerate() {
+                            opp_codes[j] = code;
+                        }
+                        rnode.n_acts[opp] = encoded_opp.len() as u8;
+                        rnode.acts[opp] = opp_codes;
+                    }
+                    let nid = nodes.len();
+                    nodes.push(rnode);
+                    index.insert(rkey, nid);
+                    nid
+                });
+
+                let rep_world_idx = worlds.len();
+                let type_index = *root_type_index.entry(tkey).or_insert_with(|| {
+                    let replies = if cb.sides[opp].request == 0 {
+                        0
+                    } else {
+                        encoded_opp.len()
+                    };
+                    let reply_keys: Vec<ReplyPoolKey> = encoded_opp
+                        .iter()
+                        .take(replies)
+                        .map(|&(c, _)| {
+                            if use_sempool {
+                                reply_pool_key(&sim, opp, c)
+                            } else {
+                                ReplyPoolKey::Other(c)
+                            }
+                        })
+                        .collect();
+                    let ti = root_types.len();
+                    root_types.push(CompactRootTypeStats {
+                        tkey,
+                        samples: 0,
+                        late_samples: 0,
+                        replies,
+                        reply_keys,
+                        cells: vec![(0, 0.0); n_my * replies],
+                        late_cells: vec![(0, 0.0); n_my * replies],
+                        col_visits: vec![0; replies],
+                        rep_world_idx,
+                        world_count: 0,
+                        prior_cells: vec![0.5; n_my * replies.max(1)],
+                        cal_prior_buf: Vec::new(),
+                        prior_valid: false,
+                        prior_delta: 0.0,
+                        opp_eq_policy: vec![0.0; replies],
+                        active_cols: Vec::new(),
+                        search_v: vec![0.5; n_my * replies],
+                        type_eq_value: 0.5,
+                    });
+                    ti
+                });
+                root_types[type_index].world_count += 1;
+
+                let cache = if use_fast {
+                    Some(TempoMatchCache::build(&cb, &table))
+                } else {
+                    None
+                };
+                worlds.push(CompactWorld {
+                    table,
+                    cb,
+                    cache,
+                    root_node_id,
+                    type_index,
+                });
+            }
+
+            let mut my_n = vec![0u32; n_my];
+            let mut my_w = vec![0.0f64; n_my];
+            let mut ord_n = vec![0u32; n_my];
+            let mut ord_w = vec![0.0f64; n_my];
+            let mut joint: Vec<(usize, ReplyPoolKey, u32, f64)> = Vec::new();
+            let mut joint_index: FxHashMap<(usize, ReplyPoolKey), usize> = FxHashMap::default();
+            let mut bayesian_row_q: Option<Vec<f64>> = None;
 
         // Stage 2A state (strictly read-only prior sweep & smoothed search-guidance buffers).
         let n_elig_usize = eligible_flags.iter().filter(|&&e| e).count().max(1);
@@ -7129,10 +8169,19 @@ impl Agent for BlindCmctsAgent {
                            endgame: &EndgameRootStats,
                            my_n: &[u32],
                            my_w: &[f64],
+                           ord_n: &[u32],
+                           ord_w: &[f64],
                            root_types: &[CompactRootTypeStats],
                            joint: &[(usize, ReplyPoolKey, u32, f64)],
                            joint_index: &FxHashMap<(usize, ReplyPoolKey), usize>|
          -> SearchChoice {
+            // Separate ordinary on-policy visits/rewards from forced cross-sampling probes
+            // (matching `blind.rs::effective_visits` so off-policy Tier-2 refutations never
+            // distort `argmax` visit-leader selection, Path-1 LP admission, or `EndgameRootStats`).
+            let has_ord = (0..n_my).any(|i| eligible_flags[i] && ord_n[i] > 0);
+            let eff_n = if has_ord { ord_n } else { my_n };
+            let eff_w = if has_ord { ord_w } else { my_w };
+
             let reply_metrics = |own: usize, n_i: u32, mean_i: f64| -> (f64, f64) {
                 if n_i == 0 {
                     return (0.0, mean_i);
@@ -7180,19 +8229,20 @@ impl Agent for BlindCmctsAgent {
             select_blind_root_choice(
                 endgame,
                 &my_acts,
-                my_n,
-                my_n,
-                my_w,
+                eff_n,
+                eff_n,
+                eff_w,
                 |i| eligible_flags[i],
                 reply_metrics,
                 |base_idx| {
                     if done >= 64 {
                         let eq_opt = if stage2_root {
-                            // Strictly prior-free readout LP!
-                            compute_stage2_eq(my_n, my_w, root_types, joint, joint_index, false)
+                            // Strictly prior-free readout LP anchored to ordinary visits (`eff_n`/`eff_w`)
+                            // so `base_idx = argmax eff_n` is guaranteed admitted in Path 1!
+                            compute_stage2_eq(eff_n, eff_w, root_types, joint, joint_index, false)
                                 .map(|(s2, _)| s2.eq)
                         } else {
-                            compute_bayesian_eq(my_n, my_w, root_types, joint, joint_index)
+                            compute_bayesian_eq(eff_n, eff_w, root_types, joint, joint_index)
                         };
                         if let Some(eq) = eq_opt {
                             if eq.override_value > eq.pure_guarantees[base_idx] + MIN_MIX_MARGIN {
@@ -7214,6 +8264,12 @@ impl Agent for BlindCmctsAgent {
         let c_ucb = self.cfg.c;
         let max_depth = self.cfg.max_depth.min(250);
         let rollout_turns = self.cfg.rollout_turns;
+        let rollout_playout = crate::mcts::Playout::Heavy {
+            turns: rollout_turns,
+            eps: 0.2,
+            weights: EvalWeights::default(),
+        };
+        let rollout_rules = RmConfig::default().rollout_rules();
         let n_worlds = worlds.len();
         let adaptive = self.cfg.adaptive;
         let adaptive_interval = self.cfg.adaptive_interval.max(1);
@@ -7260,8 +8316,11 @@ impl Agent for BlindCmctsAgent {
                         }
                     }
 
+                    let has_ord = (0..n_my).any(|i| eligible_flags[i] && ord_n[i] > 0);
+                    let eff_n = if has_ord { ord_n.as_slice() } else { my_n.as_slice() };
+                    let eff_w = if has_ord { ord_w.as_slice() } else { my_w.as_slice() };
                     if let Some((mut s2, type_map)) =
-                        compute_stage2_eq(&my_n, &my_w, &root_types, &joint, &joint_index, true)
+                        compute_stage2_eq(eff_n, eff_w, &root_types, &joint, &joint_index, true)
                     {
                         for (k, &orig_t) in type_map.iter().enumerate() {
                             let t = &mut root_types[orig_t];
@@ -7349,13 +8408,13 @@ impl Agent for BlindCmctsAgent {
 
                         let sum_elig: u32 = (0..n_my)
                             .filter(|&i| eligible_flags[i])
-                            .map(|i| my_n[i])
+                            .map(|i| eff_n[i])
                             .sum();
                         let sum_elig_f = f64::from(sum_elig.max(1));
                         let mut p_tot = 0.0f64;
                         for i in 0..n_my {
                             if eligible_flags[i] {
-                                let p_emp = f64::from(my_n[i]) / sum_elig_f;
+                                let p_emp = f64::from(eff_n[i]) / sum_elig_f;
                                 let p_tgt = 0.7 * s2.eq.policy[i] + 0.3 * p_emp;
                                 p_eval[i] = 0.5 * p_eval[i] + 0.5 * p_tgt;
                                 p_tot += p_eval[i];
@@ -7383,7 +8442,18 @@ impl Agent for BlindCmctsAgent {
                             }
                         }
 
-                        bayesian_row_q = Some(s2.search_action_values);
+                        // Keep clean prior-free `KAPPA_CELL = 64` values for admitted LP actions
+                        // (including the visit leader) while using unblocked `search_action_values`
+                        // only for unadmitted rivals so Turn-35 buried counters stay reachable.
+                        let mut row_q = vec![0.5f64; n_my];
+                        for i in 0..n_my {
+                            row_q[i] = if s2.lp_admitted[i] {
+                                s2.eq.action_values[i]
+                            } else {
+                                s2.search_action_values[i]
+                            };
+                        }
+                        bayesian_row_q = Some(row_q);
                         has_stage2_refresh = true;
                     }
                 }
@@ -7410,7 +8480,9 @@ impl Agent for BlindCmctsAgent {
                 let stats = &root_types[type_index];
                 let m = stats.replies;
                 let src = if stats.late_samples >= 64 { &stats.late_cells } else { &stats.cells };
-                let n_threat = ((2.0 * f64::from(stats.samples).sqrt()).floor() as u32).clamp(12, 192);
+                let max_threat = (192u32 / (root_types.len().max(1) as u32)).clamp(32, 192);
+                let n_threat =
+                    ((2.0 * f64::from(stats.samples).sqrt()).floor() as u32).clamp(12, max_threat);
                 let j_ucb = select_stage2_opp_reply(stats, &p_eval_sparse, c_ucb);
                 let bq = bayesian_row_q.as_deref();
 
@@ -7481,6 +8553,7 @@ impl Agent for BlindCmctsAgent {
                 None
             };
 
+            let is_forced_probe = forced_threat_pair.is_some();
             let my_pick = if let Some((ti, tj)) = forced_threat_pair {
                 forced_root_opp = Some(tj);
                 my_n[ti] += 1;
@@ -7508,6 +8581,7 @@ impl Agent for BlindCmctsAgent {
                     };
                 if let Some(a) = min_floor_pick {
                     my_n[a] += 1;
+                    ord_n[a] += 1;
                     a
                 } else {
                     let mut n_untried = 0usize;
@@ -7568,17 +8642,19 @@ impl Agent for BlindCmctsAgent {
                         best_a
                     };
                     my_n[pick] += 1;
+                    ord_n[pick] += 1;
                     pick
                 }
             };
 
             // 2. Prepare 256-byte CompactBattle for this iteration (~20 ns total!).
-            // Always resample Quick Claw per iteration (matching `blind.rs:1496-1500`).
+            // Resample Quick Claw and seed CompactBattle PRNG once per iteration (exact parity with `smmcts::run_compact_iteration`).
             let mut cb = w.cb;
             {
                 let mut prng = nc2000_engine::prng::Prng::new(self.rng.next());
                 let qc = Battle::roll_quick_claw_with(w.table.ruleset, &mut prng);
                 cb.quick_claw_roll = (qc[0] as u8) | ((qc[1] as u8) << 1);
+                cb.prng_seed = prng.seed();
             }
             if !hidden_timers.is_empty() {
                 resample_compact_hidden_timers(&mut cb, &w.table, &hidden_timers, &mut timer_rng);
@@ -7591,6 +8667,9 @@ impl Agent for BlindCmctsAgent {
             let mut root_opp_idx = 0usize;
 
             let (leaf_val, end_info) = loop {
+                if depth > 0 && use_puct {
+                    nodes[cur_id].ensure_puct_priors(&cb, &w.table, w.cache.as_ref(), puct_eps);
+                }
                 let node = &nodes[cur_id];
                 let n0_cur = node.n_acts[0] as usize;
                 let n1_cur = node.n_acts[1] as usize;
@@ -7604,6 +8683,11 @@ impl Agent for BlindCmctsAgent {
                     };
                     root_opp_idx = i_opp;
                     if side == 0 { (my_pick, i_opp) } else { (i_opp, my_pick) }
+                } else if use_puct {
+                    (
+                        node.select_puct(0, c_puct, fpu_red),
+                        node.select_puct(1, c_puct, fpu_red),
+                    )
                 } else {
                     (
                         node.select_ucb(0, c_ucb, &mut self.rng, true),
@@ -7617,39 +8701,59 @@ impl Agent for BlindCmctsAgent {
                     path.push((cur_id, i0, i1));
                 }
 
-                cb.prng_seed = self.rng.next();
                 cb.apply_actions(&w.table, [a0, a1]);
                 depth = depth.saturating_add(1);
 
                 if cb.outcome != 0 {
-                    let v = eval_duct_leaf(&cb, &w.table, leaf_mode, w.cache.as_ref());
+                    let v = eval_duct_leaf_temp(&cb, &w.table, leaf_mode, w.cache.as_ref(), leaf_temp);
                     break (v, compact_sim_end(&cb, &w.table, v));
                 }
                 if let Some(v) = compact_turn_limit_outcome(&cb, &w.table) {
                     break (v, compact_sim_end(&cb, &w.table, v));
                 }
                 if depth >= max_depth || cb.turn > turn_cap {
-                    let v = eval_duct_leaf(&cb, &w.table, leaf_mode, w.cache.as_ref());
+                    let v = eval_duct_leaf_temp(&cb, &w.table, leaf_mode, w.cache.as_ref(), leaf_temp);
                     break (v, compact_sim_end(&cb, &w.table, v));
                 }
 
-                let qc_bits = compact_observable_qc_bits(&cb, &w.table, w.any_qc);
-                let next_key = compact_duct_key_seeded_qc(&cb, &w.table, w.world_sig, qc_bits);
+                let omit_qc = !cb.quick_claw_observable(&w.table);
+                let next_key = cb.search_key(&w.table, 16, omit_qc);
                 if let Some(&next_id) = index.get(&next_key) {
                     cur_id = next_id;
                 } else {
                     let new_id = nodes.len();
                     nodes.push(DuctNode::new(&cb, &w.table));
                     index.insert(next_key, new_id);
-                    let v = eval_duct_leaf_with_rollout(
-                        &mut cb,
-                        &w.table,
-                        leaf_mode,
-                        rollout_turns,
-                        w.cache.as_ref(),
-                        &mut self.rng,
-                    );
-                    break (v, compact_sim_end(&cb, &w.table, v));
+                    if rollout_turns == 0 {
+                        if leaf_mode == TempoLeafMode::AzValue
+                            && (cb.sides[0].request == 2 || cb.sides[1].request == 2)
+                        {
+                            resolve_compact_forced_switches(&mut cb, &w.table, &EvalWeights::default());
+                        }
+                        let v = eval_duct_leaf_temp(&cb, &w.table, leaf_mode, w.cache.as_ref(), leaf_temp);
+                        break (v, compact_sim_end(&cb, &w.table, v));
+                    } else {
+                        let cutoff =
+                            turn_cap.min(cb.turn.saturating_add(rollout_turns.saturating_sub(1)));
+                        let v = crate::mcts::compact_playout_with_leaf(
+                            &mut cb,
+                            &w.table,
+                            &rollout_playout,
+                            cutoff,
+                            &mut self.rng,
+                            rollout_rules,
+                            |cb_leaf, tbl_leaf| {
+                                eval_duct_leaf_temp(
+                                    cb_leaf,
+                                    tbl_leaf,
+                                    leaf_mode,
+                                    w.cache.as_ref(),
+                                    leaf_temp,
+                                )
+                            },
+                        );
+                        break (v, crate::mcts::last_sim_end());
+                    }
                 }
             };
 
@@ -7667,14 +8771,17 @@ impl Agent for BlindCmctsAgent {
                     n.sums[1][i1] += val;
                 }
                 if nid != root_id && val > 0.000_001 && val < 0.999_999 {
-                    val = n.backed_up_value(val);
+                    val = n.backed_up_value_cfg(val, backup_lambda, backup_tau);
                 }
             }
 
             // 5. Record root stats (endgame_root, RootTypeStats, late_cells, pooled joint).
             let mine = if side == 0 { val } else { 1.0 - val };
             my_w[my_pick] += mine;
-            endgame.record(base.turn, side, my_pick, mine, end_info);
+            if !is_forced_probe {
+                ord_w[my_pick] += mine;
+                endgame.record(base.turn, side, my_pick, mine, end_info);
+            }
             let stats = &mut root_types[type_index];
             stats.samples += 1;
             if root_opp_idx < stats.replies {
@@ -7699,41 +8806,61 @@ impl Agent for BlindCmctsAgent {
             }
 
             done = iter + 1;
-            // 6. Optional `AdaptiveBattleBudget`-compatible early-stop checkpoint.
-            if adaptive && done < self.cfg.iterations && done % adaptive_interval == 0 {
+            // Optional global mature-tree exponential window: halve ALL `root_types` simultaneously
+            // on global `done` power-of-2 milestones (`>= 2048`) so relative Bayesian posterior weights
+            // across common/rare types and across `contested_trees` remain strictly invariant.
+            if mature_window && done >= 2048 && done.is_power_of_two() {
+                for t in &mut root_types {
+                    if t.late_samples < 32 {
+                        continue;
+                    }
+                    let mut new_ls = 0u32;
+                    for cell in &mut t.late_cells {
+                        if cell.0 >= 2 {
+                            let nn = cell.0 / 2;
+                            cell.1 *= f64::from(nn) / f64::from(cell.0);
+                            cell.0 = nn;
+                        }
+                        new_ls += cell.0;
+                    }
+                    t.late_samples = new_ls;
+                }
+            }
+            // 6. Optional `AdaptiveBattleBudget`-compatible early-stop checkpoint (Tree 0 only).
+            if tree_k == 0 && adaptive && done < self.cfg.iterations && done % adaptive_interval == 0 {
                 let leader_opt = (0..n_my)
                     .filter(|&i| eligible_flags[i])
-                    .max_by_key(|&i| my_n[i]);
+                    .max_by_key(|&i| ord_n[i]);
                 let candidate = leader_opt.and_then(|leader| {
-                    let cutoff = crate::root_policy::min_equilibrium_visits(my_n[leader]);
-                    let mean_l = if my_n[leader] > 0 {
-                        my_w[leader] / f64::from(my_n[leader])
-                    } else {
-                        0.5
-                    };
-                    let bq = if stage2_root { bayesian_row_q.as_deref() } else { None };
+                    let nl = ord_n[leader];
+                    if nl == 0 {
+                        return None;
+                    }
+                    let cutoff = crate::root_policy::min_equilibrium_visits(nl);
+                    let mean_l = ord_w[leader] / f64::from(nl);
                     for i in 0..n_my {
                         if i != leader && eligible_flags[i] {
-                            let mean_i = if my_n[i] > 0 {
-                                my_w[i] / f64::from(my_n[i])
-                            } else {
-                                0.5
-                            };
-                            if my_n[i] == 0
-                                || my_n[i] >= cutoff
+                            let ni = ord_n[i];
+                            let mean_i = if ni > 0 { ord_w[i] / f64::from(ni) } else { 0.5 };
+                            if ni == 0
+                                || ni >= cutoff
                                 || mean_l - mean_i < adaptive_min_gap
                             {
                                 return None;
                             }
-                            if let Some(q) = bq {
-                                if q[leader] - q[i] < adaptive_min_gap {
-                                    return None;
-                                }
-                            }
                         }
                     }
-                    let pick =
-                        select_root(done, &endgame, &my_n, &my_w, &root_types, &joint, &joint_index);
+                    let pick = select_root(
+                        done,
+                        &endgame,
+                        &my_n,
+                        &my_w,
+                        &ord_n,
+                        &ord_w,
+                        &root_types,
+                        &joint,
+                        &joint_index,
+                    );
                     (pick == my_acts[leader]).then_some(pick)
                 });
                 if candidate.is_some()
@@ -7745,10 +8872,83 @@ impl Agent for BlindCmctsAgent {
             }
         }
 
-        let chosen = select_root(done, &endgame, &my_n, &my_w, &root_types, &joint, &joint_index);
+            // Fast path: single-tree config OR Tree 0 early-stopped on a clear decision.
+            if max_trees == 1 || (tree_k == 0 && adaptive && done < self.cfg.iterations) {
+                chosen_opt = Some(select_root(
+                    done,
+                    &endgame,
+                    &my_n,
+                    &my_w,
+                    &ord_n,
+                    &ord_w,
+                    &root_types,
+                    &joint,
+                    &joint_index,
+                ));
+                break;
+            }
+
+            // Contested multi-tree root aggregation: merge full-depth tree stats across independent seeds/world plans.
+            total_done = total_done.saturating_add(done);
+            for i in 0..n_my {
+                agg_my_n[i] = agg_my_n[i].saturating_add(my_n[i]);
+                agg_my_w[i] += my_w[i];
+                agg_ord_n[i] = agg_ord_n[i].saturating_add(ord_n[i]);
+                agg_ord_w[i] += ord_w[i];
+            }
+            for t in root_types {
+                if let Some(&ai) = agg_root_type_index.get(&t.tkey) {
+                    let dst = &mut agg_root_types[ai];
+                    if dst.replies == t.replies && dst.cells.len() == t.cells.len() {
+                        dst.samples = dst.samples.saturating_add(t.samples);
+                        dst.late_samples = dst.late_samples.saturating_add(t.late_samples);
+                        for (dc, sc) in dst.cells.iter_mut().zip(t.cells.iter()) {
+                            dc.0 = dc.0.saturating_add(sc.0);
+                            dc.1 += sc.1;
+                        }
+                        for (dc, sc) in dst.late_cells.iter_mut().zip(t.late_cells.iter()) {
+                            dc.0 = dc.0.saturating_add(sc.0);
+                            dc.1 += sc.1;
+                        }
+                        for (dv, &sv) in dst.col_visits.iter_mut().zip(t.col_visits.iter()) {
+                            *dv = dv.saturating_add(sv);
+                        }
+                        dst.world_count = dst.world_count.saturating_add(t.world_count);
+                    }
+                } else {
+                    let ai = agg_root_types.len();
+                    agg_root_type_index.insert(t.tkey, ai);
+                    agg_root_types.push(t);
+                }
+            }
+            for (own, rkey, jn, jw) in joint {
+                let ji = *agg_joint_index.entry((own, rkey)).or_insert_with(|| {
+                    let k = agg_joint.len();
+                    agg_joint.push((own, rkey, 0, 0.0));
+                    k
+                });
+                agg_joint[ji].2 = agg_joint[ji].2.saturating_add(jn);
+                agg_joint[ji].3 += jw;
+            }
+
+            if tree_k + 1 == max_trees {
+                chosen_opt = Some(select_root(
+                    total_done,
+                    &endgame,
+                    &agg_my_n,
+                    &agg_my_w,
+                    &agg_ord_n,
+                    &agg_ord_w,
+                    &agg_root_types,
+                    &agg_joint,
+                    &agg_joint_index,
+                ));
+            }
+        }
+
         self.nodes_buf = nodes;
         self.index_buf = index;
-        chosen
+        chosen_opt.unwrap_or(my_acts[0])
     }
 }
 
@@ -8324,6 +9524,7 @@ mod tests {
                 adaptive_interval: 200,
                 adaptive_min_gap: 0.01,
                 stage2_root: false,
+                ..BlindCmctsConfig::default()
             },
             pool.clone(),
             42,
@@ -8361,6 +9562,7 @@ mod tests {
             adaptive_interval: 256,
             adaptive_min_gap: 0.01,
             stage2_root: true,
+            ..BlindCmctsConfig::default()
         };
         let mut s2_a = BlindCmctsAgent::new(s2_cfg.clone(), pool.clone(), 777);
         let mut s2_b = BlindCmctsAgent::new(s2_cfg.clone(), pool.clone(), 777);
@@ -8504,5 +9706,185 @@ mod tests {
             compact_duct_key_seeded_qc(&cb_tt1, &tqc, 42, 0),
             "mon.item bits must never mask two_turn_locked"
         );
+
+        // 5. Post-Screen-1 key & HybridGolf parity regressions:
+        //    (a) Floor HP bucket separates 95% HP (Rest succeeds) from 100% HP (Rest fails),
+        //    (b) Active & bench exact PP are hashed (pp=1 vs pp=16, bench pp=0 vs pp=16),
+        //    (c) `last_move_slot` (Encore) is hashed,
+        //    (d) `evaluate_hybrid_golf` matches `compact_eval_leaf_blindspot` 0-ULP on 1v1,
+        //    (e) `RmConfig::default().rollout_rules()` enables `perish_combo` & `relay`.
+        let p_key = vec![
+            mk("Snorlax", 55, "Leftovers", &["Body Slam", "Earthquake", "Rest", "Curse"]),
+            mk("Skarmory", 50, "Leftovers", &["Drill Peck", "Whirlwind", "Rest", "Curse"]),
+        ];
+        let (tk, mut cb_full) = CompactBattle::from_battle(&start(&dex, &p_key, &p_key), &dex);
+        let mut cb_95 = cb_full;
+        cb_95.mons[0].hp_pool[0] = (tk.mons[0].maxhp * 95) / 100;
+        assert_ne!(
+            cb_full.search_key(&tk, 16, true),
+            cb_95.search_key(&tk, 16, true),
+            "search_key must separate 100% HP vs 95% HP (Rest fail boundary)"
+        );
+        assert_ne!(
+            compact_duct_key_seeded_qc(&cb_full, &tk, 42, 0),
+            compact_duct_key_seeded_qc(&cb_95, &tk, 42, 0),
+            "compact_duct_key_seeded_qc must separate 100% HP vs 95% HP"
+        );
+
+        let mut cb_pp_act = cb_full;
+        cb_pp_act.mons[0].pp[2] = 1; // Rest PP 1 vs 16
+        assert_ne!(cb_full.search_key(&tk, 16, true), cb_pp_act.search_key(&tk, 16, true));
+        assert_ne!(
+            compact_duct_key_seeded_qc(&cb_full, &tk, 42, 0),
+            compact_duct_key_seeded_qc(&cb_pp_act, &tk, 42, 0),
+        );
+
+        let mut cb_pp_bench = cb_full;
+        cb_pp_bench.mons[1].pp[2] = 0; // Bench Skarmory Rest PP 0 vs 16
+        assert_ne!(cb_full.search_key(&tk, 16, true), cb_pp_bench.search_key(&tk, 16, true));
+        assert_ne!(
+            compact_duct_key_seeded_qc(&cb_full, &tk, 42, 0),
+            compact_duct_key_seeded_qc(&cb_pp_bench, &tk, 42, 0),
+        );
+
+        let mut cb_lm = cb_full;
+        cb_full.mons[0].set_last_move_slot(0);
+        cb_lm.mons[0].set_last_move_slot(2);
+        assert_ne!(cb_full.search_key(&tk, 16, true), cb_lm.search_key(&tk, 16, true));
+        assert_ne!(
+            compact_duct_key_seeded_qc(&cb_full, &tk, 42, 0),
+            compact_duct_key_seeded_qc(&cb_lm, &tk, 42, 0),
+        );
+
+        let (t1, cb1) = CompactBattle::from_battle(&start(&dex, &p_left, &p_mint), &dex);
+        let hy_1v1 = evaluate_hybrid_golf(&cb1, &t1, None);
+        let bs_1v1 = compact_eval_leaf_blindspot(&cb1, &t1, &EvalWeights::default());
+        assert_eq!(hy_1v1, bs_1v1, "HybridGolf 1v1 must match compact_eval_leaf_blindspot 0-ULP");
+
+        let rr = RmConfig::default().rollout_rules();
+        assert!(rr.perish_combo && rr.baton_pass && rr.settlement.uses_relay_bellman());
+
+        // Stage 2A + 8r heavy rollout determinism check.
+        let root = conformance::fixture::repo_root();
+        let pool = Arc::new(crate::preview::load_meta_pool(
+            &root.join("data/belief-pool-v3/belief-pool.json"),
+        ));
+        let mut b8 = Battle::from_fixture(&dex, "13,14,15,16", &pool.teams[0].sets, &pool.teams[1].sets).unwrap();
+        b8.set_log_enabled(true);
+        b8.choose(&dex, 0, "team 1,2,3").unwrap();
+        b8.choose(&dex, 1, "team 1,2,3").unwrap();
+        let cs8 = b8.legal_choices(&dex, 0);
+        let cfg8 = BlindCmctsConfig {
+            iterations: 600,
+            c: 0.4,
+            max_depth: 250,
+            leaf: TempoLeafMode::EvalBlindspot,
+            rollout_turns: 8,
+            max_worlds: 12,
+            preview_iterations: 200,
+            own_preview_triple: Some([1, 2, 3]),
+            adaptive: true,
+            adaptive_interval: 256,
+            adaptive_min_gap: 0.01,
+            stage2_root: true,
+            ..BlindCmctsConfig::default()
+        };
+        let mut a8 = BlindCmctsAgent::new(cfg8.clone(), pool.clone(), 9001);
+        let mut b8_ag = BlindCmctsAgent::new(cfg8, pool, 9001);
+        assert_eq!(a8.choose(&b8, &dex, 0, &cs8), b8_ag.choose(&b8, &dex, 0, &cs8));
+
+        // 6. Stage-3 feature extraction: exact 0-ULP side-swap antisymmetry & Frontier-#1 PP monotonicity!
+        let f_ab = extract_stage3_features(&cb_ab, &t_ab, Some(&c_ab));
+        let f_ba = extract_stage3_features(&cb_ba, &t_ba, Some(&c_ba));
+        assert_eq!(f_ab.g_stag, f_ba.g_stag, "g_stag must be exactly symmetric");
+        for k in 0..20usize {
+            assert!(
+                (f_ab.phi[k] + f_ba.phi[k]).abs() <= 1e-6,
+                "Stage3 phi[{k}] antisymmetry failed: ab={} ba={}",
+                f_ab.phi[k],
+                f_ba.phi[k]
+            );
+        }
+        let f_unc = extract_stage3_features(&cb_ab, &t_ab, None);
+        // Cached analytical boost scaling matches uncached integer DmgKernel1D closely on boosted states,
+        // and matches exact 0-drift on non-TTK mechanical features (`phi[8..18]`).
+        for k in 0..20usize {
+            let tol = if (8..=17).contains(&k) { 1e-5 } else { 0.05 };
+            assert!(
+                (f_ab.phi[k] - f_unc.phi[k]).abs() <= tol,
+                "Stage3 cached vs uncached phi[{k}] drift: cached={} uncached={}",
+                f_ab.phi[k],
+                f_unc.phi[k]
+            );
+        }
+        // Frontier #1 stagnation-gated recovery PP monotonicity on 3v3 stall wall mirror:
+        let wall_team = vec![
+            mk("Snorlax", 55, "Leftovers", &["Body Slam", "Rest", "Curse", "Sleep Talk"]),
+            mk("Skarmory", 50, "Leftovers", &["Drill Peck", "Whirlwind", "Rest", "Curse"]),
+            mk("Blissey", 50, "Leftovers", &["Seismic Toss", "Soft-Boiled", "Toxic", "Heal Bell"]),
+        ];
+        let (tw, cb_w_hi) = CompactBattle::from_battle(&start(&dex, &wall_team, &wall_team), &dex);
+        let cw_hi = TempoMatchCache::build(&cb_w_hi, &tw);
+        let mut cb_w_lo = cb_w_hi;
+        cb_w_lo.mons[0].pp[1] = 2; // Snorlax Rest PP depleted (16 -> 2)
+        cb_w_lo.mons[2].pp[1] = 4; // Blissey Soft-Boiled PP depleted (16 -> 4)
+        let f_hi = extract_stage3_features(&cb_w_hi, &tw, None);
+        let f_hi_c = extract_stage3_features(&cb_w_hi, &tw, Some(&cw_hi));
+        for k in 0..20usize {
+            assert!(
+                (f_hi.phi[k] - f_hi_c.phi[k]).abs() <= 1e-5,
+                "Stage3 unboosted cached vs uncached phi[{k}] drift: {} vs {}",
+                f_hi.phi[k],
+                f_hi_c.phi[k]
+            );
+        }
+        let f_lo = extract_stage3_features(&cb_w_lo, &tw, None);
+        assert!(f_hi.g_stag > 0.3, "3v3 wall mirror must activate stagnation gate: g_stag={}", f_hi.g_stag);
+        assert!(
+            f_hi.phi[8] > f_lo.phi[8] + 0.05,
+            "Frontier #1 stag_rec_pp must be strictly monotone in recovery PP: hi={} lo={}",
+            f_hi.phi[8],
+            f_lo.phi[8]
+        );
+        // 7. Stage-3 heads (`Stage3Log` & `Stage3Mlp`): 0-ULP antisymmetry, 1v1 exact `bs_nr`,
+        //    Frontier-#1 PP monotonicity, and `contested_trees = 2` determinism!
+        let s3l_ab = evaluate_stage3_log(&cb_ab, &t_ab, Some(&c_ab), 1.0);
+        let s3l_ba = evaluate_stage3_log(&cb_ba, &t_ba, Some(&c_ba), 1.0);
+        assert!((s3l_ab + s3l_ba - 1.0).abs() < 1e-6, "Stage3Log antisymmetry: {s3l_ab} + {s3l_ba}");
+        let s3m_ab = evaluate_stage3_mlp(&cb_ab, &t_ab, Some(&c_ab), 1.0);
+        let s3m_ba = evaluate_stage3_mlp(&cb_ba, &t_ba, Some(&c_ba), 1.0);
+        assert!((s3m_ab + s3m_ba - 1.0).abs() < 1e-6, "Stage3Mlp antisymmetry: {s3m_ab} + {s3m_ba}");
+        assert_eq!(evaluate_stage3_log(&cb1, &t1, None, 1.0), bs_1v1, "Stage3Log 1v1 must match bs 0-ULP");
+        assert_eq!(evaluate_stage3_mlp(&cb1, &t1, None, 1.0), bs_1v1, "Stage3Mlp 1v1 must match bs 0-ULP");
+        assert!(
+            evaluate_stage3_mlp(&cb_w_hi, &tw, None, 1.0)
+                > evaluate_stage3_mlp(&cb_w_lo, &tw, None, 1.0) + 0.01,
+            "Stage3Mlp must strictly reward higher recovery PP in 3v3 wall stall"
+        );
+        let cfg_k2 = BlindCmctsConfig {
+            iterations: 400,
+            c: 0.4,
+            max_depth: 250,
+            leaf: TempoLeafMode::Stage3Mlp,
+            rollout_turns: 8,
+            max_worlds: 12,
+            preview_iterations: 200,
+            own_preview_triple: Some([1, 2, 3]),
+            adaptive: false,
+            adaptive_interval: 200,
+            adaptive_min_gap: 0.01,
+            stage2_root: false,
+            sempool: true,
+            mature_window: true,
+            contested_trees: 2,
+            leaf_temp: 1.0,
+            ..BlindCmctsConfig::default()
+        };
+        let pool2 = Arc::new(crate::preview::load_meta_pool(
+            &root.join("data/belief-pool-v3/belief-pool.json"),
+        ));
+        let mut ak1 = BlindCmctsAgent::new(cfg_k2.clone(), pool2.clone(), 4242);
+        let mut ak2 = BlindCmctsAgent::new(cfg_k2, pool2, 4242);
+        assert_eq!(ak1.choose(&b8, &dex, 0, &cs8), ak2.choose(&b8, &dex, 0, &cs8));
     }
 }

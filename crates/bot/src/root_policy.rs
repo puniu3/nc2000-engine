@@ -644,6 +644,8 @@ pub fn solve_bayesian_equilibrium_with_priors(
 pub struct Stage2BayesianEquilibrium {
     pub eq: BayesianEquilibrium,
     pub search_action_values: Vec<f64>,
+    /// True for each own action `i` admitted into the prior-free `KAPPA_CELL = 64` readout LP.
+    pub lp_admitted: Vec<bool>,
     pub opp_eq_policy: Vec<Vec<f64>>,
     pub active_cols: Vec<Vec<usize>>,
     pub type_weights: Vec<f64>,
@@ -860,9 +862,10 @@ pub fn solve_bayesian_equilibrium_stage2(
             }
         }
         let max_col_n = col_n.iter().copied().max().unwrap_or(0);
+        let col_cap = (world_n / 64).clamp(96, 512);
         let min_col_n = (world_n / (2 * m as u32))
             .max(max_col_n / 5)
-            .clamp(4, 96)
+            .clamp(4, col_cap)
             .min(max_col_n);
         let mut active_cols: Vec<usize> = (0..m).filter(|&j| col_n[j] >= min_col_n).collect();
         if active_cols.is_empty() {
@@ -892,10 +895,14 @@ pub fn solve_bayesian_equilibrium_stage2(
         return None;
     }
 
-    // Pass 2: Safe two-path capped row admission (`min_own_std <= 512` OR threat-covered rival).
+    // Pass 2: Scale-safe two-path row admission:
+    // - Path 1 matches shipped `min_equilibrium_visits(max_v)` (`max_v / 8`) so low-visit losing
+    //   exploration arms never leak unconditionally into the readout LP at 486k–972k.
+    // - Path 2 admits threat-covered rivals (`>= 32..256` visits with `min_active >= 16` across
+    //   `>= 75%` of world weight), rescuing Turn-35 style buried rivals safely.
     let max_v = all_elig.iter().map(|&i| global_visits[i]).max().unwrap_or(0);
-    let min_own_std = (max_v / 8).min(512).max(4).min(max_v);
-    let min_own_threat = (max_v / 16).clamp(32, 128).min(max_v);
+    let min_own_std = min_equilibrium_visits(max_v);
+    let min_own_threat = (max_v / 16).clamp(32, 256).min(max_v);
 
     let mut lp_actions: Vec<usize> = all_elig
         .iter()
@@ -905,7 +912,11 @@ pub fn solve_bayesian_equilibrium_stage2(
             if v >= min_own_std {
                 return true;
             }
-            if v < min_own_threat {
+            // Path 2 allows real cross-sampled cell visits (`row_tot`) even when ordinary visits
+            // (`global_visits`) are small, while Path 1 stays anchored strictly to ordinary visits
+            // so `argmax(ord_n)` is guaranteed to enter `lp_actions`.
+            let row_tot: u32 = aggs.iter().map(|a| a.row_n[own]).sum();
+            if v.max(row_tot) < min_own_threat {
                 return false;
             }
             let mut cov_w = 0.0f64;
@@ -970,11 +981,7 @@ pub fn solve_bayesian_equilibrium_stage2(
                 };
                 let mu_search = if let Some(cp) = cal_prior {
                     let p_cal = cp[own * m + j].clamp(0.02, 0.98);
-                    if p_n > 0.0 {
-                        0.5 * pooled_prior + 0.5 * p_cal
-                    } else {
-                        p_cal
-                    }
+                    (p_n * pooled_prior + 8.0 * p_cal) / (p_n + 8.0)
                 } else {
                     pooled_prior
                 };
@@ -1169,9 +1176,15 @@ pub fn solve_bayesian_equilibrium_stage2(
         search_action_values[own] = 0.5 * eq_v + 0.5 * pg_v;
     }
 
+    let mut lp_admitted = vec![false; k_total];
+    for &own in &lp_actions {
+        lp_admitted[own] = true;
+    }
+
     Some(Stage2BayesianEquilibrium {
         eq,
         search_action_values,
+        lp_admitted,
         opp_eq_policy,
         active_cols: active_cols_out,
         type_weights: type_weights_out,
@@ -1688,8 +1701,33 @@ mod tests {
         .unwrap();
         assert!(
             s2_hi.eq.policy[0] > 0.3 && s2_hi.eq.policy[1] > 0.3,
-            "capped min_own_std <= 512 must admit 600-visit RPS rival at 700k: {:?}",
+            "threat-covered Path 2 must admit 600-visit RPS rival at 700k: {:?}",
             s2_hi.eq.policy
+        );
+        // Uncovered 600-visit exploration tail at 700k (min_active = 4 < 16) MUST be rejected!
+        let high_budget_uncovered = [RootType {
+            samples: 700_600,
+            replies: 2,
+            cells: vec![
+                RootCell { own: 0, reply: 0, samples: 350_000, mean: 0.45 },
+                RootCell { own: 0, reply: 1, samples: 350_000, mean: 0.75 },
+                RootCell { own: 1, reply: 0, samples: 596, mean: 0.75 },
+                RootCell { own: 1, reply: 1, samples: 4, mean: 0.45 },
+            ],
+        }];
+        let s2_uncov = solve_bayesian_equilibrium_stage2(
+            &[true, true],
+            &[700_000, 600],
+            &[0.60, 0.748],
+            &high_budget_uncovered,
+            &[],
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            s2_uncov.eq.policy,
+            vec![1.0, 0.0],
+            "uncovered 600-visit rival at 700k must NOT leak into LP readout"
         );
         assert!(
             (s2_hi.opp_eq_policy[0].iter().sum::<f64>() - 1.0).abs() < 1e-9
@@ -1731,21 +1769,21 @@ mod tests {
             s2_t13.search_action_values
         );
 
-        // 3. Path-2 threat-covered rival admission: max_v = 10_000 (min_own_std = 512,
-        //    min_own_threat = 128), rival has 160 visits with >= 16 samples on every active col.
+        // 3. Path-2 threat-covered rival admission: max_v = 10_000 (min_own_std = 1250,
+        //    min_own_threat = 256), rival has 260 visits with >= 16 samples on every active col.
         let threat_covered = [RootType {
-            samples: 10_160,
+            samples: 10_260,
             replies: 2,
             cells: vec![
                 RootCell { own: 0, reply: 0, samples: 5_000, mean: 0.40 },
                 RootCell { own: 0, reply: 1, samples: 5_000, mean: 0.75 },
-                RootCell { own: 1, reply: 0, samples: 80, mean: 0.72 },
-                RootCell { own: 1, reply: 1, samples: 80, mean: 0.42 },
+                RootCell { own: 1, reply: 0, samples: 130, mean: 0.72 },
+                RootCell { own: 1, reply: 1, samples: 130, mean: 0.42 },
             ],
         }];
         let s2_cov = solve_bayesian_equilibrium_stage2(
             &[true, true],
-            &[10_000, 160],
+            &[10_000, 260],
             &[0.575, 0.570],
             &threat_covered,
             &[],
@@ -1754,7 +1792,7 @@ mod tests {
         .unwrap();
         assert!(
             s2_cov.eq.policy[1] > 0.25,
-            "threat-covered rival with cov=1.0 and 160 >= 128 visits must enter LP: {:?}",
+            "threat-covered rival with cov=1.0 and 260 >= 256 visits must enter LP: {:?}",
             s2_cov.eq.policy
         );
 
@@ -1797,7 +1835,7 @@ mod tests {
         let cal_slices: [&[f64]; 1] = [&cal_mat];
         let s2_with_cal = solve_bayesian_equilibrium_stage2(
             &[true, true],
-            &[10_000, 160],
+            &[10_000, 260],
             &[0.575, 0.570],
             &threat_covered,
             &[],

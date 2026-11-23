@@ -457,6 +457,67 @@ pub fn compact_playout_value(
     }
 }
 
+/// Execute the exact shipped `CompactBattle` heavy rollout (`compact_playout_pick_ctx` with
+/// Perish combo/escape, Baton Pass, Setup-Relay, and `linear.rs` endgame picker) up to `cutoff`,
+/// then evaluate non-terminal cutoff leaves via caller-supplied `eval_leaf`.
+#[inline]
+pub(crate) fn compact_playout_with_leaf(
+    cb: &mut nc2000_engine::compact::CompactBattle,
+    table: &nc2000_engine::compact::MatchTable,
+    playout: &Playout,
+    cutoff: u16,
+    rng: &mut SplitMix64,
+    rules: RolloutRules,
+    mut eval_leaf: impl FnMut(
+        &nc2000_engine::compact::CompactBattle,
+        &nc2000_engine::compact::MatchTable,
+    ) -> f64,
+) -> f64 {
+    let start_turn = cb.turn;
+    let mut pivot_token = [1u8; 2];
+    let effective_cutoff = table
+        .ruleset
+        .turn_limit()
+        .map_or(cutoff, |lim| cutoff.min(lim));
+    loop {
+        if let Some(v) = eval::compact_turn_limit_outcome(cb, table) {
+            let mut info = SimEndInfo::from_compact(cb);
+            if info.outcome == 0 {
+                info.outcome = value_to_outcome_code(v);
+            }
+            set_last_sim_end(info);
+            return v;
+        }
+        if cb.turn > effective_cutoff {
+            set_last_sim_end(SimEndInfo::from_compact(cb));
+            return eval_leaf(cb, table);
+        }
+        let turn_offset = cb.turn.saturating_sub(start_turn).min(255) as u8;
+        let mut picks = [7u8; 2];
+        for s in 0..2usize {
+            if cb.sides[s].request == 0 {
+                continue;
+            }
+            let mut cs = [0u8; 7];
+            let n = cb.legal_actions(table, s, &mut cs);
+            if n > 0 {
+                picks[s] = compact_playout_pick_ctx(
+                    cb,
+                    table,
+                    playout,
+                    s,
+                    &cs[..n],
+                    turn_offset,
+                    &mut pivot_token,
+                    rng,
+                    rules,
+                );
+            }
+        }
+        apply_compact_actions_with_bp_target(cb, table, picks);
+    }
+}
+
 /// Apply compact rollout actions while honoring directed Baton Pass receiver codes
 /// (`((recv_slot + 1) << 4) | move_slot`) without touching `crates/engine`.
 #[inline]
