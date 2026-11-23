@@ -11,11 +11,12 @@
 
 use nc2000_engine::battle::{Outcome, SearchChoice};
 use nc2000_engine::compact::{
-    get_stat_branchless, role_bit, vol_bit, CompactBattle, CompactMoveSpec, CompactWeather,
-    ItemStatKind, MatchTable, RosterCompactCache, SpecialMoveKind,
+    ext_vol_bit, get_castle_speed_x3360, role_bit, vol_bit, CompactBattle, CompactMoveSpec,
+    CompactWeather, MatchTable, RosterCompactCache, SpecialMoveKind,
 };
 use nc2000_engine::dex::Dex;
 use nc2000_engine::fxhash::FxHashMap;
+use nc2000_engine::rules::Ruleset;
 use nc2000_engine::state::{stat_idx, Battle, Status};
 
 use crate::agent::Agent;
@@ -175,28 +176,58 @@ pub struct TurnMatrixAnalysis {
 
 #[inline]
 fn effective_speed(cb: &CompactBattle, table: &MatchTable, side: usize, slot: usize) -> i32 {
+    if table.ruleset.is_castle() {
+        return cb.castle_speed_x3360(table, side, slot) as i32;
+    }
     let idx = side * 3 + slot;
     let mon = &cb.mons[idx];
-    let spec = &table.mons[idx];
-    let has_par = mon.status_raw() == Status::Par as u8;
-    get_stat_branchless(
-        spec.stored_stats[stat_idx::SPE] as i32,
-        mon.boosts[stat_idx::SPE],
-        stat_idx::SPE,
-        false,
-        false,
-        true,
-        has_par,
-        false,
-        false,
-        false,
-        ItemStatKind::None,
-    )
+    let is_active = cb.sides[side].active_idx as usize == slot;
+    // In PS, `exec_switch` clears `vol_flags = 0` on bench and re-attaches `PAR_SPEED_DROP` on switch-in.
+    if !is_active && mon.status_raw() == Status::Par as u8 {
+        let base = (table.mons[idx].stored_stats[stat_idx::SPE] as i32).max(1);
+        return (base / 4).max(1);
+    }
+    cb.mon_stat(table, side, slot, stat_idx::SPE, false, false)
+}
+
+#[inline]
+fn effective_speed_unboosted(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    side: usize,
+    slot: usize,
+) -> i32 {
+    let idx = side * 3 + slot;
+    let mon = &cb.mons[idx];
+    if table.ruleset.is_castle() {
+        get_castle_speed_x3360(
+            table.mons[idx].stored_stats[stat_idx::SPE] as i32,
+            0,
+            mon.status_raw() == Status::Par as u8,
+        ) as i32
+    } else {
+        let is_active = cb.sides[side].active_idx as usize == slot;
+        if !is_active && mon.status_raw() == Status::Par as u8 {
+            let base = (table.mons[idx].stored_stats[stat_idx::SPE] as i32).max(1);
+            return (base / 4).max(1);
+        }
+        cb.mon_stat(table, side, slot, stat_idx::SPE, true, false)
+    }
+}
+
+/// True when `status_raw` + packed `status_counter` (`0x10` residualdmg flag) deals escalating
+/// Toxic-style `((cnt & 0x0F) + 1) / 16` slip damage (matches `compact.rs:6414` and `linear.rs:106`).
+#[inline]
+fn is_toxic_residual(ruleset: Ruleset, status_raw: u8, cnt_packed: u8) -> bool {
+    status_raw == Status::Tox as u8
+        || ((cnt_packed & 0x10) != 0
+            && (status_raw == Status::Psn as u8
+                || (!ruleset.is_castle() && status_raw == Status::Brn as u8)))
 }
 
 #[inline]
 fn is_grounded(table: &MatchTable, idx: usize) -> bool {
-    (table.mons[idx].type_mask & (1u32 << table.flying_type)) == 0
+    (table.mons[idx].type_mask & (1u32 << (table.flying_type & 31))) == 0
 }
 
 #[inline]
@@ -213,8 +244,13 @@ fn entry_hp(cb: &CompactBattle, table: &MatchTable, side: usize, slot: usize) ->
         return 0;
     }
     let is_active = cb.sides[side].active_idx as usize == slot;
-    if !is_active && spikes_layers(cb, side) > 0 && is_grounded(table, idx) {
-        let spike_dmg = (table.mons[idx].maxhp / 8).max(1);
+    let layers = spikes_layers(cb, side);
+    if !is_active && layers > 0 && is_grounded(table, idx) {
+        let spike_dmg = match layers {
+            1 => table.mons[idx].quantum_1_8,
+            2 => (table.mons[idx].maxhp / 6).max(1),
+            _ => (table.mons[idx].maxhp / 4).max(1),
+        };
         hp = (hp - spike_dmg).max(0);
     }
     hp
@@ -380,11 +416,26 @@ fn convolve_raw_ttk(
         base_residual += def_spec.quantum_1_16 as i32;
     }
     let def_status = def_mon.status_raw();
-    if def_status == Status::Brn as u8 || def_status == Status::Psn as u8 {
+    let def_cnt = def_mon.status_counter();
+    let is_toxic = is_toxic_residual(table.ruleset, def_status, def_cnt);
+    if !is_toxic && (def_status == Status::Brn as u8 || def_status == Status::Psn as u8) {
         base_residual -= def_spec.quantum_1_8 as i32;
     }
     if (def_mon.vol_flags & vol_bit::LEECH_SEED) != 0 {
         base_residual -= def_spec.quantum_1_8 as i32;
+    }
+    if (def_mon.vol_flags & vol_bit::CURSE) != 0 {
+        base_residual -= (def_spec.maxhp / 4).max(1) as i32;
+    }
+    if (def_mon.vol_flags & vol_bit::NIGHTMARE) != 0
+        && (def_status == Status::Slp as u8
+            || (table.ruleset.is_castle()
+                && (def_mon.ext_flags & ext_vol_bit::MIRACLE_NIGHTMARE) != 0))
+    {
+        base_residual -= (def_spec.maxhp / 4).max(1) as i32;
+    }
+    if def_mon.partially_trapped() {
+        base_residual -= def_spec.quantum_1_16 as i32;
     }
     if cb.weather_turns > 0
         && cb.weather_kind == CompactWeather::Sandstorm
@@ -392,9 +443,8 @@ fn convolve_raw_ttk(
     {
         base_residual -= def_spec.quantum_1_8 as i32;
     }
-    let is_toxic = def_status == Status::Tox as u8;
     let tox_base = if is_toxic {
-        def_mon.status_counter().max(1) as i32
+        (def_cnt & 0x0F) as i32
     } else {
         0
     };
@@ -487,9 +537,9 @@ fn convolve_raw_ttk(
             p_act *= 0.5;
         }
 
-        // Residual for this turn (Toxic escalates each turn).
+        // Residual for this turn (Toxic escalates each turn: `(cnt & 0x0F) + 1` on Turn 1).
         let res_hp = if is_toxic {
-            let step = (tox_base + turn as i32 - 1).min(15);
+            let step = (tox_base + turn as i32).min(15);
             base_residual - step * (def_spec.quantum_1_16 as i32)
         } else {
             base_residual
@@ -668,14 +718,28 @@ fn compute_raw_pair(
         residual_frac += (def_spec.quantum_1_16 as f64) / maxhp_f;
     }
     let def_status = def_mon.status_raw();
-    if def_status == Status::Brn as u8 || def_status == Status::Psn as u8 {
-        residual_frac -= (def_spec.quantum_1_8 as f64) / maxhp_f;
-    } else if def_status == Status::Tox as u8 {
-        let step = (def_mon.status_counter().max(1) as f64 + 1.0).min(15.0);
+    let def_cnt = def_mon.status_counter();
+    if is_toxic_residual(table.ruleset, def_status, def_cnt) {
+        let step = ((def_cnt & 0x0F) as f64 + 1.5).min(15.0);
         residual_frac -= step * (def_spec.quantum_1_16 as f64) / maxhp_f;
+    } else if def_status == Status::Brn as u8 || def_status == Status::Psn as u8 {
+        residual_frac -= (def_spec.quantum_1_8 as f64) / maxhp_f;
     }
     if (def_mon.vol_flags & vol_bit::LEECH_SEED) != 0 {
         residual_frac -= (def_spec.quantum_1_8 as f64) / maxhp_f;
+    }
+    if (def_mon.vol_flags & vol_bit::CURSE) != 0 {
+        residual_frac -= ((def_spec.maxhp / 4).max(1) as f64) / maxhp_f;
+    }
+    if (def_mon.vol_flags & vol_bit::NIGHTMARE) != 0
+        && (def_status == Status::Slp as u8
+            || (table.ruleset.is_castle()
+                && (def_mon.ext_flags & ext_vol_bit::MIRACLE_NIGHTMARE) != 0))
+    {
+        residual_frac -= ((def_spec.maxhp / 4).max(1) as f64) / maxhp_f;
+    }
+    if def_mon.partially_trapped() {
+        residual_frac -= (def_spec.quantum_1_16 as f64) / maxhp_f;
     }
     if cb.weather_turns > 0
         && cb.weather_kind == CompactWeather::Sandstorm
@@ -987,6 +1051,12 @@ fn apply_recovery_for_defender(
         }
         if (def_mon.vol_flags & vol_bit::LEECH_SEED) != 0 {
             rest_res -= (def_spec.quantum_1_8 as f64) / def_maxhp;
+        }
+        if (def_mon.vol_flags & vol_bit::CURSE) != 0 {
+            rest_res -= ((def_spec.maxhp / 4).max(1) as f64) / def_maxhp;
+        }
+        if def_mon.partially_trapped() {
+            rest_res -= (def_spec.quantum_1_16 as f64) / def_maxhp;
         }
         if cb.weather_turns > 0
             && cb.weather_kind == CompactWeather::Sandstorm
@@ -1564,11 +1634,13 @@ pub fn evaluate_compact_tempo_variant(
     table: &MatchTable,
     variant: TempoVariant,
 ) -> TempoEval {
-    if cb.outcome != 0 {
-        let (g0, g1, wp) = match cb.outcome {
-            1 => (0.0, 6.0, 1.0),
-            2 => (6.0, 0.0, 0.0),
-            _ => (0.0, 0.0, 0.5),
+    if let Some(wp) = compact_turn_limit_outcome(cb, table) {
+        let (g0, g1) = if wp > 0.75 {
+            (0.0, 6.0)
+        } else if wp < 0.25 {
+            (6.0, 0.0)
+        } else {
+            (0.0, 0.0)
         };
         return TempoEval {
             g_turns: [g0, g1],
@@ -1943,15 +2015,31 @@ pub fn format_tempo_explanation(battle: &Battle, dex: &Dex, eval: &TempoEval) ->
 fn encode_choice(
     table: &MatchTable,
     cb: &CompactBattle,
+    dex: &Dex,
     side: usize,
     choice: SearchChoice,
 ) -> Option<u8> {
-    let act_slot = cb.sides[side].active_idx as usize;
-    let num_moves = table.mons[side * 3 + act_slot].num_moves as usize;
+    let act_slot = cb.sides[side].active_idx.min(2) as usize;
+    let act_idx = side * 3 + act_slot;
+    let num_moves = table.mons[act_idx].num_moves as usize;
     match choice {
-        SearchChoice::Move(id) => (0..num_moves)
-            .find(|&m_i| table.mons[side * 3 + act_slot].moves[m_i] == id)
-            .map(|m_i| m_i as u8),
+        SearchChoice::Pass => Some(7),
+        SearchChoice::Move(id) => {
+            if let Some(m_i) = (0..num_moves).find(|&m_i| table.mons[act_idx].moves[m_i] == id) {
+                return Some(m_i as u8);
+            }
+            let mon = &cb.mons[act_idx];
+            if mon.must_recharge() || Some(id) == dex.known_moves.recharge {
+                return Some(0);
+            }
+            if Some(id) == dex.known_moves.struggle {
+                return Some(0);
+            }
+            if mon.is_multi_turn_locked() {
+                return Some(mon.locked_move_slot());
+            }
+            None
+        }
         SearchChoice::Switch(pos) if (1..=3).contains(&pos) => Some(pos + 3),
         _ => None,
     }
@@ -1959,7 +2047,7 @@ fn encode_choice(
 
 /// Resolve any post-turn forced switch (`request == 2`) in `cb` cleanly using `evaluate_compact_tempo_variant`.
 fn resolve_forced_switches_variant(cb: &mut CompactBattle, table: &MatchTable, variant: TempoVariant) {
-    for _ in 0..2 {
+    for _ in 0..3 {
         if cb.outcome != 0 {
             return;
         }
@@ -1984,8 +2072,8 @@ fn resolve_forced_switches_variant(cb: &mut CompactBattle, table: &MatchTable, v
             }
             v
         };
-        let opts0 = if r0 { bench_opts(0) } else { vec![0] };
-        let opts1 = if r1 { bench_opts(1) } else { vec![0] };
+        let opts0 = if r0 { bench_opts(0) } else { vec![7] };
+        let opts1 = if r1 { bench_opts(1) } else { vec![7] };
 
         let (pick0, pick1) = if r0 && !r1 {
             let best = opts0
@@ -1993,30 +2081,30 @@ fn resolve_forced_switches_variant(cb: &mut CompactBattle, table: &MatchTable, v
                 .copied()
                 .max_by(|&a, &b| {
                     let mut ca = *cb;
-                    ca.step_switch(table, [a, 0]);
+                    ca.step_switch(table, [a, 7]);
                     let mut cb_b = *cb;
-                    cb_b.step_switch(table, [b, 0]);
+                    cb_b.step_switch(table, [b, 7]);
                     evaluate_compact_tempo_variant(&ca, table, variant)
                         .win_prob
                         .total_cmp(&evaluate_compact_tempo_variant(&cb_b, table, variant).win_prob)
                 })
                 .unwrap();
-            (best, 0)
+            (best, 7)
         } else if !r0 && r1 {
             let best = opts1
                 .iter()
                 .copied()
                 .min_by(|&a, &b| {
                     let mut ca = *cb;
-                    ca.step_switch(table, [0, a]);
+                    ca.step_switch(table, [7, a]);
                     let mut cb_b = *cb;
-                    cb_b.step_switch(table, [0, b]);
+                    cb_b.step_switch(table, [7, b]);
                     evaluate_compact_tempo_variant(&ca, table, variant)
                         .win_prob
                         .total_cmp(&evaluate_compact_tempo_variant(&cb_b, table, variant).win_prob)
                 })
                 .unwrap();
-            (0, best)
+            (7, best)
         } else {
             let mut best_p0 = opts0[0];
             let mut best_val0 = f64::NEG_INFINITY;
@@ -2100,11 +2188,11 @@ pub fn analyze_turn_matrix_variant(
     let cell_seeds: Vec<u64> = (0..k).map(|_| rng.next()).collect();
 
     for (i, &own_c) in own_choices.iter().enumerate() {
-        let Some(a_own) = encode_choice(&table, &base_cb, side, own_c) else {
+        let Some(a_own) = encode_choice(&table, &base_cb, dex, side, own_c) else {
             continue;
         };
         for (j, &opp_c) in opp_choices.iter().enumerate() {
-            let Some(a_opp) = encode_choice(&table, &base_cb, opp, opp_c) else {
+            let Some(a_opp) = encode_choice(&table, &base_cb, dex, opp, opp_c) else {
                 continue;
             };
             let actions = if side == 0 {
@@ -2319,11 +2407,11 @@ impl Agent for TempoAgent {
                 .copied()
                 .max_by(|&a, &b| {
                     let score = |c: SearchChoice| -> f64 {
-                        let Some(act) = encode_choice(&table, &base_cb, side, c) else {
+                        let Some(act) = encode_choice(&table, &base_cb, dex, side, c) else {
                             return -1.0;
                         };
                         let mut cb = base_cb;
-                        let sw = if side == 0 { [act, 0] } else { [0, act] };
+                        let sw = if side == 0 { [act, 7] } else { [7, act] };
                         cb.step_switch(&table, sw);
                         evaluate_compact_tempo_variant(&cb, &table, variant).win_prob_for(side)
                     };
@@ -2581,6 +2669,9 @@ fn mix64(mut h: u64, v: u64) -> u64 {
 }
 
 /// Compact 16-HP-bucket state hash for zero-alloc DUCT tree indexing.
+/// Includes every action-legality bit (Encore/Disable slot, active PP==0 mask, multi-turn lock +
+/// locked slot, partial trap, Recharge, mid-turn BP / pending move flags) so two states with
+/// different `CompactBattle::legal_actions` never share a `DuctNode`.
 #[inline]
 fn compact_duct_key(cb: &CompactBattle, table: &MatchTable, depth: u8) -> u64 {
     let mut h = mix64(0x517C_C1B7_2722_0A95, depth as u64);
@@ -2589,22 +2680,25 @@ fn compact_duct_key(cb: &CompactBattle, table: &MatchTable, depth: u8) -> u64 {
     let side_word = ((s0.active_idx as u64) << 0)
         | ((s0.alive_mask as u64) << 3)
         | ((s0.request as u64) << 6)
-        | (((s0.side_flags & 0x07) as u64) << 9)
-        | (((s0.reflect_turns > 0) as u64) << 12)
-        | (((s0.lightscreen_turns > 0) as u64) << 13)
-        | (((s0.safeguard_turns > 0) as u64) << 14)
-        | ((s1.active_idx as u64) << 16)
-        | ((s1.alive_mask as u64) << 19)
-        | ((s1.request as u64) << 22)
-        | (((s1.side_flags & 0x07) as u64) << 25)
-        | (((s1.reflect_turns > 0) as u64) << 28)
-        | (((s1.lightscreen_turns > 0) as u64) << 29)
-        | (((s1.safeguard_turns > 0) as u64) << 30)
+        | (((s0.side_flags & 0x7F) as u64) << 8)
+        | (((s0.reflect_turns.min(7)) as u64) << 15)
+        | (((s0.lightscreen_turns.min(7)) as u64) << 18)
+        | (((s0.safeguard_turns > 0) as u64) << 21)
+        | ((s1.active_idx as u64) << 22)
+        | ((s1.alive_mask as u64) << 25)
+        | ((s1.request as u64) << 28)
+        | (((s1.side_flags & 0x7F) as u64) << 30)
+        | (((s1.reflect_turns.min(7)) as u64) << 37)
+        | (((s1.lightscreen_turns.min(7)) as u64) << 40)
+        | (((s1.safeguard_turns > 0) as u64) << 43)
         | (if cb.weather_turns > 0 {
-            ((cb.weather_kind as u64) << 32)
+            (cb.weather_kind as u64) << 44
         } else {
             0
-        });
+        })
+        | ((cb.bp_switch_flags as u64) << 46)
+        | (((cb.future_sight_turns[0].min(3)) as u64) << 54)
+        | (((cb.future_sight_turns[1].min(3)) as u64) << 56);
     h = mix64(h, side_word);
 
     for side in 0..2usize {
@@ -2625,7 +2719,9 @@ fn compact_duct_key(cb: &CompactBattle, table: &MatchTable, depth: u8) -> u64 {
             };
             let st = mon.status_raw() as u64;
             let st_c = if st == Status::Slp as u64 {
-                mon.status_counter().min(4) as u64
+                mon.status_counter().min(5) as u64
+            } else if is_toxic_residual(table.ruleset, mon.status_raw(), mon.status_counter()) {
+                (mon.status_counter() & 0x1F) as u64
             } else {
                 0
             };
@@ -2633,17 +2729,39 @@ fn compact_duct_key(cb: &CompactBattle, table: &MatchTable, depth: u8) -> u64 {
             if slot == act {
                 let sub = (mon.sub_hp() > 0) as u64;
                 let perish = mon.perish_turns() as u64;
+                let ptrap = mon.partially_trapped() as u64;
                 let vol = (mon.vol_flags
                     & (vol_bit::SUBSTITUTE
                         | vol_bit::CONFUSION
                         | vol_bit::ENCORE
                         | vol_bit::DISABLE
                         | vol_bit::TRAPPED_OR_LOCKED
-                        | vol_bit::LEECH_SEED)) as u64;
-                let rech = mon.must_recharge() as u64;
-                mword |= (sub << 16) | (perish << 17) | (rech << 20) | (vol << 24);
+                        | vol_bit::LEECH_SEED
+                        | vol_bit::PAR_SPEED_DROP
+                        | vol_bit::BRN_ATK_DROP
+                        | vol_bit::CURSE
+                        | vol_bit::NIGHTMARE
+                        | vol_bit::FORESIGHT
+                        | vol_bit::DESTINY_BOND)) as u64;
+                // Encodes encore_slot (bits 2..3), disable_slot (bits 4..5), must_recharge (bit 7).
+                let slot_ctrl = (mon.slot_refs & 0xBC) as u64;
+                // Encodes rollout_count (0..2), locked_move_slot (3..4), lock_on_turns (5..6), two_turn_locked (7).
+                let lock_ctrl = mon.rollout_rage as u64;
+                let mut pp_nz = 0u64;
+                for m in 0..4usize {
+                    if mon.pp[m] > 0 {
+                        pp_nz |= 1u64 << m;
+                    }
+                }
+                mword |= (sub << 17)
+                    | (perish << 18)
+                    | (ptrap << 21)
+                    | (pp_nz << 22)
+                    | (vol << 26)
+                    | (slot_ctrl << 42)
+                    | (lock_ctrl << 50);
                 h = mix64(h, mword);
-                let mut bword = 0u64;
+                let mut bword = (mon.ext_flags as u64) << 32;
                 for (bi, &bv) in mon.boosts.iter().enumerate() {
                     bword |= (((bv + 6).clamp(0, 12) as u64) & 0xF) << (bi * 4);
                 }
@@ -2859,6 +2977,11 @@ const GEN2_STAGE_MULT: [f32; 13] = [
     0.25, 0.28, 0.33, 0.40, 0.50, 0.66, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0,
 ];
 
+/// Gen 2 exact accuracy / evasion stage multipliers for stages `-6..=+6` (`3/(3-s)` / `(3+s)/3`).
+const GEN2_ACC_STAGE_MULT: [f32; 13] = [
+    0.33, 0.36, 0.43, 0.50, 0.60, 0.75, 1.0, 1.33, 1.66, 2.0, 2.33, 2.66, 3.0,
+];
+
 const MOVE_FLAG_USABLE: u8 = 1 << 0;
 const MOVE_FLAG_PHYSICAL: u8 = 1 << 1;
 const MOVE_FLAG_FIXED: u8 = 1 << 2;
@@ -2932,6 +3055,7 @@ struct CachedPairEntry {
     best_spec_slot: u8,
     boom_slot: u8,
     any_dynamic_bp: bool,
+    has_weather_acc: bool,
 }
 
 impl Default for CachedPairEntry {
@@ -2943,6 +3067,7 @@ impl Default for CachedPairEntry {
             best_spec_slot: 0xFF,
             boom_slot: 0xFF,
             any_dynamic_bp: false,
+            has_weather_acc: false,
         }
     }
 }
@@ -2950,13 +3075,53 @@ impl Default for CachedPairEntry {
 /// Per-search precomputed static damage & trait table across all 6 mons and 18 directed pairs.
 /// Built once at search root (~2 us) and reused across thousands of MCTS leaves with O(1) lookup,
 /// including O(1) analytical Gen 2 boost/burn/screen/weather scaling (zero `DmgKernel1D` on leaves).
+/// Tracks `party_roster` so switched `Battle` clones (which permute `side.party`) remap O(1) safely.
 #[derive(Clone)]
 pub struct TempoMatchCache {
+    party_roster: [[u8; 3]; 2],
     mons: [StaticMonCache; 6],
     entries: [[[CachedPairEntry; 3]; 3]; 2],
 }
 
+#[derive(Clone, Copy)]
+struct CacheView<'a> {
+    cache: &'a TempoMatchCache,
+    map: [[usize; 3]; 2],
+}
+
+impl<'a> CacheView<'a> {
+    #[inline(always)]
+    fn mon(&self, side: usize, slot: usize) -> &'a StaticMonCache {
+        &self.cache.mons[side * 3 + self.map[side][slot]]
+    }
+
+    #[inline(always)]
+    fn pair(&self, att_side: usize, att_slot: usize, def_slot: usize) -> &'a CachedPairEntry {
+        let ca = self.map[att_side][att_slot];
+        let cd = self.map[1 - att_side][def_slot];
+        &self.cache.entries[att_side][ca][cd]
+    }
+}
+
 impl TempoMatchCache {
+    #[inline]
+    fn view_for(&self, cb: &CompactBattle) -> Option<CacheView<'_>> {
+        if cb.sides[0].party_roster == self.party_roster[0]
+            && cb.sides[1].party_roster == self.party_roster[1]
+        {
+            return Some(CacheView { cache: self, map: [[0, 1, 2], [0, 1, 2]] });
+        }
+        let mut map = [[0usize; 3]; 2];
+        for s in 0..2 {
+            for slot in 0..3 {
+                let r = cb.sides[s].party_roster[slot];
+                let pos = (0..3).find(|&k| self.party_roster[s][k] == r)?;
+                map[s][slot] = pos;
+            }
+        }
+        Some(CacheView { cache: self, map })
+    }
+
     pub fn build(base_cb: &CompactBattle, table: &MatchTable) -> Self {
         let mut clean_cb = *base_cb;
         clean_cb.weather_turns = 0;
@@ -2968,6 +3133,9 @@ impl TempoMatchCache {
         for i in 0..6 {
             clean_cb.mons[i].boosts = [0; 7];
             clean_cb.mons[i].vol_flags = 0;
+            clean_cb.mons[i].ext_flags = 0;
+            clean_cb.mons[i].ext_timers = [0; 4];
+            clean_cb.mons[i].rollout_rage = 0;
             clean_cb.mons[i].status_packed = 0;
             let maxhp = table.mons[i].maxhp.max(1);
             clean_cb.mons[i].hp_pool[0] = maxhp;
@@ -3070,8 +3238,17 @@ impl TempoMatchCache {
                                 | SpecialMoveKind::PainSplit
                                 | SpecialMoveKind::Counter
                                 | SpecialMoveKind::MirrorCoat
+                                | SpecialMoveKind::Rollout
+                                | SpecialMoveKind::FuryCutter
+                                | SpecialMoveKind::Rage
+                                | SpecialMoveKind::DreamEater
+                                | SpecialMoveKind::BeatUp
+                                | SpecialMoveKind::Ohko
                         ) {
                             entry.any_dynamic_bp = true;
+                        }
+                        if ms.special_kind == SpecialMoveKind::Thunder {
+                            entry.has_weather_acc = true;
                         }
                         let kern = DmgKernel1D::for_move(
                             &clean_cb,
@@ -3117,7 +3294,11 @@ impl TempoMatchCache {
                 }
             }
         }
-        Self { mons, entries }
+        Self {
+            party_roster: [base_cb.sides[0].party_roster, base_cb.sides[1].party_roster],
+            mons,
+            entries,
+        }
     }
 }
 
@@ -3198,8 +3379,8 @@ fn scale_cached_move(
     let acc_b = att_boosts[5];
     let eva_b = def_boosts[6];
     if acc_b != 0 || eva_b != 0 {
-        let ratio = GEN2_STAGE_MULT[(acc_b + 6).clamp(0, 12) as usize]
-            / GEN2_STAGE_MULT[(eva_b + 6).clamp(0, 12) as usize];
+        let ratio = GEN2_ACC_STAGE_MULT[(acc_b + 6).clamp(0, 12) as usize]
+            / GEN2_ACC_STAGE_MULT[(eva_b + 6).clamp(0, 12) as usize];
         let old_h = out.p_hit.max(1e-4);
         let new_h = (out.p_hit * ratio).clamp(0.05, 1.0);
         out.mean_dmg *= new_h / old_h;
@@ -3323,8 +3504,10 @@ fn compute_fast_pair(
     sleep_eff_delays: &[f64; 6],
     ignore_att_boosts: bool,
     ignore_def_boosts: bool,
-    cache: Option<&TempoMatchCache>,
+    is_1v1: bool,
+    cache: Option<&CacheView<'_>>,
 ) -> FastPair {
+    let wall_cap = if is_1v1 { FAST_WALL_CAP_1V1 } else { FAST_WALL_CAP };
     let att_idx = att_side * 3 + att_slot;
     let def_idx = def_side * 3 + def_slot;
     let att_mon = &cb.mons[att_idx];
@@ -3333,14 +3516,12 @@ fn compute_fast_pair(
     let def_spec = &table.mons[def_idx];
 
     let s_att = if ignore_att_boosts && att_mon.boosts[4] != 0 {
-        let base = (att_spec.stored_stats[stat_idx::SPE] as i32).max(1);
-        if att_mon.status_raw() == Status::Par as u8 { (base / 4).max(1) } else { base }
+        effective_speed_unboosted(cb, table, att_side, att_slot)
     } else {
         speeds[att_idx]
     };
     let s_def = if ignore_def_boosts && def_mon.boosts[4] != 0 {
-        let base = (def_spec.stored_stats[stat_idx::SPE] as i32).max(1);
-        if def_mon.status_raw() == Status::Par as u8 { (base / 4).max(1) } else { base }
+        effective_speed_unboosted(cb, table, def_side, def_slot)
     } else {
         speeds[def_idx]
     };
@@ -3349,15 +3530,15 @@ fn compute_fast_pair(
     let start_hp = entry_hps[def_idx];
     if start_hp <= 0 || att_mon.hp() <= 0 {
         return FastPair {
-            raw_ttk: if start_hp <= 0 { 0.0 } else { FAST_WALL_CAP },
-            eff_ttk: if start_hp <= 0 { 0.0 } else { FAST_WALL_CAP },
+            raw_ttk: if start_hp <= 0 { 0.0 } else { wall_cap },
+            eff_ttk: if start_hp <= 0 { 0.0 } else { wall_cap },
             speed_cmp,
             ..FastPair::default()
         };
     }
 
     let (inv_maxhp, q16_frac, q8_frac, sand_immune) = if let Some(c) = cache {
-        let m = &c.mons[def_idx];
+        let m = c.mon(def_side, def_slot);
         (m.inv_maxhp, m.q16_frac, m.q8_frac, m.sand_immune)
     } else {
         let inv = 1.0 / (def_spec.maxhp.max(1) as f64);
@@ -3376,14 +3557,28 @@ fn compute_fast_pair(
         res_frac += q16_frac;
     }
     let def_status = def_mon.status_raw();
-    if def_status == Status::Brn as u8 || def_status == Status::Psn as u8 {
-        res_frac -= q8_frac;
-    } else if def_status == Status::Tox as u8 {
-        let step = (def_mon.status_counter().max(1) as f64 + 1.5).min(15.0);
+    let def_cnt = def_mon.status_counter();
+    if is_toxic_residual(table.ruleset, def_status, def_cnt) {
+        let step = ((def_cnt & 0x0F) as f64 + 2.0).min(15.0);
         res_frac -= step * q16_frac;
+    } else if def_status == Status::Brn as u8 || def_status == Status::Psn as u8 {
+        res_frac -= q8_frac;
     }
     if (def_mon.vol_flags & vol_bit::LEECH_SEED) != 0 {
         res_frac -= q8_frac;
+    }
+    if (def_mon.vol_flags & vol_bit::CURSE) != 0 {
+        res_frac -= 0.25;
+    }
+    if (def_mon.vol_flags & vol_bit::NIGHTMARE) != 0
+        && (def_status == Status::Slp as u8
+            || (table.ruleset.is_castle()
+                && (def_mon.ext_flags & ext_vol_bit::MIRACLE_NIGHTMARE) != 0))
+    {
+        res_frac -= 0.25;
+    }
+    if def_mon.partially_trapped() {
+        res_frac -= q16_frac;
     }
     if cb.weather_turns > 0 && cb.weather_kind == CompactWeather::Sandstorm && !sand_immune {
         res_frac -= q8_frac;
@@ -3393,7 +3588,12 @@ fn compute_fast_pair(
     let eff_att_boosts = if ignore_att_boosts { &zero_boosts } else { &att_mon.boosts };
     let eff_def_boosts = if ignore_def_boosts { &zero_boosts } else { &def_mon.boosts };
     let att_status = att_mon.status_raw();
-    let att_burned = att_status == Status::Brn as u8;
+    let att_is_active = cb.sides[att_side].active_idx as usize == att_slot;
+    // In PS, benched burned mons have `vol_flags == 0` and re-attach `BRN_ATK_DROP` upon switching in.
+    let att_burned = att_status == Status::Brn as u8
+        && (table.ruleset.is_castle()
+            || !att_is_active
+            || (att_mon.vol_flags & vol_bit::BRN_ATK_DROP) != 0);
     let def_reflect_turns = cb.sides[def_side].reflect_turns;
     let def_lightscreen_turns = cb.sides[def_side].lightscreen_turns;
     let weather_active = cb.weather_turns > 0
@@ -3407,14 +3607,32 @@ fn compute_fast_pair(
         || weather_active;
 
     // Cache stays valid even across boosts, burn, screens, weather, and consumed healing berries!
+    // Falls back to exact `DmgKernel1D` on dynamic-BP moves, Foresight, Thunder-in-weather,
+    // extended volatile damage modifiers (Focus Energy / Lock-On / Minimize / Transform / Dig / Fly),
+    // and Castle `ovfl=1` boosted stat wrapping.
+    const ATT_CACHE_BREAK_EXT: u16 = ext_vol_bit::FOCUS_ENERGY
+        | ext_vol_bit::LOCK_ON
+        | ext_vol_bit::DEFENSE_CURL
+        | ext_vol_bit::TRANSFORMED
+        | ext_vol_bit::RAGE;
+    const DEF_CACHE_BREAK_EXT: u16 =
+        ext_vol_bit::MINIMIZE | ext_vol_bit::TRANSFORMED | ext_vol_bit::DIGGING | ext_vol_bit::FLYING;
     let cached_entry = cache.and_then(|c| {
-        let e = &c.entries[att_side][att_slot][def_slot];
-        if e.any_dynamic_bp || (def_mon.vol_flags & vol_bit::FORESIGHT) != 0 {
+        let e = c.pair(att_side, att_slot, def_slot);
+        if e.any_dynamic_bp
+            || (e.has_weather_acc && weather_active)
+            || (def_mon.vol_flags & vol_bit::FORESIGHT) != 0
+            || (att_mon.ext_flags & ATT_CACHE_BREAK_EXT) != 0
+            || (def_mon.ext_flags & DEF_CACHE_BREAK_EXT) != 0
+            || (table.ruleset.is_castle()
+                && table.ruleset.overflow_mode()
+                && (*eff_att_boosts != [0; 7] || *eff_def_boosts != [0; 7]))
+        {
             return None;
         }
         let att_is = table.item_spec(att_mon.item);
-        let cm_a = &c.mons[att_idx];
-        let cm_d = &c.mons[def_idx];
+        let cm_a = c.mon(att_side, att_slot);
+        let cm_d = c.mon(def_side, def_slot);
         let item_ok = att_is.boost_type == cm_a.init_boost_type
             && att_is.castle_boost_type == cm_a.init_castle_boost_type
             && att_is.stat_kind == cm_a.init_stat_kind
@@ -3674,7 +3892,7 @@ fn compute_fast_pair(
     // Closed-form blended continuous + discrete TTK:
     // Every living Pokemon costs >= ~0.85..1.0 turns while keeping smooth 1%-HP gradient.
     let mut raw_ttk = if d_net <= 0.015 {
-        (FAST_WALL_CAP - 1.5 * (1.0 - hp_frac)).max(1.0)
+        (wall_cap - 1.5 * (1.0 - hp_frac)).max(1.0)
     } else {
         let t_cont = hp_frac / d_net;
         let mut t_hit = if t_cont < 1.0 {
@@ -3686,7 +3904,7 @@ fn compute_fast_pair(
             t_hit = ohko_prob * (0.85 + 0.15 * t_cont.min(1.0))
                 + (1.0 - ohko_prob) * t_hit.max(1.65);
         }
-        (t_hit + delay + sub_turns).min(FAST_WALL_CAP)
+        (t_hit + delay + sub_turns).min(wall_cap)
     };
 
     // Perish Song trapped hard countdown override.
@@ -3700,6 +3918,12 @@ fn compute_fast_pair(
         }
     }
 
+    let (eff_boom_ko, eff_boom_dmg) = if delay >= 1.0 {
+        (0.0, boom_dmg * act_rate * 0.25)
+    } else {
+        ((boom_ko * act_rate).clamp(0.0, 1.0), boom_dmg * act_rate)
+    };
+
     FastPair {
         raw_ttk,
         eff_ttk: raw_ttk,
@@ -3707,8 +3931,8 @@ fn compute_fast_pair(
         raw_dmg: best_mean,
         max_norm_frac: best_max_norm,
         ohko_prob,
-        boom_ko_prob: boom_ko,
-        boom_dmg_frac: boom_dmg,
+        boom_ko_prob: eff_boom_ko,
+        boom_dmg_frac: eff_boom_dmg,
         heal_duty: 0.0,
         def_sustain: false,
         speed_cmp,
@@ -3731,7 +3955,7 @@ fn apply_fast_recovery(
     entry_hps: &[i16; 6],
     sleep_turns: &[f64; 6],
     is_1v1: bool,
-    cache: Option<&TempoMatchCache>,
+    cache: Option<&CacheView<'_>>,
 ) {
     if a2d.perish_capped {
         return;
@@ -3742,7 +3966,7 @@ fn apply_fast_recovery(
     // Fast exit: if defender has neither Recover nor Rest in its moveset, skip immediately!
     let (half_heal, half_pp, rest_pp, st_rate_cached, inv_maxhp, q16_frac, q8_frac, sand_immune) =
         if let Some(c) = cache {
-            let m = &c.mons[def_idx];
+            let m = c.mon(def_side, def_slot);
             if m.half_heal_slot == 0xFF && m.rest_slot == 0xFF {
                 return;
             }
@@ -3941,6 +4165,12 @@ fn apply_fast_recovery(
         if (def_mon.vol_flags & vol_bit::LEECH_SEED) != 0 {
             rest_res -= q8_frac;
         }
+        if (def_mon.vol_flags & vol_bit::CURSE) != 0 {
+            rest_res -= 0.25;
+        }
+        if def_mon.partially_trapped() {
+            rest_res -= q16_frac;
+        }
         if cb.weather_turns > 0 && cb.weather_kind == CompactWeather::Sandstorm && !sand_immune {
             rest_res -= q8_frac;
         }
@@ -4058,7 +4288,7 @@ fn solve_fast_team_turns(
     unb_active: Option<&[FastPair; 3]>,
     entry_hps: &[i16; 6],
     sleep_eff_delays: &[f64; 6],
-    cache: Option<&TempoMatchCache>,
+    cache: Option<&CacheView<'_>>,
 ) -> f64 {
     let opp = 1 - side;
     let mut allies = [0usize; 3];
@@ -4130,9 +4360,10 @@ fn solve_fast_team_turns(
             return false;
         }
         if let Some(c) = cache {
+            let cm = c.mon(s, slot);
             let ms = match kind {
-                SpecialMoveKind::PerishSong => c.mons[idx].perish_slot as usize,
-                SpecialMoveKind::DestinyBond => c.mons[idx].dbond_slot as usize,
+                SpecialMoveKind::PerishSong => cm.perish_slot as usize,
+                SpecialMoveKind::DestinyBond => cm.dbond_slot as usize,
                 _ => 0xFF,
             };
             ms < 4 && mon.pp[ms] > 0 && !mon.is_slot_disabled(ms)
@@ -4148,7 +4379,7 @@ fn solve_fast_team_turns(
         let idx = side * 3 + a;
         let inv = cache.map_or_else(
             || 1.0 / (table.mons[idx].maxhp.max(1) as f64),
-            |c| c.mons[idx].inv_maxhp,
+            |c| c.mon(side, a).inv_maxhp,
         );
         base_hp[a] = ((entry_hps[idx] as f64) * inv).clamp(0.0, 1.0);
         let mut min_opp_t = FAST_WALL_CAP;
@@ -4616,11 +4847,13 @@ pub fn evaluate_fast_golf(
     table: &MatchTable,
     cache: Option<&TempoMatchCache>,
 ) -> FastGolfEval {
-    if cb.outcome != 0 {
-        let (g0, g1, wp) = match cb.outcome {
-            1 => (0.0, 6.0, 1.0),
-            2 => (6.0, 0.0, 0.0),
-            _ => (0.0, 0.0, 0.5),
+    if let Some(wp) = compact_turn_limit_outcome(cb, table) {
+        let (g0, g1) = if wp > 0.75 {
+            (0.0, 6.0)
+        } else if wp < 0.25 {
+            (6.0, 0.0)
+        } else {
+            (0.0, 0.0)
         };
         return FastGolfEval { g_turns: [g0, g1], turn_advantage: g1 - g0, win_prob: wp };
     }
@@ -4628,6 +4861,8 @@ pub fn evaluate_fast_golf(
     let n0 = cb.sides[0].alive_mask.count_ones();
     let n1 = cb.sides[1].alive_mask.count_ones();
     let is_1v1 = n0 <= 1 && n1 <= 1;
+    let view_opt = cache.and_then(|c| c.view_for(cb));
+    let cache = view_opt.as_ref();
 
     // Precompute entry HP, effective speed, and sleep delays ONCE across all 6 mons.
     let mut entry_hps = [0i16; 6];
@@ -4647,12 +4882,13 @@ pub fn evaluate_fast_golf(
                 let slp = expected_sleep_turns(cb, s, slot);
                 sleep_turns[idx] = slp;
                 let st_rate = if let Some(c) = cache {
-                    let st_s = c.mons[idx].sleep_talk_slot as usize;
+                    let cm = c.mon(s, slot);
+                    let st_s = cm.sleep_talk_slot as usize;
                     if st_s < 4
                         && cb.mons[idx].pp[st_s] > 0
                         && !cb.mons[idx].is_slot_disabled(st_s)
                     {
-                        c.mons[idx].st_attack_rate
+                        cm.st_attack_rate
                     } else {
                         0.0
                     }
@@ -4675,11 +4911,11 @@ pub fn evaluate_fast_golf(
             }
             let r01 = compute_fast_pair(
                 cb, table, 0, s0, 1, s1, &entry_hps, &speeds, &sleep_eff_delays, false, false,
-                cache,
+                is_1v1, cache,
             );
             let r10 = compute_fast_pair(
                 cb, table, 1, s1, 0, s0, &entry_hps, &speeds, &sleep_eff_delays, false, false,
-                cache,
+                is_1v1, cache,
             );
 
             let mut a01 = r01;
@@ -4719,11 +4955,11 @@ pub fn evaluate_fast_golf(
             }
             let r_ae = compute_fast_pair(
                 cb, table, s, act, opp, e, &entry_hps, &speeds, &sleep_eff_delays, true, false,
-                cache,
+                is_1v1, cache,
             );
             let r_ea = compute_fast_pair(
                 cb, table, opp, e, s, act, &entry_hps, &speeds, &sleep_eff_delays, false, true,
-                cache,
+                is_1v1, cache,
             );
             let mut a_ae = r_ae;
             let mut b_ea = r_ea;
@@ -4773,7 +5009,7 @@ pub fn evaluate_fast_golf(
         // 1. Encore lock on a boosted setup mon without Baton Pass.
         if (act_mon.vol_flags & vol_bit::ENCORE) != 0 {
             let has_bp = if let Some(c) = cache {
-                let bs = c.mons[act_idx].bp_slot as usize;
+                let bs = c.mon(s, act).bp_slot as usize;
                 bs < 4 && act_mon.pp[bs] > 0 && !act_mon.is_slot_disabled(bs)
             } else {
                 (0..table.mons[act_idx].num_moves as usize).any(|m| {
@@ -4800,8 +5036,9 @@ pub fn evaluate_fast_golf(
                 continue;
             }
             let (can_phaze, can_haze) = if let Some(c) = cache {
-                let ps = c.mons[e_idx].phaze_slot as usize;
-                let hs = c.mons[e_idx].haze_slot as usize;
+                let cm_e = c.mon(opp, e);
+                let ps = cm_e.phaze_slot as usize;
+                let hs = cm_e.haze_slot as usize;
                 (
                     my_alive >= 2 && ps < 4 && e_mon.pp[ps] > 0 && !e_mon.is_slot_disabled(ps),
                     hs < 4 && e_mon.pp[hs] > 0 && !e_mon.is_slot_disabled(hs),
@@ -4927,10 +5164,12 @@ pub fn format_fast_golf_debug(cb: &CompactBattle, table: &MatchTable) -> String 
                 continue;
             }
             let mut a01 = compute_fast_pair(
-                cb, table, 0, s0, 1, s1, &entry_hps, &speeds, &sleep_eff_delays, false, false, None,
+                cb, table, 0, s0, 1, s1, &entry_hps, &speeds, &sleep_eff_delays, false, false,
+                is_1v1, None,
             );
             let mut a10 = compute_fast_pair(
-                cb, table, 1, s1, 0, s0, &entry_hps, &speeds, &sleep_eff_delays, false, false, None,
+                cb, table, 1, s1, 0, s0, &entry_hps, &speeds, &sleep_eff_delays, false, false,
+                is_1v1, None,
             );
             let mut b10 = a10;
             let mut b01 = a01;
@@ -4978,12 +5217,17 @@ pub fn search_tempo_mcts(
     let mut n_own = 0usize;
     for &c in own_choices {
         if n_own < 7 {
-            if let Some(code) = encode_choice(&table, &base_cb, side, c) {
+            if let Some(code) = encode_choice(&table, &base_cb, dex, side, c) {
                 own_codes[n_own] = code;
                 n_own += 1;
             }
         }
     }
+    debug_assert_eq!(
+        n_own,
+        own_choices.len().min(7),
+        "every legal SearchChoice at root must encode 1:1 without shifting indices"
+    );
     if n_own > 0 {
         root.n_acts[side] = n_own as u8;
         root.acts[side] = own_codes;
@@ -5730,5 +5974,207 @@ mod tests {
         );
         let pick_skuct = skuct_golf.choose(&b_mcts, &dex, 0, &cs_mcts);
         assert!(cs_mcts.contains(&pick_skuct));
+    }
+
+    #[test]
+    fn tempo_engine_parity_fixes_ps_and_castle() {
+        let dex = test_dex();
+
+        // 1. Fresh Toxic packs `0x10` in `status_counter()` (`(step & 0x0F) | 0x10`).
+        //    FastGolf & TempoFull must NOT treat fresh Toxic as 15/16 (93.75%/turn) instant KO!
+        let p1_wall = vec![mk("Snorlax", 55, "Leftovers", &["Body Slam", "Earthquake"])];
+        let p2_wall = vec![mk("Snorlax", 55, "Leftovers", &["Body Slam", "Earthquake"])];
+        let b_tox = start(&dex, &p1_wall, &p2_wall);
+        let (t_tox, cb_clean) = CompactBattle::from_battle(&b_tox, &dex);
+        let c_tox = TempoMatchCache::build(&cb_clean, &t_tox);
+        let mut cb_fresh_tox = cb_clean;
+        cb_fresh_tox.mons[3].set_status(Status::Tox as u8, 0x10); // fresh Toxic: next tick is 1/16!
+        let mut cb_deep_tox = cb_clean;
+        cb_deep_tox.mons[3].set_status(Status::Tox as u8, 0x10 | 6); // 6 ticks in: next tick is 7/16!
+        let fg_fresh = evaluate_fast_golf(&cb_fresh_tox, &t_tox, Some(&c_tox));
+        let fg_deep = evaluate_fast_golf(&cb_deep_tox, &t_tox, Some(&c_tox));
+        assert!(
+            fg_fresh.g_turns[0] > 2.4 && fg_deep.g_turns[0] < fg_fresh.g_turns[0] - 0.5,
+            "fresh Toxic (0x10) must not collapse to 1t KO and must be slower than deep Toxic: fresh={:.2}t deep={:.2}t",
+            fg_fresh.g_turns[0],
+            fg_deep.g_turns[0]
+        );
+        let te_fresh = evaluate_compact_tempo(&cb_fresh_tox, &t_tox);
+        let te_deep = evaluate_compact_tempo(&cb_deep_tox, &t_tox);
+        assert!(
+            te_fresh.g_turns[0] > 2.4 && te_deep.g_turns[0] < te_fresh.g_turns[0] - 0.5,
+            "TempoFull fresh Toxic must not clamp to 15/16: fresh={:.2}t deep={:.2}t",
+            te_fresh.g_turns[0],
+            te_deep.g_turns[0]
+        );
+
+        // 2. PS `PAR_SPEED_DROP` and `BRN_ATK_DROP` clearing vs Castle persistence.
+        let p1_par = vec![mk("Zapdos", 50, "Leftovers", &["Drill Peck", "Thunderbolt"])];
+        let p2_par = vec![mk("Snorlax", 50, "Leftovers", &["Body Slam", "Earthquake"])];
+        let b_ps = start(&dex, &p1_par, &p2_par);
+        let (t_ps, mut cb_ps) = CompactBattle::from_battle(&b_ps, &dex);
+        cb_ps.mons[0].set_status(Status::Par as u8, 0);
+        cb_ps.mons[0].vol_flags |= vol_bit::PAR_SPEED_DROP;
+        let spe_par_drop = effective_speed(&cb_ps, &t_ps, 0, 0);
+        cb_ps.mons[0].vol_flags &= !vol_bit::PAR_SPEED_DROP; // cleared by Haze/boost in PS
+        let spe_par_cleared = effective_speed(&cb_ps, &t_ps, 0, 0);
+        assert!(
+            spe_par_cleared > spe_par_drop * 3,
+            "PS cleared PAR_SPEED_DROP must restore full speed: drop={spe_par_drop} cleared={spe_par_cleared}"
+        );
+
+        let mut cb_ps_brn_drop = cb_ps;
+        cb_ps_brn_drop.mons[0].set_status(Status::Brn as u8, 0);
+        cb_ps_brn_drop.mons[0].vol_flags = vol_bit::BRN_ATK_DROP;
+        let mut cb_ps_brn_clr = cb_ps_brn_drop;
+        cb_ps_brn_clr.mons[0].vol_flags = 0; // BRN_ATK_DROP cleared in PS
+        let c_ps = TempoMatchCache::build(&cb_ps, &t_ps);
+        let fg_brn_drop = evaluate_fast_golf(&cb_ps_brn_drop, &t_ps, Some(&c_ps));
+        let fg_brn_clr = evaluate_fast_golf(&cb_ps_brn_clr, &t_ps, Some(&c_ps));
+        assert!(
+            fg_brn_clr.g_turns[0] < fg_brn_drop.g_turns[0] + 0.01,
+            "PS cleared BRN_ATK_DROP must not penalize physical attack more than active burn drop"
+        );
+
+        // 3. `encode_choice` + `search_tempo_mcts` exact alignment when active mon is forced to Struggle alongside bench switches!
+        let p1_str = vec![
+            mk("Snorlax", 55, "Leftovers", &["Body Slam"]),
+            mk("Zapdos", 50, "Leftovers", &["Thunderbolt"]),
+        ];
+        let p2_str = vec![
+            mk("Machamp", 50, "Leftovers", &["Cross Chop"]),
+            mk("Snorlax", 50, "Leftovers", &["Body Slam"]),
+        ];
+        let mut b_str = start(&dex, &p1_str, &p2_str);
+        if let Some(id) = b_str.active_id(0) {
+            b_str.poke_mut(id).move_slots[0].pp = 0; // force Struggle!
+        }
+        let (t_str, cb_str) = CompactBattle::from_battle(&b_str, &dex);
+        let cs_str = b_str.legal_choices(&dex, 0);
+        assert_eq!(cs_str.len(), 2, "expected [Struggle, Switch(2)], got {:?}", cs_str);
+        assert_eq!(encode_choice(&t_str, &cb_str, &dex, 0, cs_str[0]), Some(0));
+        assert_eq!(encode_choice(&t_str, &cb_str, &dex, 0, cs_str[1]), Some(5));
+        let res_str = search_tempo_mcts(
+            &b_str,
+            &dex,
+            0,
+            &cs_str,
+            TempoMctsConfig {
+                iterations: 80,
+                c: 0.4,
+                max_depth: 16,
+                leaf: TempoLeafMode::FastGolf,
+                deterministic: true,
+                fixed_preview: true,
+                minimax_backup: true,
+                argmax_root: true,
+                rollout_turns: 2,
+            },
+            123,
+        );
+        assert_eq!(res_str.visits.len(), 2);
+        assert_eq!(res_str.visits[0] + res_str.visits[1], 80);
+        assert!(res_str.visits[0] > 0 && res_str.visits[1] > 0);
+        let psum_str: f64 = res_str.own_policy.iter().sum();
+        assert!((psum_str - 1.0).abs() < 1e-6);
+
+        // 4. `compact_duct_key` must distinguish legality-affecting states (Disable/Encore slots, PP==0,
+        //    two_turn_locked, partially_trapped, bp_switch_flags, Castle 5-turn sleep).
+        let (t_k, cb_k) = CompactBattle::from_battle(&b_ps, &dex);
+        let mut cb_dis0 = cb_k;
+        cb_dis0.mons[0].vol_flags |= vol_bit::DISABLE;
+        cb_dis0.mons[0].set_disable_slot(0);
+        let mut cb_dis1 = cb_dis0;
+        cb_dis1.mons[0].set_disable_slot(1);
+        assert_ne!(compact_duct_key(&cb_dis0, &t_k, 1), compact_duct_key(&cb_dis1, &t_k, 1));
+
+        let mut cb_enc0 = cb_k;
+        cb_enc0.mons[0].vol_flags |= vol_bit::ENCORE;
+        cb_enc0.mons[0].set_encore_slot(0);
+        let mut cb_enc1 = cb_enc0;
+        cb_enc1.mons[0].set_encore_slot(1);
+        assert_ne!(compact_duct_key(&cb_enc0, &t_k, 1), compact_duct_key(&cb_enc1, &t_k, 1));
+
+        let mut cb_pp0 = cb_k;
+        cb_pp0.mons[0].pp[0] = 0;
+        assert_ne!(compact_duct_key(&cb_k, &t_k, 1), compact_duct_key(&cb_pp0, &t_k, 1));
+
+        let mut cb_ptrap = cb_k;
+        cb_ptrap.mons[0].set_partially_trapped(true);
+        assert_ne!(compact_duct_key(&cb_k, &t_k, 1), compact_duct_key(&cb_ptrap, &t_k, 1));
+
+        let mut cb_ttm = cb_k;
+        cb_ttm.mons[0].set_two_turn_locked(true);
+        cb_ttm.mons[0].set_locked_move_slot(1);
+        assert_ne!(compact_duct_key(&cb_k, &t_k, 1), compact_duct_key(&cb_ttm, &t_k, 1));
+
+        let mut cb_slp4 = cb_k;
+        cb_slp4.mons[0].set_status(Status::Slp as u8, 4);
+        let mut cb_slp5 = cb_k;
+        cb_slp5.mons[0].set_status(Status::Slp as u8, 5);
+        assert_ne!(compact_duct_key(&cb_slp4, &t_k, 1), compact_duct_key(&cb_slp5, &t_k, 1));
+
+        // 5. Castle PBS ruleset smoke test: `effective_speed` keeps Par penalty, `evaluate_fast_golf`
+        //    honors `L_TURN` terminal adjudication, and `cmcts` runs cleanly on Castle battles.
+        let mut b_castle = Battle::from_fixture_with_ruleset(
+            &dex,
+            "1,2,3,4",
+            &p1_str,
+            &p2_str,
+            Ruleset::CastlePbs(nc2000_engine::rules::CastleOverlayConfig::tournament()),
+        )
+        .unwrap();
+        b_castle.choose(&dex, 0, "team 1,2").unwrap();
+        b_castle.choose(&dex, 1, "team 1,2").unwrap();
+        let (t_c, mut cb_c) = CompactBattle::from_battle(&b_castle, &dex);
+        cb_c.mons[0].set_status(Status::Par as u8, 0);
+        cb_c.mons[0].vol_flags = 0; // In Castle, Par penalty persists even without PAR_SPEED_DROP!
+        let spe_c_par = effective_speed(&cb_c, &t_c, 0, 0);
+        cb_c.mons[0].set_status(Status::None as u8, 0);
+        let spe_c_clean = effective_speed(&cb_c, &t_c, 0, 0);
+        assert_eq!(spe_c_par * 4, spe_c_clean);
+
+        // Castle L_TURN terminal adjudication (`turn > 80`): higher alive count / HP ratio wins immediately.
+        let mut cb_lim = cb_c;
+        cb_lim.turn = 81;
+        cb_lim.mons[3].hp_pool[0] = t_c.mons[3].maxhp / 2;
+        assert!((evaluate_fast_golf(&cb_lim, &t_c, None).win_prob - 1.0).abs() < 1e-9);
+        assert!((evaluate_compact_tempo(&cb_lim, &t_c).win_prob - 1.0).abs() < 1e-9);
+
+        let cs_c = b_castle.legal_choices(&dex, 0);
+        let mut cmcts_c = TempoMctsAgent::new(
+            TempoMctsConfig {
+                iterations: 80,
+                c: 0.4,
+                max_depth: 32,
+                leaf: TempoLeafMode::FastGolf,
+                deterministic: true,
+                fixed_preview: true,
+                minimax_backup: true,
+                argmax_root: true,
+                rollout_turns: 2,
+            },
+            77,
+        );
+        let pick_c = cmcts_c.choose(&b_castle, &dex, 0, &cs_c);
+        assert!(cs_c.contains(&pick_c));
+
+        // 6. `TempoMatchCache` remaps `party_roster` cleanly after a `Battle` switch (fixes `SkuctGolfAgent`
+        //    post-switch cache corruption when `Battle` permutes `side.party`).
+        let mut b_sw = start(&dex, &p1_str, &p2_str);
+        let (t_root, cb_root) = CompactBattle::from_battle(&b_sw, &dex);
+        let root_cache = TempoMatchCache::build(&cb_root, &t_root);
+        b_sw.choose(&dex, 0, "switch 2").unwrap();
+        b_sw.choose(&dex, 1, "switch 2").unwrap();
+        let (t_post, cb_post) = CompactBattle::from_battle(&b_sw, &dex);
+        assert_ne!(cb_post.sides[0].party_roster, cb_root.sides[0].party_roster);
+        let fg_cached_sw = evaluate_fast_golf(&cb_post, &t_post, Some(&root_cache));
+        let fg_uncached_sw = evaluate_fast_golf(&cb_post, &t_post, None);
+        assert!(
+            (fg_cached_sw.win_prob - fg_uncached_sw.win_prob).abs() < 1e-6,
+            "TempoMatchCache must match uncached FastGolf exactly after Battle party permutation: cached={:.6} uncached={:.6}",
+            fg_cached_sw.win_prob,
+            fg_uncached_sw.win_prob
+        );
     }
 }

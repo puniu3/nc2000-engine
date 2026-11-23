@@ -1140,7 +1140,10 @@ fn run_calib(dex: &Dex, args: &[String]) {
                                         let p = &b.sides[side].roster[ri as usize];
                                         if p.hp > 0 {
                                             let act = if cb.sides[side].active_idx as usize == slot && cb.sides[side].request != 2 { "*" } else { "" };
-                                            let st = if p.status != Status::None { format!(" {:?}", p.status) } else { String::new() };
+                                            let cmon = &cb.mons[side * 3 + slot];
+                                            let st = if p.status != Status::None { format!(" {:?}(c={})", p.status, cmon.status_counter()) } else { String::new() };
+                                            let it = p.item.map(|id| format!(" @{}", dex_ref.items.get(id).name)).unwrap_or_default();
+                                            let vf = if cmon.vol_flags != 0 || cmon.sub_hp() > 0 { format!(" v={:#x}/sub={}", cmon.vol_flags, cmon.sub_hp()) } else { String::new() };
                                             let bst: String = p.boosts.iter().enumerate()
                                                 .filter(|(_, &v)| v != 0)
                                                 .map(|(i, v)| format!("b{i}:{v:+}"))
@@ -1149,7 +1152,7 @@ fn run_calib(dex: &Dex, args: &[String]) {
                                             let mvs: String = p.move_slots.iter()
                                                 .map(|m| format!("{}:{}", dex_ref.move_static(m.id).name, m.pp))
                                                 .collect::<Vec<_>>().join("/");
-                                            ps.push(format!("#{slot}:{act}{}({}/{}{st}{bs_s} [{mvs}])", p.name.as_str(), p.hp, p.maxhp));
+                                            ps.push(format!("#{slot}:{act}{}({}/{}{it}{st}{vf}{bs_s} [{mvs}])", p.name.as_str(), p.hp, p.maxhp));
                                         }
                                     }
                                 }
@@ -1325,6 +1328,7 @@ fn run_calib(dex: &Dex, args: &[String]) {
         }
         std::fs::write(path, &dump).unwrap();
     };
+    dump_bucket(0, "/tmp/v2_calib_1v1.txt", 25);
     dump_bucket(1, "/tmp/v2_calib_2v1.txt", 25);
     dump_bucket(2, "/tmp/v2_calib_2v2.txt", 20);
     dump_bucket(3, "/tmp/v2_calib_3v2.txt", 15);
