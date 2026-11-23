@@ -2628,6 +2628,8 @@ struct StaticMonCache {
     phaze_slot: u8,
     haze_slot: u8,
     bp_slot: u8,
+    perish_slot: u8,
+    dbond_slot: u8,
     st_attack_rate: f64,
     inv_maxhp: f64,
     q16_frac: f64,
@@ -2648,6 +2650,8 @@ impl Default for StaticMonCache {
             phaze_slot: 0xFF,
             haze_slot: 0xFF,
             bp_slot: 0xFF,
+            perish_slot: 0xFF,
+            dbond_slot: 0xFF,
             st_attack_rate: 0.0,
             inv_maxhp: 1.0,
             q16_frac: 0.0625,
@@ -2716,6 +2720,8 @@ impl TempoMatchCache {
             let mut phaze_slot = 0xFFu8;
             let mut haze_slot = 0xFFu8;
             let mut bp_slot = 0xFFu8;
+            let mut perish_slot = 0xFFu8;
+            let mut dbond_slot = 0xFFu8;
             let mut usable_st_attacks = 0usize;
             for m in 0..n_moves {
                 clean_cb.mons[i].pp[m] = table.mons[i].max_pp[m].max(1);
@@ -2740,6 +2746,12 @@ impl TempoMatchCache {
                 if ms.special_kind == SpecialMoveKind::BatonPass && bp_slot == 0xFF {
                     bp_slot = m as u8;
                 }
+                if ms.special_kind == SpecialMoveKind::PerishSong && perish_slot == 0xFF {
+                    perish_slot = m as u8;
+                }
+                if ms.special_kind == SpecialMoveKind::DestinyBond && dbond_slot == 0xFF {
+                    dbond_slot = m as u8;
+                }
                 if ms.special_kind == SpecialMoveKind::SleepTalk {
                     sleep_talk_slot = m as u8;
                 } else if !ms.is_status && !ms.is_selfdestruct && ms.can_sleep_talk {
@@ -2756,6 +2768,8 @@ impl TempoMatchCache {
                 phaze_slot,
                 haze_slot,
                 bp_slot,
+                perish_slot,
+                dbond_slot,
                 st_attack_rate: if sleep_talk_slot != 0xFF && n_moves > 1 {
                     usable_st_attacks as f64 / (n_moves - 1) as f64
                 } else {
@@ -2908,15 +2922,15 @@ fn summarize_kernel(kern: &DmgKernel1D, ms: &CompactMoveSpec) -> CachedMoveDmg {
     }
 }
 
-/// Apply Gen 2 boosts, Burn, Screens, Weather, and Acc/Eva to a cached clean `CachedMoveDmg` in O(1).
+/// Apply Gen 2 boosts, Burn, duration-weighted Screens, Weather, and Acc/Eva to a cached clean `CachedMoveDmg` in O(1).
 #[inline(always)]
 fn scale_cached_move(
     md: CachedMoveDmg,
     att_boosts: &[i8; 7],
     def_boosts: &[i8; 7],
     att_burned: bool,
-    def_reflect: bool,
-    def_lightscreen: bool,
+    def_reflect_turns: u8,
+    def_lightscreen_turns: u8,
     weather_kind: CompactWeather,
     weather_active: bool,
 ) -> CachedMoveDmg {
@@ -2947,8 +2961,11 @@ fn scale_cached_move(
         1.0
     };
     let burn_mult = if is_phys && att_burned { 0.5 } else { 1.0 };
-    let screen_mult = if (is_phys && def_reflect) || (!is_phys && def_lightscreen) {
-        0.5
+    // Duration-weighted Reflect/Light Screen (never treat a 1-turn-remaining screen as permanent 0.5x!).
+    let rem_screen = if is_phys { def_reflect_turns } else { def_lightscreen_turns };
+    let screen_mult = if rem_screen > 0 {
+        let w = ((rem_screen.min(5) as f32) / 4.5).clamp(0.25, 0.85);
+        1.0 - 0.5 * w
     } else {
         1.0
     };
@@ -3117,16 +3134,16 @@ fn compute_fast_pair(
     let eff_def_boosts = if ignore_def_boosts { &zero_boosts } else { &def_mon.boosts };
     let att_status = att_mon.status_raw();
     let att_burned = att_status == Status::Brn as u8;
-    let def_reflect = cb.sides[def_side].reflect_turns > 0;
-    let def_lightscreen = cb.sides[def_side].lightscreen_turns > 0;
+    let def_reflect_turns = cb.sides[def_side].reflect_turns;
+    let def_lightscreen_turns = cb.sides[def_side].lightscreen_turns;
     let weather_active = cb.weather_turns > 0
         && matches!(cb.weather_kind, CompactWeather::Rain | CompactWeather::Sun);
 
     let needs_scale = *eff_att_boosts != [0; 7]
         || *eff_def_boosts != [0; 7]
         || att_burned
-        || def_reflect
-        || def_lightscreen
+        || def_reflect_turns > 0
+        || def_lightscreen_turns > 0
         || weather_active;
 
     // Cache stays valid even across boosts, burn, screens, weather, and consumed healing berries!
@@ -3146,6 +3163,12 @@ fn compute_fast_pair(
     });
 
     let start_hp_f = start_hp as f32;
+    // Effective Turn-1 KO HP threshold accounting for net end-of-turn chip (Poison/Burn/Toxic/Leech/Sand).
+    let ko_hp_f = if res_frac < -1e-4 {
+        (start_hp_f + (res_frac * (def_spec.maxhp.max(1) as f64)) as f32).max(1.0)
+    } else {
+        start_hp_f
+    };
     let mut best_mean = 0.0f64;
     let mut best_max_norm = 0.0f64;
     let mut best_ohko = 0.0f64;
@@ -3163,7 +3186,7 @@ fn compute_fast_pair(
                 used_fast_slot = true;
                 if bs < 4 {
                     let md = ce.moves[bs];
-                    let p_ko = fast_ko_prob(&md, start_hp_f);
+                    let p_ko = fast_ko_prob(&md, ko_hp_f);
                     let mut d_mean = (md.mean_dmg as f64) * inv_maxhp;
                     if (md.flags & MOVE_FLAG_RECHARGE) != 0 && p_ko < 0.85 {
                         d_mean *= 0.55;
@@ -3176,7 +3199,7 @@ fn compute_fast_pair(
                 let bms = ce.boom_slot as usize;
                 if bms < 4 && att_mon.pp[bms] > 0 && !att_mon.is_slot_disabled(bms) {
                     let md = ce.moves[bms];
-                    boom_ko = fast_ko_prob(&md, start_hp_f);
+                    boom_ko = fast_ko_prob(&md, ko_hp_f);
                     boom_dmg = (md.mean_dmg as f64) * inv_maxhp;
                 }
             }
@@ -3198,12 +3221,12 @@ fn compute_fast_pair(
                         eff_att_boosts,
                         eff_def_boosts,
                         att_burned,
-                        def_reflect,
-                        def_lightscreen,
+                        def_reflect_turns,
+                        def_lightscreen_turns,
                         cb.weather_kind,
                         weather_active,
                     );
-                    let p_ko = fast_ko_prob(&md, start_hp_f);
+                    let p_ko = fast_ko_prob(&md, ko_hp_f);
                     let mut d_mean = (md.mean_dmg as f64) * inv_maxhp;
                     if (md.flags & MOVE_FLAG_RECHARGE) != 0 && p_ko < 0.85 {
                         d_mean *= 0.55;
@@ -3224,12 +3247,12 @@ fn compute_fast_pair(
                         eff_att_boosts,
                         eff_def_boosts,
                         att_burned,
-                        def_reflect,
-                        def_lightscreen,
+                        def_reflect_turns,
+                        def_lightscreen_turns,
                         cb.weather_kind,
                         weather_active,
                     );
-                    boom_ko = fast_ko_prob(&md, start_hp_f);
+                    boom_ko = fast_ko_prob(&md, ko_hp_f);
                     boom_dmg = (md.mean_dmg as f64) * inv_maxhp;
                 }
             }
@@ -3258,8 +3281,8 @@ fn compute_fast_pair(
                         eff_att_boosts,
                         eff_def_boosts,
                         att_burned,
-                        def_reflect,
-                        def_lightscreen,
+                        def_reflect_turns,
+                        def_lightscreen_turns,
                         cb.weather_kind,
                         weather_active,
                     )
@@ -3268,7 +3291,11 @@ fn compute_fast_pair(
                 }
             } else {
                 let mut tmp_cb;
-                let use_cb = if ignore_att_boosts || ignore_def_boosts {
+                let use_cb = if ignore_att_boosts
+                    || ignore_def_boosts
+                    || def_reflect_turns > 0
+                    || def_lightscreen_turns > 0
+                {
                     tmp_cb = *cb;
                     if ignore_att_boosts {
                         tmp_cb.mons[att_idx].boosts = [0; 7];
@@ -3276,6 +3303,9 @@ fn compute_fast_pair(
                     if ignore_def_boosts {
                         tmp_cb.mons[def_idx].boosts = [0; 7];
                     }
+                    // Compute unscreened kernel, then apply duration-weighted screen multiplier consistently.
+                    tmp_cb.sides[def_side].reflect_turns = 0;
+                    tmp_cb.sides[def_side].lightscreen_turns = 0;
                     &tmp_cb
                 } else {
                     cb
@@ -3286,12 +3316,25 @@ fn compute_fast_pair(
                 if kern.max_dmg <= 0 {
                     continue;
                 }
-                summarize_kernel(&kern, ms)
+                let mut sm = summarize_kernel(&kern, ms);
+                if (ms.is_physical && def_reflect_turns > 0)
+                    || (!ms.is_physical && def_lightscreen_turns > 0)
+                {
+                    let rem_screen =
+                        if ms.is_physical { def_reflect_turns } else { def_lightscreen_turns };
+                    let w = ((rem_screen.min(5) as f32) / 4.5).clamp(0.25, 0.85);
+                    let m_sc = 1.0 - 0.5 * w;
+                    let eff_m = (1.0 - sm.p_crit) * m_sc + sm.p_crit;
+                    sm.mean_dmg *= eff_m;
+                    sm.min_norm *= m_sc;
+                    sm.max_norm *= m_sc;
+                }
+                sm
             };
             if (md.flags & MOVE_FLAG_USABLE) == 0 {
                 continue;
             }
-            let p_ko = fast_ko_prob(&md, start_hp_f);
+            let p_ko = fast_ko_prob(&md, ko_hp_f);
             if (md.flags & MOVE_FLAG_SELFDESTRUCT) != 0 {
                 if p_ko > boom_ko {
                     boom_ko = p_ko;
@@ -3605,15 +3648,23 @@ fn apply_fast_recovery(
             let t_att = p_surv * (wall_full - 0.9 * heal_debt).max(a2d.raw_ttk)
                 + (1.0 - p_surv) * a2d.raw_ttk;
 
-            let dmg_over_kill = d2a.raw_ttk * a2d.net_dmg.max(0.0);
+            let eff_att_turns =
+                (d2a.raw_ttk - if def_faster { 1.0 } else { 0.0 } - slp_t).max(0.0);
+            let dmg_over_kill = eff_att_turns * a2d.net_dmg.max(0.0);
             let excess_hp = (dmg_over_kill - (hp_frac - 0.15).max(0.0)).max(0.0);
             let net_heal = eff_heal - a2d.net_dmg.max(0.0);
             let t_def = if excess_hp <= 1e-4 {
                 d2a.raw_ttk
-            } else if net_heal > 0.025 {
-                (d2a.raw_ttk + excess_hp / net_heal).min(wall_cap)
+            } else if is_1v1 {
+                if net_heal > 0.025 {
+                    (d2a.raw_ttk + excess_hp / net_heal).min(wall_cap)
+                } else {
+                    (a2d.best_pp.max(1) as f64).min(wall_cap)
+                }
             } else {
-                (a2d.best_pp.max(1) as f64).min(wall_cap)
+                // Multi-mon: healing turns spent to offset HP saved by `def_sustain` (never blows up to 7.5t!).
+                let heal_turns = (excess_hp / eff_heal.max(0.25)).min(1.6);
+                (d2a.raw_ttk + heal_turns).min(wall_cap)
             };
             best_opt = Some((t_att, t_def, duty));
         }
@@ -3669,15 +3720,22 @@ fn apply_fast_recovery(
             let t_att = p_surv * (wall_full - 0.75 * heal_debt).max(a2d.raw_ttk)
                 + (1.0 - p_surv) * a2d.raw_ttk;
 
-            let dmg_over_kill = d2a.raw_ttk * rest_net.max(0.0);
+            let eff_att_turns =
+                (d2a.raw_ttk - if def_faster { 1.0 } else { 0.0 } - slp_t).max(0.0);
+            let dmg_over_kill = eff_att_turns * rest_net.max(0.0);
             let excess_hp = (dmg_over_kill - (hp_frac - 0.15).max(0.0)).max(0.0);
             let net_cycle = (hp_after_wake - h_rest).max(0.0);
             let t_def = if excess_hp <= 1e-4 {
                 d2a.raw_ttk
-            } else if net_cycle > 0.03 {
-                (d2a.raw_ttk + non_act * (excess_hp / net_cycle)).min(wall_cap)
+            } else if is_1v1 {
+                if net_cycle > 0.03 {
+                    (d2a.raw_ttk + non_act * (excess_hp / net_cycle)).min(wall_cap)
+                } else {
+                    (a2d.best_pp.max(1) as f64).min(wall_cap)
+                }
             } else {
-                (a2d.best_pp.max(1) as f64).min(wall_cap)
+                let heal_turns = (non_act * (excess_hp / 0.65)).min(2.0);
+                (d2a.raw_ttk + heal_turns).min(wall_cap)
             };
             let better = best_opt.map_or(true, |(pa, pd, _)| (t_att - t_def) > (pa - pd));
             if better {
@@ -3799,6 +3857,33 @@ fn solve_fast_team_turns(
 
     let mut base_hp = [0.0f64; 3];
     let mut opp_kill_ally = [2.5f64; 3];
+    let mut ally_perish = [false; 3];
+    let mut ally_dbond = [false; 3];
+    let mut enemy_dbond = [false; 3];
+    let has_usable_special = |s: usize, slot: usize, kind: SpecialMoveKind| -> bool {
+        let idx = s * 3 + slot;
+        let mon = &cb.mons[idx];
+        if mon.hp() <= 0
+            || mon.status_raw() == Status::Frz as u8
+            || sleep_eff_delays[idx] >= 1.0
+        {
+            return false;
+        }
+        if let Some(c) = cache {
+            let ms = match kind {
+                SpecialMoveKind::PerishSong => c.mons[idx].perish_slot as usize,
+                SpecialMoveKind::DestinyBond => c.mons[idx].dbond_slot as usize,
+                _ => 0xFF,
+            };
+            ms < 4 && mon.pp[ms] > 0 && !mon.is_slot_disabled(ms)
+        } else {
+            (0..table.mons[idx].num_moves as usize).any(|m| {
+                mon.pp[m] > 0
+                    && !mon.is_slot_disabled(m)
+                    && table.move_specs[idx][m].special_kind == kind
+            })
+        }
+    };
     for &a in &allies[..n_allies] {
         let idx = side * 3 + a;
         let inv = cache.map_or_else(
@@ -3813,6 +3898,15 @@ fn solve_fast_team_turns(
             }
         }
         opp_kill_ally[a] = min_opp_t.clamp(1.0, 5.5);
+        if n_allies >= 2 {
+            ally_perish[a] = has_usable_special(side, a, SpecialMoveKind::PerishSong);
+            ally_dbond[a] = has_usable_special(side, a, SpecialMoveKind::DestinyBond);
+        }
+    }
+    if n_enemies >= 2 {
+        for &e in &enemies[..n_enemies] {
+            enemy_dbond[e] = has_usable_special(opp, e, SpecialMoveKind::DestinyBond);
+        }
     }
 
     let mut ordered_enemies = [0usize; 3];
@@ -3866,68 +3960,114 @@ fn solve_fast_team_turns(
         let t_need = pair_ae.eff_ttk;
         let avail = hp_rem[a];
         let is_last_enemy = idx_e + 1 == n_enemies;
-
-        // Explosion / Self-Destruct option: requires another living ally so user never self-loses.
-        let eff_boom_ko = if pair_ae.speed_cmp < 0 {
-            pair_ae.boom_ko_prob * (1.0 - pair_ea.ohko_prob).clamp(0.0, 1.0)
-        } else {
-            pair_ae.boom_ko_prob
-        };
+        let sw_risk = if a == act_ally && ally_active_alive { 0.0 } else { 0.35 };
         let min_boom_hp = if a == act_ally && ally_active_alive {
             0.02
         } else {
             (entry_hit_hp + 0.12).max(0.15)
         };
-        if avail > min_boom_hp && (eff_boom_ko > 0.5 || (is_last_enemy && pair_ae.boom_dmg_frac > 0.50))
+        let has_other_alive =
+            n_allies >= 2 && allies[..n_allies].iter().any(|&b| b != a && hp_rem[b] > 0.02);
+
+        // 1. Explosion / Self-Destruct option (and last-enemy 2-step Explosion + Teammate Cleanup):
+        //    Requires another living ally so user never self-loses.
+        let eff_boom_ko = if pair_ae.speed_cmp < 0 {
+            pair_ae.boom_ko_prob * (1.0 - pair_ea.ohko_prob).clamp(0.0, 1.0)
+        } else {
+            pair_ae.boom_ko_prob
+        };
+        if has_other_alive
+            && avail > min_boom_hp
+            && (eff_boom_ko > 0.5 || (is_last_enemy && pair_ae.boom_dmg_frac > 0.50))
         {
-            let has_other_alive = allies[..n_allies].iter().any(|&b| b != a && hp_rem[b] > 0.02);
-            if has_other_alive {
-                let sw_risk = if a == act_ally && ally_active_alive { 0.0 } else { 0.35 };
-                if eff_boom_ko > 0.5 && (is_last_enemy || t_need > 2.0) {
-                    let sac_pen = if is_last_enemy {
-                        0.0
-                    } else {
-                        let hp_ratio = (avail / base_hp[a].max(0.05)).clamp(0.15, 1.0);
-                        let opp_saved = opp_kill_ally[a] * hp_ratio;
-                        let has_absorber = enemies[..n_enemies]
-                            .iter()
-                            .any(|&e2| e2 != e && ttk[side][a][e2].boom_dmg_frac < 0.45);
-                        opp_saved + if has_absorber { 0.85 } else { 0.0 }
-                    };
-                    let boom_cost = 1.0 / eff_boom_ko + sac_pen + sw_risk;
-                    if boom_cost < t_need {
-                        hp_rem[a] = 0.0;
-                        return add_t + boom_cost;
-                    }
-                } else if is_last_enemy && pair_ae.boom_dmg_frac > 0.50 {
-                    // Last-enemy 2-step Explosion + Teammate Cleanup (e.g., Gengar Boom 75% -> Steelix finishes!).
-                    let p_exec = if pair_ae.speed_cmp < 0 {
-                        (1.0 - pair_ea.ohko_prob).clamp(0.0, 1.0)
-                    } else {
-                        1.0
-                    };
-                    if p_exec > 0.45 {
-                        let rem_hp = (1.0 - pair_ae.boom_dmg_frac).clamp(0.05, 0.50);
-                        let mut best_clean = f64::INFINITY;
-                        for &b in &allies[..n_allies] {
-                            if b == a || hp_rem[b] <= 0.02 {
-                                continue;
-                            }
-                            let t_fin = (rem_hp * ttk[side][b][e].raw_ttk).max(0.85);
-                            let fin_cost = t_fin + 0.35;
-                            if fin_cost < best_clean {
-                                best_clean = fin_cost;
-                            }
+            if eff_boom_ko > 0.5 && (is_last_enemy || t_need > 2.0) {
+                let sac_pen = if is_last_enemy {
+                    0.0
+                } else {
+                    let hp_ratio = (avail / base_hp[a].max(0.05)).clamp(0.15, 1.0);
+                    let opp_saved = opp_kill_ally[a] * hp_ratio;
+                    let has_absorber = enemies[..n_enemies]
+                        .iter()
+                        .any(|&e2| e2 != e && ttk[side][a][e2].boom_dmg_frac < 0.45);
+                    opp_saved + if has_absorber { 0.85 } else { 0.0 }
+                };
+                let boom_cost = 1.0 / eff_boom_ko + sac_pen + sw_risk;
+                if boom_cost < t_need {
+                    hp_rem[a] = 0.0;
+                    return add_t + boom_cost;
+                }
+            } else if is_last_enemy && pair_ae.boom_dmg_frac > 0.50 {
+                // Expected turns for Last-Enemy Explosion + Teammate Cleanup:
+                // `eff_boom_ko` wins on Turn 1; `(1 - eff_boom_ko)` leaves `rem_hp` for surviving teammate `b`.
+                let p_exec = if pair_ae.speed_cmp < 0 {
+                    (1.0 - pair_ea.ohko_prob).clamp(0.0, 1.0)
+                } else {
+                    1.0
+                };
+                if p_exec > 0.45 {
+                    let rem_hp = (1.0 - pair_ae.boom_dmg_frac * 0.94).clamp(0.04, 0.50);
+                    let mut best_clean = f64::INFINITY;
+                    for &b in &allies[..n_allies] {
+                        if b == a || hp_rem[b] <= 0.02 {
+                            continue;
                         }
-                        if best_clean.is_finite() {
-                            let combo_cost = 1.0 / p_exec + sw_risk + best_clean;
-                            if combo_cost < t_need {
-                                hp_rem[a] = 0.0;
-                                return add_t + combo_cost;
-                            }
+                        let pair_be = ttk[side][b][e];
+                        let surv_b = if pair_be.speed_cmp < 0 {
+                            (1.0 - ttk[opp][e][b].ohko_prob).clamp(0.0, 1.0)
+                        } else {
+                            1.0
+                        };
+                        if surv_b < 0.25 {
+                            continue;
+                        }
+                        let t_fin = (rem_hp * pair_be.raw_ttk).max(0.85) / surv_b;
+                        if t_fin < best_clean {
+                            best_clean = t_fin;
+                        }
+                    }
+                    if best_clean.is_finite() {
+                        let p_ko = eff_boom_ko.clamp(0.0, 1.0);
+                        let exp_after = (1.0 - p_ko) * best_clean;
+                        let combo_cost = (1.0 + exp_after) / p_exec + sw_risk;
+                        if combo_cost < t_need {
+                            hp_rem[a] = 0.0;
+                            return add_t + combo_cost;
                         }
                     }
                 }
+            }
+        }
+
+        // 2. Last-enemy Perish Song / Destiny Bond checkmate (cannot switch out when `is_last_enemy`!).
+        let mut best_checkmate = t_need;
+        let mut checkmate_sac = false;
+        if is_last_enemy && has_other_alive && avail > min_boom_hp {
+            let p_act = if pair_ae.speed_cmp > 0 {
+                1.0
+            } else {
+                (1.0 - pair_ea.ohko_prob).clamp(0.0, 1.0)
+            };
+            if ally_perish[a] && p_act > 0.45 {
+                let perish_t = 3.5 / p_act + sw_risk;
+                if perish_t < best_checkmate {
+                    best_checkmate = perish_t;
+                    checkmate_sac = false;
+                }
+            }
+            if ally_dbond[a] && p_act > 0.55 {
+                // Faster Destiny Bond forces 1-for-1 trade checkmate vs last enemy; slower requires surviving 1 hit.
+                let db_base = if pair_ae.speed_cmp > 0 { 2.0 } else { 2.6 };
+                let db_t = db_base / p_act + sw_risk;
+                if db_t < best_checkmate {
+                    best_checkmate = db_t;
+                    checkmate_sac = true;
+                }
+            }
+            if best_checkmate < t_need - 0.05 {
+                if checkmate_sac {
+                    hp_rem[a] = 0.0;
+                }
+                return add_t + best_checkmate;
             }
         }
 
@@ -3941,23 +4081,38 @@ fn solve_fast_team_turns(
         } else {
             (t_need - 0.5).max(0.5)
         };
-        let eff_hits = (raw_hits - e_slp).max(0.0);
+        // Conservation of actions per turn: a sustaining enemy spends `heal_duty` of its turns
+        // clicking Recover/Rest and ONLY `(1 - heal_duty)` of its turns attacking!
+        let e_att_frac = if pair_ae.def_sustain {
+            (1.0 - pair_ae.heal_duty).clamp(0.25, 1.0)
+        } else {
+            1.0
+        };
+        let eff_hits = ((raw_hits - e_slp).max(0.0)) * e_att_frac;
         let raw_hp_drain = eff_hits * pair_ea.net_dmg.max(0.0);
         let mut hits_taken = if pair_ea.def_sustain {
             (0.35 * raw_hp_drain).max(0.15 * pair_ea.heal_duty)
         } else {
             raw_hp_drain
         };
-        if n_enemies >= 2 && e_slp < 0.5 && pair_ea.boom_ko_prob > 0.45 {
-            let p_boom_hits = if pair_ae.speed_cmp > 0 {
+        // Defensive Explosion & Destiny Bond threat when enemy `e` has backup (`n_enemies >= 2`).
+        if n_enemies >= 2 && e_slp < 0.5 {
+            let p_e_acts = if pair_ae.speed_cmp > 0 {
                 (1.0 - pair_ae.ohko_prob).clamp(0.0, 1.0)
             } else {
                 1.0
             };
-            let boom_drain =
-                opp_boom_threat_w * p_boom_hits * pair_ea.boom_ko_prob * pair_ea.boom_dmg_frac;
-            if boom_drain > hits_taken {
-                hits_taken = boom_drain;
+            if pair_ea.boom_dmg_frac > 0.55 {
+                let boom_drain = opp_boom_threat_w * p_e_acts * pair_ea.boom_dmg_frac;
+                if boom_drain > hits_taken {
+                    hits_taken = boom_drain;
+                }
+            }
+            if enemy_dbond[e] && (pair_ae.speed_cmp < 0 || pair_ae.ohko_prob < 0.85) {
+                let db_drain = opp_boom_threat_w * p_e_acts * 0.90;
+                if db_drain > hits_taken {
+                    hits_taken = db_drain;
+                }
             }
         }
         let fragile_bump = if !pair_ea.def_sustain
@@ -4017,21 +4172,44 @@ fn solve_fast_team_turns(
                     continue;
                 }
                 let pair_be = ttk[side][b][e];
+                let pair_eb = ttk[opp][e][b];
+                // Helper `b` cannot finish `e` if `b` is slower and gets OHKO'd before moving!
+                let surv_b = if pair_be.speed_cmp < 0 {
+                    (1.0 - pair_eb.ohko_prob).clamp(0.0, 1.0)
+                } else {
+                    1.0
+                };
+                if surv_b <= 0.05 {
+                    continue;
+                }
                 let raw_fin = rem_frac * pair_be.raw_ttk;
                 let eff_fin = rem_frac * pair_be.eff_ttk;
                 let stall_w = ((raw_fin - 1.0) / 1.5).clamp(0.0, 1.0);
                 let t_b = raw_fin * (1.0 - stall_w) + eff_fin * stall_w;
-                let cost_b = if ttk[opp][e][b].def_sustain {
+                let b_e_att = if pair_be.def_sustain {
+                    (1.0 - pair_be.heal_duty).clamp(0.25, 1.0)
+                } else {
+                    1.0
+                };
+                let cost_b = if pair_eb.def_sustain {
                     0.20 * rem_frac
                 } else {
                     let hits_b = if pair_be.speed_cmp > 0 { (t_b - 1.0).max(0.0) } else { t_b };
-                    hits_b * ttk[opp][e][b].net_dmg.max(0.0)
+                    hits_b * b_e_att * pair_eb.net_dmg.max(0.0)
                 };
                 let extra_pen = if cost_b > hp_rem[b] {
                     let any_third =
                         allies[..n_allies].iter().any(|&c| c != a && c != b && hp_rem[c] > 0.02);
-                    let mul = if any_third { 1.8 } else { 3.5 };
-                    (mul * (cost_b - hp_rem[b])).min(FAST_WALL_CAP - t_b).max(0.0)
+                    if any_third {
+                        (1.8 * (cost_b - hp_rem[b])).min(FAST_WALL_CAP - t_b).max(0.0)
+                    } else {
+                        // Last surviving helper dies partway: unkillable fraction incurs dead-team wall cost!
+                        let done_b = (hp_rem[b] / cost_b.max(1e-6)).clamp(0.0, 0.999) * surv_b;
+                        let unkillable = (1.0 - done_b).max(0.0);
+                        (unkillable * FAST_WALL_CAP).min(FAST_WALL_CAP - t_b).max(0.0)
+                    }
+                } else if surv_b < 0.99 {
+                    (1.0 - surv_b) * (FAST_WALL_CAP - t_b).max(0.0)
                 } else {
                     0.0
                 };
@@ -4122,8 +4300,34 @@ fn solve_fast_team_turns(
                 } else {
                     ttk[side][a][e]
                 };
+                let mut t_a = p.eff_ttk;
+                // In 2v1/3v1 (`n_enemies == 1`), credit last-enemy Explosion / Perish / DBond in `g_depth` too!
+                if n_enemies == 1 && base_hp[a] > 0.08 {
+                    let p_act = if p.speed_cmp >= 0 {
+                        1.0
+                    } else {
+                        (1.0 - ttk[opp][e][a].ohko_prob).clamp(0.0, 1.0)
+                    };
+                    if p_act > 0.45 {
+                        if p.boom_dmg_frac > 0.55 {
+                            let bt = (1.0 + (1.0 - p.boom_ko_prob).max(0.0) * 1.1) / p_act;
+                            if bt < t_a {
+                                t_a = bt;
+                            }
+                        }
+                        if ally_perish[a] && (3.5 / p_act) < t_a {
+                            t_a = 3.5 / p_act;
+                        }
+                        if ally_dbond[a] && p_act > 0.55 {
+                            let dt = (if p.speed_cmp > 0 { 2.0 } else { 2.6 }) / p_act;
+                            if dt < t_a {
+                                t_a = dt;
+                            }
+                        }
+                    }
+                }
                 let w_a = 0.20 + 0.80 * base_hp[a];
-                z += w_a * (-p.eff_ttk * inv_tau).exp();
+                z += w_a * (-t_a * inv_tau).exp();
             }
             let td = if z > 1e-12 {
                 (-DEPTH_TAU * z.ln()).clamp(0.4, FAST_WALL_CAP)
@@ -4414,20 +4618,80 @@ pub fn evaluate_fast_golf(
     } else if g1 <= 0.0 {
         0.0
     } else {
-        // Empirically calibrated Brownian race variance per turn:
-        // sharp in pure 1v1 races (`0.60/turn`, beating `linear.rs` Brier by -0.060!),
-        // calm in multi-mon switch games (`3.9..7.2/turn`) so DUCT MCTS exploration (`c = 0.4`)
-        // and Nash LP payoff averaging match calibrated win probabilities.
+        // Empirically calibrated Brownian race variance per turn across 18k+ real NC2000 states:
+        // sharp in pure 1v1 races (`1.15/turn`), calmly increasing across multi-mon switch games
+        // (`2.85..4.80/turn`) so DUCT MCTS exploration (`c = 0.4`) and Nash LP averaging are well calibrated.
         let var_per_turn = if is_1v1 {
-            0.55
+            1.15
         } else {
             let extra_mons = (n0 + n1).saturating_sub(2) as f64;
-            2.2 + 1.0 * extra_mons
+            2.2 + 0.65 * extra_mons
         };
         let sigma = (var_per_turn * (g0 + g1).max(1.0)).sqrt();
         normal_cdf(adv / sigma)
     };
     FastGolfEval { g_turns: [g0, g1], turn_advantage: adv, win_prob: wp }
+}
+
+/// Diagnostic breakdown of `evaluate_fast_golf` for offline calibration & autopsy (not used in hot path).
+pub fn format_fast_golf_debug(cb: &CompactBattle, table: &MatchTable) -> String {
+    let n0 = cb.sides[0].alive_mask.count_ones();
+    let n1 = cb.sides[1].alive_mask.count_ones();
+    let is_1v1 = n0 <= 1 && n1 <= 1;
+    let mut entry_hps = [0i16; 6];
+    let mut speeds = [1i32; 6];
+    let mut sleep_turns = [0.0f64; 6];
+    let mut sleep_eff_delays = [0.0f64; 6];
+    for s in 0..2 {
+        for slot in 0..3 {
+            if (cb.sides[s].alive_mask & (1 << slot)) == 0 {
+                continue;
+            }
+            let idx = s * 3 + slot;
+            entry_hps[idx] = entry_hp(cb, table, s, slot);
+            speeds[idx] = effective_speed(cb, table, s, slot);
+            if cb.mons[idx].status_raw() == Status::Slp as u8 {
+                let slp = expected_sleep_turns(cb, s, slot);
+                sleep_turns[idx] = slp;
+                sleep_eff_delays[idx] = slp * (1.0 - sleep_talk_attack_rate(cb, table, s, slot));
+            }
+        }
+    }
+    let mut out = String::new();
+    for s0 in 0..3 {
+        if (cb.sides[0].alive_mask & (1 << s0)) == 0 {
+            continue;
+        }
+        for s1 in 0..3 {
+            if (cb.sides[1].alive_mask & (1 << s1)) == 0 {
+                continue;
+            }
+            let mut a01 = compute_fast_pair(
+                cb, table, 0, s0, 1, s1, &entry_hps, &speeds, &sleep_eff_delays, false, false, None,
+            );
+            let mut a10 = compute_fast_pair(
+                cb, table, 1, s1, 0, s0, &entry_hps, &speeds, &sleep_eff_delays, false, false, None,
+            );
+            let mut b10 = a10;
+            let mut b01 = a01;
+            apply_fast_recovery(
+                cb, table, 0, s0, 1, s1, &mut a01, &mut b10, &entry_hps, &sleep_turns, is_1v1, None,
+            );
+            apply_fast_recovery(
+                cb, table, 1, s1, 0, s0, &mut a10, &mut b01, &entry_hps, &sleep_turns, is_1v1, None,
+            );
+            a01.eff_ttk = a01.eff_ttk.max(b01.eff_ttk);
+            a10.eff_ttk = a10.eff_ttk.max(b10.eff_ttk);
+            out.push_str(&format!(
+                "    [p0#{s0}->p1#{s1}] raw={:.2} eff={:.2} dmg={:.0}% ohko={:.0}% boom={:.0}%/{:.0}% sus={} spd={:+} | [rev] raw={:.2} eff={:.2} dmg={:.0}% ohko={:.0}% boom={:.0}%/{:.0}% sus={}\n",
+                a01.raw_ttk, a01.eff_ttk, a01.net_dmg * 100.0, a01.ohko_prob * 100.0,
+                a01.boom_ko_prob * 100.0, a01.boom_dmg_frac * 100.0, a01.def_sustain as u8, a01.speed_cmp,
+                a10.raw_ttk, a10.eff_ttk, a10.net_dmg * 100.0, a10.ohko_prob * 100.0,
+                a10.boom_ko_prob * 100.0, a10.boom_dmg_frac * 100.0, a10.def_sustain as u8,
+            ));
+        }
+    }
+    out
 }
 
 /// Run zero-rollout CompactBattle DUCT SM-MCTS from `battle` for `side`.
@@ -4984,6 +5248,36 @@ mod tests {
             fg_boom.g_turns[0] < 2.2 && fg_boom.win_prob > 0.70,
             "2v1 with Forretress Explosion on last enemy must score fast win: {:?}",
             fg_boom
+        );
+
+        // (d) Last-enemy Perish Song / Destiny Bond checkmate in 2v1 vs Recover wall.
+        let p1_perish = vec![
+            mk("Gengar", 50, "Leftovers", &["Fire Punch", "Perish Song", "Destiny Bond", "Mean Look"]),
+            mk("Starmie", 50, "Leftovers", &["Surf", "Recover"]),
+        ];
+        let p2_wall = vec![mk("Porygon2", 50, "Leftovers", &["Return", "Ice Beam", "Curse", "Recover"])];
+        let b_perish = start(&dex, &p1_perish, &p2_wall);
+        let (t_p, cb_p) = CompactBattle::from_battle(&b_perish, &dex);
+        let c_p = TempoMatchCache::build(&cb_p, &t_p);
+        let fg_perish = evaluate_fast_golf(&cb_p, &t_p, Some(&c_p));
+        assert!(
+            fg_perish.g_turns[0] < 3.6 && fg_perish.win_prob > 0.58,
+            "2v1 with faster Gengar Perish/DBond vs lone wall must favor 2-mon side: {:?}",
+            fg_perish
+        );
+
+        // (e) Duration-weighted Reflect: 1-turn remaining Reflect must not look as strong as 5-turn Reflect.
+        let mut cb_r5 = cb_l;
+        cb_r5.sides[1].reflect_turns = 5;
+        let mut cb_r1 = cb_l;
+        cb_r1.sides[1].reflect_turns = 1;
+        let fg_r5 = evaluate_fast_golf(&cb_r5, &t_l, Some(&c_l));
+        let fg_r1 = evaluate_fast_golf(&cb_r1, &t_l, Some(&c_l));
+        assert!(
+            fg_r1.turn_advantage > fg_r5.turn_advantage + 0.05,
+            "Expiring 1-turn Reflect must give less foe defense than fresh 5-turn Reflect: r1={:+.2}t r5={:+.2}t",
+            fg_r1.turn_advantage,
+            fg_r5.turn_advantage
         );
     }
 }

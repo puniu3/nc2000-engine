@@ -944,12 +944,16 @@ fn run_calib(dex: &Dex, args: &[String]) {
     };
     let games: usize = flag("--games").map_or(240, |v| v.parse().unwrap());
     let threads: usize = flag("--threads").map_or(10, |v| v.parse().unwrap());
-    let arm = flag("--arm").unwrap_or_else(|| "mcts-eval:300".to_string());
+    let seed: u64 = flag("--seed").map_or(2026112377, |v| v.parse().unwrap());
+    let arm_a = flag("--arm-a")
+        .or_else(|| flag("--arm"))
+        .unwrap_or_else(|| "mcts-eval:300".to_string());
+    let arm_b = flag("--arm-b").unwrap_or_else(|| arm_a.clone());
     let root = repo_root();
     let pool = load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
     let teams: Vec<Vec<PokemonSet>> = pool.teams.iter().map(|t| t.sets.clone()).collect();
 
-    let mut sched = nc2000_bot::SplitMix64::new(2026112377);
+    let mut sched = nc2000_bot::SplitMix64::new(seed);
     let mut jobs = Vec::with_capacity(games);
     for g in 0..games {
         let t0 = sched.below(teams.len());
@@ -960,6 +964,7 @@ fn run_calib(dex: &Dex, args: &[String]) {
 
     #[derive(Clone)]
     struct Sample {
+        game: usize,
         bucket: usize, // 0:1v1, 1:2v1, 2:2v2, 3:3v1/3v2, 4:3v3
         y: f64,
         g0: f64,
@@ -976,7 +981,8 @@ fn run_calib(dex: &Dex, args: &[String]) {
         for chunk in jobs.chunks(chunk_size.max(1)) {
             let dex_ref = dex;
             let teams_ref = &teams;
-            let arm_ref = &arm;
+            let arm_a_ref = &arm_a;
+            let arm_b_ref = &arm_b;
             handles.push(s.spawn(move || {
                 let w = nc2000_bot::EvalWeights::default();
                 let mut local = Vec::new();
@@ -985,8 +991,8 @@ fn run_calib(dex: &Dex, args: &[String]) {
                     let tp0 = b.legal_choices(dex_ref, 0)[0];
                     let tp1 = b.legal_choices(dex_ref, 1)[0];
                     b.apply_choices(dex_ref, [Some(tp0), Some(tp1)]).unwrap();
-                    let mut a0 = build_agent(arm_ref, 30000 + g as u64, true);
-                    let mut a1 = build_agent(arm_ref, 40000 + g as u64, true);
+                    let mut a0 = build_agent(arm_a_ref, 30000 + g as u64, true);
+                    let mut a1 = build_agent(arm_b_ref, 40000 + g as u64, true);
                     let mut game_rows: Vec<(usize, f64, f64, f64, f64, f64, String)> = Vec::new();
                     for _ in 0..160 {
                         if b.outcome().is_some() {
@@ -1005,27 +1011,31 @@ fn run_calib(dex: &Dex, args: &[String]) {
                         let fg = nc2000_bot::tempo::evaluate_fast_golf(&cb, &table, None);
                         let ev = nc2000_bot::eval::compact_eval01(&cb, &table, &w);
                         let bs = nc2000_bot::eval::compact_eval_leaf_blindspot(&cb, &table, &w);
-                        let desc = if (fg.win_prob - bs).abs() > 0.25 {
+                        let desc = if (fg.win_prob - bs).abs() > 0.18 || (bucket == 1 && (fg.win_prob - bs).abs() > 0.10) {
                             let fmt_s = |side: usize| -> String {
                                 let mut ps = Vec::new();
                                 for slot in 0..3 {
                                     if let Some(&ri) = b.sides[side].party.get(slot) {
                                         let p = &b.sides[side].roster[ri as usize];
                                         if p.hp > 0 {
-                                            let act = if cb.sides[side].active_idx as usize == slot { "*" } else { "" };
+                                            let act = if cb.sides[side].active_idx as usize == slot && cb.sides[side].request != 2 { "*" } else { "" };
                                             let st = if p.status != Status::None { format!(" {:?}", p.status) } else { String::new() };
                                             let bst: String = p.boosts.iter().enumerate()
                                                 .filter(|(_, &v)| v != 0)
                                                 .map(|(i, v)| format!("b{i}:{v:+}"))
                                                 .collect::<Vec<_>>().join(",");
                                             let bs_s = if bst.is_empty() { String::new() } else { format!(" [{bst}]") };
-                                            ps.push(format!("{act}{}({}/{}{st}{bs_s})", p.name.as_str(), p.hp, p.maxhp));
+                                            let mvs: String = p.move_slots.iter()
+                                                .map(|m| format!("{}:{}", dex_ref.move_static(m.id).name, m.pp))
+                                                .collect::<Vec<_>>().join("/");
+                                            ps.push(format!("#{slot}:{act}{}({}/{}{st}{bs_s} [{mvs}])", p.name.as_str(), p.hp, p.maxhp));
                                         }
                                     }
                                 }
                                 ps.join(", ")
                             };
-                            format!("g={g} t={} {}v{} | P1: {} || P2: {}", b.turn, n0, n1, fmt_s(0), fmt_s(1))
+                            let dbg = nc2000_bot::tempo::format_fast_golf_debug(&cb, &table);
+                            format!("g={g} t={} {}v{} req=({},{})\n  P1: {}\n  P2: {}\n{}", b.turn, n0, n1, cb.sides[0].request, cb.sides[1].request, fmt_s(0), fmt_s(1), dbg)
                         } else {
                             String::new()
                         };
@@ -1045,7 +1055,7 @@ fn run_calib(dex: &Dex, args: &[String]) {
                         _ => continue,
                     };
                     for (bucket, g0, g1, fg_p, ev_p, bs_p, desc) in game_rows {
-                        local.push(Sample { bucket, y, g0, g1, fg_p, ev_p, bs_p, desc });
+                        local.push(Sample { game: g, bucket, y, g0, g1, fg_p, ev_p, bs_p, desc });
                     }
                 }
                 local
@@ -1164,21 +1174,39 @@ fn run_calib(dex: &Dex, args: &[String]) {
     let ev_all: Vec<(f64, f64)> = all_samples.iter().map(|s| (s.ev_p, s.y)).collect();
     let bs_all: Vec<(f64, f64)> = all_samples.iter().map(|s| (s.bs_p, s.y)).collect();
 
-    // Dump top 20 worst FastGolf blunders (where FastGolf erred badly while blindspot was right)
-    let mut worst: Vec<&Sample> = all_samples.iter().filter(|s| !s.desc.is_empty()).collect();
-    worst.sort_by(|a, b| {
-        let ea = (a.fg_p - a.y).abs() - (a.bs_p - a.y).abs();
-        let eb = (b.fg_p - b.y).abs() - (b.bs_p - b.y).abs();
-        eb.total_cmp(&ea)
-    });
-    let mut dump = String::new();
-    for s in worst.iter().take(25) {
-        dump.push_str(&format!(
-            "y={:.0} | fg={:.1}% G=({:.2}t,{:.2}t) | bs={:.1}% | ev={:.1}% | {}\n",
-            s.y, s.fg_p * 100.0, s.g0, s.g1, s.bs_p * 100.0, s.ev_p * 100.0, s.desc
-        ));
-    }
-    std::fs::write("/tmp/v2_calib_worst.txt", &dump).unwrap();
+    // Dump deduplicated (1 worst state per game) blunders for 2v1 and 2v2 separately!
+    let dump_bucket = |b_idx: usize, path: &str, limit: usize| {
+        let mut by_game: std::collections::BTreeMap<usize, &Sample> = std::collections::BTreeMap::new();
+        for s in all_samples.iter().filter(|s| s.bucket == b_idx && !s.desc.is_empty()) {
+            let err = (s.fg_p - s.y).abs() - (s.bs_p - s.y).abs();
+            by_game
+                .entry(s.game)
+                .and_modify(|cur| {
+                    let cur_err = (cur.fg_p - cur.y).abs() - (cur.bs_p - cur.y).abs();
+                    if err > cur_err {
+                        *cur = s;
+                    }
+                })
+                .or_insert(s);
+        }
+        let mut worst: Vec<&Sample> = by_game.into_values().collect();
+        worst.sort_by(|a, b| {
+            let ea = (a.fg_p - a.y).abs() - (a.bs_p - a.y).abs();
+            let eb = (b.fg_p - b.y).abs() - (b.bs_p - b.y).abs();
+            eb.total_cmp(&ea)
+        });
+        let mut dump = String::new();
+        for s in worst.iter().take(limit) {
+            dump.push_str(&format!(
+                "=== y={:.0} | fg={:.1}% G=({:.2}t,{:.2}t) | bs={:.1}% | ev={:.1}% | {}\n",
+                s.y, s.fg_p * 100.0, s.g0, s.g1, s.bs_p * 100.0, s.ev_p * 100.0, s.desc
+            ));
+        }
+        std::fs::write(path, &dump).unwrap();
+    };
+    dump_bucket(1, "/tmp/v2_calib_2v1.txt", 25);
+    dump_bucket(2, "/tmp/v2_calib_2v2.txt", 20);
+    dump_bucket(3, "/tmp/v2_calib_3v2.txt", 15);
 
     println!(
         "{}",
