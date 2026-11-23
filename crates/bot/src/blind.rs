@@ -877,12 +877,19 @@ fn root_type_key(battle: &Battle) -> u64 {
     battle.type_key()
 }
 
+struct CompactWorld {
+    table: nc2000_engine::compact::MatchTable,
+    cb: nc2000_engine::compact::CompactBattle,
+    root: usize,
+}
+
 struct CachedDetRoot {
     sim: Battle,
     root: usize,
     type_index: usize,
     cache: Arc<nc2000_engine::battle::BattleSearchCache>,
     world_id: u64,
+    compact: Option<Arc<CompactWorld>>,
 }
 
 struct SampledWorld {
@@ -892,6 +899,19 @@ struct SampledWorld {
     pick: Option<usize>,
     cache: Arc<nc2000_engine::battle::BattleSearchCache>,
     world_id: u64,
+    compact: Option<Arc<CompactWorld>>,
+}
+
+enum NextWorld {
+    Compact {
+        cw: Arc<CompactWorld>,
+        cb: nc2000_engine::compact::CompactBattle,
+        world_idx: usize,
+    },
+    Battle {
+        sim: Box<Battle>,
+        cache: Arc<nc2000_engine::battle::BattleSearchCache>,
+    },
 }
 
 /// Persistent, incrementally steppable blind search over ONE decision point
@@ -949,6 +969,12 @@ pub struct BlindSearch {
     /// Per-determinization roots + full-state interior nodes.
     nodes: Vec<Node>,
     table: FxHashMap<u64, usize>,
+    /// Native 256-byte `CompactBattle` tree nodes and transposition table (in-battle fast path).
+    compact_nodes: Vec<crate::smmcts::CompactNode>,
+    compact_table: FxHashMap<u64, usize>,
+    /// Maps each battle root index in `nodes` that also backs a compact root in `compact_nodes`
+    /// so `node_count()` never double-counts shared roots.
+    compact_root_battle_nodes: FxHashMap<usize, usize>,
     done: u32,
     depth_sum: u64,
     max_depth: u32,
@@ -1166,6 +1192,9 @@ impl BlindSearch {
             my_acts,
             nodes: Vec::new(),
             table: FxHashMap::default(),
+            compact_nodes: Vec::new(),
+            compact_table: FxHashMap::default(),
+            compact_root_battle_nodes: FxHashMap::default(),
             done: 0,
             depth_sum: 0,
             max_depth: 0,
@@ -1258,6 +1287,66 @@ impl BlindSearch {
         (post_qc_seed, qc, party_key, party_len)
     }
 
+    #[inline]
+    fn has_bide_hidden_timer(&self) -> bool {
+        self.hidden_timers
+            .iter()
+            .any(|s| matches!(s.kind, crate::player_state::HiddenTimerKind::Bide { .. }))
+    }
+
+    fn try_build_compact_world(
+        &mut self,
+        dex: &Dex,
+        sim: &Battle,
+        battle_root: usize,
+        cache: &nc2000_engine::battle::BattleSearchCache,
+    ) -> Option<Arc<CompactWorld>> {
+        if self.is_preview()
+            || self.has_bide_hidden_timer()
+            || !nc2000_engine::compact::is_compact_tree_supported(sim, dex)
+        {
+            return None;
+        }
+        let (table, mut cb) =
+            nc2000_engine::compact::CompactBattle::from_battle_with_roster_cache(
+                sim,
+                dex,
+                Some(&cache.roster_compact),
+            );
+        if self.base_idle {
+            cb.quick_claw_roll = 0;
+        }
+        let c_node = crate::smmcts::CompactNode::at(&cb, &table);
+        if !c_node.matches_battle_acts(
+            &cb,
+            &table,
+            dex,
+            &self.nodes[battle_root].acts,
+            [&sim.sides[0].party, &sim.sides[1].party],
+        ) {
+            return None;
+        }
+        let omit_qc = self.base_idle || !cb.quick_claw_observable(&table);
+        let c_key = cb.search_key(&table, self.cfg.hp_buckets, omit_qc);
+        let c_root = match self.compact_table.get(&c_key) {
+            Some(&i) => i,
+            None => {
+                let idx = self.compact_nodes.len();
+                self.compact_nodes.push(c_node);
+                self.compact_table.insert(c_key, idx);
+                idx
+            }
+        };
+        self.compact_root_battle_nodes
+            .entry(battle_root)
+            .or_insert(c_root);
+        Some(Arc::new(CompactWorld {
+            table,
+            cb,
+            root: c_root,
+        }))
+    }
+
     fn determinize_and_resolve_root(
         &mut self,
         dex: &Dex,
@@ -1270,6 +1359,7 @@ impl BlindSearch {
         usize,
         Arc<nc2000_engine::battle::BattleSearchCache>,
         u64,
+        Option<Arc<CompactWorld>>,
     ) {
         let obs_rev = obs.revision();
         if self.det_cache_obs_rev != obs_rev {
@@ -1299,6 +1389,7 @@ impl BlindSearch {
                     let world_id = cached.world_id;
                     let root = cached.root;
                     let type_index = cached.type_index;
+                    let compact = cached.compact.clone();
                     let mut same_sets = [false, false];
                     same_sets[self.side] = self.scratch_world_id != 0;
                     same_sets[1 - self.side] = self.scratch_world_id == world_id;
@@ -1313,7 +1404,7 @@ impl BlindSearch {
                     sim.reseed(post_qc_seed);
                     sim.quick_claw_rolls = if zero_preview_qc { [false, false] } else { qc };
                     std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
-                    return (sim, root, type_index, cache, world_id);
+                    return (sim, root, type_index, cache, world_id, compact);
                 }
 
                 let mut sim = match self.scratch.take() {
@@ -1352,6 +1443,7 @@ impl BlindSearch {
                 self.scratch_world_id = world_id;
                 std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
                 let (root, type_index) = self.resolve_root(dex, &mut sim, Some(&cache));
+                let compact = self.try_build_compact_world(dex, &sim, root, &cache);
                 if can_cache {
                     std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
                     let cached_sim = (*sim).clone();
@@ -1364,13 +1456,14 @@ impl BlindSearch {
                             type_index,
                             cache: cache.clone(),
                             world_id,
+                            compact: compact.clone(),
                         },
                     );
                 }
                 if unseen_idle {
                     sim.quick_claw_rolls = sampled_qc;
                 }
-                return (sim, root, type_index, cache, world_id);
+                return (sim, root, type_index, cache, world_id, compact);
             }
         }
 
@@ -1407,10 +1500,11 @@ impl BlindSearch {
         self.scratch_world_id = world_id;
         std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
         let (root, type_index) = self.resolve_root(dex, &mut sim, Some(&cache));
+        let compact = self.try_build_compact_world(dex, &sim, root, &cache);
         if unseen_idle {
             sim.quick_claw_rolls = sampled_qc;
         }
-        (sim, root, type_index, cache, world_id)
+        (sim, root, type_index, cache, world_id, compact)
     }
 
     fn next_determinized_world(
@@ -1418,13 +1512,7 @@ impl BlindSearch {
         dex: &Dex,
         belief: &Belief,
         obs: &Observer,
-    ) -> (
-        Box<Battle>,
-        usize,
-        usize,
-        Option<usize>,
-        Arc<nc2000_engine::battle::BattleSearchCache>,
-    ) {
+    ) -> (NextWorld, usize, usize, Option<usize>) {
         let obs_rev = obs.revision();
         if self.det_cache_obs_rev != obs_rev {
             self.det_cache.clear();
@@ -1452,12 +1540,12 @@ impl BlindSearch {
                 self.planned_team_picks[self.world_pool.len()]
             };
             let pick = plan_pick.pool_index();
-            let (mut sim, root, type_index, cache, world_id) =
+            let (mut sim, root, type_index, cache, world_id, compact) =
                 self.determinize_and_resolve_root(dex, belief, obs, plan_pick);
             if !self.is_preview() {
                 std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
                 let cached_sim = (*sim).clone();
-                std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
+                let w_idx = self.world_pool.len();
                 self.world_pool.push(SampledWorld {
                     sim: cached_sim,
                     root,
@@ -1465,7 +1553,36 @@ impl BlindSearch {
                     pick,
                     cache: cache.clone(),
                     world_id,
+                    compact: compact.clone(),
                 });
+                if let Some(cw) = compact {
+                    if !self.has_bide_hidden_timer() {
+                        let mut cb = cw.cb;
+                        cb.prng_seed = sim.prng.lcg.seed();
+                        cb.quick_claw_roll = (sim.quick_claw_rolls[0] as u8)
+                            | ((sim.quick_claw_rolls[1] as u8) << 1);
+                        if !self.hidden_timers.is_empty() {
+                            resample_compact_hidden_timers(
+                                &mut cb,
+                                &cw.table,
+                                &self.hidden_timers,
+                                &mut self.timer_rng,
+                            );
+                        }
+                        self.scratch = Some(sim);
+                        return (
+                            NextWorld::Compact {
+                                cw,
+                                cb,
+                                world_idx: w_idx,
+                            },
+                            root,
+                            type_index,
+                            pick,
+                        );
+                    }
+                }
+                std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
                 if !self.hidden_timers.is_empty() {
                     resample_hidden_timers(
                         dex,
@@ -1475,9 +1592,39 @@ impl BlindSearch {
                     );
                 }
             }
-            return (sim, root, type_index, pick, cache);
+            return (NextWorld::Battle { sim, cache }, root, type_index, pick);
         }
         let w_idx = (self.done as usize) % self.world_pool.len();
+        if !self.has_bide_hidden_timer() {
+            if let Some(cw) = self.world_pool[w_idx].compact.clone() {
+                let w = &self.world_pool[w_idx];
+                let (root, type_index, pick) = (w.root, w.type_index, w.pick);
+                let mut cb = cw.cb;
+                let seed = self.rng.next();
+                let mut prng = nc2000_engine::prng::Prng::new(seed);
+                let qc = Battle::roll_quick_claw_with(cw.table.ruleset, &mut prng);
+                cb.prng_seed = prng.seed();
+                cb.quick_claw_roll = (qc[0] as u8) | ((qc[1] as u8) << 1);
+                if !self.hidden_timers.is_empty() {
+                    resample_compact_hidden_timers(
+                        &mut cb,
+                        &cw.table,
+                        &self.hidden_timers,
+                        &mut self.timer_rng,
+                    );
+                }
+                return (
+                    NextWorld::Compact {
+                        cw,
+                        cb,
+                        world_idx: w_idx,
+                    },
+                    root,
+                    type_index,
+                    pick,
+                );
+            }
+        }
         let (root, type_index, pick, cache, world_id) = {
             let w = &self.world_pool[w_idx];
             (w.root, w.type_index, w.pick, w.cache.clone(), w.world_id)
@@ -1502,7 +1649,182 @@ impl BlindSearch {
         if !self.hidden_timers.is_empty() {
             resample_hidden_timers(dex, &mut sim, &self.hidden_timers, &mut self.timer_rng);
         }
-        (sim, root, type_index, pick, cache)
+        (NextWorld::Battle { sim, cache }, root, type_index, pick)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn run_world_iteration(
+        &mut self,
+        dex: &Dex,
+        world: NextWorld,
+        root: usize,
+        force: [Option<usize>; 2],
+        joint: &mut [usize; 2],
+        leaf: Option<&mut dyn FnMut(&mut Battle, &mut SplitMix64, bool) -> f64>,
+        trace: Option<&mut dyn FnMut(crate::smmcts::SearchTrace<'_>)>,
+        root_child_value: Option<&mut dyn FnMut(&Battle) -> Option<f64>>,
+    ) -> f64 {
+        let mut iter_depth = 0u32;
+        let r = match world {
+            NextWorld::Compact {
+                cw,
+                mut cb,
+                world_idx,
+            } => {
+                if leaf.is_none() && trace.is_none() && root_child_value.is_none() {
+                    crate::smmcts::run_compact_iteration(
+                        &self.cfg,
+                        &mut self.rng,
+                        &mut self.compact_nodes,
+                        &mut self.compact_table,
+                        &mut cb,
+                        &cw.table,
+                        self.turn_cap,
+                        cw.root,
+                        force,
+                        joint,
+                        &mut iter_depth,
+                    )
+                } else {
+                    let w_id = self.world_pool[world_idx].world_id;
+                    let mut same_sets = [false, false];
+                    same_sets[self.side] = self.scratch_world_id != 0;
+                    same_sets[1 - self.side] = self.scratch_world_id == w_id;
+                    let mut battle_buf = match self.scratch.take() {
+                        Some(mut sim) => {
+                            sim.reset_search_sim(&self.world_pool[world_idx].sim, same_sets);
+                            sim
+                        }
+                        None => Box::new(self.world_pool[world_idx].sim.clone()),
+                    };
+                    self.scratch_world_id = w_id;
+                    std::mem::swap(&mut battle_buf.listener_pool, &mut self.base.listener_pool);
+                    let v = crate::smmcts::run_compact_iteration_with_hooks(
+                        &self.cfg,
+                        &mut self.rng,
+                        &mut self.compact_nodes,
+                        &mut self.compact_table,
+                        &mut cb,
+                        &cw.table,
+                        dex,
+                        &mut battle_buf,
+                        self.turn_cap,
+                        cw.root,
+                        force,
+                        joint,
+                        &mut iter_depth,
+                        leaf,
+                        trace,
+                        root_child_value,
+                    );
+                    std::mem::swap(&mut battle_buf.listener_pool, &mut self.base.listener_pool);
+                    // `sync_to_battle` mutates picked bench mons without advancing `previously_switched_in`;
+                    // invalidate `scratch_world_id` so subsequent `reset_search_sim` resets all mons cleanly.
+                    self.scratch_world_id = 0;
+                    self.scratch = Some(battle_buf);
+                    v
+                }
+            }
+            NextWorld::Battle { mut sim, cache } => {
+                if trace.is_some() && self.base_idle && sim.any_quick_claw_roll() {
+                    sim.update_all_speeds(dex);
+                }
+                let v = if let Some(evaluate) = root_child_value {
+                    crate::smmcts::run_iteration_with_root_child_value_cached(
+                        &self.cfg,
+                        &mut self.rng,
+                        &mut self.nodes,
+                        &mut self.table,
+                        &mut sim,
+                        dex,
+                        self.turn_cap,
+                        root,
+                        force,
+                        joint,
+                        &mut iter_depth,
+                        &mut |sim, rng, rollout| {
+                            crate::smmcts::default_leaf_cached(
+                                &self.cfg,
+                                sim,
+                                dex,
+                                self.turn_cap,
+                                rng,
+                                rollout,
+                                Some(&cache),
+                            )
+                        },
+                        trace,
+                        Some(evaluate),
+                        Some(&cache),
+                    )
+                } else if let Some(leaf) = leaf {
+                    crate::smmcts::run_iteration_with_leaf_cached(
+                        &self.cfg,
+                        &mut self.rng,
+                        &mut self.nodes,
+                        &mut self.table,
+                        &mut sim,
+                        dex,
+                        self.turn_cap,
+                        root,
+                        force,
+                        joint,
+                        &mut iter_depth,
+                        leaf,
+                        trace,
+                        Some(&cache),
+                    )
+                } else if let Some(trace) = trace {
+                    crate::smmcts::run_iteration_with_leaf_cached(
+                        &self.cfg,
+                        &mut self.rng,
+                        &mut self.nodes,
+                        &mut self.table,
+                        &mut sim,
+                        dex,
+                        self.turn_cap,
+                        root,
+                        force,
+                        joint,
+                        &mut iter_depth,
+                        &mut |sim, rng, rollout| {
+                            crate::smmcts::default_leaf_cached(
+                                &self.cfg,
+                                sim,
+                                dex,
+                                self.turn_cap,
+                                rng,
+                                rollout,
+                                Some(&cache),
+                            )
+                        },
+                        Some(trace),
+                        Some(&cache),
+                    )
+                } else {
+                    run_iteration_cached(
+                        &self.cfg,
+                        &mut self.rng,
+                        &mut self.nodes,
+                        &mut self.table,
+                        &mut sim,
+                        dex,
+                        self.turn_cap,
+                        root,
+                        force,
+                        joint,
+                        &mut iter_depth,
+                        Some(&cache),
+                    )
+                };
+                std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
+                self.scratch = Some(sim);
+                v
+            }
+        };
+        self.depth_sum += u64::from(iter_depth);
+        self.max_depth = self.max_depth.max(iter_depth);
+        r
     }
 
     fn step_one_impl(
@@ -1518,11 +1840,7 @@ impl BlindSearch {
                 self.bayesian_row_q = Some(eq.action_values);
             }
         }
-        let (mut sim, root, type_index, pick, cache) =
-            self.next_determinized_world(dex, belief, obs);
-        if trace.is_some() && self.base_idle && sim.any_quick_claw_roll() {
-            sim.update_all_speeds(dex);
-        }
+        let (world, root, type_index, pick) = self.next_determinized_world(dex, belief, obs);
         // Forced switches have `replies == 0` and an empty `cells` matrix, so
         // world-floor coverage does not apply and UCB1 must drive allocation.
         let min_floor_pick = if !self.is_preview()
@@ -1582,82 +1900,7 @@ impl BlindSearch {
             );
         }
         let mut joint = [0usize; 2];
-        let mut iter_depth = 0u32;
-        let r = if let Some(leaf) = leaf {
-            let v = crate::smmcts::run_iteration_with_leaf_cached(
-                &self.cfg,
-                &mut self.rng,
-                &mut self.nodes,
-                &mut self.table,
-                &mut sim,
-                dex,
-                self.turn_cap,
-                root,
-                force,
-                &mut joint,
-                &mut iter_depth,
-                leaf,
-                None,
-                Some(&cache),
-            );
-            self.depth_sum += u64::from(iter_depth);
-            self.max_depth = self.max_depth.max(iter_depth);
-            v
-        } else if let Some(trace) = trace {
-            let v = crate::smmcts::run_iteration_with_leaf_cached(
-                &self.cfg,
-                &mut self.rng,
-                &mut self.nodes,
-                &mut self.table,
-                &mut sim,
-                dex,
-                self.turn_cap,
-                root,
-                force,
-                &mut joint,
-                &mut iter_depth,
-                &mut |sim, rng, rollout| {
-                    if rollout {
-                        crate::mcts::playout_value_cached(
-                            sim,
-                            dex,
-                            &self.cfg.playout,
-                            self.turn_cap,
-                            rng,
-                            self.cfg.rollout_rules(),
-                            Some(&cache.roster_compact),
-                        )
-                    } else {
-                        crate::smmcts::leaf_eval_cached(&self.cfg, sim, dex, Some(&cache))
-                    }
-                },
-                Some(trace),
-                Some(&cache),
-            );
-            self.depth_sum += u64::from(iter_depth);
-            self.max_depth = self.max_depth.max(iter_depth);
-            v
-        } else {
-            let v = run_iteration_cached(
-                &self.cfg,
-                &mut self.rng,
-                &mut self.nodes,
-                &mut self.table,
-                &mut sim,
-                dex,
-                self.turn_cap,
-                root,
-                force,
-                &mut joint,
-                &mut iter_depth,
-                Some(&cache),
-            );
-            self.depth_sum += u64::from(iter_depth);
-            self.max_depth = self.max_depth.max(iter_depth);
-            v
-        };
-        std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
-        self.scratch = Some(sim);
+        let r = self.run_world_iteration(dex, world, root, force, &mut joint, leaf, trace, None);
         self.record_joint(root, type_index, my_pick, joint, r);
         self.my_w[my_pick] += if self.side == 0 { r } else { 1.0 - r };
         self.done += 1;
@@ -1798,11 +2041,7 @@ impl BlindSearch {
                 self.bayesian_row_q = Some(eq.action_values);
             }
         }
-        let (mut sim, root, type_index, pick, cache) =
-            self.next_determinized_world(dex, belief, obs);
-        if trace.is_some() && self.base_idle && sim.any_quick_claw_roll() {
-            sim.update_all_speeds(dex);
-        }
+        let (world, root, type_index, pick) = self.next_determinized_world(dex, belief, obs);
         let (my_pick, forced_reply, override_reply) = match forcing {
             ForcedRoot::Action { own, reply } => {
                 self.my_n[own] += 1;
@@ -1866,89 +2105,16 @@ impl BlindSearch {
             force[1 - self.side] = forced_reply;
         }
         let mut joint = [0usize; 2];
-        let mut iter_depth = 0u32;
-        let r = if let Some(evaluate) = root_child_value {
-            let v = crate::smmcts::run_iteration_with_root_child_value_cached(
-                &self.cfg,
-                &mut self.rng,
-                &mut self.nodes,
-                &mut self.table,
-                &mut sim,
-                dex,
-                self.turn_cap,
-                root,
-                force,
-                &mut joint,
-                &mut iter_depth,
-                &mut |sim, rng, rollout| {
-                    crate::smmcts::default_leaf_cached(
-                        &self.cfg,
-                        sim,
-                        dex,
-                        self.turn_cap,
-                        rng,
-                        rollout,
-                        Some(&cache),
-                    )
-                },
-                trace,
-                Some(evaluate),
-                Some(&cache),
-            );
-            self.depth_sum += u64::from(iter_depth);
-            self.max_depth = self.max_depth.max(iter_depth);
-            v
-        } else if let Some(trace) = trace {
-            let v = crate::smmcts::run_iteration_with_leaf_cached(
-                &self.cfg,
-                &mut self.rng,
-                &mut self.nodes,
-                &mut self.table,
-                &mut sim,
-                dex,
-                self.turn_cap,
-                root,
-                force,
-                &mut joint,
-                &mut iter_depth,
-                &mut |sim, rng, rollout| {
-                    crate::smmcts::default_leaf_cached(
-                        &self.cfg,
-                        sim,
-                        dex,
-                        self.turn_cap,
-                        rng,
-                        rollout,
-                        Some(&cache),
-                    )
-                },
-                Some(trace),
-                Some(&cache),
-            );
-            self.depth_sum += u64::from(iter_depth);
-            self.max_depth = self.max_depth.max(iter_depth);
-            v
-        } else {
-            let v = run_iteration_cached(
-                &self.cfg,
-                &mut self.rng,
-                &mut self.nodes,
-                &mut self.table,
-                &mut sim,
-                dex,
-                self.turn_cap,
-                root,
-                force,
-                &mut joint,
-                &mut iter_depth,
-                Some(&cache),
-            );
-            self.depth_sum += u64::from(iter_depth);
-            self.max_depth = self.max_depth.max(iter_depth);
-            v
-        };
-        std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
-        self.scratch = Some(sim);
+        let r = self.run_world_iteration(
+            dex,
+            world,
+            root,
+            force,
+            &mut joint,
+            None,
+            trace,
+            root_child_value,
+        );
         self.record_joint(root, type_index, my_pick, joint, r);
         self.my_w[my_pick] += if self.side == 0 { r } else { 1.0 - r };
         self.done += 1;
@@ -2203,9 +2369,144 @@ impl BlindSearch {
             if session.expired(clock()) {
                 break;
             }
-            self.step_with_leaf(dex, belief, obs, 1, &mut |sim, rng, rollout| {
-                session.leaf(dex, &cfg, turn_cap, sim, rng, rollout, clock)
-            });
+            if !session.can_probe() {
+                self.step_one_impl(dex, belief, obs, None, None);
+                continue;
+            }
+            if !self.is_preview() && self.done >= 512 && self.done % 256 == 0 {
+                if let Some(eq) = self.bayesian_equilibrium() {
+                    self.bayesian_row_q = Some(eq.action_values);
+                }
+            }
+            let (world, root, type_index, pick) = self.next_determinized_world(dex, belief, obs);
+            let min_floor_pick = if !self.is_preview()
+                && self.done >= 512
+                && self.root_types[type_index].replies > 0
+            {
+                let has_safe = self.has_undominated_allowed();
+                let elig: nc2000_engine::smallvec::SmallVec<[usize; 8]> = (0..self.my_acts.len())
+                    .filter(|&i| self.is_eligible(i, has_safe))
+                    .collect();
+                let n_elig = (elig.len().max(1)) as u32;
+                let stats = &self.root_types[type_index];
+                let replies = stats.replies;
+                let world_floor = (stats.samples / (3 * n_elig)).min(48);
+                elig.into_iter()
+                    .filter_map(|i| {
+                        let row_start = i * replies;
+                        let w_n: u32 = stats
+                            .cells
+                            .get(row_start..row_start + replies)
+                            .map_or(0, |row| row.iter().map(|&(n, _)| n).sum());
+                        (w_n < world_floor).then_some((w_n, self.my_n[i], i))
+                    })
+                    .min_by_key(|&(w_n, g_n, _)| (w_n, g_n))
+                    .map(|(_, _, i)| i)
+            } else {
+                None
+            };
+            let my_pick = if let Some(action) = min_floor_pick {
+                self.my_n[action] += 1;
+                action
+            } else {
+                let has_safe = self.has_undominated_allowed();
+                let my_mask = &self.my_mask;
+                let my_dominated = &self.my_dominated;
+                let prune_dominated = self.prune_dominated;
+                select_global_with_prior(
+                    &self.cfg,
+                    &mut self.rng,
+                    &mut self.my_n,
+                    &self.my_w,
+                    |a| {
+                        my_mask.as_ref().map_or(true, |m| m[a])
+                            && (!prune_dominated || !has_safe || !my_dominated[a])
+                    },
+                    self.bayesian_row_q.as_deref(),
+                )
+            };
+            let mut force = [None, None];
+            force[self.side] = Some(my_pick);
+            if self.opponent_preview_prior && self.is_preview() {
+                force[1 - self.side] = belief.sample_preview_prior(
+                    pick,
+                    obs,
+                    &self.nodes[root].acts[1 - self.side],
+                    &mut self.rng,
+                );
+            }
+            let mut joint = [0usize; 2];
+            let r = match world {
+                NextWorld::Compact {
+                    cw,
+                    mut cb,
+                    world_idx,
+                } => {
+                    let mut iter_depth = 0u32;
+                    let w_sim = &self.world_pool[world_idx].sim;
+                    let scratch = &mut self.scratch;
+                    let scratch_world_id = &mut self.scratch_world_id;
+                    let base_lp = &mut self.base.listener_pool;
+                    let v = crate::smmcts::run_compact_iteration_with_endgame(
+                        &self.cfg,
+                        &mut self.rng,
+                        &mut self.compact_nodes,
+                        &mut self.compact_table,
+                        &mut cb,
+                        &cw.table,
+                        self.turn_cap,
+                        cw.root,
+                        force,
+                        &mut joint,
+                        &mut iter_depth,
+                        session,
+                        clock,
+                        &mut |cb_leaf, mt_leaf, rng_leaf, rollout, sess, clk| {
+                            let mut battle_buf = match scratch.take() {
+                                Some(mut sim) => {
+                                    sim.reset_search_sim(w_sim, [false, false]);
+                                    sim
+                                }
+                                None => Box::new(w_sim.clone()),
+                            };
+                            std::mem::swap(&mut battle_buf.listener_pool, base_lp);
+                            cb_leaf.sync_to_battle(mt_leaf, dex, &mut battle_buf);
+                            let mut clk_ref = || clk();
+                            let lv = sess.leaf(
+                                dex,
+                                &cfg,
+                                turn_cap,
+                                &mut battle_buf,
+                                rng_leaf,
+                                rollout,
+                                &mut clk_ref,
+                            );
+                            std::mem::swap(&mut battle_buf.listener_pool, base_lp);
+                            *scratch_world_id = 0;
+                            *scratch = Some(battle_buf);
+                            lv
+                        },
+                    );
+                    self.depth_sum += u64::from(iter_depth);
+                    self.max_depth = self.max_depth.max(iter_depth);
+                    v
+                }
+                battle_world => self.run_world_iteration(
+                    dex,
+                    battle_world,
+                    root,
+                    force,
+                    &mut joint,
+                    Some(&mut |sim, rng, rollout| {
+                        session.leaf(dex, &cfg, turn_cap, sim, rng, rollout, clock)
+                    }),
+                    None,
+                    None,
+                ),
+            };
+            self.record_joint(root, type_index, my_pick, joint, r);
+            self.my_w[my_pick] += if self.side == 0 { r } else { 1.0 - r };
+            self.done += 1;
         }
         self.done
     }
@@ -2226,7 +2527,7 @@ impl BlindSearch {
 
     /// Distinct states in the determinized tree (see `SkuctSearch::node_count`).
     pub fn node_count(&self) -> usize {
-        self.nodes.len()
+        self.nodes.len() + self.compact_nodes.len() - self.compact_root_battle_nodes.len()
     }
 
     pub fn mean_depth(&self) -> f64 {
@@ -3209,6 +3510,76 @@ pub fn resample_hidden_timers(
                     if let Some(vs) = sim.poke_mut(id).volatile_mut(cid) {
                         vs.duration = Some(draw_remaining_uniform(rng, 2, 3, upkeeps));
                     }
+                }
+            }
+        }
+    }
+}
+
+fn resample_compact_hidden_timers(
+    cb: &mut nc2000_engine::compact::CompactBattle,
+    table: &nc2000_engine::compact::MatchTable,
+    specs: &[crate::player_state::HiddenTimerSpec],
+    rng: &mut SplitMix64,
+) {
+    use crate::player_state::HiddenTimerKind;
+    use nc2000_engine::compact::{ext_timer_idx, ext_vol_bit, timer_idx, vol_bit};
+    let is_castle = table.ruleset.is_castle();
+    for &spec in specs {
+        let side = spec.side as usize;
+        if side >= 2 {
+            continue;
+        }
+        let Some(p_idx) = (0..3usize).find(|&i| cb.sides[side].party_roster[i] == spec.slot) else {
+            continue;
+        };
+        if (cb.sides[side].alive_mask & (1u8 << p_idx)) == 0 {
+            continue;
+        }
+        let mon = &mut cb.mons[side * 3 + p_idx];
+        if mon.hp() <= 0 {
+            continue;
+        }
+        match spec.kind {
+            HiddenTimerKind::Sleep { slept } => {
+                if mon.status_raw() == Status::Slp as u8 {
+                    let max_d = if is_castle { 5 } else { 4 };
+                    let rem = draw_remaining_uniform(rng, 2, max_d, slept) as u8;
+                    mon.set_status(Status::Slp as u8, rem);
+                }
+            }
+            HiddenTimerKind::Confusion { ticks } => {
+                if (mon.vol_flags & vol_bit::CONFUSION) != 0 {
+                    mon.timers[timer_idx::CONFUSION] = draw_remaining_uniform(rng, 2, 5, ticks) as u8;
+                }
+            }
+            HiddenTimerKind::Encore { upkeeps } => {
+                if (mon.vol_flags & vol_bit::ENCORE) != 0 {
+                    mon.timers[timer_idx::ENCORE] = draw_remaining_uniform(rng, 3, 6, upkeeps) as u8;
+                }
+            }
+            HiddenTimerKind::Disable {
+                upkeeps,
+                acted_on_start,
+            } => {
+                if (mon.vol_flags & vol_bit::DISABLE) != 0 {
+                    let bonus = u8::from(acted_on_start);
+                    let (min_b, max_b) = if is_castle { (1, 7) } else { (2, 5) };
+                    mon.timers[timer_idx::DISABLE] =
+                        draw_remaining_uniform(rng, min_b + bonus, max_b + bonus, upkeeps) as u8;
+                }
+            }
+            HiddenTimerKind::PartiallyTrapped { upkeeps } => {
+                if mon.partially_trapped() {
+                    mon.ext_timers[ext_timer_idx::PARTIAL_TRAP_TURNS] =
+                        draw_remaining_uniform(rng, 3, 5, upkeeps) as u8;
+                }
+            }
+            HiddenTimerKind::Bide { .. } => {}
+            HiddenTimerKind::LockedMove { upkeeps } => {
+                if (mon.ext_flags & ext_vol_bit::LOCKED_OUTRAGE) != 0 {
+                    mon.ext_timers[ext_timer_idx::LOCKED_TURNS] =
+                        draw_remaining_uniform(rng, 2, 3, upkeeps) as u8;
                 }
             }
         }

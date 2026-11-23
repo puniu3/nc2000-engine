@@ -75,7 +75,8 @@ pub fn compact_castle_judge_value(cb: &CompactBattle, table: &MatchTable) -> f64
     let mut hp_sum = [0.0f64; 2];
     for side in 0..2 {
         let mask = cb.sides[side].alive_mask;
-        for slot in 0..3usize {
+        for &slot_u8 in &cb.party_order(side) {
+            let slot = slot_u8 as usize;
             if (mask & (1 << slot)) == 0 {
                 continue;
             }
@@ -398,7 +399,8 @@ fn castle_turn_limit_proximity_diff(cb: &CompactBattle, table: &MatchTable) -> f
     let mut hp_sum = [0.0f64; 2];
     for side in 0..2 {
         let mask = cb.sides[side].alive_mask;
-        for slot in 0..3usize {
+        for &slot_u8 in &cb.party_order(side) {
+            let slot = slot_u8 as usize;
             if (mask & (1 << slot)) == 0 {
                 continue;
             }
@@ -1237,7 +1239,8 @@ fn compact_side_score(
     let mut spikes_exposed = 0u32;
     let flying_mask = 1u32 << (table.flying_type & 31);
 
-    for slot in 0..3usize {
+    for &slot_u8 in &cb.party_order(s) {
+        let slot = slot_u8 as usize;
         if (side_st.alive_mask & (1 << slot)) == 0 {
             continue;
         }

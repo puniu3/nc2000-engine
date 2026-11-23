@@ -291,7 +291,7 @@ fn value_to_outcome(v: f64) -> Outcome {
 }
 
 #[inline]
-fn value_to_outcome_code(v: f64) -> u8 {
+pub(crate) fn value_to_outcome_code(v: f64) -> u8 {
     if v >= 0.999_999 {
         1
     } else if v <= 0.000_001 {
@@ -521,14 +521,15 @@ pub fn apply_compact_actions_with_bp_target(
 }
 
 #[inline]
-fn compact_hp_eval(
+pub(crate) fn compact_hp_eval(
     cb: &nc2000_engine::compact::CompactBattle,
     table: &nc2000_engine::compact::MatchTable,
 ) -> f64 {
     let f = |s: usize| {
         let mut sum = 0.0;
         let mut cnt = 0.0;
-        for slot in 0..3usize {
+        for &slot_u8 in &cb.party_order(s) {
+            let slot = slot_u8 as usize;
             let idx = s * 3 + slot;
             let maxhp = table.mons[idx].maxhp;
             if maxhp > 0 {

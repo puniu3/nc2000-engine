@@ -153,6 +153,24 @@ impl EndgameSession {
             })
     }
 
+    #[inline]
+    pub fn can_probe(&self) -> bool {
+        self.cfg.solver_fraction > 0.0
+            && self.stats.solver_ms < self.budget_ms * self.cfg.solver_fraction
+    }
+
+    #[inline]
+    pub fn eligible_compact(
+        &self,
+        cb: &nc2000_engine::compact::CompactBattle,
+        table: &nc2000_engine::compact::MatchTable,
+    ) -> bool {
+        cb.turn > 0
+            && crate::eval::compact_turn_limit_outcome(cb, table).is_none()
+            && (1..=self.cfg.max_alive).contains(&(cb.sides[0].alive_mask.count_ones() as usize))
+            && (1..=self.cfg.max_alive).contains(&(cb.sides[1].alive_mask.count_ones() as usize))
+    }
+
     fn bound_config(&self, work_budget: usize) -> BoundConfig {
         BoundConfig {
             work_budget,
@@ -286,8 +304,12 @@ impl EndgameSession {
         clock: &mut impl FnMut() -> f64,
     ) -> f64 {
         let start = clock();
+        // Scale per-leaf wall cap with the decision's solver budget (5%, clamped to 2..30 ms)
+        // so slow CPUs or cold WASM JIT after CompactBattle mid-game turns still complete a
+        // 2-slice leaf closure instead of aborting after 1 slice when plenty of budget remains.
+        let leaf_cap_ms = (self.budget_ms * self.cfg.solver_fraction * 0.05).clamp(2.0, 30.0);
         for _ in 0..4 {
-            if clock() - start >= 2.0 {
+            if clock() - start >= leaf_cap_ms {
                 break;
             }
             let before = self.stats.runs;

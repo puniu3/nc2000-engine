@@ -352,6 +352,39 @@ fn probe_does_not_mutate_battle_or_consume_search_randomness() {
 }
 
 #[test]
+fn slow_clock_leaf_still_closes_within_scaled_budget_cap() {
+    let dex = super::common::dex();
+    let mut root = position(&dex, &["Splash", "Seismic Toss"], &["Splash"], [1, 1]);
+    root.turn = 999;
+    let id1 = root.active_id(1).unwrap();
+    root.poke_mut(id1).hp = root.poke(id1).maxhp;
+    let obs = Observer::new(&root, 0);
+    let pool = MetaPool {
+        teams: vec![MetaTeam {
+            id: "foe".into(),
+            sets: vec![mon(&["Splash"])],
+            weight: None,
+        }],
+    };
+    let belief = Belief::new(&dex, &pool, &obs);
+    let mut blind_session = session();
+    let mut blind = BlindSearch::new(&root, &dex, RmConfig::default(), 0, 73);
+    // Simulate a slow CI/cold-WASM clock (~5 ms per probe) under a 10s decision budget.
+    let mut now = 0.0;
+    let mut slow_clock = || {
+        now += 2.5;
+        now
+    };
+    blind.step_with_endgame(&dex, &belief, &obs, 16, &mut blind_session, &mut slow_clock);
+    assert!(
+        blind_session.stats.value_replacements > 0,
+        "expected leaf value replacement on slow clock: {:?}",
+        blind_session.stats
+    );
+    assert!(blind_session.stats.max_value_error <= 0.01);
+}
+
+#[test]
 fn portable_solver_cache_requires_matching_dex_and_exact_state() {
     use nc2000_bot::bounds::{BoundConfig, BoundSolver};
     let dex = super::common::dex();

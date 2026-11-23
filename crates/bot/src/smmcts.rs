@@ -248,6 +248,125 @@ impl Node {
     }
 }
 
+/// Zero-allocation tree node for the 256-byte `CompactBattle` search core.
+/// Action codes use `CompactBattle` encoding (`0..4` = move slot, `4..7` = party slot switch);
+/// waiting sides (`request == 0`) have `len[s] == 0`.
+#[derive(Clone, Copy)]
+pub(crate) struct CompactNode {
+    pub(crate) acts: [[u8; 6]; 2],
+    pub(crate) len: [u8; 2],
+    pub(crate) n: [[u32; 6]; 2],
+    pub(crate) w: [[f64; 6]; 2],
+}
+
+impl CompactNode {
+    #[inline]
+    pub(crate) fn at(
+        cb: &nc2000_engine::compact::CompactBattle,
+        table: &nc2000_engine::compact::MatchTable,
+    ) -> Self {
+        let mut acts = [[0u8; 6]; 2];
+        let mut len = [0u8; 2];
+        if cb.outcome == 0 {
+            for s in 0..2usize {
+                if cb.sides[s].request == 0 {
+                    continue;
+                }
+                let mut buf = [0u8; 7];
+                let k = cb.legal_actions(table, s, &mut buf).min(6);
+                acts[s][..k].copy_from_slice(&buf[..k]);
+                len[s] = k as u8;
+            }
+        }
+        Self {
+            acts,
+            len,
+            n: [[0; 6]; 2],
+            w: [[0.0; 6]; 2],
+        }
+    }
+
+    /// Verify 1:1 root action order and choice identity against `Battle::legal_choices_into`.
+    pub(crate) fn matches_battle_acts(
+        &self,
+        cb: &nc2000_engine::compact::CompactBattle,
+        table: &nc2000_engine::compact::MatchTable,
+        dex: &Dex,
+        battle_acts: &[nc2000_engine::smallvec::SmallVec<[SearchChoice; 6]>; 2],
+        battle_party: [&[u8]; 2],
+    ) -> bool {
+        for s in 0..2usize {
+            let k = self.len[s] as usize;
+            if k != battle_acts[s].len() {
+                return false;
+            }
+            for i in 0..k {
+                if cb.decode_action(table, dex, s, self.acts[s][i], battle_party[s])
+                    != Some(battle_acts[s][i])
+                {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
+    /// Identical empirical-Bayes minimax backup contraction to [`Node::backed_up_value`].
+    #[inline]
+    pub(crate) fn backed_up_value(&self, raw_val0: f64) -> f64 {
+        let k0 = self.len[0] as usize;
+        let k1 = self.len[1] as usize;
+        let n0: u32 = self.n[0][..k0].iter().sum();
+        let n1: u32 = self.n[1][..k1].iter().sum();
+        let n = n0.max(n1);
+        if n < 2 {
+            return raw_val0;
+        }
+        let r_bar0 = if n0 > 0 {
+            self.w[0][..k0].iter().sum::<f64>() / f64::from(n0)
+        } else if n1 > 0 {
+            1.0 - (self.w[1][..k1].iter().sum::<f64>() / f64::from(n1))
+        } else {
+            return raw_val0;
+        };
+        const TAU: f64 = 1.5;
+        let gain0 = if k0 > 1 && n0 >= 2 {
+            let mut mu0 = r_bar0;
+            for a in 0..k0 {
+                let na = self.n[0][a];
+                if na > 0 {
+                    let q = (self.w[0][a] + TAU * r_bar0) / (f64::from(na) + TAU);
+                    if q > mu0 {
+                        mu0 = q;
+                    }
+                }
+            }
+            (mu0 - r_bar0).max(0.0)
+        } else {
+            0.0
+        };
+        let blunder1 = if k1 > 1 && n1 >= 2 {
+            let r_bar1 = self.w[1][..k1].iter().sum::<f64>() / f64::from(n1);
+            let mut mu1 = r_bar1;
+            for b in 0..k1 {
+                let nb = self.n[1][b];
+                if nb > 0 {
+                    let q = (self.w[1][b] + TAU * r_bar1) / (f64::from(nb) + TAU);
+                    if q > mu1 {
+                        mu1 = q;
+                    }
+                }
+            }
+            (mu1 - r_bar1).max(0.0)
+        } else {
+            0.0
+        };
+        let v_star = (r_bar0 + gain0 - blunder1).clamp(0.000_002, 0.999_998);
+        let lambda = 0.85 * (f64::from(n) / (f64::from(n) + 6.0));
+        ((1.0 - lambda) * raw_val0 + lambda * v_star).clamp(0.000_002, 0.999_998)
+    }
+}
+
 pub fn collapse_sleep_choices(b: &Battle, dex: &Dex, side: usize, choices: &mut Vec<SearchChoice>) {
     let Some(id) = b.active_id(side) else { return };
     let p = b.poke(id);
@@ -804,6 +923,524 @@ pub(crate) fn default_leaf(
 }
 
 #[inline]
+pub(crate) fn compact_leaf_eval(
+    cfg: &RmConfig,
+    cb: &nc2000_engine::compact::CompactBattle,
+    table: &nc2000_engine::compact::MatchTable,
+) -> f64 {
+    match &cfg.playout {
+        Playout::Uniform => crate::mcts::compact_hp_eval(cb, table),
+        Playout::Heavy { weights, .. } => {
+            if cfg.settlement.uses_relay_bellman() {
+                crate::eval::compact_eval_leaf_blindspot(cb, table, weights)
+            } else if cfg.settlement.uses_blindspot_leaf() {
+                crate::eval::compact_eval_leaf_blindspot_norelay(cb, table, weights)
+            } else {
+                crate::eval::compact_eval_leaf(cb, table, weights)
+            }
+        }
+    }
+}
+
+#[inline]
+pub(crate) fn compact_default_leaf(
+    cfg: &RmConfig,
+    cb: &mut nc2000_engine::compact::CompactBattle,
+    table: &nc2000_engine::compact::MatchTable,
+    turn_cap: u16,
+    rng: &mut SplitMix64,
+    rollout: bool,
+) -> f64 {
+    if !rollout {
+        crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_compact(cb));
+        return compact_leaf_eval(cfg, cb, table);
+    }
+    if let Some(v) = crate::eval::compact_turn_limit_outcome(cb, table) {
+        let mut info = crate::mcts::SimEndInfo::from_compact(cb);
+        if info.outcome == 0 {
+            info.outcome = crate::mcts::value_to_outcome_code(v);
+        }
+        crate::mcts::set_last_sim_end(info);
+        return v;
+    }
+    if cb.turn > turn_cap || matches!(cfg.playout, Playout::Heavy { turns: 0, .. }) {
+        crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_compact(cb));
+        return compact_leaf_eval(cfg, cb, table);
+    }
+    let effective_cap = table
+        .ruleset
+        .turn_limit()
+        .map_or(turn_cap, |lim| turn_cap.min(lim));
+    let cutoff = match cfg.playout {
+        Playout::Uniform => effective_cap,
+        Playout::Heavy { turns, .. } => {
+            effective_cap.min(cb.turn.saturating_add(turns.saturating_sub(1)))
+        }
+    };
+    let rules = cfg.rollout_rules();
+    if !rules.baton_pass {
+        cb.sides[0].side_flags |= nc2000_engine::compact::SIDE0_DISABLE_BP_FIX;
+    }
+    crate::mcts::compact_playout_value(cb, table, &cfg.playout, cutoff, rng, rules)
+}
+
+#[inline]
+fn back_up_compact_path(
+    nodes: &mut [CompactNode],
+    path: &[(usize, [Option<usize>; 2])],
+    root: usize,
+    reward0: f64,
+) -> f64 {
+    let mut value = reward0;
+    let mut root_value = reward0;
+    for &(index, actions) in path.iter().rev() {
+        let node = &mut nodes[index];
+        if let Some(action) = actions[0] {
+            node.w[0][action] += value;
+        }
+        if let Some(action) = actions[1] {
+            node.w[1][action] += 1.0 - value;
+        }
+        if index == root {
+            root_value = value;
+        } else if value > 0.000_001 && value < 0.999_999 {
+            value = node.backed_up_value(value);
+        }
+    }
+    root_value
+}
+
+/// Hot-path iteration natively over 256-byte `CompactBattle` with zero `Battle` allocation,
+/// zero `from_battle` conversion, and identical UCB1 / HP-bucketed TT / empirical-Bayes backup.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_compact_iteration(
+    cfg: &RmConfig,
+    rng: &mut SplitMix64,
+    nodes: &mut Vec<CompactNode>,
+    table: &mut FxHashMap<u64, usize>,
+    cb: &mut nc2000_engine::compact::CompactBattle,
+    match_table: &nc2000_engine::compact::MatchTable,
+    turn_cap: u16,
+    start: usize,
+    force_root: [Option<usize>; 2],
+    root_joint: &mut [usize; 2],
+    depth_out: &mut u32,
+) -> f64 {
+    let mut path = nc2000_engine::smallvec::SmallVec::<[(usize, [Option<usize>; 2]); 16]>::new();
+    let mut node_idx = start;
+
+    let reward0 = loop {
+        let at_root = node_idx == start;
+        let mut joint = [7u8, 7u8];
+        let mut selected = [None; 2];
+        for s in 0..2usize {
+            let k = nodes[node_idx].len[s] as usize;
+            if k == 0 {
+                continue;
+            }
+            let ai = if k == 1 {
+                0
+            } else {
+                let ai = match force_root[s] {
+                    Some(f) if at_root => {
+                        nodes[node_idx].n[s][f] += 1;
+                        f
+                    }
+                    _ => {
+                        let node = &mut nodes[node_idx];
+                        select_ucb_counts(cfg.c, rng, &mut node.n[s][..k], &node.w[s][..k])
+                    }
+                };
+                selected[s] = Some(ai);
+                ai
+            };
+            joint[s] = nodes[node_idx].acts[s][ai];
+            if at_root {
+                root_joint[s] = ai;
+            }
+        }
+        if selected[0].is_some() || selected[1].is_some() {
+            path.push((node_idx, selected));
+        }
+        if joint == [7, 7] {
+            break compact_default_leaf(cfg, cb, match_table, turn_cap, rng, false);
+        }
+        cb.apply_actions(match_table, joint);
+        if cb.outcome != 0 {
+            crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_compact(cb));
+            break match cb.outcome {
+                1 => 1.0,
+                2 => 0.0,
+                _ => 0.5,
+            };
+        }
+        if let Some(v) = crate::eval::compact_turn_limit_outcome(cb, match_table) {
+            let mut info = crate::mcts::SimEndInfo::from_compact(cb);
+            if info.outcome == 0 {
+                info.outcome = crate::mcts::value_to_outcome_code(v);
+            }
+            crate::mcts::set_last_sim_end(info);
+            break v;
+        }
+        if cb.turn > turn_cap {
+            break compact_default_leaf(cfg, cb, match_table, turn_cap, rng, false);
+        }
+        let omit_qc = !cb.quick_claw_observable(match_table);
+        let key = cb.search_key(match_table, cfg.hp_buckets, omit_qc);
+        match table.get(&key) {
+            Some(&child) => {
+                *depth_out += 1;
+                node_idx = child;
+            }
+            None => {
+                let child = nodes.len();
+                nodes.push(CompactNode::at(cb, match_table));
+                table.insert(key, child);
+                break compact_default_leaf(cfg, cb, match_table, turn_cap, rng, true);
+            }
+        }
+    };
+
+    back_up_compact_path(nodes, &path, start, reward0)
+}
+
+/// Fast-path `CompactBattle` iteration with lazy `EndgameSession` leaf interception:
+/// runs with ZERO `Battle` reset / `sync_to_battle` / `from_battle` overhead whenever the
+/// reached leaf is ineligible for `EndgameSession` (e.g. 3v3 / 3v2 turns in WASM production),
+/// materializing `Battle` via `sync_to_battle` ONLY on eligible small-endgame leaves (`<= 2v2`).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_compact_iteration_with_endgame(
+    cfg: &RmConfig,
+    rng: &mut SplitMix64,
+    nodes: &mut Vec<CompactNode>,
+    table: &mut FxHashMap<u64, usize>,
+    cb: &mut nc2000_engine::compact::CompactBattle,
+    match_table: &nc2000_engine::compact::MatchTable,
+    turn_cap: u16,
+    start: usize,
+    force_root: [Option<usize>; 2],
+    root_joint: &mut [usize; 2],
+    depth_out: &mut u32,
+    session: &mut crate::endgame::EndgameSession,
+    clock: &mut impl FnMut() -> f64,
+    materialize: &mut impl FnMut(
+        &nc2000_engine::compact::CompactBattle,
+        &nc2000_engine::compact::MatchTable,
+        &mut SplitMix64,
+        bool,
+        &mut crate::endgame::EndgameSession,
+        &mut dyn FnMut() -> f64,
+    ) -> f64,
+) -> f64 {
+    let mut path = nc2000_engine::smallvec::SmallVec::<[(usize, [Option<usize>; 2]); 16]>::new();
+    let mut node_idx = start;
+
+    let reward0 = loop {
+        let at_root = node_idx == start;
+        let mut joint = [7u8, 7u8];
+        let mut selected = [None; 2];
+        for s in 0..2usize {
+            let k = nodes[node_idx].len[s] as usize;
+            if k == 0 {
+                continue;
+            }
+            let ai = if k == 1 {
+                0
+            } else {
+                let ai = match force_root[s] {
+                    Some(f) if at_root => {
+                        nodes[node_idx].n[s][f] += 1;
+                        f
+                    }
+                    _ => {
+                        let node = &mut nodes[node_idx];
+                        select_ucb_counts(cfg.c, rng, &mut node.n[s][..k], &node.w[s][..k])
+                    }
+                };
+                selected[s] = Some(ai);
+                ai
+            };
+            joint[s] = nodes[node_idx].acts[s][ai];
+            if at_root {
+                root_joint[s] = ai;
+            }
+        }
+        if selected[0].is_some() || selected[1].is_some() {
+            path.push((node_idx, selected));
+        }
+        if joint == [7, 7] {
+            break if session.can_probe() && session.eligible_compact(cb, match_table) {
+                materialize(cb, match_table, rng, false, session, clock)
+            } else {
+                compact_default_leaf(cfg, cb, match_table, turn_cap, rng, false)
+            };
+        }
+        cb.apply_actions(match_table, joint);
+        if cb.outcome != 0 {
+            crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_compact(cb));
+            break match cb.outcome {
+                1 => 1.0,
+                2 => 0.0,
+                _ => 0.5,
+            };
+        }
+        if let Some(v) = crate::eval::compact_turn_limit_outcome(cb, match_table) {
+            let mut info = crate::mcts::SimEndInfo::from_compact(cb);
+            if info.outcome == 0 {
+                info.outcome = crate::mcts::value_to_outcome_code(v);
+            }
+            crate::mcts::set_last_sim_end(info);
+            break v;
+        }
+        if cb.turn > turn_cap {
+            break if session.can_probe() && session.eligible_compact(cb, match_table) {
+                materialize(cb, match_table, rng, false, session, clock)
+            } else {
+                compact_default_leaf(cfg, cb, match_table, turn_cap, rng, false)
+            };
+        }
+        let omit_qc = !cb.quick_claw_observable(match_table);
+        let key = cb.search_key(match_table, cfg.hp_buckets, omit_qc);
+        match table.get(&key) {
+            Some(&child) => {
+                *depth_out += 1;
+                node_idx = child;
+            }
+            None => {
+                let child = nodes.len();
+                nodes.push(CompactNode::at(cb, match_table));
+                table.insert(key, child);
+                break if session.can_probe() && session.eligible_compact(cb, match_table) {
+                    materialize(cb, match_table, rng, true, session, clock)
+                } else {
+                    compact_default_leaf(cfg, cb, match_table, turn_cap, rng, true)
+                };
+            }
+        }
+    };
+
+    back_up_compact_path(nodes, &path, start, reward0)
+}
+
+#[cold]
+#[inline(never)]
+fn emit_compact_choice_trace(
+    cb: &nc2000_engine::compact::CompactBattle,
+    match_table: &nc2000_engine::compact::MatchTable,
+    dex: &Dex,
+    battle_buf: &mut Battle,
+    node_idx: usize,
+    node: &CompactNode,
+    joint: [u8; 2],
+    trace: &mut dyn FnMut(SearchTrace<'_>),
+) {
+    cb.sync_to_battle(match_table, dex, battle_buf);
+    let mut t_acts = [Vec::new(), Vec::new()];
+    let mut t_n = [Vec::new(), Vec::new()];
+    let mut t_w = [Vec::new(), Vec::new()];
+    let mut t_chosen = [None, None];
+    for s in 0..2usize {
+        let k = node.len[s] as usize;
+        t_acts[s].reserve(k);
+        t_n[s].extend_from_slice(&node.n[s][..k]);
+        t_w[s].extend_from_slice(&node.w[s][..k]);
+        for i in 0..k {
+            if let Some(sc) =
+                cb.decode_action(match_table, dex, s, node.acts[s][i], &battle_buf.sides[s].party)
+            {
+                t_acts[s].push(sc);
+            }
+        }
+        if joint[s] < 7 {
+            t_chosen[s] =
+                cb.decode_action(match_table, dex, s, joint[s], &battle_buf.sides[s].party);
+        }
+    }
+    trace(SearchTrace::Choice {
+        battle: battle_buf,
+        node: node_idx,
+        actions: &t_acts,
+        visits: &t_n,
+        rewards: &t_w,
+        chosen: t_chosen,
+    });
+}
+
+/// Callback-enabled `CompactBattle` iteration (`step_observed`, `step_with_leaf`,
+/// `step_with_endgame`, `step_forced_joint_with_root_child_value`). Executes the exact same
+/// `CompactBattle` tree transitions, keys, and RNG stream as [`run_compact_iteration`],
+/// materializing `battle_buf` via `sync_to_battle` only at callback points.
+#[allow(clippy::too_many_arguments)]
+#[cold]
+pub(crate) fn run_compact_iteration_with_hooks(
+    cfg: &RmConfig,
+    rng: &mut SplitMix64,
+    nodes: &mut Vec<CompactNode>,
+    table: &mut FxHashMap<u64, usize>,
+    cb: &mut nc2000_engine::compact::CompactBattle,
+    match_table: &nc2000_engine::compact::MatchTable,
+    dex: &Dex,
+    battle_buf: &mut Battle,
+    turn_cap: u16,
+    start: usize,
+    force_root: [Option<usize>; 2],
+    root_joint: &mut [usize; 2],
+    depth_out: &mut u32,
+    mut leaf: Option<&mut dyn FnMut(&mut Battle, &mut SplitMix64, bool) -> f64>,
+    mut trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
+    mut root_child_value: Option<&mut dyn FnMut(&Battle) -> Option<f64>>,
+) -> f64 {
+    let mut path = nc2000_engine::smallvec::SmallVec::<[(usize, [Option<usize>; 2]); 16]>::new();
+    let mut node_idx = start;
+
+    let reward0 = loop {
+        let at_root = node_idx == start;
+        let mut joint = [7u8, 7u8];
+        let mut selected = [None; 2];
+        for s in 0..2usize {
+            let k = nodes[node_idx].len[s] as usize;
+            if k == 0 {
+                continue;
+            }
+            let ai = if k == 1 {
+                0
+            } else {
+                let ai = match force_root[s] {
+                    Some(f) if at_root => {
+                        nodes[node_idx].n[s][f] += 1;
+                        f
+                    }
+                    _ => {
+                        let node = &mut nodes[node_idx];
+                        select_ucb_counts(cfg.c, rng, &mut node.n[s][..k], &node.w[s][..k])
+                    }
+                };
+                selected[s] = Some(ai);
+                ai
+            };
+            joint[s] = nodes[node_idx].acts[s][ai];
+            if at_root {
+                root_joint[s] = ai;
+            }
+        }
+        if selected[0].is_some() || selected[1].is_some() {
+            path.push((node_idx, selected));
+        }
+        if let Some(tr) = trace.as_deref_mut() {
+            emit_compact_choice_trace(
+                cb,
+                match_table,
+                dex,
+                battle_buf,
+                node_idx,
+                &nodes[node_idx],
+                joint,
+                tr,
+            );
+        }
+        if joint == [7, 7] {
+            if let Some(tr) = trace.as_deref_mut() {
+                cb.sync_to_battle(match_table, dex, battle_buf);
+                tr(SearchTrace::Leaf {
+                    battle: battle_buf,
+                    rng,
+                    rollout: false,
+                });
+            }
+            crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_compact(cb));
+            break if let Some(lf) = leaf.as_deref_mut() {
+                cb.sync_to_battle(match_table, dex, battle_buf);
+                lf(battle_buf, rng, false)
+            } else {
+                compact_default_leaf(cfg, cb, match_table, turn_cap, rng, false)
+            };
+        }
+        cb.apply_actions(match_table, joint);
+        if cb.outcome != 0 {
+            crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_compact(cb));
+            break match cb.outcome {
+                1 => 1.0,
+                2 => 0.0,
+                _ => 0.5,
+            };
+        }
+        if let Some(v) = crate::eval::compact_turn_limit_outcome(cb, match_table) {
+            let mut info = crate::mcts::SimEndInfo::from_compact(cb);
+            if info.outcome == 0 {
+                info.outcome = crate::mcts::value_to_outcome_code(v);
+            }
+            crate::mcts::set_last_sim_end(info);
+            break v;
+        }
+        if at_root {
+            if let Some(eval_child) = root_child_value.as_deref_mut() {
+                cb.sync_to_battle(match_table, dex, battle_buf);
+                if let Some(value) = eval_child(battle_buf) {
+                    assert!((0. ..=1.).contains(&value));
+                    crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_compact(cb));
+                    break value;
+                }
+            }
+        }
+        if cb.turn > turn_cap {
+            if let Some(tr) = trace.as_deref_mut() {
+                cb.sync_to_battle(match_table, dex, battle_buf);
+                tr(SearchTrace::Leaf {
+                    battle: battle_buf,
+                    rng,
+                    rollout: false,
+                });
+            }
+            crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_compact(cb));
+            break if let Some(lf) = leaf.as_deref_mut() {
+                cb.sync_to_battle(match_table, dex, battle_buf);
+                lf(battle_buf, rng, false)
+            } else {
+                compact_default_leaf(cfg, cb, match_table, turn_cap, rng, false)
+            };
+        }
+        let omit_qc = !cb.quick_claw_observable(match_table);
+        let key = cb.search_key(match_table, cfg.hp_buckets, omit_qc);
+        match table.get(&key) {
+            Some(&child) => {
+                *depth_out += 1;
+                node_idx = child;
+            }
+            None => {
+                let child = nodes.len();
+                nodes.push(CompactNode::at(cb, match_table));
+                table.insert(key, child);
+                if let Some(tr) = trace.as_deref_mut() {
+                    cb.sync_to_battle(match_table, dex, battle_buf);
+                    tr(SearchTrace::Leaf {
+                        battle: battle_buf,
+                        rng,
+                        rollout: true,
+                    });
+                }
+                crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_compact(cb));
+                break if let Some(lf) = leaf.as_deref_mut() {
+                    cb.sync_to_battle(match_table, dex, battle_buf);
+                    lf(battle_buf, rng, true)
+                } else {
+                    compact_default_leaf(cfg, cb, match_table, turn_cap, rng, true)
+                };
+            }
+        }
+    };
+
+    let root_reward0 = back_up_compact_path(nodes, &path, start, reward0);
+    if let Some(tr) = trace {
+        cb.sync_to_battle(match_table, dex, battle_buf);
+        tr(SearchTrace::Result {
+            battle: battle_buf,
+            reward0: root_reward0,
+        });
+    }
+    root_reward0
+}
+
+#[inline]
 pub(crate) fn default_leaf_cached(
     cfg: &RmConfig,
     sim: &mut Battle,
@@ -840,6 +1477,13 @@ pub(crate) fn default_leaf_cached(
 /// `RmAgent` drives this same struct internally (tree phase = `step_one`,
 /// probe phase = `step_forced`), so the stepped form can never drift from
 /// the gate-measured agents.
+struct CompactSkuct {
+    match_table: nc2000_engine::compact::MatchTable,
+    root_cb: nc2000_engine::compact::CompactBattle,
+    nodes: Vec<CompactNode>,
+    table: FxHashMap<u64, usize>,
+}
+
 pub struct SkuctSearch {
     cfg: RmConfig,
     rng: SplitMix64,
@@ -849,6 +1493,7 @@ pub struct SkuctSearch {
     turn_cap: u16,
     nodes: Vec<Node>,
     table: FxHashMap<u64, usize>,
+    compact: Option<Box<CompactSkuct>>,
     done: u32,
     depth_sum: u64,
     /// Final-choice exclusions from `dominated_reason`. Only `best()` uses
@@ -887,6 +1532,39 @@ impl SkuctSearch {
         let nodes = vec![Node::at(&mut root, dex)];
         let mut table = FxHashMap::default();
         table.insert(key_of_cached(&cfg, dex, &mut root, Some(&cache)), 0usize);
+        let compact = if nc2000_engine::compact::is_compact_tree_supported(&root, dex) {
+            let (match_table, root_cb) =
+                nc2000_engine::compact::CompactBattle::from_battle_with_roster_cache(
+                    &root,
+                    dex,
+                    Some(&cache.roster_compact),
+                );
+            let root_node = CompactNode::at(&root_cb, &match_table);
+            if root_node.matches_battle_acts(
+                &root_cb,
+                &match_table,
+                dex,
+                &nodes[0].acts,
+                [&root.sides[0].party, &root.sides[1].party],
+            ) {
+                let mut c_table = FxHashMap::default();
+                let omit_qc = !root_cb.quick_claw_observable(&match_table);
+                c_table.insert(
+                    root_cb.search_key(&match_table, cfg.hp_buckets, omit_qc),
+                    0usize,
+                );
+                Some(Box::new(CompactSkuct {
+                    match_table,
+                    root_cb,
+                    nodes: vec![root_node],
+                    table: c_table,
+                }))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
         let root_dominated = [0usize, 1].map(|s| {
             nodes[0].acts[s]
                 .iter()
@@ -904,12 +1582,25 @@ impl SkuctSearch {
             turn_cap,
             nodes,
             table,
+            compact,
             done: 0,
             depth_sum: 0,
             root_dominated,
             endgame,
             joint_n: vec![0u32; cells],
             joint_w0: vec![0.0f64; cells],
+        }
+    }
+
+    #[inline]
+    fn sync_compact_root_stats(&mut self) {
+        if let Some(c) = &self.compact {
+            let cn = &c.nodes[0];
+            for s in 0..2usize {
+                let k = cn.len[s] as usize;
+                self.nodes[0].n[s][..k].copy_from_slice(&cn.n[s][..k]);
+                self.nodes[0].w[s][..k].copy_from_slice(&cn.w[s][..k]);
+            }
         }
     }
 
@@ -974,6 +1665,30 @@ impl SkuctSearch {
     /// rollout/backprop). Returns the side-0 reward and the root joint's
     /// action indices — `RmAgent`'s late-tree stage-game seeding needs both.
     pub fn step_one(&mut self, dex: &Dex) -> (f64, [usize; 2]) {
+        if let Some(c) = self.compact.as_mut() {
+            let mut cb = c.root_cb;
+            cb.prng_seed = self.rng.next();
+            let mut joint = [0usize; 2];
+            let mut depth = 0u32;
+            let r = run_compact_iteration(
+                &self.cfg,
+                &mut self.rng,
+                &mut c.nodes,
+                &mut c.table,
+                &mut cb,
+                &c.match_table,
+                self.turn_cap,
+                0,
+                [None, None],
+                &mut joint,
+                &mut depth,
+            );
+            self.sync_compact_root_stats();
+            self.depth_sum += depth as u64;
+            self.done += 1;
+            self.record_root_endgame(r, joint);
+            return (r, joint);
+        }
         let mut sim = match self.scratch.take() {
             Some(mut sim) => {
                 sim.reset_search_sim(&self.root, [true, true]);
@@ -1010,6 +1725,30 @@ impl SkuctSearch {
     /// One probe iteration with the root joint forced (`RmAgent`'s matrix
     /// estimation phase).
     fn step_forced(&mut self, dex: &Dex, force: [usize; 2]) -> f64 {
+        if let Some(c) = self.compact.as_mut() {
+            let mut cb = c.root_cb;
+            cb.prng_seed = self.rng.next();
+            let mut joint = [0usize; 2];
+            let mut depth = 0u32;
+            let r = run_compact_iteration(
+                &self.cfg,
+                &mut self.rng,
+                &mut c.nodes,
+                &mut c.table,
+                &mut cb,
+                &c.match_table,
+                self.turn_cap,
+                0,
+                [Some(force[0]), Some(force[1])],
+                &mut joint,
+                &mut depth,
+            );
+            self.sync_compact_root_stats();
+            self.depth_sum += depth as u64;
+            self.done += 1;
+            self.record_root_endgame(r, joint);
+            return r;
+        }
         let mut sim = match self.scratch.take() {
             Some(mut sim) => {
                 sim.reset_search_sim(&self.root, [true, true]);
@@ -1052,6 +1791,49 @@ impl SkuctSearch {
         leaf: &mut dyn FnMut(&mut Battle, &mut SplitMix64, bool) -> f64,
     ) -> u32 {
         for _ in 0..n {
+            if self.compact.is_some() {
+                let mut sim = match self.scratch.take() {
+                    Some(mut sim) => {
+                        sim.reset_search_sim(&self.root, [false, false]);
+                        sim
+                    }
+                    None => Box::new(self.root.clone()),
+                };
+                std::mem::swap(&mut sim.listener_pool, &mut self.root.listener_pool);
+                let (r, joint, depth) = {
+                    let c = self.compact.as_mut().unwrap();
+                    let mut cb = c.root_cb;
+                    cb.prng_seed = self.rng.next();
+                    let mut joint = [0usize; 2];
+                    let mut depth = 0u32;
+                    let r = run_compact_iteration_with_hooks(
+                        &self.cfg,
+                        &mut self.rng,
+                        &mut c.nodes,
+                        &mut c.table,
+                        &mut cb,
+                        &c.match_table,
+                        dex,
+                        &mut sim,
+                        self.turn_cap,
+                        0,
+                        [None, None],
+                        &mut joint,
+                        &mut depth,
+                        Some(leaf),
+                        None,
+                        None,
+                    );
+                    (r, joint, depth)
+                };
+                std::mem::swap(&mut sim.listener_pool, &mut self.root.listener_pool);
+                self.scratch = Some(sim);
+                self.sync_compact_root_stats();
+                self.depth_sum += depth as u64;
+                self.done += 1;
+                self.record_root_endgame(r, joint);
+                continue;
+            }
             let mut sim = match self.scratch.take() {
                 Some(mut sim) => {
                     sim.reset_search_sim(&self.root, [true, true]);
@@ -1100,7 +1882,11 @@ impl SkuctSearch {
     /// iteration budget this is the tree-shape number the node key controls:
     /// fewer nodes = more visits per node = deeper effective search.
     pub fn node_count(&self) -> usize {
-        self.nodes.len()
+        if let Some(c) = &self.compact {
+            c.nodes.len()
+        } else {
+            self.nodes.len()
+        }
     }
 
     /// Mean number of transposition hits an iteration walks through before it
@@ -1603,6 +2389,41 @@ mod tests {
             key_of_cached(&cfg, &dex, &mut b0, Some(&cache)),
             key_of_cached(&cfg, &dex, &mut b1, Some(&cache))
         );
+    }
+
+    #[test]
+    fn compact_skuct_activates_on_supported_ps_and_castle_and_falls_back_on_unsupported() {
+        let (dex, b_ps) = setup();
+        let cfg = RmConfig {
+            iterations: 64,
+            ..Default::default()
+        };
+        let mut s_ps_a = SkuctSearch::new(&b_ps, &dex, cfg.clone(), 99);
+        let mut s_ps_b = SkuctSearch::new(&b_ps, &dex, cfg.clone(), 99);
+        assert!(s_ps_a.compact.is_some(), "supported PS position must use CompactSkuct");
+        s_ps_a.step(&dex, 64);
+        s_ps_b.step(&dex, 64);
+        assert_eq!(s_ps_a.visits(0), s_ps_b.visits(0));
+        assert_eq!(s_ps_a.means(0), s_ps_b.means(0));
+        assert!(s_ps_a.node_count() > 1);
+
+        // Castle ruleset supported position also activates CompactSkuct
+        let mut b_castle = b_ps.clone();
+        b_castle.ruleset = nc2000_engine::rules::Ruleset::castle_tournament();
+        let mut s_castle = SkuctSearch::new(&b_castle, &dex, cfg.clone(), 99);
+        assert!(s_castle.compact.is_some(), "supported Castle position must use CompactSkuct");
+        s_castle.step(&dex, 64);
+        assert!(s_castle.node_count() > 1);
+
+        // Unsupported move (Solar Beam) transparently falls back to Battle tree
+        let mut b_unsup = b_ps.clone();
+        let sb_id = dex.moves.id("solarbeam").unwrap();
+        b_unsup.sides[0].roster[0].move_slots[0].id = sb_id;
+        b_unsup.sides[0].roster[0].base_move_slots[0].id = sb_id;
+        let mut s_unsup = SkuctSearch::new(&b_unsup, &dex, cfg.clone(), 99);
+        assert!(s_unsup.compact.is_none(), "Solar Beam must fall back to Battle tree");
+        s_unsup.step(&dex, 32);
+        assert_eq!(s_unsup.visits(0).iter().sum::<u32>(), 32);
     }
 
 }
