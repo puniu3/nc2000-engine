@@ -415,6 +415,17 @@ fn build_agent(spec: &str, seed: u64, fixed_preview: bool) -> Box<dyn Agent> {
             },
             seed,
         ))
+    } else if let Some(rest) = spec.strip_prefix("mcts-v2:") {
+        let iters: u32 = rest.parse().unwrap_or(300);
+        Box::new(TempoMctsAgent::new(
+            TempoMctsConfig {
+                iterations: iters,
+                leaf: TempoLeafMode::FastGolf,
+                fixed_preview,
+                ..TempoMctsConfig::default()
+            },
+            seed,
+        ))
     } else if let Some(rest) = spec.strip_prefix("mcts-eval:") {
         let iters: u32 = rest.parse().unwrap_or(300);
         Box::new(TempoMctsAgent::new(
@@ -696,12 +707,220 @@ fn run_scale_suite(dex: &Dex, args: &[String]) {
     println!("{report}");
 }
 
+fn run_v2_bench(dex: &Dex, args: &[String]) {
+    let flag = |name: &str| -> Option<String> {
+        args.iter()
+            .position(|a| a == name)
+            .and_then(|i| args.get(i + 1).cloned())
+    };
+    let games: usize = flag("--games").map_or(160, |v| v.parse().unwrap());
+    let seed: u64 = flag("--seed").map_or(2026112350, |v| v.parse().unwrap());
+    let threads: usize = flag("--threads").map_or(10, |v| v.parse().unwrap());
+
+    let root = repo_root();
+    let pool = load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
+    let teams: Vec<Vec<PokemonSet>> = pool.teams.iter().map(|t| t.sets.clone()).collect();
+
+    // 1. Equal-iteration & equal-tree comparisons (fixed preview, CRN paired)
+    let equal_iter_pairs = [
+        ("mcts-v2:300", "mcts-full:300"),
+        ("mcts-v2:300", "mcts-eval:300"),
+        ("mcts-v2:300", "mcts-blindspot:300"),
+        ("mcts-v2:900", "mcts-eval:900"),
+        ("mcts-v2:900", "mcts-blindspot:900"),
+        ("mcts-v2:2700", "mcts-eval:2700"),
+        ("mcts-v2:2700", "mcts-blindspot:2700"),
+    ];
+    let mut equal_iter = Vec::new();
+    for (idx, &(a, b)) in equal_iter_pairs.iter().enumerate() {
+        equal_iter.push(run_one_duel(
+            dex,
+            &teams,
+            a,
+            b,
+            games,
+            seed + idx as u64,
+            true,
+            true,
+            threads,
+        ));
+    }
+
+    // 2. Self-scaling of FastGolf v2 up to 8100 iters (fixed preview, CRN)
+    let self_pairs = [
+        ("mcts-v2:900", "mcts-v2:300"),
+        ("mcts-v2:2700", "mcts-v2:900"),
+        ("mcts-v2:8100", "mcts-v2:2700"),
+    ];
+    let mut self_scale = Vec::new();
+    for (idx, &(a, b)) in self_pairs.iter().enumerate() {
+        self_scale.push(run_one_duel(
+            dex,
+            &teams,
+            a,
+            b,
+            games,
+            seed + 100 + idx as u64,
+            true,
+            true,
+            threads,
+        ));
+    }
+
+    // 3. Full-game vs shipped SM-MCTS (`skuct:300`, `skuct:1000`, `skuct:3000`) at equal/comparable wall-clock!
+    let vs_skuct_pairs = [
+        ("mcts-v2:900", "skuct:300"),
+        ("mcts-v2:2700", "skuct:300"),
+        ("mcts-v2:2700", "skuct:1000"),
+        ("mcts-v2:8100", "skuct:1000"),
+        ("mcts-v2:8100", "skuct:3000"),
+    ];
+    let mut vs_skuct = Vec::new();
+    for (idx, &(a, b)) in vs_skuct_pairs.iter().enumerate() {
+        vs_skuct.push(run_one_duel(
+            dex,
+            &teams,
+            a,
+            b,
+            games,
+            seed + 200 + idx as u64,
+            false,
+            false,
+            threads,
+        ));
+    }
+
+    println!(
+        "{}",
+        json!({
+            "equal_iter": equal_iter,
+            "self_scale": self_scale,
+            "vs_skuct": vs_skuct,
+        })
+    );
+}
+
+/// Post-mortem autopsy: play `games` between `mcts-v2:300` and `mcts-eval:300`, log states where
+/// `mcts-v2` lost despite thinking it was ahead (or disagreed sharply with `eval.rs`), to `/tmp/v2_autopsy.txt`.
+fn run_autopsy(dex: &Dex, args: &[String]) {
+    let flag = |name: &str| -> Option<String> {
+        args.iter()
+            .position(|a| a == name)
+            .and_then(|i| args.get(i + 1).cloned())
+    };
+    let games: usize = flag("--games").map_or(30, |v| v.parse().unwrap());
+    let root = repo_root();
+    let pool = load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
+    let teams: Vec<Vec<PokemonSet>> = pool.teams.iter().map(|t| t.sets.clone()).collect();
+
+    let mut sched = nc2000_bot::SplitMix64::new(2026112399);
+    let mut dump = String::new();
+    let mut wins = 0usize;
+    let mut losses = 0usize;
+    let mut blindspot_counts = [0usize; 6]; // [over_boom, over_wall, under_piece, under_status, under_boost, over_switch]
+
+    for g in 0..games {
+        let t0 = sched.below(teams.len());
+        let t1 = sched.below(teams.len());
+        let bseed = sched.battle_seed();
+        let mut b = Battle::from_fixture(dex, &bseed, &teams[t0], &teams[t1]).unwrap();
+        let tp0 = b.legal_choices(dex, 0)[0];
+        let tp1 = b.legal_choices(dex, 1)[0];
+        b.apply_choices(dex, [Some(tp0), Some(tp1)]).unwrap();
+
+        let mut a0 = build_agent("mcts-v2:300", 1000 + g as u64, true);
+        let mut a1 = build_agent("mcts-eval:300", 2000 + g as u64, true);
+        let mut trace = Vec::new();
+
+        for _ in 0..160 {
+            if b.outcome().is_some() {
+                break;
+            }
+            let (table, cb) = nc2000_engine::compact::CompactBattle::from_battle(&b, dex);
+            let fg = nc2000_bot::tempo::evaluate_fast_golf(&cb, &table, None);
+            let ev = nc2000_bot::eval::compact_eval01(&cb, &table, &nc2000_bot::EvalWeights::default());
+            let cs0 = b.legal_choices(dex, 0);
+            let cs1 = b.legal_choices(dex, 1);
+            let p0 = if cs0.is_empty() { None } else { Some(a0.choose(&b, dex, 0, &cs0)) };
+            let p1 = if cs1.is_empty() { None } else { Some(a1.choose(&b, dex, 1, &cs1)) };
+
+            let diff = fg.win_prob - ev;
+            if diff.abs() > 0.25 {
+                let alive0 = cb.sides[0].alive_mask.count_ones();
+                let alive1 = cb.sides[1].alive_mask.count_ones();
+                let desc_side = |s: usize| -> String {
+                    let mut parts = Vec::new();
+                    for slot in 0..3 {
+                        if let Some(&ri) = b.sides[s].party.get(slot) {
+                            let p = &b.sides[s].roster[ri as usize];
+                            if p.hp > 0 {
+                                let act = if cb.sides[s].active_idx as usize == slot { "*" } else { "" };
+                                let st = if p.status != Status::None { format!(" {:?}", p.status) } else { String::new() };
+                                let bst: String = p.boosts.iter().enumerate()
+                                    .filter(|(_, &v)| v != 0)
+                                    .map(|(i, v)| format!("b{i}:{v:+}"))
+                                    .collect::<Vec<_>>().join(",");
+                                let bst_s = if bst.is_empty() { String::new() } else { format!(" [{bst}]") };
+                                parts.push(format!("{act}{}({}/{}{st}{bst_s})", p.name.as_str(), p.hp, p.maxhp));
+                            }
+                        }
+                    }
+                    parts.join(", ")
+                };
+                trace.push((
+                    b.turn,
+                    fg.g_turns[0],
+                    fg.g_turns[1],
+                    fg.win_prob,
+                    ev,
+                    alive0,
+                    alive1,
+                    p0.map(|c| c.to_input(dex)).unwrap_or_default(),
+                    p1.map(|c| c.to_input(dex)).unwrap_or_default(),
+                    desc_side(0),
+                    desc_side(1),
+                ));
+            }
+            if b.apply_choices(dex, [p0, p1]).is_err() {
+                break;
+            }
+        }
+
+        let won = b.outcome() == Some(nc2000_engine::battle::Outcome::P1Win);
+        if won {
+            wins += 1;
+        } else {
+            losses += 1;
+            if !trace.is_empty() {
+                // Find turn with max optimism (fg - ev) in lost games
+                if let Some(worst) = trace.iter().max_by(|a, b| (a.3 - a.4).total_cmp(&(b.3 - b.4))) {
+                    if worst.3 - worst.4 > 0.25 {
+                        if worst.5 < worst.6 { blindspot_counts[2] += 1; }
+                        dump.push_str(&format!(
+                            "=== Game {g} LOST (t={}) | FastGolf G=({:.2}t,{:.2}t) wp={:.1}% vs eval.rs={:.1}% (gap={:+.1}pp) ===\n  P1(v2) [{}, picked {}]: {}\n  P2(ev) [{}, picked {}]: {}\n\n",
+                            worst.0, worst.1, worst.2, worst.3 * 100.0, worst.4 * 100.0, (worst.3 - worst.4) * 100.0,
+                            worst.5, worst.7, worst.9, worst.6, worst.8, worst.10
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    std::fs::write("/tmp/v2_autopsy.txt", &dump).unwrap();
+    println!(
+        "{}",
+        json!({"games": games, "v2_wins": wins, "v2_losses": losses, "autopsy_entries": dump.matches("=== Game").count(), "under_piece_cases": blindspot_counts[2]})
+    );
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let dex = load_dex();
     match args.first().map(String::as_str) {
         Some("duel") => run_duel_bench(&dex, &args[1..]),
         Some("scale") => run_scale_suite(&dex, &args[1..]),
+        Some("v2bench") => run_v2_bench(&dex, &args[1..]),
+        Some("autopsy") => run_autopsy(&dex, &args[1..]),
         _ => run_scenarios(&dex),
     }
 }

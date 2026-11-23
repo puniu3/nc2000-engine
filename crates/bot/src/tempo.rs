@@ -37,6 +37,7 @@ pub enum TempoVariant {
 pub enum TempoLeafMode {
     TempoFull,
     TempoRaw,
+    FastGolf,
     EvalStatic,
     EvalBlindspot,
 }
@@ -1249,6 +1250,10 @@ fn solve_team_plan(
 
     let act_ally = cb.sides[side].active_idx as usize;
     let act_enemy = cb.sides[opp].active_idx as usize;
+    let ally_active_alive =
+        cb.mons[side * 3 + act_ally].hp() > 0 && cb.sides[side].request != 2;
+    let enemy_active_alive =
+        cb.mons[opp * 3 + act_enemy].hp() > 0 && cb.sides[opp].request != 2;
 
     // Precompute each ally's available HP budget (entry HP fraction).
     let mut base_hp_budget = [0.0f64; 3];
@@ -1259,9 +1264,7 @@ fn solve_team_plan(
     }
 
     // Active matchup speed tie-break (`-0.25` if active ally faster than active enemy, `+0.25` if slower).
-    let active_speed_adj = if cb.mons[side * 3 + act_ally].hp() > 0
-        && cb.mons[opp * 3 + act_enemy].hp() > 0
-    {
+    let active_speed_adj = if ally_active_alive && enemy_active_alive {
         match ttk[side][act_ally][act_enemy].speed_cmp {
             1 => -0.25,
             -1 => 0.25,
@@ -1360,14 +1363,15 @@ fn solve_team_plan(
             }
 
             // Switch cost:
-            // - Active enemy handled by benched ally: +1.0 immediate switch turn (+ 1 free hit on entry).
-            // - Bench enemy handled by a NEW distinct ally beyond the first: +0.5 pivot friction.
+            // - Active enemy handled by benched ally (only if `act_ally` is alive; forced switch is free!):
+            //   +1.0 immediate switch turn (+ 1 free hit on entry).
+            // - Subsequent enemy handled by a NEW distinct ally beyond the first: +0.5 pivot friction.
             let mut entry_hit_hp = 0.0f64;
-            if e == act_enemy && a != act_ally {
+            if ally_active_alive && enemy_active_alive && e == act_enemy && a != act_ally {
                 switch_turns += 1.0;
                 // Incoming free hit from active enemy when switching in.
                 entry_hit_hp = pair_ea.net_dmg_frac.max(0.0);
-            } else if e != act_enemy && used_mask != 0 && (used_mask & (1 << a)) == 0 {
+            } else if used_mask != 0 && (used_mask & (1 << a)) == 0 {
                 switch_turns += 0.5;
             }
             used_mask |= 1 << a;
@@ -2150,6 +2154,7 @@ fn fast_tempo_team_preview(
     side: usize,
     choices: &[SearchChoice],
     variant: TempoVariant,
+    use_fast_golf: bool,
 ) -> SearchChoice {
     if choices.len() <= 1 {
         return choices[0];
@@ -2192,7 +2197,14 @@ fn fast_tempo_team_preview(
                 [Some(opp_c), Some(my_c)]
             };
             if sim.apply_choices(dex, picks).is_ok() {
-                sum += evaluate_tempo_variant(&sim, dex, variant).win_prob_for(side);
+                let wp = if use_fast_golf {
+                    let (t, cb) = CompactBattle::from_battle(&sim, dex);
+                    let fg = evaluate_fast_golf(&cb, &t, None);
+                    if side == 0 { fg.win_prob } else { 1.0 - fg.win_prob }
+                } else {
+                    evaluate_tempo_variant(&sim, dex, variant).win_prob_for(side)
+                };
+                sum += wp;
                 cnt += 1;
             }
         }
@@ -2290,7 +2302,7 @@ impl Agent for TempoAgent {
                 let d = SearchChoice::Team([1, 2, 3]);
                 return if choices.contains(&d) { d } else { choices[0] };
             }
-            return fast_tempo_team_preview(battle, dex, side, choices, self.variant);
+            return fast_tempo_team_preview(battle, dex, side, choices, self.variant, false);
         }
 
         // Forced switch (no Move actions): pick the bench switch maximizing TempoEval win prob.
@@ -2546,7 +2558,12 @@ fn compact_duct_key(cb: &CompactBattle, table: &MatchTable, depth: u8) -> u64 {
 }
 
 #[inline]
-fn eval_duct_leaf(cb: &CompactBattle, table: &MatchTable, mode: TempoLeafMode) -> f64 {
+fn eval_duct_leaf(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    mode: TempoLeafMode,
+    cache: Option<&TempoMatchCache>,
+) -> f64 {
     if cb.outcome != 0 {
         return match cb.outcome {
             1 => 1.0,
@@ -2561,11 +2578,976 @@ fn eval_duct_leaf(cb: &CompactBattle, table: &MatchTable, mode: TempoLeafMode) -
         TempoLeafMode::TempoRaw => {
             evaluate_compact_tempo_variant(cb, table, TempoVariant::Raw).win_prob
         }
+        TempoLeafMode::FastGolf => evaluate_fast_golf(cb, table, cache).win_prob,
         TempoLeafMode::EvalStatic => compact_eval01(cb, table, &EvalWeights::default()),
         TempoLeafMode::EvalBlindspot => {
             compact_eval_leaf_blindspot(cb, table, &EvalWeights::default())
         }
     }
+}
+
+// =========================================================================
+// FastGolf (v2): Cached Closed-Form Turn-Economy Evaluator (~1-2 us/leaf)
+// =========================================================================
+
+/// Wall-cap for `FastGolf` in multi-mon states (1v1 uses `FAST_WALL_CAP_1V1`).
+const FAST_WALL_CAP: f64 = 7.5;
+const FAST_WALL_CAP_1V1: f64 = 12.0;
+
+/// Calibrated Brownian race variance per turn for `FastGolf` (prevents 99.8% UCB premature lock-in).
+const FAST_RACE_VAR: f64 = 0.65;
+
+#[derive(Clone, Copy, Default)]
+struct CachedMoveDmg {
+    mean_dmg: f32,
+    min_norm: f32,
+    max_norm: f32,
+    max_crit: f32,
+    p_hit: f32,
+    p_crit: f32,
+    is_usable_dmg: bool,
+    is_selfdestruct: bool,
+    is_recharge: bool,
+}
+
+#[derive(Clone, Copy, Default)]
+struct CachedPairEntry {
+    moves: [CachedMoveDmg; 4],
+    init_att_item: u8,
+    init_def_item: u8,
+    any_phys: bool,
+    any_weather: bool,
+    any_dynamic_bp: bool,
+}
+
+/// Per-search precomputed static damage table across all 18 directed `(att, def)` pairs.
+/// Built once at search root (~2 us) and reused across thousands of MCTS leaves with O(1) lookup.
+#[derive(Clone)]
+pub struct TempoMatchCache {
+    entries: [[[CachedPairEntry; 3]; 3]; 2],
+}
+
+impl TempoMatchCache {
+    pub fn build(base_cb: &CompactBattle, table: &MatchTable) -> Self {
+        let mut clean_cb = *base_cb;
+        clean_cb.weather_turns = 0;
+        for s in 0..2 {
+            clean_cb.sides[s].reflect_turns = 0;
+            clean_cb.sides[s].lightscreen_turns = 0;
+        }
+        for i in 0..6 {
+            clean_cb.mons[i].boosts = [0; 7];
+            clean_cb.mons[i].vol_flags = 0;
+            clean_cb.mons[i].status_packed = 0;
+            clean_cb.mons[i].hp_pool[0] = table.mons[i].maxhp.max(1);
+            clean_cb.mons[i].hp_pool[1] = 0;
+            for m in 0..4 {
+                clean_cb.mons[i].pp[m] = table.mons[i].max_pp[m].max(1);
+            }
+        }
+
+        let mut entries = [[[CachedPairEntry::default(); 3]; 3]; 2];
+        for att_side in 0..2 {
+            let def_side = 1 - att_side;
+            for att_slot in 0..3 {
+                let att_idx = att_side * 3 + att_slot;
+                let n_moves = table.mons[att_idx].num_moves as usize;
+                for def_slot in 0..3 {
+                    let def_idx = def_side * 3 + def_slot;
+                    let mut entry = CachedPairEntry {
+                        moves: [CachedMoveDmg::default(); 4],
+                        init_att_item: base_cb.mons[att_idx].item,
+                        init_def_item: base_cb.mons[def_idx].item,
+                        any_phys: false,
+                        any_weather: false,
+                        any_dynamic_bp: false,
+                    };
+                    for m_i in 0..n_moves {
+                        let ms = &table.move_specs[att_idx][m_i];
+                        if ms.is_status {
+                            continue;
+                        }
+                        if ms.is_physical {
+                            entry.any_phys = true;
+                        }
+                        if ms.is_water || ms.is_fire || ms.is_solarbeam {
+                            entry.any_weather = true;
+                        }
+                        if matches!(
+                            ms.special_kind,
+                            SpecialMoveKind::FlailReversal
+                                | SpecialMoveKind::SuperFang
+                                | SpecialMoveKind::PainSplit
+                                | SpecialMoveKind::Counter
+                                | SpecialMoveKind::MirrorCoat
+                        ) {
+                            entry.any_dynamic_bp = true;
+                        }
+                        let kern = DmgKernel1D::for_move(
+                            &clean_cb,
+                            table,
+                            att_side,
+                            att_slot,
+                            def_side,
+                            def_slot,
+                            m_i,
+                        );
+                        if kern.max_dmg <= 0 {
+                            continue;
+                        }
+                        entry.moves[m_i] = summarize_kernel(&kern, ms);
+                    }
+                    entries[att_side][att_slot][def_slot] = entry;
+                }
+            }
+        }
+        Self { entries }
+    }
+}
+
+#[inline]
+fn summarize_kernel(kern: &DmgKernel1D, ms: &CompactMoveSpec) -> CachedMoveDmg {
+    let mut p_hit = 0.0f32;
+    let mut min_norm = f32::INFINITY;
+    let mut max_norm = 0.0f32;
+    let mut p_crit = 0.0f32;
+    for k in 0..kern.len {
+        let (dmg, prob) = kern.pts[k];
+        if dmg > 0 {
+            p_hit += prob;
+            if prob >= 0.06 {
+                let df = dmg as f32;
+                if df < min_norm {
+                    min_norm = df;
+                }
+                if df > max_norm {
+                    max_norm = df;
+                }
+            } else {
+                p_crit += prob;
+            }
+        }
+    }
+    if !min_norm.is_finite() {
+        min_norm = kern.mean_dmg;
+        max_norm = kern.max_dmg as f32;
+    }
+    let crit_frac = if p_hit > 1e-4 { (p_crit / p_hit).clamp(0.0, 1.0) } else { 0.0 };
+    CachedMoveDmg {
+        mean_dmg: kern.mean_dmg,
+        min_norm,
+        max_norm,
+        max_crit: (kern.max_dmg as f32).max(max_norm),
+        p_hit: p_hit.clamp(0.0, 1.0),
+        p_crit: crit_frac,
+        is_usable_dmg: true,
+        is_selfdestruct: ms.is_selfdestruct,
+        is_recharge: ms.is_recharge,
+    }
+}
+
+#[inline]
+fn fast_ko_prob(m: &CachedMoveDmg, hp: f32) -> f64 {
+    if hp <= 0.0 {
+        return 1.0;
+    }
+    if hp > m.max_crit {
+        return 0.0;
+    }
+    let p_norm = if hp <= m.min_norm {
+        1.0f32
+    } else if hp >= m.max_norm {
+        0.0f32
+    } else {
+        (m.max_norm - hp) / (m.max_norm - m.min_norm).max(1.0)
+    };
+    let min_crit = m.max_crit * 0.85;
+    let p_c = if hp <= min_crit {
+        1.0f32
+    } else {
+        ((m.max_crit - hp) / (m.max_crit - min_crit).max(1.0)).clamp(0.0, 1.0)
+    };
+    (m.p_hit * ((1.0 - m.p_crit) * p_norm + m.p_crit * p_c)).clamp(0.0, 1.0) as f64
+}
+
+#[derive(Clone, Copy, Default)]
+struct FastPair {
+    raw_ttk: f64,
+    eff_ttk: f64,
+    net_dmg: f64,
+    raw_dmg: f64,
+    max_norm_frac: f64,
+    ohko_prob: f64,
+    boom_ko_prob: f64,
+    boom_dmg_frac: f64,
+    heal_duty: f64,
+    def_sustain: bool,
+    speed_cmp: i8,
+    perish_capped: bool,
+    best_pp: u8,
+}
+
+#[inline]
+fn compute_fast_pair(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    att_side: usize,
+    att_slot: usize,
+    def_side: usize,
+    def_slot: usize,
+    cache: Option<&TempoMatchCache>,
+) -> FastPair {
+    let att_idx = att_side * 3 + att_slot;
+    let def_idx = def_side * 3 + def_slot;
+    let att_mon = &cb.mons[att_idx];
+    let def_mon = &cb.mons[def_idx];
+    let att_spec = &table.mons[att_idx];
+    let def_spec = &table.mons[def_idx];
+
+    let s_att = effective_speed(cb, table, att_side, att_slot);
+    let s_def = effective_speed(cb, table, def_side, def_slot);
+    let speed_cmp = if s_att > s_def { 1 } else if s_att < s_def { -1 } else { 0 };
+
+    let start_hp = entry_hp(cb, table, def_side, def_slot);
+    if start_hp <= 0 || att_mon.hp() <= 0 {
+        return FastPair {
+            raw_ttk: if start_hp <= 0 { 0.0 } else { FAST_WALL_CAP },
+            eff_ttk: if start_hp <= 0 { 0.0 } else { FAST_WALL_CAP },
+            speed_cmp,
+            ..FastPair::default()
+        };
+    }
+
+    let maxhp_f = def_spec.maxhp.max(1) as f64;
+    let def_item = table.item_spec(def_mon.item);
+
+    // Passive residuals on defender (positive = heals defender).
+    let mut res_frac = 0.0f64;
+    if def_item.is_leftovers {
+        res_frac += (def_spec.quantum_1_16 as f64) / maxhp_f;
+    }
+    let def_status = def_mon.status_raw();
+    if def_status == Status::Brn as u8 || def_status == Status::Psn as u8 {
+        res_frac -= (def_spec.quantum_1_8 as f64) / maxhp_f;
+    } else if def_status == Status::Tox as u8 {
+        let step = (def_mon.status_counter().max(1) as f64 + 1.5).min(15.0);
+        res_frac -= step * (def_spec.quantum_1_16 as f64) / maxhp_f;
+    }
+    if (def_mon.vol_flags & vol_bit::LEECH_SEED) != 0 {
+        res_frac -= (def_spec.quantum_1_8 as f64) / maxhp_f;
+    }
+    if cb.weather_turns > 0
+        && cb.weather_kind == CompactWeather::Sandstorm
+        && (def_spec.type_mask & table.sandstorm_immune_mask) == 0
+    {
+        res_frac -= (def_spec.quantum_1_8 as f64) / maxhp_f;
+    }
+
+    // Check O(1) cache validity for this pair.
+    let cached_entry = cache.and_then(|c| {
+        let e = &c.entries[att_side][att_slot][def_slot];
+        let valid = att_mon.boosts == [0; 7]
+            && def_mon.boosts == [0; 7]
+            && att_mon.item == e.init_att_item
+            && def_mon.item == e.init_def_item
+            && !(e.any_phys && att_mon.status_raw() == Status::Brn as u8)
+            && !(e.any_weather && cb.weather_turns > 0)
+            && cb.sides[def_side].reflect_turns == 0
+            && cb.sides[def_side].lightscreen_turns == 0
+            && (def_mon.vol_flags & vol_bit::FORESIGHT) == 0
+            && !e.any_dynamic_bp;
+        if valid { Some(e) } else { None }
+    });
+
+    let start_hp_f = start_hp as f32;
+    let mut best_score = 0.0f64;
+    let mut best_mean = 0.0f64;
+    let mut best_max_norm = 0.0f64;
+    let mut best_ohko = 0.0f64;
+    let mut best_pp = 0u8;
+    let mut boom_ko = 0.0f64;
+    let mut boom_dmg = 0.0f64;
+
+    let n_moves = att_spec.num_moves as usize;
+    for m_i in 0..n_moves {
+        if att_mon.pp[m_i] == 0 || att_mon.is_slot_disabled(m_i) {
+            continue;
+        }
+        let ms = &table.move_specs[att_idx][m_i];
+        if ms.is_status {
+            continue;
+        }
+        let md = if let Some(ce) = cached_entry {
+            ce.moves[m_i]
+        } else {
+            let kern = DmgKernel1D::for_move(cb, table, att_side, att_slot, def_side, def_slot, m_i);
+            if kern.max_dmg <= 0 {
+                continue;
+            }
+            summarize_kernel(&kern, ms)
+        };
+        if !md.is_usable_dmg {
+            continue;
+        }
+        let p_ko = fast_ko_prob(&md, start_hp_f);
+        if md.is_selfdestruct {
+            if p_ko > boom_ko {
+                boom_ko = p_ko;
+            }
+            let bd = (md.mean_dmg as f64) / maxhp_f;
+            if bd > boom_dmg {
+                boom_dmg = bd;
+            }
+            continue;
+        }
+        let mut d_mean = (md.mean_dmg as f64) / maxhp_f;
+        if md.is_recharge && p_ko < 0.85 {
+            d_mean *= 0.55;
+        }
+        let score = d_mean + 0.15 * p_ko;
+        if score > best_score {
+            best_score = score;
+            best_mean = d_mean;
+            best_max_norm = (md.max_norm as f64) / maxhp_f;
+            best_ohko = p_ko;
+            best_pp = att_mon.pp[m_i];
+        }
+    }
+
+    // One-time berry effective HP bonus if not OHKO'd.
+    let berry_hp: f64 = if def_item.is_goldberry {
+        30.0
+    } else if def_item.is_berry_juice {
+        20.0
+    } else if def_item.is_berry {
+        10.0
+    } else {
+        0.0
+    };
+    let eff_start_hp = if berry_hp > 0.0 && best_ohko < 0.5 {
+        ((start_hp as f64) + berry_hp).min(maxhp_f)
+    } else {
+        start_hp as f64
+    };
+    let hp_frac = (eff_start_hp / maxhp_f).clamp(0.0, 1.0);
+
+    // Attacker action efficiency & initial turn delays.
+    let att_status = att_mon.status_raw();
+    let mut act_rate = 1.0f64;
+    if att_status == Status::Par as u8 {
+        act_rate *= 0.75;
+    } else if att_status == Status::Frz as u8 {
+        act_rate *= 0.15;
+    }
+    if (att_mon.vol_flags & vol_bit::CONFUSION) != 0 {
+        act_rate *= 0.75;
+    }
+    let mut delay = 0.0f64;
+    if att_status == Status::Slp as u8 {
+        let slp_t = expected_sleep_turns(cb, att_side, att_slot);
+        let st_rate = sleep_talk_attack_rate(cb, table, att_side, att_slot);
+        delay += slp_t * (1.0 - st_rate);
+    }
+    if att_mon.must_recharge() {
+        delay += 1.0;
+    }
+
+    // Substitute shield on active defender.
+    let sub_hp = if cb.sides[def_side].active_idx as usize == def_slot {
+        def_mon.sub_hp()
+    } else {
+        0
+    };
+    let sub_turns = if sub_hp > 0 {
+        let sub_frac = (sub_hp as f64) / maxhp_f;
+        (sub_frac / (best_mean * act_rate).max(0.05)).clamp(1.0, 3.0)
+    } else {
+        0.0
+    };
+    let ohko_prob = if sub_hp > 0 || delay >= 1.0 {
+        0.0
+    } else {
+        (best_ohko * act_rate).clamp(0.0, 1.0)
+    };
+
+    let d_net = best_mean * act_rate - res_frac;
+
+    // Closed-form blended continuous + discrete TTK (preserves KO thresholds AND smooth 1%-HP gradient).
+    let mut raw_ttk = if d_net <= 0.015 {
+        // Walled by Leftovers: still keep small smooth HP gradient so chipping has non-zero derivative.
+        (FAST_WALL_CAP - 1.5 * (1.0 - hp_frac)).max(1.0)
+    } else {
+        let t_cont = hp_frac / d_net;
+        let t_disc = t_cont.ceil();
+        let mut t_hit = 0.55 * t_cont + 0.45 * t_disc;
+        if ohko_prob > 0.01 && t_cont <= 1.35 {
+            t_hit = ohko_prob * 1.0 + (1.0 - ohko_prob) * t_hit.max(1.6);
+        }
+        (t_hit + delay + sub_turns).min(FAST_WALL_CAP)
+    };
+
+    // Perish Song trapped hard countdown override.
+    let mut perish_capped = false;
+    if cb.sides[def_side].active_idx as usize == def_slot {
+        let pt = def_mon.perish_turns();
+        let trapped = def_mon.is_trapped() || cb.sides[def_side].alive_mask.count_ones() <= 1;
+        if pt > 0 && trapped && (pt as f64) < raw_ttk {
+            raw_ttk = pt as f64;
+            perish_capped = true;
+        }
+    }
+
+    FastPair {
+        raw_ttk,
+        eff_ttk: raw_ttk,
+        net_dmg: d_net,
+        raw_dmg: best_mean,
+        max_norm_frac: best_max_norm,
+        ohko_prob,
+        boom_ko_prob: boom_ko,
+        boom_dmg_frac: boom_dmg,
+        heal_duty: 0.0,
+        def_sustain: false,
+        speed_cmp,
+        perish_capped,
+        best_pp,
+    }
+}
+
+#[inline]
+fn apply_fast_recovery(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    att_side: usize,
+    att_slot: usize,
+    def_side: usize,
+    def_slot: usize,
+    a2d: &mut FastPair,
+    d2a: &mut FastPair,
+    is_1v1: bool,
+) {
+    if a2d.perish_capped {
+        return;
+    }
+    let def_idx = def_side * 3 + def_slot;
+    let def_mon = &cb.mons[def_idx];
+    let def_spec = &table.mons[def_idx];
+    let def_hp = entry_hp(cb, table, def_side, def_slot);
+    if def_hp <= 0 || cb.mons[att_side * 3 + att_slot].hp() <= 0 {
+        return;
+    }
+    if def_mon.status_raw() == Status::Frz as u8 {
+        return;
+    }
+    let def_asleep = def_mon.status_raw() == Status::Slp as u8
+        && expected_sleep_turns(cb, def_side, def_slot) >= 1.0;
+    if def_asleep {
+        return;
+    }
+
+    let maxhp_f = def_spec.maxhp.max(1) as f64;
+    let hp_frac = (def_hp as f64) / maxhp_f;
+    let def_faster = d2a.speed_cmp > 0;
+    let p_surv = if def_faster { 1.0 } else { (1.0 - a2d.ohko_prob).clamp(0.0, 1.0) };
+    if p_surv < 0.05 {
+        return;
+    }
+
+    let mut half_heal = 0.0f64;
+    let mut half_pp = 0u8;
+    let mut rest_pp = 0u8;
+    for m_i in 0..def_spec.num_moves as usize {
+        if def_mon.pp[m_i] == 0 || def_mon.is_slot_disabled(m_i) {
+            continue;
+        }
+        let ms = &table.move_specs[def_idx][m_i];
+        if let Some(hf) = instant_heal_frac(cb, ms) {
+            if hf > half_heal {
+                half_heal = hf;
+                half_pp = def_mon.pp[m_i];
+            }
+        }
+        if ms.is_rest {
+            rest_pp = rest_pp.max(def_mon.pp[m_i]);
+        }
+    }
+
+    let wall_cap = if is_1v1 { FAST_WALL_CAP_1V1 } else { FAST_WALL_CAP };
+    // Discount wall bonus if attacker carries a massive Explosion (>65% dmg) that breaks the wall.
+    let boom_disc = if !is_1v1 && a2d.boom_dmg_frac > 0.65 {
+        (1.0 - 0.55 * ((a2d.boom_dmg_frac - 0.65) / 0.35).clamp(0.0, 1.0)).clamp(0.45, 1.0)
+    } else {
+        1.0
+    };
+
+    let mut best_opt: Option<(f64, f64, f64)> = None;
+
+    // 50% Recover / Soft-Boiled / Milk Drink / Weather Heal
+    if half_heal > 0.0 && half_pp > 0 {
+        let safe_after = if def_faster {
+            (hp_frac + half_heal).min(1.0)
+        } else {
+            (1.0 - a2d.max_norm_frac + half_heal).min(1.0)
+        };
+        if a2d.max_norm_frac < safe_after - 0.02 && a2d.net_dmg <= half_heal + 0.015 {
+            let duty = (a2d.net_dmg.max(0.0) / half_heal).clamp(0.0, 1.0);
+            let pp_scale = ((half_pp as f64) / 16.0).clamp(0.35, 1.0);
+            // In 1v1, a Recover wall truly approaches `wall_cap`; in multi-mon, cap the extra bonus
+            // realistically (~1.5..3.5t scaled by free-turn margin, heal PP, and boom pressure).
+            let wall_full = if is_1v1 {
+                (a2d.raw_ttk + (half_pp as f64) / duty.max(0.20)).min(wall_cap)
+            } else {
+                let extra = 3.5 * (1.0 - 0.45 * duty) * pp_scale * boom_disc;
+                (a2d.raw_ttk + extra).min(wall_cap)
+            };
+            // Smooth HP-deficit gradient: chipped wall owes `(1 - hp_frac) / heal_frac` heal turns!
+            let heal_debt = (1.0 - hp_frac) / half_heal;
+            let t_att = p_surv * (wall_full - 0.9 * heal_debt).max(a2d.raw_ttk)
+                + (1.0 - p_surv) * a2d.raw_ttk;
+
+            let dmg_over_kill = d2a.raw_ttk * a2d.net_dmg.max(0.0);
+            let excess_hp = (dmg_over_kill - (hp_frac - 0.15).max(0.0)).max(0.0);
+            let net_heal = half_heal - a2d.net_dmg.max(0.0);
+            let t_def = if excess_hp <= 1e-4 {
+                d2a.raw_ttk
+            } else if net_heal > 0.025 {
+                (d2a.raw_ttk + excess_hp / net_heal).min(wall_cap)
+            } else {
+                (a2d.best_pp.max(1) as f64).min(wall_cap)
+            };
+            best_opt = Some((t_att, t_def, duty));
+        }
+    }
+
+    // Rest (+ Sleep Talk / Mint Berry)
+    if rest_pp > 0 {
+        let def_item = table.item_spec(def_mon.item);
+        let has_wake_berry = def_item.is_mintberry || def_item.is_miracleberry;
+        let mut rest_res = 0.0;
+        if def_item.is_leftovers {
+            rest_res += (def_spec.quantum_1_16 as f64) / maxhp_f;
+        }
+        if (def_mon.vol_flags & vol_bit::LEECH_SEED) != 0 {
+            rest_res -= (def_spec.quantum_1_8 as f64) / maxhp_f;
+        }
+        if cb.weather_turns > 0
+            && cb.weather_kind == CompactWeather::Sandstorm
+            && (def_spec.type_mask & table.sandstorm_immune_mask) == 0
+        {
+            rest_res -= (def_spec.quantum_1_8 as f64) / maxhp_f;
+        }
+        let att_mult = if cb.mons[att_side * 3 + att_slot].status_raw() == Status::Par as u8 {
+            0.75
+        } else {
+            1.0
+        };
+        let rest_net = a2d.raw_dmg * att_mult - rest_res;
+        let sleep_hits = if def_faster { 2.0 } else { 2.8 };
+        let hp_after_wake = 1.0 - sleep_hits * rest_net.max(0.0);
+        let h_rest = a2d.max_norm_frac.clamp(0.18, 0.48);
+
+        if hp_after_wake > h_rest && a2d.max_norm_frac < 0.48 {
+            let st_rate = sleep_talk_attack_rate(cb, table, def_side, def_slot);
+            let non_act = (3.0 - 2.0 * st_rate).max(1.0);
+            let k_awake = if rest_net > 0.01 {
+                ((hp_after_wake - h_rest) / rest_net).max(0.0)
+            } else {
+                12.0
+            };
+            let duty = (non_act / (3.0 + k_awake)).clamp(0.0, 1.0);
+            let pp_scale = ((rest_pp as f64) / 10.0).clamp(0.4, 1.0);
+            let wall_full = if is_1v1 {
+                (a2d.raw_ttk + (rest_pp as f64) * 3.0).min(wall_cap)
+            } else {
+                let extra = 3.2 * (1.0 - 0.40 * duty) * pp_scale * boom_disc;
+                (a2d.raw_ttk + extra).min(wall_cap)
+            };
+            let heal_debt = (1.0 - hp_frac) * non_act;
+            let t_att = p_surv * (wall_full - 0.75 * heal_debt).max(a2d.raw_ttk)
+                + (1.0 - p_surv) * a2d.raw_ttk;
+
+            let dmg_over_kill = d2a.raw_ttk * rest_net.max(0.0);
+            let excess_hp = (dmg_over_kill - (hp_frac - 0.15).max(0.0)).max(0.0);
+            let net_cycle = (hp_after_wake - h_rest).max(0.0);
+            let t_def = if excess_hp <= 1e-4 {
+                d2a.raw_ttk
+            } else if net_cycle > 0.03 {
+                (d2a.raw_ttk + non_act * (excess_hp / net_cycle)).min(wall_cap)
+            } else {
+                (a2d.best_pp.max(1) as f64).min(wall_cap)
+            };
+            let better = best_opt.map_or(true, |(pa, pd, _)| (t_att - t_def) > (pa - pd));
+            if better {
+                best_opt = Some((t_att, t_def, duty));
+            }
+        } else if has_wake_berry && a2d.max_norm_frac < 0.88 && hp_frac < 0.85 {
+            let extra = ((1.0 - hp_frac.min(0.6)) / rest_net.max(0.15)).min(2.5);
+            let t_att = (a2d.raw_ttk + p_surv * extra).min(wall_cap);
+            let t_def = (d2a.raw_ttk + 1.0).min(wall_cap);
+            let better = best_opt.map_or(true, |(pa, pd, _)| (t_att - t_def) > (pa - pd));
+            if better {
+                best_opt = Some((t_att, t_def, 0.25));
+            }
+        }
+    }
+
+    if let Some((t_att, t_def, duty)) = best_opt {
+        if t_att > a2d.raw_ttk + 0.05 {
+            a2d.eff_ttk = a2d.eff_ttk.max(t_att);
+            a2d.heal_duty = duty;
+            a2d.def_sustain = true;
+            let safe_turns = a2d.raw_ttk - if def_faster { 0.75 } else { 1.5 };
+            if d2a.raw_ttk > safe_turns {
+                d2a.eff_ttk = d2a.eff_ttk.max(t_def);
+            }
+        }
+    }
+}
+
+/// Zero-alloc stack 3v3 Golf score solver (with Explosion option, switch-out boost wipe, and normalized softmin).
+#[inline]
+fn solve_fast_team_turns(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    side: usize,
+    ttk: &[[[FastPair; 3]; 3]; 2],
+    unb_active: Option<&[FastPair; 3]>,
+) -> f64 {
+    let opp = 1 - side;
+    let mut allies = [0usize; 3];
+    let mut n_allies = 0usize;
+    let mut enemies = [0usize; 3];
+    let mut n_enemies = 0usize;
+
+    for slot in 0..3 {
+        if (cb.sides[side].alive_mask & (1 << slot)) != 0 && cb.mons[side * 3 + slot].hp() > 0 {
+            allies[n_allies] = slot;
+            n_allies += 1;
+        }
+        if (cb.sides[opp].alive_mask & (1 << slot)) != 0 && cb.mons[opp * 3 + slot].hp() > 0 {
+            enemies[n_enemies] = slot;
+            n_enemies += 1;
+        }
+    }
+    if n_enemies == 0 {
+        return 0.0;
+    }
+    if n_allies == 0 {
+        return FAST_WALL_CAP * (n_enemies as f64);
+    }
+
+    let act_ally = cb.sides[side].active_idx as usize;
+    let act_enemy = cb.sides[opp].active_idx as usize;
+    let ally_active_alive =
+        cb.mons[side * 3 + act_ally].hp() > 0 && cb.sides[side].request != 2;
+    let enemy_active_alive =
+        cb.mons[opp * 3 + act_enemy].hp() > 0 && cb.sides[opp].request != 2;
+
+    let active_speed_adj = if ally_active_alive && enemy_active_alive {
+        match ttk[side][act_ally][act_enemy].speed_cmp {
+            1 => -0.25,
+            -1 => 0.25,
+            _ => 0.0,
+        }
+    } else {
+        0.0
+    };
+
+    if n_allies == 1 && n_enemies == 1 {
+        return (ttk[side][allies[0]][enemies[0]].eff_ttk + active_speed_adj).max(0.25);
+    }
+
+    let mut base_hp = [0.0f64; 3];
+    for &a in &allies[..n_allies] {
+        let hp = entry_hp(cb, table, side, a) as f64;
+        let maxhp = table.mons[side * 3 + a].maxhp.max(1) as f64;
+        base_hp[a] = (hp / maxhp).clamp(0.0, 1.0);
+    }
+
+    let mut ordered_enemies = [0usize; 3];
+    {
+        let mut pos = 0;
+        for &e in &enemies[..n_enemies] {
+            if enemy_active_alive && e == act_enemy {
+                ordered_enemies[pos] = e;
+                pos += 1;
+            }
+        }
+        for &e in &enemies[..n_enemies] {
+            if !enemy_active_alive || e != act_enemy {
+                ordered_enemies[pos] = e;
+                pos += 1;
+            }
+        }
+    }
+
+    let total_combos = n_allies.pow(n_enemies as u32);
+    let mut totals = [f64::INFINITY; 27];
+    let mut best_total = f64::INFINITY;
+
+    for combo in 0..total_combos {
+        let mut assign = [0usize; 3];
+        let mut x = combo;
+        for idx_e in 0..n_enemies {
+            assign[idx_e] = allies[x % n_allies];
+            x /= n_allies;
+        }
+
+        let mut hp_rem = base_hp;
+        let mut used_mask = 0u8;
+        let mut total = 0.0f64;
+        let mut switched_out_active = false;
+
+        for idx_e in 0..n_enemies {
+            let e = ordered_enemies[idx_e];
+            let a = assign[idx_e];
+            if a != act_ally {
+                switched_out_active = true;
+            }
+            // Switching `act_ally` out wipes all its stat boosts (O(1) cached unboosted row).
+            let pair_ae = if a == act_ally && switched_out_active {
+                unb_active.map_or(ttk[side][a][e], |row| row[e])
+            } else {
+                ttk[side][a][e]
+            };
+            let pair_ea = ttk[opp][e][a];
+
+            // Only charge voluntary switch cost (+1.0t + free entry hit) when `act_ally` is actually
+            // alive on the field; a faint replacement (`request == 2`) enters for FREE!
+            let mut entry_hit_hp = 0.0f64;
+            if ally_active_alive && enemy_active_alive && e == act_enemy && a != act_ally {
+                total += 1.0;
+                entry_hit_hp = pair_ea.net_dmg.max(0.0);
+            } else if used_mask != 0 && (used_mask & (1 << a)) == 0 {
+                total += 0.5;
+            }
+            used_mask |= 1 << a;
+
+            let t_need = pair_ae.eff_ttk;
+            let avail = hp_rem[a];
+
+            // Explosion / Self-Destruct option: must survive to execute if slower than target!
+            let eff_boom_ko = if pair_ae.speed_cmp < 0 {
+                pair_ae.boom_ko_prob * (1.0 - pair_ea.ohko_prob).clamp(0.0, 1.0)
+            } else {
+                pair_ae.boom_ko_prob
+            };
+            if n_allies >= 2
+                && eff_boom_ko > 0.5
+                && t_need > 2.2
+                && avail > entry_hit_hp + 0.02
+            {
+                let boom_cost = 1.0 / eff_boom_ko + 1.5 * avail;
+                if boom_cost < t_need {
+                    hp_rem[a] = 0.0;
+                    total += boom_cost;
+                    continue;
+                }
+            }
+
+            let hits_taken = if pair_ea.def_sustain {
+                0.15 * pair_ea.heal_duty
+            } else {
+                let raw_hits = if pair_ae.speed_cmp > 0 {
+                    (t_need - 1.0).max(0.0)
+                } else if pair_ae.speed_cmp < 0 {
+                    t_need
+                } else {
+                    (t_need - 0.5).max(0.0)
+                };
+                let enemy_sleep = expected_sleep_turns(cb, opp, e);
+                let enemy_st = sleep_talk_attack_rate(cb, table, opp, e);
+                let eff_hits = (raw_hits - enemy_sleep * (1.0 - enemy_st)).max(0.0);
+                eff_hits * pair_ea.net_dmg.max(0.0)
+            };
+            let hp_cost = (entry_hit_hp + hits_taken).min(4.0);
+
+            if hp_cost <= avail + 1e-6 || hp_cost <= 1e-6 {
+                hp_rem[a] = (avail - hp_cost).max(0.0);
+                total += t_need;
+            } else {
+                let frac_done = if entry_hit_hp >= avail {
+                    0.0
+                } else {
+                    let net_avail = (avail - entry_hit_hp).max(0.0);
+                    if hits_taken > 1e-6 {
+                        (net_avail / hits_taken).clamp(0.0, 0.999)
+                    } else {
+                        0.0
+                    }
+                };
+                let rem_frac = (1.0 - frac_done).max(0.0);
+                let deficit_hp = (hp_cost - avail).clamp(0.0, 2.0);
+                let turns_by_a = if frac_done <= 0.02 && pair_ae.speed_cmp <= 0 {
+                    1.0
+                } else {
+                    frac_done * t_need
+                };
+                hp_rem[a] = 0.0;
+
+                let mut best_spill = (rem_frac * t_need + 1.8 * deficit_hp).min(FAST_WALL_CAP);
+                let mut best_helper: Option<(usize, f64)> = None;
+                for &b in &allies[..n_allies] {
+                    if b == a || hp_rem[b] <= 0.02 {
+                        continue;
+                    }
+                    let pair_be = ttk[side][b][e];
+                    let raw_fin = rem_frac * pair_be.raw_ttk;
+                    let eff_fin = rem_frac * pair_be.eff_ttk;
+                    let stall_w = ((raw_fin - 1.0) / 1.5).clamp(0.0, 1.0);
+                    let t_b = raw_fin * (1.0 - stall_w) + eff_fin * stall_w;
+                    let cost_b = if ttk[opp][e][b].def_sustain {
+                        0.1 * rem_frac
+                    } else {
+                        let hits_b = if pair_be.speed_cmp > 0 { (t_b - 1.0).max(0.0) } else { t_b };
+                        hits_b * ttk[opp][e][b].net_dmg.max(0.0)
+                    };
+                    let extra_pen = if cost_b > hp_rem[b] {
+                        1.8 * (cost_b - hp_rem[b]).min(2.0)
+                    } else {
+                        0.0
+                    };
+                    let pivot_pen = if (used_mask & (1 << b)) == 0 {
+                        0.4 * (rem_frac * 2.0).min(1.0)
+                    } else {
+                        0.0
+                    };
+                    let cand = t_b + extra_pen + pivot_pen;
+                    if cand < best_spill {
+                        best_spill = cand;
+                        best_helper = Some((b, cost_b));
+                    }
+                }
+                if let Some((b, cost_b)) = best_helper {
+                    hp_rem[b] = (hp_rem[b] - cost_b).max(0.0);
+                    used_mask |= 1 << b;
+                }
+                total += turns_by_a + best_spill;
+            }
+        }
+
+        let speed_adj = if ally_active_alive && enemy_active_alive && assign[0] == act_ally {
+            active_speed_adj
+        } else {
+            0.0
+        };
+        let cand_total = (total + speed_adj).max(0.25);
+        totals[combo] = cand_total;
+        if cand_total < best_total {
+            best_total = cand_total;
+        }
+    }
+
+    // Normalized softmin across feasible assignments (tau = 1.0 turn):
+    // Reduces turn cost smoothly when healthy/status-free backup allies provide redundant answers,
+    // without distorting `n_enemies` scaling (normalized by `1 / n_enemies`).
+    if n_allies <= 1 {
+        return best_total;
+    }
+    let tau = 1.0f64;
+    let mut sum_exp = 0.0f64;
+    for &t in &totals[..total_combos] {
+        let d = t - best_total;
+        if d < 14.0 {
+            sum_exp += (-d / tau).exp();
+        }
+    }
+    let backup_bonus = (tau / (n_enemies as f64)) * sum_exp.max(1.0).ln();
+    (best_total - backup_bonus).max(0.25)
+}
+
+/// Output of `FastGolf` (v2) evaluator.
+#[derive(Clone, Copy, Debug)]
+pub struct FastGolfEval {
+    pub g_turns: [f64; 2],
+    pub turn_advantage: f64,
+    pub win_prob: f64,
+}
+
+/// Ultra-fast zero-alloc Turn-Economy ("FastGolf" v2) evaluator (~1-2 us/leaf with cache).
+pub fn evaluate_fast_golf(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    cache: Option<&TempoMatchCache>,
+) -> FastGolfEval {
+    if cb.outcome != 0 {
+        let (g0, g1, wp) = match cb.outcome {
+            1 => (0.0, 6.0, 1.0),
+            2 => (6.0, 0.0, 0.0),
+            _ => (0.0, 0.0, 0.5),
+        };
+        return FastGolfEval { g_turns: [g0, g1], turn_advantage: g1 - g0, win_prob: wp };
+    }
+
+    let is_1v1 =
+        cb.sides[0].alive_mask.count_ones() <= 1 && cb.sides[1].alive_mask.count_ones() <= 1;
+
+    let mut ttk = [[[FastPair::default(); 3]; 3]; 2];
+    for s0 in 0..3 {
+        if (cb.sides[0].alive_mask & (1 << s0)) == 0 {
+            continue;
+        }
+        for s1 in 0..3 {
+            if (cb.sides[1].alive_mask & (1 << s1)) == 0 {
+                continue;
+            }
+            let r01 = compute_fast_pair(cb, table, 0, s0, 1, s1, cache);
+            let r10 = compute_fast_pair(cb, table, 1, s1, 0, s0, cache);
+
+            let mut a01 = r01;
+            let mut b10 = r10;
+            apply_fast_recovery(cb, table, 0, s0, 1, s1, &mut a01, &mut b10, is_1v1);
+
+            let mut a10 = r10;
+            let mut b01 = r01;
+            apply_fast_recovery(cb, table, 1, s1, 0, s0, &mut a10, &mut b01, is_1v1);
+
+            a01.eff_ttk = a01.eff_ttk.max(b01.eff_ttk);
+            a10.eff_ttk = a10.eff_ttk.max(b10.eff_ttk);
+            ttk[0][s0][s1] = a01;
+            ttk[1][s1][s0] = a10;
+        }
+    }
+
+    // O(1)-cached unboosted row for active mon if it currently holds stat boosts (used if switched out).
+    let unb_fast = |s: usize| -> Option<[FastPair; 3]> {
+        let act = cb.sides[s].active_idx as usize;
+        let act_mon = &cb.mons[s * 3 + act];
+        if act_mon.hp() <= 0 || act_mon.boosts == [0; 7] {
+            return None;
+        }
+        let mut cb_u = *cb;
+        cb_u.mons[s * 3 + act].boosts = [0; 7];
+        let opp = 1 - s;
+        let mut row = [FastPair::default(); 3];
+        for e in 0..3 {
+            if (cb.sides[opp].alive_mask & (1 << e)) == 0 {
+                continue;
+            }
+            let mut r_ae = compute_fast_pair(&cb_u, table, s, act, opp, e, cache);
+            let mut r_ea = compute_fast_pair(&cb_u, table, opp, e, s, act, cache);
+            apply_fast_recovery(&cb_u, table, s, act, opp, e, &mut r_ae, &mut r_ea, is_1v1);
+            row[e] = r_ae;
+        }
+        Some(row)
+    };
+    let unb0 = unb_fast(0);
+    let unb1 = unb_fast(1);
+
+    let g0 = solve_fast_team_turns(cb, table, 0, &ttk, unb0.as_ref());
+    let g1 = solve_fast_team_turns(cb, table, 1, &ttk, unb1.as_ref());
+    let adv = g1 - g0;
+    let wp = if g0 <= 0.0 && g1 <= 0.0 {
+        0.5
+    } else if g0 <= 0.0 {
+        1.0
+    } else if g1 <= 0.0 {
+        0.0
+    } else {
+        let sigma = (FAST_RACE_VAR * (g0 + g1).max(1.0)).sqrt();
+        normal_cdf(adv / sigma)
+    };
+    FastGolfEval { g_turns: [g0, g1], turn_advantage: adv, win_prob: wp }
 }
 
 /// Run zero-rollout CompactBattle DUCT SM-MCTS from `battle` for `side`.
@@ -2578,6 +3560,11 @@ pub fn search_tempo_mcts(
     seed: u64,
 ) -> TempoMctsResult {
     let (table, base_cb) = CompactBattle::from_battle(battle, dex);
+    let fast_cache = if cfg.leaf == TempoLeafMode::FastGolf {
+        Some(TempoMatchCache::build(&base_cb, &table))
+    } else {
+        None
+    };
     let mut nodes: Vec<DuctNode> = Vec::with_capacity((cfg.iterations as usize / 2).max(16));
     let mut index: FxHashMap<u64, usize> = FxHashMap::default();
 
@@ -2634,10 +3621,10 @@ pub fn search_tempo_mcts(
             depth += 1;
 
             if cb.outcome != 0 {
-                break eval_duct_leaf(&cb, &table, cfg.leaf);
+                break eval_duct_leaf(&cb, &table, cfg.leaf, fast_cache.as_ref());
             }
             if depth >= cfg.max_depth {
-                break eval_duct_leaf(&cb, &table, cfg.leaf);
+                break eval_duct_leaf(&cb, &table, cfg.leaf, fast_cache.as_ref());
             }
 
             let next_key = compact_duct_key(&cb, &table, depth);
@@ -2647,7 +3634,7 @@ pub fn search_tempo_mcts(
                 let new_id = nodes.len();
                 nodes.push(DuctNode::new(&cb, &table));
                 index.insert(next_key, new_id);
-                break eval_duct_leaf(&cb, &table, cfg.leaf);
+                break eval_duct_leaf(&cb, &table, cfg.leaf, fast_cache.as_ref());
             }
         };
 
@@ -2789,6 +3776,7 @@ impl Agent for TempoMctsAgent {
         let tag = match self.cfg.leaf {
             TempoLeafMode::TempoFull => "full",
             TempoLeafMode::TempoRaw => "raw",
+            TempoLeafMode::FastGolf => "v2",
             TempoLeafMode::EvalStatic => "eval",
             TempoLeafMode::EvalBlindspot => "blindspot",
         };
@@ -2814,7 +3802,14 @@ impl Agent for TempoMctsAgent {
                 TempoLeafMode::TempoRaw => TempoVariant::Raw,
                 _ => TempoVariant::Full,
             };
-            return fast_tempo_team_preview(battle, dex, side, choices, preview_variant);
+            return fast_tempo_team_preview(
+                battle,
+                dex,
+                side,
+                choices,
+                preview_variant,
+                self.cfg.leaf == TempoLeafMode::FastGolf,
+            );
         }
 
         let seed = self.rng.next();
@@ -3047,5 +4042,27 @@ mod tests {
         );
         let psum: f64 = r300.own_policy.iter().sum();
         assert!((psum - 1.0).abs() < 1e-6, "policy must sum to 1, got {psum}");
+
+        // 8. FastGolf (v2) exact mirror symmetry & wall-chipping gradient (no 24t saturation!).
+        let (t_m, cb_m) = CompactBattle::from_battle(&b_mirror, &dex);
+        let c_m = TempoMatchCache::build(&cb_m, &t_m);
+        let fg_m = evaluate_fast_golf(&cb_m, &t_m, Some(&c_m));
+        assert!(fg_m.turn_advantage.abs() < 1e-9);
+        assert!((fg_m.win_prob - 0.5).abs() < 1e-9);
+
+        // Chipping a Rest Snorlax from 100% to 55% must produce strictly positive gradient (fixes 24t saturation!).
+        let b_lax = start(&dex, &p1_r, &p2_r);
+        let (t_l, cb_l) = CompactBattle::from_battle(&b_lax, &dex);
+        let c_l = TempoMatchCache::build(&cb_l, &t_l);
+        let fg_full = evaluate_fast_golf(&cb_l, &t_l, Some(&c_l));
+        let mut cb_l_chip = cb_l;
+        cb_l_chip.mons[5].hp_pool[0] = (t_l.mons[5].maxhp * 55) / 100;
+        let fg_chip = evaluate_fast_golf(&cb_l_chip, &t_l, Some(&c_l));
+        assert!(
+            fg_chip.turn_advantage > fg_full.turn_advantage + 0.3,
+            "FastGolf must give positive gradient for chipping a Rest wall: full={:+.2}t chip={:+.2}t",
+            fg_full.turn_advantage,
+            fg_chip.turn_advantage
+        );
     }
 }
