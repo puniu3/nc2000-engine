@@ -63,6 +63,7 @@ pub mod runner;
 pub mod smmcts;
 pub mod stall;
 pub mod teamgen;
+pub mod tempo;
 
 pub use accounting::LeafSettlementMode;
 pub use agent::{Agent, MaxDamageAgent, RandomAgent};
