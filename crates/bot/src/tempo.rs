@@ -15,12 +15,31 @@ use nc2000_engine::compact::{
     ItemStatKind, MatchTable, SpecialMoveKind,
 };
 use nc2000_engine::dex::Dex;
+use nc2000_engine::fxhash::FxHashMap;
 use nc2000_engine::state::{stat_idx, Battle, Status};
 
 use crate::agent::Agent;
+use crate::eval::{compact_eval01, compact_eval_leaf_blindspot, EvalWeights};
 use crate::exact::solve_matrix_full;
 use crate::linear::DmgKernel1D;
 use crate::rng::SplitMix64;
+
+/// Ablation switch between the smoothed 1-ply-safe Golf model (`Full`) and the
+/// unsmoothed minimal Golf model (`Raw`, without HP/Rest/overflow/phaze-cap workarounds).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TempoVariant {
+    Full,
+    Raw,
+}
+
+/// Leaf evaluator mode for `TempoMctsAgent` (enables controlled leaf A/B inside the exact same DUCT tree).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TempoLeafMode {
+    TempoFull,
+    TempoRaw,
+    EvalStatic,
+    EvalBlindspot,
+}
 
 /// Maximum cap on effective turns-to-KO for walled / stalemated matchups.
 pub const MAX_TTK: f64 = 24.0;
@@ -819,6 +838,7 @@ fn apply_recovery_for_defender(
     def_slot: usize,
     att_to_def: &mut RawPairInfo,
     def_to_att: &mut RawPairInfo,
+    variant: TempoVariant,
 ) {
     if att_to_def.ttk.perish_capped {
         return;
@@ -921,19 +941,30 @@ fn apply_recovery_for_defender(
             let t_att_sustain = p_survive_t1 * heal_pp_turns.min(crit_break_turns).min(MAX_TTK)
                 + (1.0 - p_survive_t1) * att_to_def.ttk.raw_ttk;
 
-            // Exact turns for Defender to KO Attacker while healing only the HP deficit beyond starting HP:
-            // Each Recover turn heals `net_heal = best_half_heal - net_dmg` net HP at a cost of 1 turn.
-            let dmg_over_kill = def_to_att.ttk.raw_ttk * net_dmg.max(0.0);
-            let excess_hp = (dmg_over_kill - (def_hp_frac - 0.15).max(0.0)).max(0.0);
-            let net_heal_per_turn = best_half_heal - net_dmg.max(0.0);
-            let t_def_stall = if excess_hp <= 1e-4 {
-                def_to_att.ttk.raw_ttk
-            } else if net_heal_per_turn > 0.02 {
-                (def_to_att.ttk.raw_ttk + excess_hp / net_heal_per_turn).min(MAX_TTK)
-            } else {
-                // Exact 50% vs 50% lock (`net_heal <= 0`): defender has 0 free attacks;
-                // can only win if attacker runs out of PP first!
-                att_pp.min(MAX_TTK)
+            // Defender's attacking TTK while healing:
+            // - `Full`: exact excess-HP heal cost beyond starting HP.
+            // - `Raw`: simple duty-cycle scaling `raw_ttk / (1 - duty)`.
+            let t_def_stall = match variant {
+                TempoVariant::Full => {
+                    let dmg_over_kill = def_to_att.ttk.raw_ttk * net_dmg.max(0.0);
+                    let excess_hp = (dmg_over_kill - (def_hp_frac - 0.15).max(0.0)).max(0.0);
+                    let net_heal_per_turn = best_half_heal - net_dmg.max(0.0);
+                    if excess_hp <= 1e-4 {
+                        def_to_att.ttk.raw_ttk
+                    } else if net_heal_per_turn > 0.02 {
+                        (def_to_att.ttk.raw_ttk + excess_hp / net_heal_per_turn).min(MAX_TTK)
+                    } else {
+                        att_pp.min(MAX_TTK)
+                    }
+                }
+                TempoVariant::Raw => {
+                    let free_rate = (1.0 - duty).max(0.0);
+                    if free_rate > 0.04 {
+                        (def_to_att.ttk.raw_ttk / free_rate).min(MAX_TTK)
+                    } else {
+                        att_pp.min(MAX_TTK)
+                    }
+                }
             };
 
             best_option = Some((t_att_sustain, t_def_stall, duty));
@@ -971,10 +1002,15 @@ fn apply_recovery_for_defender(
         let h_rest_threshold = max_norm.clamp(0.18, 0.50);
         let rest_margin = hp_after_wake - h_rest_threshold;
 
-        if rest_margin > -0.06 && max_norm < 0.50 {
-            // Smooth sustainability weight across [-0.06, +0.06] to avoid discontinuous 5t<->24t cliffs
-            // on borderline Rest matchups (e.g., Snorlax mirror).
-            let sustain_w = ((rest_margin + 0.06) / 0.12).clamp(0.0, 1.0);
+        let rest_ok = match variant {
+            TempoVariant::Full => rest_margin > -0.06 && max_norm < 0.50,
+            TempoVariant::Raw => rest_margin > 0.02 && max_norm < 0.50,
+        };
+        if rest_ok {
+            let sustain_w = match variant {
+                TempoVariant::Full => ((rest_margin + 0.06) / 0.12).clamp(0.0, 1.0),
+                TempoVariant::Raw => 1.0,
+            };
             let k_awake = if rest_net_dmg > 0.01 {
                 ((hp_after_wake - h_rest_threshold).max(0.0) / rest_net_dmg).max(0.0)
             } else {
@@ -999,16 +1035,28 @@ fn apply_recovery_for_defender(
                 + (1.0 - p_survive_t1) * att_to_def.ttk.raw_ttk;
             let t_att_sustain =
                 att_to_def.ttk.raw_ttk * (1.0 - sustain_w) + full_sustain * sustain_w;
-            let dmg_over_kill = def_to_att.ttk.raw_ttk * rest_net_dmg.max(0.0);
-            let excess_hp = (dmg_over_kill - (def_hp_frac - 0.15).max(0.0)).max(0.0);
-            let net_heal_per_cycle = (hp_after_wake - h_rest_threshold).max(0.0);
-            let full_stall_def = if excess_hp <= 1e-4 {
-                def_to_att.ttk.raw_ttk
-            } else if net_heal_per_cycle > 0.04 {
-                (def_to_att.ttk.raw_ttk + non_act_turns * (excess_hp / net_heal_per_cycle))
-                    .min(MAX_TTK)
-            } else {
-                att_pp.min(MAX_TTK)
+            let full_stall_def = match variant {
+                TempoVariant::Full => {
+                    let dmg_over_kill = def_to_att.ttk.raw_ttk * rest_net_dmg.max(0.0);
+                    let excess_hp = (dmg_over_kill - (def_hp_frac - 0.15).max(0.0)).max(0.0);
+                    let net_heal_per_cycle = (hp_after_wake - h_rest_threshold).max(0.0);
+                    if excess_hp <= 1e-4 {
+                        def_to_att.ttk.raw_ttk
+                    } else if net_heal_per_cycle > 0.04 {
+                        (def_to_att.ttk.raw_ttk + non_act_turns * (excess_hp / net_heal_per_cycle))
+                            .min(MAX_TTK)
+                    } else {
+                        att_pp.min(MAX_TTK)
+                    }
+                }
+                TempoVariant::Raw => {
+                    let free_rate = (1.0 - duty).max(0.0);
+                    if free_rate > 0.05 {
+                        (def_to_att.ttk.raw_ttk / free_rate).min(MAX_TTK)
+                    } else {
+                        att_pp.min(MAX_TTK)
+                    }
+                }
             };
             let t_def_stall =
                 def_to_att.ttk.raw_ttk * (1.0 - sustain_w) + full_stall_def * sustain_w;
@@ -1040,20 +1088,30 @@ fn apply_recovery_for_defender(
         }
     }
 
-    // Adopt sustainable recovery monotonically (independent of `race_margin_def` sign flips):
-    // 1. Whenever Defender can sustainably heal against Attacker, Attacker's effective TTK
-    //    reflects Defender's healing wall (`t_att_sustain`).
-    // 2. Defender's own attacking TTK is only slowed by the healing duty cycle when Defender
-    //    cannot already KO Attacker safely before taking lethal damage.
     if let Some((t_att_sustain, t_def_stall, duty)) = best_option {
-        if t_att_sustain > att_to_def.ttk.raw_ttk + 0.1 {
-            att_to_def.ttk.eff_ttk = att_to_def.ttk.eff_ttk.max(t_att_sustain);
-            att_to_def.ttk.def_heal_duty = duty;
-            att_to_def.ttk.def_can_sustain = true;
+        match variant {
+            TempoVariant::Full => {
+                if t_att_sustain > att_to_def.ttk.raw_ttk + 0.1 {
+                    att_to_def.ttk.eff_ttk = att_to_def.ttk.eff_ttk.max(t_att_sustain);
+                    att_to_def.ttk.def_heal_duty = duty;
+                    att_to_def.ttk.def_can_sustain = true;
 
-            let safe_attack_turns = att_to_def.ttk.raw_ttk - if def_faster { 0.75 } else { 1.5 };
-            if def_to_att.ttk.raw_ttk > safe_attack_turns {
-                def_to_att.ttk.eff_ttk = def_to_att.ttk.eff_ttk.max(t_def_stall);
+                    let safe_attack_turns =
+                        att_to_def.ttk.raw_ttk - if def_faster { 0.75 } else { 1.5 };
+                    if def_to_att.ttk.raw_ttk > safe_attack_turns {
+                        def_to_att.ttk.eff_ttk = def_to_att.ttk.eff_ttk.max(t_def_stall);
+                    }
+                }
+            }
+            TempoVariant::Raw => {
+                let race_margin_def = att_to_def.ttk.raw_ttk - def_to_att.ttk.raw_ttk;
+                let stall_margin_def = t_att_sustain - t_def_stall;
+                if stall_margin_def > race_margin_def + 0.05 {
+                    att_to_def.ttk.eff_ttk = att_to_def.ttk.eff_ttk.max(t_att_sustain);
+                    att_to_def.ttk.def_heal_duty = duty;
+                    att_to_def.ttk.def_can_sustain = true;
+                    def_to_att.ttk.eff_ttk = def_to_att.ttk.eff_ttk.max(t_def_stall);
+                }
             }
         }
     }
@@ -1163,6 +1221,7 @@ fn solve_team_plan(
     side: usize,
     ttk: &[[[PairTtk; 3]; 3]; 2],
     unboosted_active_ttk: Option<&[PairTtk; 3]>,
+    variant: TempoVariant,
 ) -> TeamPlan {
     let opp = 1 - side;
     let mut allies = [0usize; 3];
@@ -1283,8 +1342,8 @@ fn solve_team_plan(
                 active_switched_out = true;
             }
             // In Pokemon, switching `act_ally` out wipes all its stat boosts!
-            // If `act_ally` is reused AFTER another ally came in, evaluate it unboosted.
-            let pair_ae = if a == act_ally && active_switched_out {
+            // `Full`: evaluate reused active unboosted; `Raw`: skip boost-wipe check.
+            let pair_ae = if variant == TempoVariant::Full && a == act_ally && active_switched_out {
                 unboosted_active_ttk.map_or(ttk[side][a][e], |row| row[e])
             } else {
                 ttk[side][a][e]
@@ -1292,7 +1351,8 @@ fn solve_team_plan(
             let pair_ea = ttk[opp][e][a];
 
             // Do not allow starting a fresh enemy with an already-exhausted ally while another ally still has HP.
-            if hp_rem[a] <= 0.02
+            if variant == TempoVariant::Full
+                && hp_rem[a] <= 0.02
                 && allies[..n_allies].iter().any(|&other| other != a && hp_rem[other] > 0.02)
             {
                 infeasible = true;
@@ -1346,9 +1406,6 @@ fn solve_team_plan(
                     spilled: false,
                 });
             } else {
-                // Ally `a` runs out of HP before finishing `e` -> partial progress + smooth overflow!
-                // Crucial: keep overflow continuous at `hp_cost == avail` so 1%-HP perturbations never
-                // create artificial multi-turn cliffs.
                 let frac_done = if entry_hit_hp >= avail {
                     0.0
                 } else {
@@ -1358,17 +1415,13 @@ fn solve_team_plan(
                     } else {
                         0.0
                     };
-                    // If ally `a` is slower than `e`, `e` strikes BEFORE `a` gets even 1 attack:
-                    // scale `a`'s progress by probability `a` survives turn 1 (`1 - ohko_prob`).
-                    if pair_ae.speed_cmp < 0 {
+                    if variant == TempoVariant::Full && pair_ae.speed_cmp < 0 {
                         base_frac * (1.0 - pair_ea.ohko_prob).clamp(0.0, 1.0)
                     } else {
                         base_frac
                     }
                 };
                 let rem_frac = (1.0 - frac_done).max(0.0);
-                let deficit_hp = (hp_cost - avail).clamp(0.0, 2.0);
-                // Slower mon that gets OHKO'd before acting (`frac_done == 0`) wastes 1 full turn.
                 let turns_by_a = if frac_done <= 0.02 && pair_ae.speed_cmp <= 0 {
                     1.0
                 } else {
@@ -1376,21 +1429,29 @@ fn solve_team_plan(
                 };
                 hp_rem[a] = 0.0;
 
-                // Remaining fraction `rem_frac` of enemy `e`: either finished by best surviving teammate
-                // OR incurs a smooth survival-deficit penalty capped at `MAX_TTK`.
-                let mut best_spill = (rem_frac * t_need + 2.0 * deficit_hp).min(MAX_TTK - turns_by_a.min(MAX_TTK - 0.5));
+                let mut best_spill = match variant {
+                    TempoVariant::Full => {
+                        let deficit_hp = (hp_cost - avail).clamp(0.0, 2.0);
+                        (rem_frac * t_need + 2.0 * deficit_hp)
+                            .min(MAX_TTK - turns_by_a.min(MAX_TTK - 0.5))
+                    }
+                    TempoVariant::Raw => rem_frac * MAX_TTK + 2.0,
+                };
                 let mut best_helper: Option<(usize, f64)> = None;
                 for &b in &allies[..n_allies] {
                     if b == a || hp_rem[b] <= 0.02 {
                         continue;
                     }
                     let pair_be = ttk[side][b][e];
-                    let raw_fin = rem_frac * pair_be.raw_ttk;
-                    let eff_fin = rem_frac * pair_be.eff_ttk;
-                    // Blend smoothly: a target at <= 1.2 hits of raw_ttk can be finished before healing,
-                    // whereas a nearly-full target still invokes its recovery wall.
-                    let stall_w = ((raw_fin - 1.0) / 1.5).clamp(0.0, 1.0);
-                    let t_b = raw_fin * (1.0 - stall_w) + eff_fin * stall_w;
+                    let t_b = match variant {
+                        TempoVariant::Full => {
+                            let raw_fin = rem_frac * pair_be.raw_ttk;
+                            let eff_fin = rem_frac * pair_be.eff_ttk;
+                            let stall_w = ((raw_fin - 1.0) / 1.5).clamp(0.0, 1.0);
+                            raw_fin * (1.0 - stall_w) + eff_fin * stall_w
+                        }
+                        TempoVariant::Raw => (rem_frac * pair_be.eff_ttk).max(0.5),
+                    };
                     let cost_b = if ttk[opp][e][b].def_can_sustain {
                         0.1 * rem_frac
                     } else {
@@ -1406,9 +1467,11 @@ fn solve_team_plan(
                     } else {
                         0.0
                     };
-                    // Pivot friction scales smoothly with `rem_frac` so a 1% spillover doesn't jump +0.4t.
                     let pivot_pen = if (used_mask & (1 << b)) == 0 {
-                        0.5 * (rem_frac * 2.0).min(1.0)
+                        match variant {
+                            TempoVariant::Full => 0.5 * (rem_frac * 2.0).min(1.0),
+                            TempoVariant::Raw => 0.5,
+                        }
                     } else {
                         0.0
                     };
@@ -1457,18 +1520,20 @@ fn solve_team_plan(
         }
     }
 
-    // Phazer / Hazer cap: if active ally has boosts AND opponent has a healthy living Phazer/Hazer
-    // that survives resetting them, boosts cannot save more than `reset_turns` compared to unboosted!
-    if let Some(unb) = unboosted_active_ttk {
-        if let Some(reset_turns) = opponent_phaze_reset_turns(cb, table, side, ttk) {
-            let mut unb_ttk = *ttk;
-            unb_ttk[side][act_ally] = *unb;
-            let unb_plan = solve_team_plan(cb, table, side, &unb_ttk, None);
-            let boost_savings = unb_plan.total_turns - best_plan.total_turns;
-            if boost_savings > reset_turns {
-                let excess = boost_savings - reset_turns;
-                best_plan.phaze_cap_turns = excess;
-                best_plan.total_turns += excess;
+    // Phazer / Hazer cap (`Full` only): if active ally has boosts AND opponent has a healthy living
+    // Phazer/Hazer that survives resetting them, boosts cannot save more than `reset_turns`.
+    if variant == TempoVariant::Full {
+        if let Some(unb) = unboosted_active_ttk {
+            if let Some(reset_turns) = opponent_phaze_reset_turns(cb, table, side, ttk) {
+                let mut unb_ttk = *ttk;
+                unb_ttk[side][act_ally] = *unb;
+                let unb_plan = solve_team_plan(cb, table, side, &unb_ttk, None, variant);
+                let boost_savings = unb_plan.total_turns - best_plan.total_turns;
+                if boost_savings > reset_turns {
+                    let excess = boost_savings - reset_turns;
+                    best_plan.phaze_cap_turns = excess;
+                    best_plan.total_turns += excess;
+                }
             }
         }
     }
@@ -1480,8 +1545,17 @@ fn solve_team_plan(
 // Main Public Evaluation API
 // =========================================================================
 
-/// Evaluate a `CompactBattle` in turn-economy ("Golf") units.
+/// Evaluate a `CompactBattle` in turn-economy ("Golf") units (`TempoVariant::Full`).
 pub fn evaluate_compact_tempo(cb: &CompactBattle, table: &MatchTable) -> TempoEval {
+    evaluate_compact_tempo_variant(cb, table, TempoVariant::Full)
+}
+
+/// Evaluate a `CompactBattle` in turn-economy ("Golf") units under `variant` (`Full` or `Raw`).
+pub fn evaluate_compact_tempo_variant(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    variant: TempoVariant,
+) -> TempoEval {
     if cb.outcome != 0 {
         let (g0, g1, wp) = match cb.outcome {
             1 => (0.0, 6.0, 1.0),
@@ -1673,7 +1747,17 @@ pub fn evaluate_compact_tempo(cb: &CompactBattle, table: &MatchTable) -> TempoEv
                 max_crit_dmg_frac: r10.max_crit_dmg_frac,
                 best_move_pp: r10.best_move_pp,
             };
-            apply_recovery_for_defender(cb, table, 0, s0, 1, s1, &mut r01_for_d1, &mut r10_for_d1);
+            apply_recovery_for_defender(
+                cb,
+                table,
+                0,
+                s0,
+                1,
+                s1,
+                &mut r01_for_d1,
+                &mut r10_for_d1,
+                variant,
+            );
 
             let mut r10_for_d0 = RawPairInfo {
                 ttk: r10.ttk,
@@ -1687,7 +1771,17 @@ pub fn evaluate_compact_tempo(cb: &CompactBattle, table: &MatchTable) -> TempoEv
                 max_crit_dmg_frac: r01.max_crit_dmg_frac,
                 best_move_pp: r01.best_move_pp,
             };
-            apply_recovery_for_defender(cb, table, 1, s1, 0, s0, &mut r10_for_d0, &mut r01_for_d0);
+            apply_recovery_for_defender(
+                cb,
+                table,
+                1,
+                s1,
+                0,
+                s0,
+                &mut r10_for_d0,
+                &mut r01_for_d0,
+                variant,
+            );
 
             r01.ttk = r01_for_d1.ttk;
             r01.ttk.eff_ttk = r01.ttk.eff_ttk.max(r01_for_d0.ttk.eff_ttk);
@@ -1699,9 +1793,12 @@ pub fn evaluate_compact_tempo(cb: &CompactBattle, table: &MatchTable) -> TempoEv
         }
     }
 
-    // Step 3: Whenever an active mon has non-zero stat boosts, also precompute its unboosted TTKs
-    // so `solve_team_plan` accurately wipes boosts if the active mon switches out (and applies phaze caps).
+    // Step 3: Whenever an active mon has non-zero stat boosts (`Full`), also precompute unboosted TTKs
+    // so `solve_team_plan` wipes boosts on switch-out and applies phaze caps.
     let unb_row = |s: usize| -> Option<[PairTtk; 3]> {
+        if variant == TempoVariant::Raw {
+            return None;
+        }
         let act = cb.sides[s].active_idx as usize;
         let act_mon = &cb.mons[s * 3 + act];
         if act_mon.hp() <= 0 || act_mon.boosts == [0; 7] {
@@ -1717,7 +1814,17 @@ pub fn evaluate_compact_tempo(cb: &CompactBattle, table: &MatchTable) -> TempoEv
             }
             let mut r_ae = compute_raw_pair(&cb_unb, table, s, act, opp, e);
             let mut r_ea = compute_raw_pair(&cb_unb, table, opp, e, s, act);
-            apply_recovery_for_defender(&cb_unb, table, s, act, opp, e, &mut r_ae, &mut r_ea);
+            apply_recovery_for_defender(
+                &cb_unb,
+                table,
+                s,
+                act,
+                opp,
+                e,
+                &mut r_ae,
+                &mut r_ea,
+                variant,
+            );
             row[e] = r_ae.ttk;
         }
         Some(row)
@@ -1725,8 +1832,8 @@ pub fn evaluate_compact_tempo(cb: &CompactBattle, table: &MatchTable) -> TempoEv
     let unb0 = unb_row(0);
     let unb1 = unb_row(1);
 
-    let plan0 = solve_team_plan(cb, table, 0, &ttk, unb0.as_ref());
-    let plan1 = solve_team_plan(cb, table, 1, &ttk, unb1.as_ref());
+    let plan0 = solve_team_plan(cb, table, 0, &ttk, unb0.as_ref(), variant);
+    let plan1 = solve_team_plan(cb, table, 1, &ttk, unb1.as_ref(), variant);
     let g0 = plan0.total_turns;
     let g1 = plan1.total_turns;
     let turn_advantage = g1 - g0;
@@ -1741,8 +1848,13 @@ pub fn evaluate_compact_tempo(cb: &CompactBattle, table: &MatchTable) -> TempoEv
     }
 }
 
-/// Evaluate a full `Battle` state in turn-economy ("Golf") units.
+/// Evaluate a full `Battle` state in turn-economy ("Golf") units (`TempoVariant::Full`).
 pub fn evaluate_tempo(battle: &Battle, dex: &Dex) -> TempoEval {
+    evaluate_tempo_variant(battle, dex, TempoVariant::Full)
+}
+
+/// Evaluate a full `Battle` state in turn-economy ("Golf") units under `variant`.
+pub fn evaluate_tempo_variant(battle: &Battle, dex: &Dex, variant: TempoVariant) -> TempoEval {
     if let Some(o) = battle.outcome() {
         let (g0, g1, wp) = match o {
             Outcome::P1Win => (0.0, 6.0, 1.0),
@@ -1758,7 +1870,7 @@ pub fn evaluate_tempo(battle: &Battle, dex: &Dex) -> TempoEval {
         };
     }
     let (table, cb) = CompactBattle::from_battle(battle, dex);
-    evaluate_compact_tempo(&cb, &table)
+    evaluate_compact_tempo_variant(&cb, &table, variant)
 }
 
 /// Format a concise human-readable turn-economy breakdown of `battle`.
@@ -1837,8 +1949,8 @@ fn encode_choice(
     }
 }
 
-/// Resolve any post-turn forced switch (`request == 2`) in `cb` cleanly using `evaluate_compact_tempo`.
-fn resolve_forced_switches(cb: &mut CompactBattle, table: &MatchTable) {
+/// Resolve any post-turn forced switch (`request == 2`) in `cb` cleanly using `evaluate_compact_tempo_variant`.
+fn resolve_forced_switches_variant(cb: &mut CompactBattle, table: &MatchTable, variant: TempoVariant) {
     for _ in 0..2 {
         if cb.outcome != 0 {
             return;
@@ -1876,9 +1988,9 @@ fn resolve_forced_switches(cb: &mut CompactBattle, table: &MatchTable) {
                     ca.step_switch(table, [a, 0]);
                     let mut cb_b = *cb;
                     cb_b.step_switch(table, [b, 0]);
-                    evaluate_compact_tempo(&ca, table)
+                    evaluate_compact_tempo_variant(&ca, table, variant)
                         .win_prob
-                        .total_cmp(&evaluate_compact_tempo(&cb_b, table).win_prob)
+                        .total_cmp(&evaluate_compact_tempo_variant(&cb_b, table, variant).win_prob)
                 })
                 .unwrap();
             (best, 0)
@@ -1891,14 +2003,13 @@ fn resolve_forced_switches(cb: &mut CompactBattle, table: &MatchTable) {
                     ca.step_switch(table, [0, a]);
                     let mut cb_b = *cb;
                     cb_b.step_switch(table, [0, b]);
-                    evaluate_compact_tempo(&ca, table)
+                    evaluate_compact_tempo_variant(&ca, table, variant)
                         .win_prob
-                        .total_cmp(&evaluate_compact_tempo(&cb_b, table).win_prob)
+                        .total_cmp(&evaluate_compact_tempo_variant(&cb_b, table, variant).win_prob)
                 })
                 .unwrap();
             (0, best)
         } else {
-            // Both sides forced to switch simultaneously: pick minimax optimal pair.
             let mut best_p0 = opts0[0];
             let mut best_val0 = f64::NEG_INFINITY;
             for &a in &opts0 {
@@ -1906,7 +2017,7 @@ fn resolve_forced_switches(cb: &mut CompactBattle, table: &MatchTable) {
                 for &b in &opts1 {
                     let mut c = *cb;
                     c.step_switch(table, [a, b]);
-                    let v = evaluate_compact_tempo(&c, table).win_prob;
+                    let v = evaluate_compact_tempo_variant(&c, table, variant).win_prob;
                     if v < worst {
                         worst = v;
                     }
@@ -1924,9 +2035,9 @@ fn resolve_forced_switches(cb: &mut CompactBattle, table: &MatchTable) {
                     ca.step_switch(table, [best_p0, a]);
                     let mut cb_b = *cb;
                     cb_b.step_switch(table, [best_p0, b]);
-                    evaluate_compact_tempo(&ca, table)
+                    evaluate_compact_tempo_variant(&ca, table, variant)
                         .win_prob
-                        .total_cmp(&evaluate_compact_tempo(&cb_b, table).win_prob)
+                        .total_cmp(&evaluate_compact_tempo_variant(&cb_b, table, variant).win_prob)
                 })
                 .unwrap();
             (best_p0, best_p1)
@@ -1935,7 +2046,7 @@ fn resolve_forced_switches(cb: &mut CompactBattle, table: &MatchTable) {
     }
 }
 
-/// Analyze a simultaneous-move decision point with 1-ply engine lookahead + Nash LP.
+/// Analyze a simultaneous-move decision point with 1-ply engine lookahead + Nash LP (`Full`).
 pub fn analyze_turn_matrix(
     battle: &Battle,
     dex: &Dex,
@@ -1943,6 +2054,27 @@ pub fn analyze_turn_matrix(
     own_choices: &[SearchChoice],
     samples_per_cell: usize,
     seed: u64,
+) -> TurnMatrixAnalysis {
+    analyze_turn_matrix_variant(
+        battle,
+        dex,
+        side,
+        own_choices,
+        samples_per_cell,
+        seed,
+        TempoVariant::Full,
+    )
+}
+
+/// Analyze a simultaneous-move decision point with 1-ply engine lookahead + Nash LP under `variant`.
+pub fn analyze_turn_matrix_variant(
+    battle: &Battle,
+    dex: &Dex,
+    side: usize,
+    own_choices: &[SearchChoice],
+    samples_per_cell: usize,
+    seed: u64,
+    variant: TempoVariant,
 ) -> TurnMatrixAnalysis {
     let opp = 1 - side;
     let mut b_tmp = battle.clone();
@@ -1979,8 +2111,8 @@ pub fn analyze_turn_matrix(
                 let mut cb = base_cb;
                 cb.prng_seed = s;
                 cb.step_turn(&table, actions);
-                resolve_forced_switches(&mut cb, &table);
-                let ev = evaluate_compact_tempo(&cb, &table);
+                resolve_forced_switches_variant(&mut cb, &table, variant);
+                let ev = evaluate_compact_tempo_variant(&cb, &table, variant);
                 sum_wp += ev.win_prob_for(side);
                 sum_tg += ev.advantage_for(side);
             }
@@ -2009,10 +2141,91 @@ pub fn analyze_turn_matrix(
     }
 }
 
+/// Fast 2-stage Team Preview selector shared across `TempoAgent` and `TempoMctsAgent`:
+/// Stage 1 scores unique 3-mon subsets (up to 20) against 2 opponent samples;
+/// Stage 2 picks the best lead among the top 3 subsets against 3 opponent samples.
+fn fast_tempo_team_preview(
+    battle: &Battle,
+    dex: &Dex,
+    side: usize,
+    choices: &[SearchChoice],
+    variant: TempoVariant,
+) -> SearchChoice {
+    if choices.len() <= 1 {
+        return choices[0];
+    }
+    let opp = 1 - side;
+    let mut b_tmp = battle.clone();
+    b_tmp.log_enabled = false;
+    let opp_choices = b_tmp.legal_choices(dex, opp);
+    let step2 = (opp_choices.len() / 2).max(1);
+    let opp_s2: Vec<SearchChoice> = opp_choices.iter().step_by(step2).take(2).copied().collect();
+    let step3 = (opp_choices.len() / 3).max(1);
+    let opp_s3: Vec<SearchChoice> = opp_choices.iter().step_by(step3).take(3).copied().collect();
+
+    // Group choices by sorted 3-mon subset.
+    let mut subsets: Vec<([u8; 3], Vec<SearchChoice>)> = Vec::new();
+    for &c in choices {
+        if let SearchChoice::Team(t) = c {
+            let mut key = t;
+            key.sort_unstable();
+            if let Some((_, list)) = subsets.iter_mut().find(|(k, _)| *k == key) {
+                list.push(c);
+            } else {
+                subsets.push((key, vec![c]));
+            }
+        }
+    }
+    if subsets.is_empty() {
+        return choices[0];
+    }
+
+    let score_pick = |my_c: SearchChoice, opp_list: &[SearchChoice]| -> f64 {
+        let mut sum = 0.0;
+        let mut cnt = 0usize;
+        for &opp_c in opp_list {
+            let mut sim = battle.clone();
+            sim.log_enabled = false;
+            let picks = if side == 0 {
+                [Some(my_c), Some(opp_c)]
+            } else {
+                [Some(opp_c), Some(my_c)]
+            };
+            if sim.apply_choices(dex, picks).is_ok() {
+                sum += evaluate_tempo_variant(&sim, dex, variant).win_prob_for(side);
+                cnt += 1;
+            }
+        }
+        if cnt > 0 { sum / (cnt as f64) } else { 0.5 }
+    };
+
+    let mut ranked: Vec<(f64, usize)> = subsets
+        .iter()
+        .enumerate()
+        .map(|(idx, (_, list))| (score_pick(list[0], &opp_s2), idx))
+        .collect();
+    ranked.sort_by(|a, b| b.0.total_cmp(&a.0));
+
+    let mut best_choice = choices[0];
+    let mut best_score = f64::NEG_INFINITY;
+    for &(_, idx) in ranked.iter().take(3) {
+        for &my_c in &subsets[idx].1 {
+            let sc = score_pick(my_c, &opp_s3);
+            if sc > best_score {
+                best_score = sc;
+                best_choice = my_c;
+            }
+        }
+    }
+    best_choice
+}
+
 /// Standalone Turn-Economy ("Golf") Agent (1-ply simultaneous Nash equilibrium over `TempoEval`).
 pub struct TempoAgent {
     pub samples_per_cell: usize,
     pub deterministic: bool,
+    pub variant: TempoVariant,
+    pub fixed_preview: bool,
     rng: SplitMix64,
 }
 
@@ -2021,6 +2234,8 @@ impl TempoAgent {
         Self {
             samples_per_cell: 8,
             deterministic: false,
+            variant: TempoVariant::Full,
+            fixed_preview: false,
             rng: SplitMix64::new(seed),
         }
     }
@@ -2029,60 +2244,35 @@ impl TempoAgent {
         Self {
             samples_per_cell: samples_per_cell.max(1),
             deterministic,
+            variant: TempoVariant::Full,
+            fixed_preview: false,
             rng: SplitMix64::new(seed),
         }
     }
 
-    fn choose_team_preview(
-        &mut self,
-        battle: &Battle,
-        dex: &Dex,
-        side: usize,
-        choices: &[SearchChoice],
-    ) -> SearchChoice {
-        if choices.len() <= 1 {
-            return choices[0];
+    pub fn with_variant(
+        seed: u64,
+        samples_per_cell: usize,
+        deterministic: bool,
+        variant: TempoVariant,
+    ) -> Self {
+        Self {
+            samples_per_cell: samples_per_cell.max(1),
+            deterministic,
+            variant,
+            fixed_preview: false,
+            rng: SplitMix64::new(seed),
         }
-        let opp = 1 - side;
-        let mut b_tmp = battle.clone();
-        b_tmp.log_enabled = false;
-        let opp_choices = b_tmp.legal_choices(dex, opp);
-        // Sample up to 3 diverse opponent team picks (different leads) to score our picks quickly.
-        let step = (opp_choices.len() / 3).max(1);
-        let opp_sample: Vec<SearchChoice> = opp_choices.iter().step_by(step).take(3).copied().collect();
-
-        let mut best_choice = choices[0];
-        let mut best_score = f64::NEG_INFINITY;
-
-        for &my_c in choices {
-            let mut sum = 0.0;
-            let mut cnt = 0usize;
-            for &opp_c in &opp_sample {
-                let mut sim = battle.clone();
-                sim.log_enabled = false;
-                let picks = if side == 0 {
-                    [Some(my_c), Some(opp_c)]
-                } else {
-                    [Some(opp_c), Some(my_c)]
-                };
-                if sim.apply_choices(dex, picks).is_ok() {
-                    sum += evaluate_tempo(&sim, dex).win_prob_for(side);
-                    cnt += 1;
-                }
-            }
-            let score = if cnt > 0 { sum / (cnt as f64) } else { 0.5 };
-            if score > best_score {
-                best_score = score;
-                best_choice = my_c;
-            }
-        }
-        best_choice
     }
 }
 
 impl Agent for TempoAgent {
     fn name(&self) -> String {
-        format!("tempo:{}", self.samples_per_cell)
+        let tag = match self.variant {
+            TempoVariant::Full => "full",
+            TempoVariant::Raw => "raw",
+        };
+        format!("tempo-1ply-{tag}:{}", self.samples_per_cell)
     }
 
     fn choose(
@@ -2096,13 +2286,18 @@ impl Agent for TempoAgent {
             return choices[0];
         }
         if matches!(choices[0], SearchChoice::Team(_)) {
-            return self.choose_team_preview(battle, dex, side, choices);
+            if self.fixed_preview {
+                let d = SearchChoice::Team([1, 2, 3]);
+                return if choices.contains(&d) { d } else { choices[0] };
+            }
+            return fast_tempo_team_preview(battle, dex, side, choices, self.variant);
         }
 
         // Forced switch (no Move actions): pick the bench switch maximizing TempoEval win prob.
         let has_moves = choices.iter().any(|c| matches!(c, SearchChoice::Move(_)));
         if !has_moves {
             let (table, base_cb) = CompactBattle::from_battle(battle, dex);
+            let variant = self.variant;
             return choices
                 .iter()
                 .copied()
@@ -2114,7 +2309,7 @@ impl Agent for TempoAgent {
                         let mut cb = base_cb;
                         let sw = if side == 0 { [act, 0] } else { [0, act] };
                         cb.step_switch(&table, sw);
-                        evaluate_compact_tempo(&cb, &table).win_prob_for(side)
+                        evaluate_compact_tempo_variant(&cb, &table, variant).win_prob_for(side)
                     };
                     score(a).total_cmp(&score(b))
                 })
@@ -2122,7 +2317,15 @@ impl Agent for TempoAgent {
         }
 
         let seed = self.rng.next();
-        let analysis = analyze_turn_matrix(battle, dex, side, choices, self.samples_per_cell, seed);
+        let analysis = analyze_turn_matrix_variant(
+            battle,
+            dex,
+            side,
+            choices,
+            self.samples_per_cell,
+            seed,
+            self.variant,
+        );
 
         if self.deterministic {
             let best_idx = analysis
@@ -2157,7 +2360,500 @@ impl Agent for TempoAgent {
             return choices.iter().map(|&c| if c == pick { 1.0 } else { 0.0 }).collect();
         }
         let seed = self.rng.next();
-        analyze_turn_matrix(battle, dex, side, choices, self.samples_per_cell, seed).own_policy
+        analyze_turn_matrix_variant(
+            battle,
+            dex,
+            side,
+            choices,
+            self.samples_per_cell,
+            seed,
+            self.variant,
+        )
+        .own_policy
+    }
+}
+
+// =========================================================================
+// CompactBattle-Native Zero-Rollout DUCT SM-MCTS (`TempoMctsAgent`)
+// =========================================================================
+
+#[derive(Clone, Copy, Debug)]
+pub struct TempoMctsConfig {
+    pub iterations: u32,
+    pub c: f64,
+    pub max_depth: u8,
+    pub leaf: TempoLeafMode,
+    pub deterministic: bool,
+    pub fixed_preview: bool,
+}
+
+impl Default for TempoMctsConfig {
+    fn default() -> Self {
+        Self {
+            iterations: 300,
+            c: 0.4,
+            max_depth: 16,
+            leaf: TempoLeafMode::TempoFull,
+            deterministic: false,
+            fixed_preview: false,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TempoMctsResult {
+    pub own_choices: Vec<SearchChoice>,
+    pub own_policy: Vec<f64>,
+    pub visits: Vec<u32>,
+    pub means: Vec<f64>,
+    pub eq_win_prob: f64,
+    pub mean_depth: f64,
+    pub nodes: usize,
+}
+
+#[derive(Clone, Copy)]
+struct DuctNode {
+    n_acts: [u8; 2],
+    acts: [[u8; 7]; 2],
+    visits: [[u32; 7]; 2],
+    sums: [[f64; 7]; 2],
+    total: u32,
+}
+
+impl DuctNode {
+    fn new(cb: &CompactBattle, table: &MatchTable) -> Self {
+        let mut acts = [[0u8; 7]; 2];
+        let n0 = cb.legal_actions(table, 0, &mut acts[0]) as u8;
+        let n1 = cb.legal_actions(table, 1, &mut acts[1]) as u8;
+        Self {
+            n_acts: [n0, n1],
+            acts,
+            visits: [[0; 7]; 2],
+            sums: [[0.0; 7]; 2],
+            total: 0,
+        }
+    }
+
+    #[inline]
+    fn select_ucb(&self, side: usize, c: f64) -> usize {
+        let n = self.n_acts[side] as usize;
+        if n <= 1 {
+            return 0;
+        }
+        for i in 0..n {
+            if self.visits[side][i] == 0 {
+                return i;
+            }
+        }
+        let log_n = (self.total.max(1) as f64).ln();
+        let mut best_i = 0;
+        let mut best_u = f64::NEG_INFINITY;
+        for i in 0..n {
+            let v = self.visits[side][i] as f64;
+            let raw_mean = self.sums[side][i] / v;
+            let mean = if side == 0 { raw_mean } else { 1.0 - raw_mean };
+            let u = mean + c * (log_n / v).sqrt();
+            if u > best_u {
+                best_u = u;
+                best_i = i;
+            }
+        }
+        best_i
+    }
+}
+
+#[inline]
+fn mix64(mut h: u64, v: u64) -> u64 {
+    h ^= v.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    h = h.rotate_left(27).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    h ^ (h >> 31)
+}
+
+/// Compact 16-HP-bucket state hash for zero-alloc DUCT tree indexing.
+#[inline]
+fn compact_duct_key(cb: &CompactBattle, table: &MatchTable, depth: u8) -> u64 {
+    let mut h = mix64(0x517C_C1B7_2722_0A95, depth as u64);
+    let s0 = &cb.sides[0];
+    let s1 = &cb.sides[1];
+    let side_word = ((s0.active_idx as u64) << 0)
+        | ((s0.alive_mask as u64) << 3)
+        | ((s0.request as u64) << 6)
+        | (((s0.side_flags & 0x07) as u64) << 9)
+        | (((s0.reflect_turns > 0) as u64) << 12)
+        | (((s0.lightscreen_turns > 0) as u64) << 13)
+        | (((s0.safeguard_turns > 0) as u64) << 14)
+        | ((s1.active_idx as u64) << 16)
+        | ((s1.alive_mask as u64) << 19)
+        | ((s1.request as u64) << 22)
+        | (((s1.side_flags & 0x07) as u64) << 25)
+        | (((s1.reflect_turns > 0) as u64) << 28)
+        | (((s1.lightscreen_turns > 0) as u64) << 29)
+        | (((s1.safeguard_turns > 0) as u64) << 30)
+        | (if cb.weather_turns > 0 {
+            ((cb.weather_kind as u64) << 32)
+        } else {
+            0
+        });
+    h = mix64(h, side_word);
+
+    for side in 0..2usize {
+        let act = cb.sides[side].active_idx as usize;
+        let mask = cb.sides[side].alive_mask;
+        for slot in 0..3usize {
+            if (mask & (1 << slot)) == 0 {
+                continue;
+            }
+            let idx = side * 3 + slot;
+            let mon = &cb.mons[idx];
+            let maxhp = table.mons[idx].maxhp.max(1) as i32;
+            let hp = mon.hp().max(0) as i32;
+            let hp_b = if hp == 0 {
+                0u64
+            } else {
+                (((hp * 16 + maxhp - 1) / maxhp).clamp(1, 16)) as u64
+            };
+            let st = mon.status_raw() as u64;
+            let st_c = if st == Status::Slp as u64 {
+                mon.status_counter().min(4) as u64
+            } else {
+                0
+            };
+            let mut mword = ((idx as u64) << 0) | (hp_b << 4) | (st << 9) | (st_c << 12);
+            if slot == act {
+                let sub = (mon.sub_hp() > 0) as u64;
+                let perish = mon.perish_turns() as u64;
+                let vol = (mon.vol_flags
+                    & (vol_bit::SUBSTITUTE
+                        | vol_bit::CONFUSION
+                        | vol_bit::ENCORE
+                        | vol_bit::DISABLE
+                        | vol_bit::TRAPPED_OR_LOCKED
+                        | vol_bit::LEECH_SEED)) as u64;
+                let rech = mon.must_recharge() as u64;
+                mword |= (sub << 16) | (perish << 17) | (rech << 20) | (vol << 24);
+                h = mix64(h, mword);
+                let mut bword = 0u64;
+                for (bi, &bv) in mon.boosts.iter().enumerate() {
+                    bword |= (((bv + 6).clamp(0, 12) as u64) & 0xF) << (bi * 4);
+                }
+                h = mix64(h, bword);
+            } else {
+                h = mix64(h, mword);
+            }
+        }
+    }
+    h
+}
+
+#[inline]
+fn eval_duct_leaf(cb: &CompactBattle, table: &MatchTable, mode: TempoLeafMode) -> f64 {
+    if cb.outcome != 0 {
+        return match cb.outcome {
+            1 => 1.0,
+            2 => 0.0,
+            _ => 0.5,
+        };
+    }
+    match mode {
+        TempoLeafMode::TempoFull => {
+            evaluate_compact_tempo_variant(cb, table, TempoVariant::Full).win_prob
+        }
+        TempoLeafMode::TempoRaw => {
+            evaluate_compact_tempo_variant(cb, table, TempoVariant::Raw).win_prob
+        }
+        TempoLeafMode::EvalStatic => compact_eval01(cb, table, &EvalWeights::default()),
+        TempoLeafMode::EvalBlindspot => {
+            compact_eval_leaf_blindspot(cb, table, &EvalWeights::default())
+        }
+    }
+}
+
+/// Run zero-rollout CompactBattle DUCT SM-MCTS from `battle` for `side`.
+pub fn search_tempo_mcts(
+    battle: &Battle,
+    dex: &Dex,
+    side: usize,
+    own_choices: &[SearchChoice],
+    cfg: TempoMctsConfig,
+    seed: u64,
+) -> TempoMctsResult {
+    let (table, base_cb) = CompactBattle::from_battle(battle, dex);
+    let mut nodes: Vec<DuctNode> = Vec::with_capacity((cfg.iterations as usize / 2).max(16));
+    let mut index: FxHashMap<u64, usize> = FxHashMap::default();
+
+    // Build root node using exact caller `own_choices` order so indices align 1:1.
+    let mut root = DuctNode::new(&base_cb, &table);
+    let mut own_codes = [0u8; 7];
+    let mut n_own = 0usize;
+    for &c in own_choices {
+        if n_own < 7 {
+            if let Some(code) = encode_choice(&table, &base_cb, side, c) {
+                own_codes[n_own] = code;
+                n_own += 1;
+            }
+        }
+    }
+    if n_own > 0 {
+        root.n_acts[side] = n_own as u8;
+        root.acts[side] = own_codes;
+    }
+    let root_n0 = root.n_acts[0] as usize;
+    let root_n1 = root.n_acts[1] as usize;
+
+    let root_key = compact_duct_key(&base_cb, &table, 0);
+    nodes.push(root);
+    index.insert(root_key, 0);
+
+    let mut joint_v = [[0u32; 7]; 7];
+    let mut joint_s = [[0.0f64; 7]; 7];
+    let mut rng = SplitMix64::new(seed ^ 0xD1B5_4A32_D192_ED03);
+    let mut path: Vec<(usize, usize, usize)> = Vec::with_capacity(cfg.max_depth as usize + 1);
+    let mut depth_sum = 0u64;
+
+    let warmup_pairs = (root_n0 * root_n1).min(cfg.iterations as usize);
+
+    for iter in 0..cfg.iterations as usize {
+        let mut cb = base_cb;
+        let mut depth = 0u8;
+        let mut cur_id = 0usize;
+        path.clear();
+
+        let leaf_val = loop {
+            let (i0, i1) = if depth == 0 && iter < warmup_pairs {
+                (iter / root_n1.max(1), iter % root_n1.max(1))
+            } else {
+                let node = &nodes[cur_id];
+                (node.select_ucb(0, cfg.c), node.select_ucb(1, cfg.c))
+            };
+            let a0 = nodes[cur_id].acts[0][i0];
+            let a1 = nodes[cur_id].acts[1][i1];
+            path.push((cur_id, i0, i1));
+
+            cb.prng_seed = rng.next();
+            cb.apply_actions(&table, [a0, a1]);
+            depth += 1;
+
+            if cb.outcome != 0 {
+                break eval_duct_leaf(&cb, &table, cfg.leaf);
+            }
+            if depth >= cfg.max_depth {
+                break eval_duct_leaf(&cb, &table, cfg.leaf);
+            }
+
+            let next_key = compact_duct_key(&cb, &table, depth);
+            if let Some(&next_id) = index.get(&next_key) {
+                cur_id = next_id;
+            } else {
+                let new_id = nodes.len();
+                nodes.push(DuctNode::new(&cb, &table));
+                index.insert(next_key, new_id);
+                break eval_duct_leaf(&cb, &table, cfg.leaf);
+            }
+        };
+
+        depth_sum += depth as u64;
+        for &(nid, i0, i1) in &path {
+            let n = &mut nodes[nid];
+            n.total += 1;
+            n.visits[0][i0] += 1;
+            n.sums[0][i0] += leaf_val;
+            n.visits[1][i1] += 1;
+            n.sums[1][i1] += leaf_val;
+        }
+        if let Some(&(_, r0, r1)) = path.first() {
+            joint_v[r0][r1] += 1;
+            joint_s[r0][r1] += leaf_val;
+        }
+    }
+
+    let root_node = &nodes[0];
+    let n_my = own_choices.len();
+    let opp = 1 - side;
+    let n_op = root_node.n_acts[opp] as usize;
+
+    let mut visits = vec![0u32; n_my];
+    let mut means = vec![0.5f64; n_my];
+    for i in 0..n_my {
+        let v = root_node.visits[side][i];
+        visits[i] = v;
+        if v > 0 {
+            let raw = root_node.sums[side][i] / (v as f64);
+            means[i] = if side == 0 { raw } else { 1.0 - raw };
+        }
+    }
+
+    // Root readout: solve shrunken joint matrix over active support (`visits >= max_v / 8`) via exact Nash LP.
+    let (own_policy, eq_win_prob) = if n_my <= 1 {
+        (vec![1.0; n_my], means.first().copied().unwrap_or(0.5))
+    } else if n_op <= 1 {
+        let best_i = (0..n_my)
+            .max_by(|&a, &b| visits[a].cmp(&visits[b]).then_with(|| means[a].total_cmp(&means[b])))
+            .unwrap_or(0);
+        let mut pol = vec![0.0; n_my];
+        pol[best_i] = 1.0;
+        (pol, means[best_i])
+    } else {
+        let max_v = visits.iter().copied().max().unwrap_or(1);
+        let min_own_v = (max_v / 8).max(1);
+        let active_rows: Vec<usize> = (0..n_my).filter(|&i| visits[i] >= min_own_v).collect();
+        let max_ov = (0..n_op)
+            .map(|j| root_node.visits[opp][j])
+            .max()
+            .unwrap_or(1);
+        let min_opp_v = (max_ov / 16).max(1);
+        let active_cols: Vec<usize> = (0..n_op)
+            .filter(|&j| root_node.visits[opp][j] >= min_opp_v)
+            .collect();
+
+        if active_rows.len() == 1 {
+            let mut pol = vec![0.0; n_my];
+            pol[active_rows[0]] = 1.0;
+            (pol, means[active_rows[0]])
+        } else if active_cols.is_empty() {
+            let best_i = active_rows
+                .iter()
+                .copied()
+                .max_by(|&a, &b| means[a].total_cmp(&means[b]))
+                .unwrap_or(0);
+            let mut pol = vec![0.0; n_my];
+            pol[best_i] = 1.0;
+            (pol, means[best_i])
+        } else {
+            let nr = active_rows.len();
+            let nc = active_cols.len();
+            let mut mat = vec![0.5; nr * nc];
+            let k_shrink = 4.0f64;
+            for (ri, &i) in active_rows.iter().enumerate() {
+                let row_prior = means[i];
+                for (cj, &j) in active_cols.iter().enumerate() {
+                    let (r0, r1) = if side == 0 { (i, j) } else { (j, i) };
+                    let nij = joint_v[r0][r1] as f64;
+                    let val = if nij > 0.0 {
+                        let raw_q = joint_s[r0][r1] / nij;
+                        let q = if side == 0 { raw_q } else { 1.0 - raw_q };
+                        (nij * q + k_shrink * row_prior) / (nij + k_shrink)
+                    } else {
+                        row_prior
+                    };
+                    mat[ri * nc + cj] = val;
+                }
+            }
+            let sol = solve_matrix_full(&mat, nr, nc);
+            let mut pol = vec![0.0; n_my];
+            let mut total_p = 0.0;
+            for (ri, &i) in active_rows.iter().enumerate() {
+                let p = sol.x[ri].max(0.0);
+                pol[i] = p;
+                total_p += p;
+            }
+            if total_p > 1e-9 {
+                for p in &mut pol {
+                    *p /= total_p;
+                }
+            } else {
+                let best_i = active_rows[0];
+                pol[best_i] = 1.0;
+            }
+            (pol, sol.value)
+        }
+    };
+
+    TempoMctsResult {
+        own_choices: own_choices.to_vec(),
+        own_policy,
+        visits,
+        means,
+        eq_win_prob,
+        mean_depth: (depth_sum as f64) / (cfg.iterations.max(1) as f64),
+        nodes: nodes.len(),
+    }
+}
+
+/// Standalone zero-rollout DUCT SM-MCTS Agent over `TempoEval` (or controlled `eval.rs` leaf).
+pub struct TempoMctsAgent {
+    pub cfg: TempoMctsConfig,
+    rng: SplitMix64,
+}
+
+impl TempoMctsAgent {
+    pub fn new(cfg: TempoMctsConfig, seed: u64) -> Self {
+        Self {
+            cfg,
+            rng: SplitMix64::new(seed),
+        }
+    }
+}
+
+impl Agent for TempoMctsAgent {
+    fn name(&self) -> String {
+        let tag = match self.cfg.leaf {
+            TempoLeafMode::TempoFull => "full",
+            TempoLeafMode::TempoRaw => "raw",
+            TempoLeafMode::EvalStatic => "eval",
+            TempoLeafMode::EvalBlindspot => "blindspot",
+        };
+        format!("tempo-mcts-{tag}:{}", self.cfg.iterations)
+    }
+
+    fn choose(
+        &mut self,
+        battle: &Battle,
+        dex: &Dex,
+        side: usize,
+        choices: &[SearchChoice],
+    ) -> SearchChoice {
+        if choices.len() == 1 {
+            return choices[0];
+        }
+        if matches!(choices[0], SearchChoice::Team(_)) {
+            if self.cfg.fixed_preview {
+                let d = SearchChoice::Team([1, 2, 3]);
+                return if choices.contains(&d) { d } else { choices[0] };
+            }
+            let preview_variant = match self.cfg.leaf {
+                TempoLeafMode::TempoRaw => TempoVariant::Raw,
+                _ => TempoVariant::Full,
+            };
+            return fast_tempo_team_preview(battle, dex, side, choices, preview_variant);
+        }
+
+        let seed = self.rng.next();
+        let res = search_tempo_mcts(battle, dex, side, choices, self.cfg, seed);
+
+        if self.cfg.deterministic {
+            let best_i = res
+                .own_policy
+                .iter()
+                .enumerate()
+                .max_by(|a, b| a.1.total_cmp(b.1))
+                .map(|(i, _)| i)
+                .unwrap_or(0);
+            choices[best_i]
+        } else {
+            let mut r = self.rng.next_f64();
+            for (i, &p) in res.own_policy.iter().enumerate() {
+                r -= p;
+                if r <= 0.0 {
+                    return choices[i];
+                }
+            }
+            choices[choices.len() - 1]
+        }
+    }
+
+    fn root_policy(
+        &mut self,
+        battle: &Battle,
+        dex: &Dex,
+        side: usize,
+        choices: &[SearchChoice],
+    ) -> Vec<f64> {
+        if choices.len() == 1 || matches!(choices[0], SearchChoice::Team(_)) {
+            let pick = self.choose(battle, dex, side, choices);
+            return choices.iter().map(|&c| if c == pick { 1.0 } else { 0.0 }).collect();
+        }
+        let seed = self.rng.next();
+        search_tempo_mcts(battle, dex, side, choices, self.cfg, seed).own_policy
     }
 }
 
@@ -2314,5 +3010,42 @@ mod tests {
             ev_full.turn_advantage,
             ev_chipped.turn_advantage
         );
+
+        // 7. DUCT MCTS search depth scales monotonically with iteration budget.
+        let mut b_mcts = start(&dex, &p1_r, &p2_r);
+        let cs_mcts = b_mcts.legal_choices(&dex, 0);
+        let r30 = search_tempo_mcts(
+            &b_mcts,
+            &dex,
+            0,
+            &cs_mcts,
+            TempoMctsConfig { iterations: 30, ..TempoMctsConfig::default() },
+            11,
+        );
+        let r300 = search_tempo_mcts(
+            &b_mcts,
+            &dex,
+            0,
+            &cs_mcts,
+            TempoMctsConfig { iterations: 300, ..TempoMctsConfig::default() },
+            11,
+        );
+        let r1500 = search_tempo_mcts(
+            &b_mcts,
+            &dex,
+            0,
+            &cs_mcts,
+            TempoMctsConfig { iterations: 1500, ..TempoMctsConfig::default() },
+            11,
+        );
+        assert!(
+            r1500.mean_depth > r300.mean_depth && r300.mean_depth > r30.mean_depth,
+            "mean_depth must scale with budget: 30={:.2}, 300={:.2}, 1500={:.2}",
+            r30.mean_depth,
+            r300.mean_depth,
+            r1500.mean_depth
+        );
+        let psum: f64 = r300.own_policy.iter().sum();
+        assert!((psum - 1.0).abs() < 1e-6, "policy must sum to 1, got {psum}");
     }
 }

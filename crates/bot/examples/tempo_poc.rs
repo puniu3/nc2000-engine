@@ -13,7 +13,8 @@ use nc2000_bot::duel::{run_duel, DuelSpec};
 use nc2000_bot::preview::load_meta_pool;
 use nc2000_bot::smmcts::{RmAgent, RmConfig, SelRule};
 use nc2000_bot::tempo::{
-    analyze_turn_matrix, evaluate_tempo, format_tempo_explanation, TempoAgent,
+    analyze_turn_matrix, analyze_turn_matrix_variant, evaluate_tempo, format_tempo_explanation,
+    search_tempo_mcts, TempoAgent, TempoLeafMode, TempoMctsAgent, TempoMctsConfig, TempoVariant,
 };
 use nc2000_bot::{Agent, MaxDamageAgent};
 use nc2000_engine::battle::PokemonSet;
@@ -368,64 +369,331 @@ fn run_scenarios(dex: &Dex) {
     }
 }
 
+fn build_agent(spec: &str, seed: u64, fixed_preview: bool) -> Box<dyn Agent> {
+    if spec == "greedy" {
+        Box::new(MaxDamageAgent::conformant())
+    } else if spec == "maxdamage" {
+        Box::new(MaxDamageAgent::new())
+    } else if let Some(rest) = spec.strip_prefix("skuct:") {
+        let iters: u32 = rest.parse().unwrap_or(300);
+        let cfg = RmConfig {
+            iterations: iters,
+            c: 0.4,
+            rule: SelRule::Ucb,
+            ..RmConfig::default()
+        };
+        Box::new(RmAgent::new(cfg, seed))
+    } else if let Some(rest) = spec.strip_prefix("1ply-full:") {
+        let k: usize = rest.parse().unwrap_or(8);
+        let mut a = TempoAgent::with_variant(seed, k, false, TempoVariant::Full);
+        a.fixed_preview = fixed_preview;
+        Box::new(a)
+    } else if let Some(rest) = spec.strip_prefix("1ply-raw:") {
+        let k: usize = rest.parse().unwrap_or(8);
+        let mut a = TempoAgent::with_variant(seed, k, false, TempoVariant::Raw);
+        a.fixed_preview = fixed_preview;
+        Box::new(a)
+    } else if let Some(rest) = spec.strip_prefix("mcts-full:") {
+        let iters: u32 = rest.parse().unwrap_or(300);
+        Box::new(TempoMctsAgent::new(
+            TempoMctsConfig {
+                iterations: iters,
+                leaf: TempoLeafMode::TempoFull,
+                fixed_preview,
+                ..TempoMctsConfig::default()
+            },
+            seed,
+        ))
+    } else if let Some(rest) = spec.strip_prefix("mcts-raw:") {
+        let iters: u32 = rest.parse().unwrap_or(300);
+        Box::new(TempoMctsAgent::new(
+            TempoMctsConfig {
+                iterations: iters,
+                leaf: TempoLeafMode::TempoRaw,
+                fixed_preview,
+                ..TempoMctsConfig::default()
+            },
+            seed,
+        ))
+    } else if let Some(rest) = spec.strip_prefix("mcts-eval:") {
+        let iters: u32 = rest.parse().unwrap_or(300);
+        Box::new(TempoMctsAgent::new(
+            TempoMctsConfig {
+                iterations: iters,
+                leaf: TempoLeafMode::EvalStatic,
+                fixed_preview,
+                ..TempoMctsConfig::default()
+            },
+            seed,
+        ))
+    } else if let Some(rest) = spec.strip_prefix("mcts-blindspot:") {
+        let iters: u32 = rest.parse().unwrap_or(300);
+        Box::new(TempoMctsAgent::new(
+            TempoMctsConfig {
+                iterations: iters,
+                leaf: TempoLeafMode::EvalBlindspot,
+                fixed_preview,
+                ..TempoMctsConfig::default()
+            },
+            seed,
+        ))
+    } else {
+        panic!("unknown agent spec: {spec}");
+    }
+}
+
+fn run_one_duel(
+    dex: &Dex,
+    teams: &[Vec<PokemonSet>],
+    arm_a: &str,
+    arm_b: &str,
+    games: usize,
+    seed: u64,
+    crn: bool,
+    fixed_preview: bool,
+    threads: usize,
+) -> serde_json::Value {
+    let a_str = arm_a.to_string();
+    let b_str = arm_b.to_string();
+    let build_a = move |s: u64| build_agent(&a_str, s, fixed_preview);
+    let build_b = move |s: u64| build_agent(&b_str, s, fixed_preview);
+    let mut spec = DuelSpec::new(games, seed);
+    spec.max_turns = 200;
+    spec.crn_agent_seeds = crn;
+    spec.threads = threads.min(10);
+    let stats = run_duel(dex, teams, &build_a, &build_b, spec);
+    json!({
+        "arm_a": arm_a,
+        "arm_b": arm_b,
+        "games": stats.games,
+        "wins": stats.wins,
+        "losses": stats.losses,
+        "ties": stats.ties,
+        "turn_caps": stats.turn_caps,
+        "score": (stats.score * 10000.0).round() / 10000.0,
+        "ci95": if stats.ci95.is_finite() { (stats.ci95 * 10000.0).round() / 10000.0 } else { 0.0 },
+        "avg_turns": (stats.avg_turns * 10.0).round() / 10.0,
+        "a_ms": (stats.a_ms_per_move * 100.0).round() / 100.0,
+        "b_ms": (stats.b_ms_per_move * 100.0).round() / 100.0,
+    })
+}
+
 fn run_duel_bench(dex: &Dex, args: &[String]) {
     let flag = |name: &str| -> Option<String> {
         args.iter()
             .position(|a| a == name)
             .and_then(|i| args.get(i + 1).cloned())
     };
-    let games: usize = flag("--games").map_or(40, |v| v.parse().unwrap());
+    let has = |name: &str| args.iter().any(|a| a == name);
+    let games: usize = flag("--games").map_or(60, |v| v.parse().unwrap());
     let samples: usize = flag("--samples").map_or(8, |v| v.parse().unwrap());
-    let vs = flag("--vs").unwrap_or_else(|| "greedy".to_string());
+    let arm_a = flag("--arm-a").unwrap_or_else(|| format!("1ply-full:{samples}"));
+    let arm_b = flag("--arm-b")
+        .or_else(|| flag("--vs"))
+        .unwrap_or_else(|| "greedy".to_string());
     let seed: u64 = flag("--seed").map_or(20261123, |v| v.parse().unwrap());
+    let threads: usize = flag("--threads").map_or(10, |v| v.parse().unwrap());
+    let crn = has("--crn");
+    let fixed_preview = has("--fixed-preview");
+
+    let root = repo_root();
+    let pool = load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
+    let teams: Vec<Vec<PokemonSet>> = pool.teams.iter().map(|t| t.sets.clone()).collect();
+    let row = run_one_duel(dex, &teams, &arm_a, &arm_b, games, seed, crn, fixed_preview, threads);
+    println!("{row}");
+}
+
+/// Probe whether deeper search fixes the 1-ply HP/boost cliffs on `Raw` without static workarounds.
+fn run_cliff_probe(dex: &Dex) -> serde_json::Value {
+    // Case 6a: Cloyster facing Raikou (`switch 2` = Snorlax vs dying to Thunderbolt)
+    let p1_6 = vec![
+        mk("Cloyster", 50, "Leftovers", &["Surf", "Spikes", "Explosion"]),
+        mk("Snorlax", 55, "Leftovers", &["Body Slam", "Earthquake", "Rest"]),
+        mk("Zapdos", 50, "Leftovers", &["Thunderbolt", "Hidden Power Ice", "Rest"]),
+    ];
+    let p2_6 = vec![
+        mk("Raikou", 50, "Leftovers", &["Thunderbolt", "Hidden Power Ice", "Rest"]),
+        mk("Skarmory", 50, "Leftovers", &["Drill Peck", "Whirlwind", "Rest"]),
+        mk("Snorlax", 55, "Leftovers", &["Body Slam", "Earthquake", "Rest"]),
+    ];
+    let mut b6 = start_battle(dex, &p1_6, &p2_6);
+    let cs6 = b6.legal_choices(dex, 0);
+
+    // Case 4b: Marowak facing faster Starmie (must NOT click Swords Dance)
+    let p1_4 = vec![
+        mk("Marowak", 50, "Thick Club", &["Earthquake", "Rock Slide", "Swords Dance"]),
+        mk("Snorlax", 50, "Leftovers", &["Body Slam", "Earthquake"]),
+    ];
+    let p2_4 = vec![
+        mk("Starmie", 50, "Leftovers", &["Surf", "Recover"]),
+        mk("Snorlax", 50, "Leftovers", &["Body Slam", "Rest"]),
+    ];
+    let mut b4 = start_battle(dex, &p1_4, &p2_4);
+    let cs4 = b4.legal_choices(dex, 0);
+
+    let mut rows = Vec::new();
+    for (v_name, variant, leaf) in [
+        ("raw", TempoVariant::Raw, TempoLeafMode::TempoRaw),
+        ("full", TempoVariant::Full, TempoLeafMode::TempoFull),
+    ] {
+        // 1-ply
+        let m6 = analyze_turn_matrix_variant(&b6, dex, 0, &cs6, 24, 42, variant);
+        let m4 = analyze_turn_matrix_variant(&b4, dex, 0, &cs4, 24, 42, variant);
+        let sw_i = cs6.iter().position(|c| c.to_input(dex) == "switch 2").unwrap();
+        let exp_i = cs6.iter().position(|c| c.to_input(dex) == "move explosion").unwrap();
+        let surf_i = cs6.iter().position(|c| c.to_input(dex) == "move surf").unwrap();
+        let sd_i = cs4.iter().position(|c| c.to_input(dex) == "move swordsdance").unwrap();
+        let eq_i = cs4.iter().position(|c| c.to_input(dex) == "move earthquake").unwrap();
+        rows.push(json!({
+            "variant": v_name,
+            "budget": "1ply",
+            "case6_p_switch_lax": (m6.own_policy[sw_i] * 1000.0).round() / 1000.0,
+            "case6_p_explosion": (m6.own_policy[exp_i] * 1000.0).round() / 1000.0,
+            "case6_p_surf_stay": (m6.own_policy[surf_i] * 1000.0).round() / 1000.0,
+            "case6_depth": 1.0,
+            "case4b_p_sd": (m4.own_policy[sd_i] * 1000.0).round() / 1000.0,
+            "case4b_p_eq": (m4.own_policy[eq_i] * 1000.0).round() / 1000.0,
+        }));
+
+        for &iters in &[100u32, 300, 900, 2700] {
+            let cfg = TempoMctsConfig {
+                iterations: iters,
+                leaf,
+                ..TempoMctsConfig::default()
+            };
+            let r6 = search_tempo_mcts(&b6, dex, 0, &cs6, cfg, 42);
+            let r4 = search_tempo_mcts(&b4, dex, 0, &cs4, cfg, 42);
+            rows.push(json!({
+                "variant": v_name,
+                "budget": format!("mcts:{iters}"),
+                "case6_p_switch_lax": (r6.own_policy[sw_i] * 1000.0).round() / 1000.0,
+                "case6_p_explosion": (r6.own_policy[exp_i] * 1000.0).round() / 1000.0,
+                "case6_p_surf_stay": (r6.own_policy[surf_i] * 1000.0).round() / 1000.0,
+                "case6_depth": (r6.mean_depth * 100.0).round() / 100.0,
+                "case4b_p_sd": (r4.own_policy[sd_i] * 1000.0).round() / 1000.0,
+                "case4b_p_eq": (r4.own_policy[eq_i] * 1000.0).round() / 1000.0,
+            }));
+        }
+    }
+    json!(rows)
+}
+
+fn run_scale_suite(dex: &Dex, args: &[String]) {
+    let flag = |name: &str| -> Option<String> {
+        args.iter()
+            .position(|a| a == name)
+            .and_then(|i| args.get(i + 1).cloned())
+    };
+    let games: usize = flag("--games").map_or(100, |v| v.parse().unwrap());
+    let seed: u64 = flag("--seed").map_or(2026112301, |v| v.parse().unwrap());
+    let threads: usize = flag("--threads").map_or(10, |v| v.parse().unwrap());
 
     let root = repo_root();
     let pool = load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
     let teams: Vec<Vec<PokemonSet>> = pool.teams.iter().map(|t| t.sets.clone()).collect();
 
-    let build_a = move |s: u64| -> Box<dyn Agent> {
-        Box::new(TempoAgent::with_samples(s, samples, false))
-    };
-    let vs_clone = vs.clone();
-    let build_b = move |s: u64| -> Box<dyn Agent> {
-        if vs_clone == "greedy" {
-            Box::new(MaxDamageAgent::conformant())
-        } else if vs_clone == "maxdamage" {
-            Box::new(MaxDamageAgent::new())
-        } else if let Some(rest) = vs_clone.strip_prefix("skuct:") {
-            let iters: u32 = rest.parse().unwrap_or(300);
-            let cfg = RmConfig {
-                iterations: iters,
-                c: 0.4,
-                rule: SelRule::Ucb,
-                ..RmConfig::default()
-            };
-            Box::new(RmAgent::new(cfg, s))
-        } else {
-            panic!("unknown --vs spec: {vs_clone}");
-        }
-    };
+    // 1. Self-scaling ladder (fixed preview = false, same fast preview across all Tempo arms)
+    let self_ladder = [
+        ("mcts-full:100", "1ply-full:8"),
+        ("mcts-full:300", "mcts-full:100"),
+        ("mcts-full:900", "mcts-full:300"),
+        ("mcts-full:2700", "mcts-full:900"),
+    ];
+    let mut self_rows = Vec::new();
+    for (idx, &(a, b)) in self_ladder.iter().enumerate() {
+        self_rows.push(run_one_duel(
+            dex,
+            &teams,
+            a,
+            b,
+            games,
+            seed + idx as u64,
+            true,
+            false,
+            threads,
+        ));
+    }
 
-    let mut spec = DuelSpec::new(games, seed);
-    spec.max_turns = 200;
-    let stats = run_duel(dex, &teams, &build_a, &build_b, spec);
-    println!(
-        "{}",
-        json!({
-            "arm_a": format!("tempo:{samples}"),
-            "arm_b": vs,
-            "games": stats.games,
-            "wins": stats.wins,
-            "losses": stats.losses,
-            "ties": stats.ties,
-            "turn_caps": stats.turn_caps,
-            "score": (stats.score * 10000.0).round() / 10000.0,
-            "ci95": if stats.ci95.is_finite() { (stats.ci95 * 10000.0).round() / 10000.0 } else { 0.0 },
-            "avg_turns": (stats.avg_turns * 10.0).round() / 10.0,
-            "a_ms_per_move": (stats.a_ms_per_move * 100.0).round() / 100.0,
-            "b_ms_per_move": (stats.b_ms_per_move * 100.0).round() / 100.0,
-        })
-    );
+    // 2. Fixed-anchor ladder vs skuct:300 (and skuct:1000 at 900/2700)
+    let anchor_ladder = [
+        ("1ply-full:8", "skuct:300"),
+        ("mcts-full:100", "skuct:300"),
+        ("mcts-full:300", "skuct:300"),
+        ("mcts-full:900", "skuct:300"),
+        ("mcts-full:2700", "skuct:300"),
+        ("mcts-full:900", "skuct:1000"),
+        ("mcts-full:2700", "skuct:1000"),
+    ];
+    let mut anchor_rows = Vec::new();
+    for (idx, &(a, b)) in anchor_ladder.iter().enumerate() {
+        anchor_rows.push(run_one_duel(
+            dex,
+            &teams,
+            a,
+            b,
+            games,
+            seed + 100 + idx as u64,
+            false,
+            false,
+            threads,
+        ));
+    }
+
+    // 3. Hypothesis 2: Raw vs Full ablation across search depths (CRN paired, fixed preview so only in-battle differs!)
+    let raw_vs_full = [
+        ("1ply-raw:8", "1ply-full:8"),
+        ("mcts-raw:100", "mcts-full:100"),
+        ("mcts-raw:300", "mcts-full:300"),
+        ("mcts-raw:900", "mcts-full:900"),
+        ("mcts-raw:2700", "mcts-full:2700"),
+    ];
+    let mut ablation_rows = Vec::new();
+    for (idx, &(a, b)) in raw_vs_full.iter().enumerate() {
+        ablation_rows.push(run_one_duel(
+            dex,
+            &teams,
+            a,
+            b,
+            games,
+            seed + 200 + idx as u64,
+            true,
+            true,
+            threads,
+        ));
+    }
+
+    // 4. Leaf control inside the exact same zero-rollout DUCT tree (TempoFull vs EvalStatic / EvalBlindspot)
+    let leaf_controls = [
+        ("mcts-full:300", "mcts-eval:300"),
+        ("mcts-full:300", "mcts-blindspot:300"),
+        ("mcts-full:900", "mcts-eval:900"),
+        ("mcts-full:900", "mcts-blindspot:900"),
+    ];
+    let mut control_rows = Vec::new();
+    for (idx, &(a, b)) in leaf_controls.iter().enumerate() {
+        control_rows.push(run_one_duel(
+            dex,
+            &teams,
+            a,
+            b,
+            games,
+            seed + 300 + idx as u64,
+            true,
+            true,
+            threads,
+        ));
+    }
+
+    let cliff_probe = run_cliff_probe(dex);
+
+    let report = json!({
+        "self_ladder": self_rows,
+        "anchor_ladder": anchor_rows,
+        "raw_vs_full": ablation_rows,
+        "leaf_controls": control_rows,
+        "cliff_probe": cliff_probe,
+    });
+    println!("{report}");
 }
 
 fn main() {
@@ -433,6 +701,7 @@ fn main() {
     let dex = load_dex();
     match args.first().map(String::as_str) {
         Some("duel") => run_duel_bench(&dex, &args[1..]),
+        Some("scale") => run_scale_suite(&dex, &args[1..]),
         _ => run_scenarios(&dex),
     }
 }
