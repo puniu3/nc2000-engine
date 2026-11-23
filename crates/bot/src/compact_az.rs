@@ -14,9 +14,9 @@ use nc2000_engine::state::Status;
 
 use crate::compact_az_weights::{
     POLICY_ACT_DIM, POLICY_CTX_DIM, POLICY_H1, POLICY_H2, POLICY_WEIGHTS_LOADED, P_B1, P_B2,
-    P_TAU, P_W2_MEAN, P_W2_SELF, P_W_ACT, P_W_CTX, P_W_OUT, VALUE_H1, VALUE_H2, VALUE_SIDE_DIM,
-    VALUE_WEIGHTS_LOADED, V_B1, V_B2, V_SKIP_BS, V_SKIP_FG, V_W1_OPP, V_W1_SELF, V_W2_OPP,
-    V_W2_SELF, V_W_OUT,
+    P_TAU, P_W2_MEAN_T, P_W2_SELF_T, P_W_ACT_T, P_W_CTX_T, P_W_OUT, VALUE_H1, VALUE_H2,
+    VALUE_SIDE_DIM, VALUE_WEIGHTS_LOADED, V_B1, V_B2, V_SKIP_BS, V_SKIP_FG, V_W1_MINUS_T,
+    V_W1_PLUS_T, V_W2_MINUS_T, V_W2_PLUS_T, V_W_OUT,
 };
 use crate::eval::{compact_eval01_blindspot_norelay, compact_turn_limit_outcome, EvalWeights};
 use crate::rng::SplitMix64;
@@ -33,8 +33,8 @@ pub use crate::compact_az_weights::{
 };
 
 #[inline(always)]
-fn silu(x: f32) -> f32 {
-    x / (1.0 + (-x.clamp(-20.0, 20.0)).exp())
+fn relu(x: f32) -> f32 {
+    if x > 0.0 { x } else { 0.0 }
 }
 
 // =========================================================================
@@ -549,12 +549,75 @@ fn best_pair_dmg_stats(
 // 3. Policy Feature Extractor & `P_net` Inference (Species-ID-Free)
 // =========================================================================
 
-/// Extract `(ctx[24], act_feats[n_acts][28])` for `side` at `cb` (pure mechanics, zero species/team IDs).
+/// Shared memoized pair-damage & speed table across both sides for `policy_priors_both`.
+struct NodePolicyScratch {
+    speeds: [[i32; 3]; 2],
+    speed_ok: [[bool; 3]; 2],
+    pair_dmg: [[[(f32, f32); 3]; 3]; 2],
+    pair_ok: [[[bool; 3]; 3]; 2],
+}
+
+impl NodePolicyScratch {
+    #[inline(always)]
+    fn new() -> Self {
+        Self {
+            speeds: [[0; 3]; 2],
+            speed_ok: [[false; 3]; 2],
+            pair_dmg: [[[(0.0, 0.0); 3]; 3]; 2],
+            pair_ok: [[[false; 3]; 3]; 2],
+        }
+    }
+
+    #[inline(always)]
+    fn speed(&mut self, cb: &CompactBattle, table: &MatchTable, side: usize, slot: usize) -> i32 {
+        if !self.speed_ok[side][slot] {
+            self.speeds[side][slot] = effective_speed(cb, table, side, slot);
+            self.speed_ok[side][slot] = true;
+        }
+        self.speeds[side][slot]
+    }
+
+    #[inline(always)]
+    fn pair(
+        &mut self,
+        cb: &CompactBattle,
+        table: &MatchTable,
+        cview: Option<&CacheView<'_>>,
+        att_side: usize,
+        att_slot: usize,
+        def_side: usize,
+        def_slot: usize,
+    ) -> (f32, f32) {
+        if !self.pair_ok[att_side][att_slot][def_slot] {
+            self.pair_dmg[att_side][att_slot][def_slot] =
+                best_pair_dmg_stats(cb, table, cview, att_side, att_slot, def_side, def_slot);
+            self.pair_ok[att_side][att_slot][def_slot] = true;
+        }
+        self.pair_dmg[att_side][att_slot][def_slot]
+    }
+}
+
+/// Extract `(ctx[28], act_feats[n_acts][32])` for `side` at `cb` (pure mechanics, zero species/team IDs).
 #[inline]
 pub fn extract_policy_features(
     cb: &CompactBattle,
     table: &MatchTable,
     cache: Option<&TempoMatchCache>,
+    side: usize,
+    acts: &[u8],
+    n_acts: usize,
+) -> ([f32; POLICY_CTX_DIM], [[f32; POLICY_ACT_DIM]; 7]) {
+    let view_opt = cache.and_then(|c| c.view_for(cb));
+    let mut scratch = NodePolicyScratch::new();
+    extract_policy_features_inner(cb, table, view_opt.as_ref(), &mut scratch, side, acts, n_acts)
+}
+
+#[inline]
+fn extract_policy_features_inner(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    cview: Option<&CacheView<'_>>,
+    scratch: &mut NodePolicyScratch,
     side: usize,
     acts: &[u8],
     n_acts: usize,
@@ -575,16 +638,14 @@ pub fn extract_policy_features(
     let me_alive = (cb.sides[side].alive_mask & (1 << a_slot)) != 0 && me.hp() > 0;
     let foe_alive = (cb.sides[opp].alive_mask & (1 << d_slot)) != 0 && foe.hp() > 0;
     let is_forced_sw = cb.sides[side].request == 2;
-    let view_opt = cache.and_then(|c| c.view_for(cb));
-    let cview = view_opt.as_ref();
 
     let my_hp_f = if me_alive { (me.hp() as f32 / my_maxhp).clamp(0.0, 1.0) } else { 0.0 };
     let foe_hp_f = if foe_alive { (foe.hp() as f32 / foe_maxhp).clamp(0.0, 1.0) } else { 0.0 };
     let my_st = me.status_raw();
     let foe_st = foe.status_raw();
 
-    let my_spd = effective_speed(cb, table, side, a_slot);
-    let foe_spd = effective_speed(cb, table, opp, d_slot);
+    let my_spd = scratch.speed(cb, table, side, a_slot);
+    let foe_spd = scratch.speed(cb, table, opp, d_slot);
     let spd_cmp = if my_spd > foe_spd {
         1.0
     } else if my_spd < foe_spd {
@@ -596,12 +657,12 @@ pub fn extract_policy_features(
     let foe_pos_b: f32 = foe.boosts.iter().take(5).map(|&b| b.max(0) as f32).sum::<f32>() / 4.0;
 
     let (my_best_d, my_best_ko) = if me_alive && foe_alive {
-        best_pair_dmg_stats(cb, table, cview, side, a_slot, opp, d_slot)
+        scratch.pair(cb, table, cview, side, a_slot, opp, d_slot)
     } else {
         (0.0, 0.0)
     };
     let (foe_best_d, foe_best_ko) = if me_alive && foe_alive {
-        best_pair_dmg_stats(cb, table, cview, opp, d_slot, side, a_slot)
+        scratch.pair(cb, table, cview, opp, d_slot, side, a_slot)
     } else {
         (0.0, 0.0)
     };
@@ -704,12 +765,12 @@ pub fn extract_policy_features(
             let t_maxhp = table.mons[t_idx].maxhp.max(1) as f32;
             let t_hp_f = (cb.mons[t_idx].hp().max(0) as f32 / t_maxhp).clamp(0.0, 1.0);
             let (t2f_d, t2f_ko) = if foe_alive {
-                best_pair_dmg_stats(cb, table, cview, side, t_slot, opp, d_slot)
+                scratch.pair(cb, table, cview, side, t_slot, opp, d_slot)
             } else {
                 (0.0, 0.0)
             };
             let (f2t_d, f2t_ko) = if foe_alive {
-                best_pair_dmg_stats(cb, table, cview, opp, d_slot, side, t_slot)
+                scratch.pair(cb, table, cview, opp, d_slot, side, t_slot)
             } else {
                 (0.0, 0.0)
             };
@@ -914,7 +975,7 @@ pub fn extract_policy_features(
             let (t_hp_f, t2f_d, t2f_ko, f2t_d, f2t_ko) = sw_cache[i];
             let t_ehp_f = (entry_hp(cb, table, side, t_slot).max(0) as f32 / t_maxhp).clamp(0.0, 1.0);
             let t_st = t_mon.status_raw();
-            let t_spd = effective_speed(cb, table, side, t_slot);
+            let t_spd = scratch.speed(cb, table, side, t_slot);
             let t_spd_cmp = if t_spd > foe_spd { 1.0 } else if t_spd < foe_spd { -1.0 } else { 0.0 };
             let t2f_hp = if foe_hp_f > 0.01 { (t2f_d / foe_hp_f).min(1.5) } else { 0.0 };
             let f2t_hp = if t_ehp_f > 0.01 { (f2t_d / t_ehp_f).min(1.5) } else { 1.5 };
@@ -988,7 +1049,11 @@ pub fn extract_policy_features(
             let mut team_n = 0.0f32;
             for es in 0..3usize {
                 if (cb.sides[opp].alive_mask & (1 << es)) != 0 && cb.mons[opp * 3 + es].hp() > 0 {
-                    let (ed, _) = best_pair_dmg_stats(cb, table, cview, side, t_slot, opp, es);
+                    let ed = if es == d_slot {
+                        t2f_d
+                    } else {
+                        scratch.pair(cb, table, cview, side, t_slot, opp, es).0
+                    };
                     team_d += ed.min(1.5);
                     team_n += 1.0;
                 }
@@ -1033,12 +1098,50 @@ pub fn extract_policy_features(
 }
 
 /// Evaluate embedded `P_net` + `compact_interior_noop_mask` + floor `eps_p` over safe actions.
-/// Returns `(priors[7], noop_mask)`. Zero heap allocations (`~200-300 ns` per side).
+/// Returns `(priors[7], noop_mask)`. Zero heap allocations, column-major SIMD + ReLU sparse skip.
 #[inline]
 pub fn policy_priors(
     cb: &CompactBattle,
     table: &MatchTable,
     cache: Option<&TempoMatchCache>,
+    side: usize,
+    acts: &[u8],
+    n_acts: usize,
+    eps_p: f32,
+) -> ([f32; 7], u8) {
+    let view_opt = cache.and_then(|c| c.view_for(cb));
+    let mut scratch = NodePolicyScratch::new();
+    policy_priors_inner(cb, table, view_opt.as_ref(), &mut scratch, side, acts, n_acts, eps_p)
+}
+
+/// Evaluate embedded `P_net` for BOTH sides at an interior `CompactBattle` node, sharing
+/// `TempoMatchCache::view_for`, speeds, and pair damage queries across sides.
+#[inline]
+pub fn policy_priors_both(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    cache: Option<&TempoMatchCache>,
+    acts0: &[u8],
+    n0: usize,
+    acts1: &[u8],
+    n1: usize,
+    eps_p: f32,
+) -> (([f32; 7], u8), ([f32; 7], u8)) {
+    let view_opt = cache.and_then(|c| c.view_for(cb));
+    let cview = view_opt.as_ref();
+    let mut scratch = NodePolicyScratch::new();
+    let r0 = policy_priors_inner(cb, table, cview, &mut scratch, 0, acts0, n0, eps_p);
+    let r1 = policy_priors_inner(cb, table, cview, &mut scratch, 1, acts1, n1, eps_p);
+    (r0, r1)
+}
+
+#[inline]
+#[allow(clippy::too_many_arguments)]
+fn policy_priors_inner(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    cview: Option<&CacheView<'_>>,
+    scratch: &mut NodePolicyScratch,
     side: usize,
     acts: &[u8],
     n_acts: usize,
@@ -1075,37 +1178,43 @@ pub fn policy_priors(
         return (priors, noop_mask);
     }
 
-    let (ctx, af) = extract_policy_features(cb, table, cache, side, acts, n);
+    let (ctx, af) = extract_policy_features_inner(cb, table, cview, scratch, side, acts, n);
 
-    // Layer 1 shared context projection (computed ONCE per side).
-    let mut ctx_proj = [0.0f32; POLICY_H1];
-    for h in 0..POLICY_H1 {
-        let row = &P_W_CTX[h];
-        let mut s = P_B1[h];
-        for k in 0..POLICY_CTX_DIM {
-            s += row[k] * ctx[k];
+    // Layer 1 shared context projection (column-major SIMD + sparse skip, computed ONCE per side).
+    let mut ctx_proj = P_B1;
+    for k in 0..POLICY_CTX_DIM {
+        let c = ctx[k];
+        if c != 0.0 {
+            let row = &P_W_CTX_T[k];
+            for h in 0..POLICY_H1 {
+                ctx_proj[h] += c * row[h];
+            }
         }
-        ctx_proj[h] = s;
     }
 
-    // Layer 1 per-action activation + mean pooling across safe actions.
+    // Layer 1 per-action ReLU activation + mean pooling across safe actions.
     let mut h1 = [[0.0f32; POLICY_H1]; 7];
     let mut h1_mean = [0.0f32; POLICY_H1];
     for i in 0..n {
         if ((noop_mask >> i) & 1) != 0 {
             continue;
         }
+        let mut acc = ctx_proj;
         let act_v = &af[i];
+        for k in 0..POLICY_ACT_DIM {
+            let v = act_v[k];
+            if v != 0.0 {
+                let row = &P_W_ACT_T[k];
+                for h in 0..POLICY_H1 {
+                    acc[h] += v * row[h];
+                }
+            }
+        }
         let dst = &mut h1[i];
         for h in 0..POLICY_H1 {
-            let row = &P_W_ACT[h];
-            let mut s = ctx_proj[h];
-            for k in 0..POLICY_ACT_DIM {
-                s += row[k] * act_v[k];
-            }
-            let v = silu(s);
-            dst[h] = v;
-            h1_mean[h] += v;
+            let r = relu(acc[h]);
+            dst[h] = r;
+            h1_mean[h] += r;
         }
     }
     let inv_safe = 1.0 / safe_cnt_f;
@@ -1113,15 +1222,16 @@ pub fn policy_priors(
         *m *= inv_safe;
     }
 
-    // Layer 2 mean-context projection (computed ONCE per side).
-    let mut mean_proj = [0.0f32; POLICY_H2];
-    for j in 0..POLICY_H2 {
-        let row = &P_W2_MEAN[j];
-        let mut s = P_B2[j];
-        for h in 0..POLICY_H1 {
-            s += row[h] * h1_mean[h];
+    // Layer 2 mean-context projection (column-major SIMD + sparse skip, computed ONCE per side).
+    let mut mean_proj = P_B2;
+    for h in 0..POLICY_H1 {
+        let m = h1_mean[h];
+        if m != 0.0 {
+            let row = &P_W2_MEAN_T[h];
+            for j in 0..POLICY_H2 {
+                mean_proj[j] += m * row[j];
+            }
         }
-        mean_proj[j] = s;
     }
 
     // Layer 2 per-action logit + stable softmax over unmasked actions.
@@ -1132,15 +1242,20 @@ pub fn policy_priors(
         if ((noop_mask >> i) & 1) != 0 {
             continue;
         }
+        let mut acc = mean_proj;
         let h1_i = &h1[i];
+        for h in 0..POLICY_H1 {
+            let v = h1_i[h];
+            if v != 0.0 {
+                let row = &P_W2_SELF_T[h];
+                for j in 0..POLICY_H2 {
+                    acc[j] += v * row[j];
+                }
+            }
+        }
         let mut z = 0.0f32;
         for j in 0..POLICY_H2 {
-            let row = &P_W2_SELF[j];
-            let mut s = mean_proj[j];
-            for h in 0..POLICY_H1 {
-                s += row[h] * h1_i[h];
-            }
-            z += P_W_OUT[j] * silu(s);
+            z += P_W_OUT[j] * relu(acc[j]);
         }
         let l = z * inv_tau;
         logits[i] = l;
@@ -1538,7 +1653,8 @@ pub fn extract_value_features(
 }
 
 /// Evaluate embedded 0-ULP antisymmetric Siamese `V_net` on `CompactBattle`.
-/// Preserves exact `1v1` `linear.rs` valuation and wraps outer `relay::apply_relay_leaf_lift`.
+/// Uses exact `(W_PLUS, W_MINUS)` Siamese factorization + column-major SIMD + ReLU sparse skip.
+/// Preserves exact terminal outcomes, `1v1` `linear.rs` valuation, and outer `relay::apply_relay_leaf_lift`.
 #[inline]
 pub fn evaluate_az_value(
     cb: &CompactBattle,
@@ -1546,6 +1662,13 @@ pub fn evaluate_az_value(
     cache: Option<&TempoMatchCache>,
     leaf_temp: f64,
 ) -> f64 {
+    if cb.outcome != 0 {
+        return match cb.outcome {
+            1 => 1.0,
+            2 => 0.0,
+            _ => 0.5,
+        };
+    }
     if let Some(v) = compact_turn_limit_outcome(cb, table) {
         return v;
     }
@@ -1561,32 +1684,51 @@ pub fn evaluate_az_value(
 
     let (x0, x1, logit_fg, logit_bs) = extract_value_features(cb, table, cache);
 
-    let mut h0_1 = [0.0f32; VALUE_H1];
-    let mut h1_1 = [0.0f32; VALUE_H1];
-    for h in 0..VALUE_H1 {
-        let ws = &V_W1_SELF[h];
-        let wo = &V_W1_OPP[h];
-        let mut s0 = V_B1[h];
-        let mut s1 = V_B1[h];
-        for k in 0..VALUE_SIDE_DIM {
-            s0 += ws[k] * x0[k] + wo[k] * x1[k];
-            s1 += ws[k] * x1[k] + wo[k] * x0[k];
+    // Exact Siamese (W_PLUS, W_MINUS) factorization: 2x fewer FMAs + 0-ULP side-swap antisymmetry
+    // + sparse zero-skip + contiguous NEON/AVX2 vectorization.
+    let mut a1 = V_B1;
+    let mut b1 = [0.0f32; VALUE_H1];
+    for k in 0..VALUE_SIDE_DIM {
+        let xs = x0[k] + x1[k];
+        if xs != 0.0 {
+            let row = &V_W1_PLUS_T[k];
+            for h in 0..VALUE_H1 {
+                a1[h] += xs * row[h];
+            }
         }
-        h0_1[h] = silu(s0);
-        h1_1[h] = silu(s1);
+        let xd = x0[k] - x1[k];
+        if xd != 0.0 {
+            let row = &V_W1_MINUS_T[k];
+            for h in 0..VALUE_H1 {
+                b1[h] += xd * row[h];
+            }
+        }
+    }
+
+    let mut a2 = V_B2;
+    let mut b2 = [0.0f32; VALUE_H2];
+    for h in 0..VALUE_H1 {
+        let h0 = relu(a1[h] + b1[h]);
+        let h1 = relu(a1[h] - b1[h]);
+        let hs = h0 + h1;
+        if hs != 0.0 {
+            let row = &V_W2_PLUS_T[h];
+            for j in 0..VALUE_H2 {
+                a2[j] += hs * row[j];
+            }
+        }
+        let hd = h0 - h1;
+        if hd != 0.0 {
+            let row = &V_W2_MINUS_T[h];
+            for j in 0..VALUE_H2 {
+                b2[j] += hd * row[j];
+            }
+        }
     }
 
     let mut z = V_SKIP_FG * logit_fg + V_SKIP_BS * logit_bs;
     for j in 0..VALUE_H2 {
-        let ws = &V_W2_SELF[j];
-        let wo = &V_W2_OPP[j];
-        let mut s0 = V_B2[j];
-        let mut s1 = V_B2[j];
-        for h in 0..VALUE_H1 {
-            s0 += ws[h] * h0_1[h] + wo[h] * h1_1[h];
-            s1 += ws[h] * h1_1[h] + wo[h] * h0_1[h];
-        }
-        let d = silu(s0) - silu(s1);
+        let d = relu(a2[j] + b2[j]) - relu(a2[j] - b2[j]);
         z += V_W_OUT[j] * d;
     }
 
@@ -1786,16 +1928,20 @@ pub fn search_compact_az_teacher(
             if self.priors_ready {
                 return;
             }
-            for s in 0..2usize {
-                let k = self.n_acts[s] as usize;
-                if k > 1 {
-                    let (p, m) = policy_priors(cb, table, Some(cache), s, &self.acts[s], k, eps_p);
-                    self.priors[s] = p;
-                    self.noop_mask[s] = m;
-                } else if k == 1 {
-                    self.priors[s][0] = 1.0;
-                }
-            }
+            let ((p0, m0), (p1, m1)) = policy_priors_both(
+                cb,
+                table,
+                Some(cache),
+                &self.acts[0],
+                self.n_acts[0] as usize,
+                &self.acts[1],
+                self.n_acts[1] as usize,
+                eps_p,
+            );
+            self.priors[0] = p0;
+            self.noop_mask[0] = m0;
+            self.priors[1] = p1;
+            self.noop_mask[1] = m1;
             self.priors_ready = true;
         }
         #[inline]

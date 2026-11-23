@@ -2549,29 +2549,33 @@ pub struct TempoMctsResult {
 #[derive(Clone, Copy)]
 struct DuctNode {
     n_acts: [u8; 2],
-    acts: [[u8; 7]; 2],
-    visits: [[u32; 7]; 2],
-    sums: [[f64; 7]; 2],
-    priors: [[f32; 7]; 2],
+    acts: [[u8; 6]; 2],
     noop_mask: [u8; 2],
     priors_ready: bool,
     total: u32,
+    priors_q: [[u16; 6]; 2],
+    visits: [[u32; 6]; 2],
+    sums: [[f64; 6]; 2],
 }
 
 impl DuctNode {
     fn new(cb: &CompactBattle, table: &MatchTable) -> Self {
-        let mut acts = [[0u8; 7]; 2];
-        let n0 = cb.legal_actions(table, 0, &mut acts[0]) as u8;
-        let n1 = cb.legal_actions(table, 1, &mut acts[1]) as u8;
+        let mut tmp0 = [0u8; 7];
+        let mut tmp1 = [0u8; 7];
+        let n0 = cb.legal_actions(table, 0, &mut tmp0).min(6) as u8;
+        let n1 = cb.legal_actions(table, 1, &mut tmp1).min(6) as u8;
+        let mut acts = [[0u8; 6]; 2];
+        acts[0].copy_from_slice(&tmp0[..6]);
+        acts[1].copy_from_slice(&tmp1[..6]);
         Self {
             n_acts: [n0, n1],
             acts,
-            visits: [[0; 7]; 2],
-            sums: [[0.0; 7]; 2],
-            priors: [[0.0; 7]; 2],
             noop_mask: [0; 2],
             priors_ready: false,
             total: 0,
+            priors_q: [[0; 6]; 2],
+            visits: [[0; 6]; 2],
+            sums: [[0.0; 6]; 2],
         }
     }
 
@@ -2586,24 +2590,22 @@ impl DuctNode {
         if self.priors_ready {
             return;
         }
-        for s in 0..2usize {
-            let k = self.n_acts[s] as usize;
-            if k > 1 {
-                let (p, m) = crate::compact_az::policy_priors(
-                    cb,
-                    table,
-                    cache,
-                    s,
-                    &self.acts[s],
-                    k,
-                    eps_p,
-                );
-                self.priors[s] = p;
-                self.noop_mask[s] = m;
-            } else if k == 1 {
-                self.priors[s][0] = 1.0;
-            }
+        let ((p0, m0), (p1, m1)) = crate::compact_az::policy_priors_both(
+            cb,
+            table,
+            cache,
+            &self.acts[0],
+            self.n_acts[0] as usize,
+            &self.acts[1],
+            self.n_acts[1] as usize,
+            eps_p,
+        );
+        for i in 0..6 {
+            self.priors_q[0][i] = (p0[i].clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
+            self.priors_q[1][i] = (p1[i].clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
         }
+        self.noop_mask[0] = m0;
+        self.noop_mask[1] = m1;
         self.priors_ready = true;
     }
 
@@ -2616,10 +2618,12 @@ impl DuctNode {
         let mask = self.noop_mask[side];
         if self.total == 0 {
             let mut best_i = 0usize;
-            let mut best_p = f32::NEG_INFINITY;
+            let mut best_p = 0u16;
+            let mut found = false;
             for i in 0..n {
-                if ((mask >> i) & 1) == 0 && self.priors[side][i] > best_p {
-                    best_p = self.priors[side][i];
+                if ((mask >> i) & 1) == 0 && (!found || self.priors_q[side][i] > best_p) {
+                    found = true;
+                    best_p = self.priors_q[side][i];
                     best_i = i;
                 }
             }
@@ -2634,7 +2638,7 @@ impl DuctNode {
         let r_bar0 = if n_tot > 0 { w_tot / f64::from(n_tot) } else { 0.5 };
         let r_bar_s = if side == 0 { r_bar0 } else { 1.0 - r_bar0 };
         let fpu = (r_bar_s - fpu_red).clamp(0.01, 0.99);
-        let sqrt_n = f64::from(self.total.max(1)).sqrt();
+        let scale = c_puct * (1.0 / 65535.0) * f64::from(self.total.max(1)).sqrt();
         let mut best_i = 0usize;
         let mut best_u = f64::NEG_INFINITY;
         for i in 0..n {
@@ -2648,7 +2652,7 @@ impl DuctNode {
             } else {
                 fpu
             };
-            let u = q + c_puct * f64::from(self.priors[side][i]) * sqrt_n / f64::from(vi + 1);
+            let u = q + scale * f64::from(self.priors_q[side][i]) / f64::from(vi + 1);
             if u > best_u {
                 best_u = u;
                 best_i = i;
@@ -6329,10 +6333,10 @@ pub fn search_tempo_mcts(
 
     // Build root node using exact caller `own_choices` order so indices align 1:1.
     let mut root = DuctNode::new(&base_cb, &table);
-    let mut own_codes = [0u8; 7];
+    let mut own_codes = [0u8; 6];
     let mut n_own = 0usize;
     for &c in own_choices {
-        if n_own < 7 {
+        if n_own < 6 {
             if let Some(code) = encode_choice(&table, &base_cb, dex, side, c) {
                 own_codes[n_own] = code;
                 n_own += 1;
@@ -6341,7 +6345,7 @@ pub fn search_tempo_mcts(
     }
     debug_assert_eq!(
         n_own,
-        own_choices.len().min(7),
+        own_choices.len().min(6),
         "every legal SearchChoice at root must encode 1:1 without shifting indices"
     );
     if n_own > 0 {
@@ -7741,9 +7745,9 @@ impl Agent for BlindCmctsAgent {
                 let opp_choices = sim.legal_choices(dex, opp);
 
                 let mut encoded_opp: Vec<(SearchChoice, u8)> =
-                    Vec::with_capacity(opp_choices.len().min(7));
+                    Vec::with_capacity(opp_choices.len().min(6));
                 for &c in &opp_choices {
-                    if encoded_opp.len() < 7 {
+                    if encoded_opp.len() < 6 {
                         if let Some(code) = encode_choice(&table, &cb, dex, opp, c) {
                             encoded_opp.push((c, code));
                         }
@@ -7751,22 +7755,22 @@ impl Agent for BlindCmctsAgent {
                 }
                 let root_node_id = *world_root_index.entry(rkey).or_insert_with(|| {
                     let mut rnode = DuctNode::new(&cb, &table);
-                    let mut own_codes = [0u8; 7];
+                    let mut own_codes = [0u8; 6];
                     let mut n_own = 0usize;
                     for &c in &my_acts {
-                        if n_own < 7 {
+                        if n_own < 6 {
                             if let Some(code) = encode_choice(&table, &cb, dex, side, c) {
                                 own_codes[n_own] = code;
                                 n_own += 1;
                             }
                         }
                     }
-                    debug_assert_eq!(n_own, n_my.min(7));
+                    debug_assert_eq!(n_own, n_my.min(6));
                     rnode.n_acts[side] = n_own as u8;
                     rnode.acts[side] = own_codes;
 
                     if !encoded_opp.is_empty() {
-                        let mut opp_codes = [0u8; 7];
+                        let mut opp_codes = [0u8; 6];
                         for (j, &(_, code)) in encoded_opp.iter().enumerate() {
                             opp_codes[j] = code;
                         }
