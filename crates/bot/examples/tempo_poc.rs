@@ -808,7 +808,9 @@ fn run_autopsy(dex: &Dex, args: &[String]) {
             .position(|a| a == name)
             .and_then(|i| args.get(i + 1).cloned())
     };
-    let games: usize = flag("--games").map_or(30, |v| v.parse().unwrap());
+    let games: usize = flag("--games").map_or(40, |v| v.parse().unwrap());
+    let arm_a = flag("--arm-a").unwrap_or_else(|| "mcts-v2:300".to_string());
+    let arm_b = flag("--arm-b").unwrap_or_else(|| "mcts-eval:300".to_string());
     let root = repo_root();
     let pool = load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
     let teams: Vec<Vec<PokemonSet>> = pool.teams.iter().map(|t| t.sets.clone()).collect();
@@ -817,7 +819,7 @@ fn run_autopsy(dex: &Dex, args: &[String]) {
     let mut dump = String::new();
     let mut wins = 0usize;
     let mut losses = 0usize;
-    let mut blindspot_counts = [0usize; 6]; // [over_boom, over_wall, under_piece, under_status, under_boost, over_switch]
+    let mut blindspot_counts = [0usize; 6];
 
     for g in 0..games {
         let t0 = sched.below(teams.len());
@@ -828,17 +830,22 @@ fn run_autopsy(dex: &Dex, args: &[String]) {
         let tp1 = b.legal_choices(dex, 1)[0];
         b.apply_choices(dex, [Some(tp0), Some(tp1)]).unwrap();
 
-        let mut a0 = build_agent("mcts-v2:300", 1000 + g as u64, true);
-        let mut a1 = build_agent("mcts-eval:300", 2000 + g as u64, true);
+        let mut a0 = build_agent(&arm_a, 1000 + g as u64, true);
+        let mut a1 = build_agent(&arm_b, 2000 + g as u64, true);
         let mut trace = Vec::new();
+        let mut reached_endgame_21 = false;
+        let mut reached_endgame_11 = false;
 
         for _ in 0..160 {
             if b.outcome().is_some() {
                 break;
             }
             let (table, cb) = nc2000_engine::compact::CompactBattle::from_battle(&b, dex);
+            let n_tot = cb.sides[0].alive_mask.count_ones() + cb.sides[1].alive_mask.count_ones();
+            if n_tot <= 3 { reached_endgame_21 = true; }
+            if n_tot <= 2 { reached_endgame_11 = true; }
             let fg = nc2000_bot::tempo::evaluate_fast_golf(&cb, &table, None);
-            let ev = nc2000_bot::eval::compact_eval01(&cb, &table, &nc2000_bot::EvalWeights::default());
+            let ev = nc2000_bot::eval::compact_eval_leaf_blindspot(&cb, &table, &nc2000_bot::EvalWeights::default());
             let cs0 = b.legal_choices(dex, 0);
             let cs1 = b.legal_choices(dex, 1);
             let p0 = if cs0.is_empty() { None } else { Some(a0.choose(&b, dex, 0, &cs0)) };
@@ -889,16 +896,19 @@ fn run_autopsy(dex: &Dex, args: &[String]) {
         let won = b.outcome() == Some(nc2000_engine::battle::Outcome::P1Win);
         if won {
             wins += 1;
+            if reached_endgame_11 { blindspot_counts[0] += 1; }
         } else {
             losses += 1;
+            if reached_endgame_11 { blindspot_counts[1] += 1; }
+            if reached_endgame_21 { blindspot_counts[3] += 1; }
             if !trace.is_empty() {
                 // Find turn with max optimism (fg - ev) in lost games
                 if let Some(worst) = trace.iter().max_by(|a, b| (a.3 - a.4).total_cmp(&(b.3 - b.4))) {
                     if worst.3 - worst.4 > 0.25 {
                         if worst.5 < worst.6 { blindspot_counts[2] += 1; }
                         dump.push_str(&format!(
-                            "=== Game {g} LOST (t={}) | FastGolf G=({:.2}t,{:.2}t) wp={:.1}% vs eval.rs={:.1}% (gap={:+.1}pp) ===\n  P1(v2) [{}, picked {}]: {}\n  P2(ev) [{}, picked {}]: {}\n\n",
-                            worst.0, worst.1, worst.2, worst.3 * 100.0, worst.4 * 100.0, (worst.3 - worst.4) * 100.0,
+                            "=== Game {g} LOST (t={}, eg11={}) | FastGolf G=({:.2}t,{:.2}t) wp={:.1}% vs blindspot={:.1}% (gap={:+.1}pp) ===\n  P1(v2) [{}, picked {}]: {}\n  P2(bs) [{}, picked {}]: {}\n\n",
+                            worst.0, reached_endgame_11, worst.1, worst.2, worst.3 * 100.0, worst.4 * 100.0, (worst.3 - worst.4) * 100.0,
                             worst.5, worst.7, worst.9, worst.6, worst.8, worst.10
                         ));
                     }
@@ -909,7 +919,279 @@ fn run_autopsy(dex: &Dex, args: &[String]) {
     std::fs::write("/tmp/v2_autopsy.txt", &dump).unwrap();
     println!(
         "{}",
-        json!({"games": games, "v2_wins": wins, "v2_losses": losses, "autopsy_entries": dump.matches("=== Game").count(), "under_piece_cases": blindspot_counts[2]})
+        json!({
+            "games": games,
+            "v2_wins": wins,
+            "v2_losses": losses,
+            "eg11_wins": blindspot_counts[0],
+            "eg11_losses": blindspot_counts[1],
+            "eg21_losses": blindspot_counts[3],
+            "autopsy_entries": dump.matches("=== Game").count(),
+            "under_piece_cases": blindspot_counts[2]
+        })
+    );
+}
+
+/// Fast offline calibration & phase-breakdown benchmark:
+/// Plays `games` self-play games in parallel (default 240 games with `mcts-eval:300`), collects all
+/// non-terminal states with ground-truth game outcomes, and reports Brier, LogLoss, AUC, and sharpness
+/// across `FastGolf`, `eval.rs`, and `eval_blindspot` split by piece-count bucket.
+fn run_calib(dex: &Dex, args: &[String]) {
+    let flag = |name: &str| -> Option<String> {
+        args.iter()
+            .position(|a| a == name)
+            .and_then(|i| args.get(i + 1).cloned())
+    };
+    let games: usize = flag("--games").map_or(240, |v| v.parse().unwrap());
+    let threads: usize = flag("--threads").map_or(10, |v| v.parse().unwrap());
+    let arm = flag("--arm").unwrap_or_else(|| "mcts-eval:300".to_string());
+    let root = repo_root();
+    let pool = load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
+    let teams: Vec<Vec<PokemonSet>> = pool.teams.iter().map(|t| t.sets.clone()).collect();
+
+    let mut sched = nc2000_bot::SplitMix64::new(2026112377);
+    let mut jobs = Vec::with_capacity(games);
+    for g in 0..games {
+        let t0 = sched.below(teams.len());
+        let t1 = sched.below(teams.len());
+        let bseed = sched.battle_seed();
+        jobs.push((g, t0, t1, bseed));
+    }
+
+    #[derive(Clone)]
+    struct Sample {
+        bucket: usize, // 0:1v1, 1:2v1, 2:2v2, 3:3v1/3v2, 4:3v3
+        y: f64,
+        g0: f64,
+        g1: f64,
+        fg_p: f64,
+        ev_p: f64,
+        bs_p: f64,
+        desc: String,
+    }
+
+    let chunk_size = (games + threads - 1) / threads.max(1);
+    let all_samples: Vec<Sample> = std::thread::scope(|s| {
+        let mut handles = Vec::new();
+        for chunk in jobs.chunks(chunk_size.max(1)) {
+            let dex_ref = dex;
+            let teams_ref = &teams;
+            let arm_ref = &arm;
+            handles.push(s.spawn(move || {
+                let w = nc2000_bot::EvalWeights::default();
+                let mut local = Vec::new();
+                for &(g, t0, t1, ref bseed) in chunk {
+                    let mut b = Battle::from_fixture(dex_ref, bseed, &teams_ref[t0], &teams_ref[t1]).unwrap();
+                    let tp0 = b.legal_choices(dex_ref, 0)[0];
+                    let tp1 = b.legal_choices(dex_ref, 1)[0];
+                    b.apply_choices(dex_ref, [Some(tp0), Some(tp1)]).unwrap();
+                    let mut a0 = build_agent(arm_ref, 30000 + g as u64, true);
+                    let mut a1 = build_agent(arm_ref, 40000 + g as u64, true);
+                    let mut game_rows: Vec<(usize, f64, f64, f64, f64, f64, String)> = Vec::new();
+                    for _ in 0..160 {
+                        if b.outcome().is_some() {
+                            break;
+                        }
+                        let (table, cb) = nc2000_engine::compact::CompactBattle::from_battle(&b, dex_ref);
+                        let n0 = cb.sides[0].alive_mask.count_ones();
+                        let n1 = cb.sides[1].alive_mask.count_ones();
+                        let bucket = match (n0.min(n1), n0.max(n1)) {
+                            (1, 1) => 0,
+                            (1, 2) => 1,
+                            (2, 2) => 2,
+                            (3, 3) => 4,
+                            _ => 3,
+                        };
+                        let fg = nc2000_bot::tempo::evaluate_fast_golf(&cb, &table, None);
+                        let ev = nc2000_bot::eval::compact_eval01(&cb, &table, &w);
+                        let bs = nc2000_bot::eval::compact_eval_leaf_blindspot(&cb, &table, &w);
+                        let desc = if (fg.win_prob - bs).abs() > 0.25 {
+                            let fmt_s = |side: usize| -> String {
+                                let mut ps = Vec::new();
+                                for slot in 0..3 {
+                                    if let Some(&ri) = b.sides[side].party.get(slot) {
+                                        let p = &b.sides[side].roster[ri as usize];
+                                        if p.hp > 0 {
+                                            let act = if cb.sides[side].active_idx as usize == slot { "*" } else { "" };
+                                            let st = if p.status != Status::None { format!(" {:?}", p.status) } else { String::new() };
+                                            let bst: String = p.boosts.iter().enumerate()
+                                                .filter(|(_, &v)| v != 0)
+                                                .map(|(i, v)| format!("b{i}:{v:+}"))
+                                                .collect::<Vec<_>>().join(",");
+                                            let bs_s = if bst.is_empty() { String::new() } else { format!(" [{bst}]") };
+                                            ps.push(format!("{act}{}({}/{}{st}{bs_s})", p.name.as_str(), p.hp, p.maxhp));
+                                        }
+                                    }
+                                }
+                                ps.join(", ")
+                            };
+                            format!("g={g} t={} {}v{} | P1: {} || P2: {}", b.turn, n0, n1, fmt_s(0), fmt_s(1))
+                        } else {
+                            String::new()
+                        };
+                        game_rows.push((bucket, fg.g_turns[0], fg.g_turns[1], fg.win_prob, ev, bs, desc));
+
+                        let cs0 = b.legal_choices(dex_ref, 0);
+                        let cs1 = b.legal_choices(dex_ref, 1);
+                        let p0 = if cs0.is_empty() { None } else { Some(a0.choose(&b, dex_ref, 0, &cs0)) };
+                        let p1 = if cs1.is_empty() { None } else { Some(a1.choose(&b, dex_ref, 1, &cs1)) };
+                        if b.apply_choices(dex_ref, [p0, p1]).is_err() {
+                            break;
+                        }
+                    }
+                    let y = match b.outcome() {
+                        Some(nc2000_engine::battle::Outcome::P1Win) => 1.0,
+                        Some(nc2000_engine::battle::Outcome::P2Win) => 0.0,
+                        _ => continue,
+                    };
+                    for (bucket, g0, g1, fg_p, ev_p, bs_p, desc) in game_rows {
+                        local.push(Sample { bucket, y, g0, g1, fg_p, ev_p, bs_p, desc });
+                    }
+                }
+                local
+            }));
+        }
+        let mut merged = Vec::new();
+        for h in handles {
+            merged.extend(h.join().unwrap());
+        }
+        merged
+    });
+
+    let metrics = |pts: &[(f64, f64)]| -> serde_json::Value {
+        let n = pts.len();
+        if n == 0 {
+            return json!({"n": 0});
+        }
+        let mut brier = 0.0;
+        let mut ll = 0.0;
+        let mut sharp = 0.0;
+        let mut ext_err = 0usize;
+        let mut pos = Vec::new();
+        let mut neg = Vec::new();
+        for &(p, y) in pts {
+            let pc = p.clamp(1e-5, 1.0 - 1e-5);
+            brier += (pc - y) * (pc - y);
+            ll -= y * pc.ln() + (1.0 - y) * (1.0 - pc).ln();
+            sharp += (pc - 0.5).abs();
+            if (pc - y).abs() > 0.75 {
+                ext_err += 1;
+            }
+            if y > 0.5 { pos.push(pc); } else { neg.push(pc); }
+        }
+        // Exact AUC via sorted ranks
+        let mut ranked: Vec<(f64, f64)> = pts.to_vec();
+        ranked.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let mut rank_sum_pos = 0.0;
+        let mut i = 0;
+        while i < ranked.len() {
+            let mut j = i + 1;
+            while j < ranked.len() && (ranked[j].0 - ranked[i].0).abs() <= 1e-12 {
+                j += 1;
+            }
+            let avg_rank = 0.5 * ((i + 1 + j) as f64);
+            for k in i..j {
+                if ranked[k].1 > 0.5 {
+                    rank_sum_pos += avg_rank;
+                }
+            }
+            i = j;
+        }
+        let n_pos = pos.len() as f64;
+        let n_neg = neg.len() as f64;
+        let auc = if n_pos > 0.0 && n_neg > 0.0 {
+            (rank_sum_pos - n_pos * (n_pos + 1.0) / 2.0) / (n_pos * n_neg)
+        } else {
+            0.5
+        };
+        json!({
+            "n": n,
+            "brier": (brier / n as f64 * 10000.0).round() / 10000.0,
+            "logloss": (ll / n as f64 * 10000.0).round() / 10000.0,
+            "auc": (auc * 10000.0).round() / 10000.0,
+            "sharp": (sharp / n as f64 * 1000.0).round() / 1000.0,
+            "ext75": ((ext_err as f64 / n as f64) * 1000.0).round() / 10.0,
+        })
+    };
+
+    // Grid-search optimal Brownian `var_per_turn` per bucket for FastGolf `g1 - g0`
+    let best_var_brier = |rows: &[&Sample]| -> (f64, f64) {
+        let mut best_v = 0.5;
+        let mut best_b = f64::INFINITY;
+        for step in 2..=80 {
+            let v = step as f64 * 0.25;
+            let mut bsum = 0.0;
+            for r in rows {
+                let sigma = (v * (r.g0 + r.g1).max(1.0)).sqrt();
+                let z = (r.g1 - r.g0) / sigma;
+                // Abramowitz-Stegun normal CDF
+                let t = 1.0 / (1.0 + 0.2316419 * z.abs());
+                let poly = t * (0.319381530 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
+                let pdf = (-0.5 * z * z).exp() * 0.3989422804014327;
+                let p = if z >= 0.0 { 1.0 - pdf * poly } else { pdf * poly };
+                bsum += (p - r.y) * (p - r.y);
+            }
+            let b = bsum / rows.len().max(1) as f64;
+            if b < best_b {
+                best_b = b;
+                best_v = v;
+            }
+        }
+        ((best_v * 100.0).round() / 100.0, (best_b * 10000.0).round() / 10000.0)
+    };
+
+    let bucket_names = ["1v1", "2v1", "2v2", "3v2_3v1", "3v3"];
+    let mut by_bucket = serde_json::Map::new();
+    for b_idx in 0..5 {
+        let sub: Vec<&Sample> = all_samples.iter().filter(|s| s.bucket == b_idx).collect();
+        let fg_pts: Vec<(f64, f64)> = sub.iter().map(|s| (s.fg_p, s.y)).collect();
+        let ev_pts: Vec<(f64, f64)> = sub.iter().map(|s| (s.ev_p, s.y)).collect();
+        let bs_pts: Vec<(f64, f64)> = sub.iter().map(|s| (s.bs_p, s.y)).collect();
+        let (opt_v, opt_b) = best_var_brier(&sub);
+        by_bucket.insert(
+            bucket_names[b_idx].to_string(),
+            json!({
+                "fg": metrics(&fg_pts),
+                "ev": metrics(&ev_pts),
+                "bs": metrics(&bs_pts),
+                "fg_opt_var": opt_v,
+                "fg_opt_brier": opt_b,
+            }),
+        );
+    }
+
+    let fg_all: Vec<(f64, f64)> = all_samples.iter().map(|s| (s.fg_p, s.y)).collect();
+    let ev_all: Vec<(f64, f64)> = all_samples.iter().map(|s| (s.ev_p, s.y)).collect();
+    let bs_all: Vec<(f64, f64)> = all_samples.iter().map(|s| (s.bs_p, s.y)).collect();
+
+    // Dump top 20 worst FastGolf blunders (where FastGolf erred badly while blindspot was right)
+    let mut worst: Vec<&Sample> = all_samples.iter().filter(|s| !s.desc.is_empty()).collect();
+    worst.sort_by(|a, b| {
+        let ea = (a.fg_p - a.y).abs() - (a.bs_p - a.y).abs();
+        let eb = (b.fg_p - b.y).abs() - (b.bs_p - b.y).abs();
+        eb.total_cmp(&ea)
+    });
+    let mut dump = String::new();
+    for s in worst.iter().take(25) {
+        dump.push_str(&format!(
+            "y={:.0} | fg={:.1}% G=({:.2}t,{:.2}t) | bs={:.1}% | ev={:.1}% | {}\n",
+            s.y, s.fg_p * 100.0, s.g0, s.g1, s.bs_p * 100.0, s.ev_p * 100.0, s.desc
+        ));
+    }
+    std::fs::write("/tmp/v2_calib_worst.txt", &dump).unwrap();
+
+    println!(
+        "{}",
+        json!({
+            "games": games,
+            "samples": all_samples.len(),
+            "overall": {
+                "fg": metrics(&fg_all),
+                "ev": metrics(&ev_all),
+                "bs": metrics(&bs_all),
+            },
+            "buckets": by_bucket,
+        })
     );
 }
 
@@ -921,6 +1203,7 @@ fn main() {
         Some("scale") => run_scale_suite(&dex, &args[1..]),
         Some("v2bench") => run_v2_bench(&dex, &args[1..]),
         Some("autopsy") => run_autopsy(&dex, &args[1..]),
+        Some("calib") => run_calib(&dex, &args[1..]),
         _ => run_scenarios(&dex),
     }
 }

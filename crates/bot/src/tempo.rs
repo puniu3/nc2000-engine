@@ -2594,8 +2594,19 @@ fn eval_duct_leaf(
 const FAST_WALL_CAP: f64 = 7.5;
 const FAST_WALL_CAP_1V1: f64 = 12.0;
 
-/// Calibrated Brownian race variance per turn for `FastGolf` (prevents 99.8% UCB premature lock-in).
-const FAST_RACE_VAR: f64 = 0.65;
+/// Gen 2 exact stat-stage multipliers for stages `-6..=+6` (`idx = stage + 6`).
+const GEN2_STAGE_MULT: [f32; 13] = [
+    0.25, 0.28, 0.33, 0.40, 0.50, 0.66, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0,
+];
+
+const MOVE_FLAG_USABLE: u8 = 1 << 0;
+const MOVE_FLAG_PHYSICAL: u8 = 1 << 1;
+const MOVE_FLAG_FIXED: u8 = 1 << 2;
+const MOVE_FLAG_WATER: u8 = 1 << 3;
+const MOVE_FLAG_FIRE: u8 = 1 << 4;
+const MOVE_FLAG_SOLARBEAM: u8 = 1 << 5;
+const MOVE_FLAG_SELFDESTRUCT: u8 = 1 << 6;
+const MOVE_FLAG_RECHARGE: u8 = 1 << 7;
 
 #[derive(Clone, Copy, Default)]
 struct CachedMoveDmg {
@@ -2605,25 +2616,79 @@ struct CachedMoveDmg {
     max_crit: f32,
     p_hit: f32,
     p_crit: f32,
-    is_usable_dmg: bool,
-    is_selfdestruct: bool,
-    is_recharge: bool,
+    flags: u8,
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy)]
+struct StaticMonCache {
+    half_heal_slot: u8,
+    half_heal_is_weather: bool,
+    rest_slot: u8,
+    sleep_talk_slot: u8,
+    phaze_slot: u8,
+    haze_slot: u8,
+    bp_slot: u8,
+    st_attack_rate: f64,
+    inv_maxhp: f64,
+    q16_frac: f64,
+    q8_frac: f64,
+    sand_immune: bool,
+    init_boost_type: u8,
+    init_castle_boost_type: u8,
+    init_stat_kind: nc2000_engine::compact::ItemStatKind,
+}
+
+impl Default for StaticMonCache {
+    fn default() -> Self {
+        Self {
+            half_heal_slot: 0xFF,
+            half_heal_is_weather: false,
+            rest_slot: 0xFF,
+            sleep_talk_slot: 0xFF,
+            phaze_slot: 0xFF,
+            haze_slot: 0xFF,
+            bp_slot: 0xFF,
+            st_attack_rate: 0.0,
+            inv_maxhp: 1.0,
+            q16_frac: 0.0625,
+            q8_frac: 0.125,
+            sand_immune: false,
+            init_boost_type: 0xFF,
+            init_castle_boost_type: 0xFF,
+            init_stat_kind: nc2000_engine::compact::ItemStatKind::None,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
 struct CachedPairEntry {
     moves: [CachedMoveDmg; 4],
-    init_att_item: u8,
-    init_def_item: u8,
-    any_phys: bool,
-    any_weather: bool,
+    best_norm_slot: u8,
+    best_phys_slot: u8,
+    best_spec_slot: u8,
+    boom_slot: u8,
     any_dynamic_bp: bool,
 }
 
-/// Per-search precomputed static damage table across all 18 directed `(att, def)` pairs.
-/// Built once at search root (~2 us) and reused across thousands of MCTS leaves with O(1) lookup.
+impl Default for CachedPairEntry {
+    fn default() -> Self {
+        Self {
+            moves: [CachedMoveDmg::default(); 4],
+            best_norm_slot: 0xFF,
+            best_phys_slot: 0xFF,
+            best_spec_slot: 0xFF,
+            boom_slot: 0xFF,
+            any_dynamic_bp: false,
+        }
+    }
+}
+
+/// Per-search precomputed static damage & trait table across all 6 mons and 18 directed pairs.
+/// Built once at search root (~2 us) and reused across thousands of MCTS leaves with O(1) lookup,
+/// including O(1) analytical Gen 2 boost/burn/screen/weather scaling (zero `DmgKernel1D` on leaves).
 #[derive(Clone)]
 pub struct TempoMatchCache {
+    mons: [StaticMonCache; 6],
     entries: [[[CachedPairEntry; 3]; 3]; 2],
 }
 
@@ -2635,15 +2700,75 @@ impl TempoMatchCache {
             clean_cb.sides[s].reflect_turns = 0;
             clean_cb.sides[s].lightscreen_turns = 0;
         }
+        let mut mons = [StaticMonCache::default(); 6];
         for i in 0..6 {
             clean_cb.mons[i].boosts = [0; 7];
             clean_cb.mons[i].vol_flags = 0;
             clean_cb.mons[i].status_packed = 0;
-            clean_cb.mons[i].hp_pool[0] = table.mons[i].maxhp.max(1);
+            let maxhp = table.mons[i].maxhp.max(1);
+            clean_cb.mons[i].hp_pool[0] = maxhp;
             clean_cb.mons[i].hp_pool[1] = 0;
-            for m in 0..4 {
+            let n_moves = table.mons[i].num_moves as usize;
+            let mut half_heal_slot = 0xFFu8;
+            let mut half_heal_is_weather = false;
+            let mut rest_slot = 0xFFu8;
+            let mut sleep_talk_slot = 0xFFu8;
+            let mut phaze_slot = 0xFFu8;
+            let mut haze_slot = 0xFFu8;
+            let mut bp_slot = 0xFFu8;
+            let mut usable_st_attacks = 0usize;
+            for m in 0..n_moves {
                 clean_cb.mons[i].pp[m] = table.mons[i].max_pp[m].max(1);
+                let ms = &table.move_specs[i][m];
+                if ms.is_half_heal {
+                    half_heal_slot = m as u8;
+                    half_heal_is_weather = false;
+                } else if ms.special_kind == SpecialMoveKind::WeatherHeal && half_heal_slot == 0xFF
+                {
+                    half_heal_slot = m as u8;
+                    half_heal_is_weather = true;
+                }
+                if ms.is_rest {
+                    rest_slot = m as u8;
+                }
+                if ms.special_kind == SpecialMoveKind::Phaze && phaze_slot == 0xFF {
+                    phaze_slot = m as u8;
+                }
+                if ms.special_kind == SpecialMoveKind::Haze && haze_slot == 0xFF {
+                    haze_slot = m as u8;
+                }
+                if ms.special_kind == SpecialMoveKind::BatonPass && bp_slot == 0xFF {
+                    bp_slot = m as u8;
+                }
+                if ms.special_kind == SpecialMoveKind::SleepTalk {
+                    sleep_talk_slot = m as u8;
+                } else if !ms.is_status && !ms.is_selfdestruct && ms.can_sleep_talk {
+                    usable_st_attacks += 1;
+                }
             }
+            let inv_maxhp = 1.0 / (maxhp as f64);
+            let ispec = table.item_spec(base_cb.mons[i].item);
+            mons[i] = StaticMonCache {
+                half_heal_slot,
+                half_heal_is_weather,
+                rest_slot,
+                sleep_talk_slot,
+                phaze_slot,
+                haze_slot,
+                bp_slot,
+                st_attack_rate: if sleep_talk_slot != 0xFF && n_moves > 1 {
+                    usable_st_attacks as f64 / (n_moves - 1) as f64
+                } else {
+                    0.0
+                },
+                inv_maxhp,
+                q16_frac: (table.mons[i].quantum_1_16 as f64) * inv_maxhp,
+                q8_frac: (table.mons[i].quantum_1_8 as f64) * inv_maxhp,
+                sand_immune: (table.mons[i].type_mask & table.sandstorm_immune_mask) != 0,
+                init_boost_type: ispec.boost_type,
+                init_castle_boost_type: ispec.castle_boost_type,
+                init_stat_kind: ispec.stat_kind,
+            };
         }
 
         let mut entries = [[[CachedPairEntry::default(); 3]; 3]; 2];
@@ -2654,24 +2779,15 @@ impl TempoMatchCache {
                 let n_moves = table.mons[att_idx].num_moves as usize;
                 for def_slot in 0..3 {
                     let def_idx = def_side * 3 + def_slot;
-                    let mut entry = CachedPairEntry {
-                        moves: [CachedMoveDmg::default(); 4],
-                        init_att_item: base_cb.mons[att_idx].item,
-                        init_def_item: base_cb.mons[def_idx].item,
-                        any_phys: false,
-                        any_weather: false,
-                        any_dynamic_bp: false,
-                    };
+                    let mut entry = CachedPairEntry::default();
+                    let mut best_norm_dmg = 0.0f32;
+                    let mut best_phys_dmg = 0.0f32;
+                    let mut best_spec_dmg = 0.0f32;
+                    let mut best_boom_dmg = 0.0f32;
                     for m_i in 0..n_moves {
                         let ms = &table.move_specs[att_idx][m_i];
                         if ms.is_status {
                             continue;
-                        }
-                        if ms.is_physical {
-                            entry.any_phys = true;
-                        }
-                        if ms.is_water || ms.is_fire || ms.is_solarbeam {
-                            entry.any_weather = true;
                         }
                         if matches!(
                             ms.special_kind,
@@ -2695,13 +2811,39 @@ impl TempoMatchCache {
                         if kern.max_dmg <= 0 {
                             continue;
                         }
-                        entry.moves[m_i] = summarize_kernel(&kern, ms);
+                        let sm = summarize_kernel(&kern, ms);
+                        entry.moves[m_i] = sm;
+                        if (sm.flags & MOVE_FLAG_SELFDESTRUCT) != 0 {
+                            if sm.mean_dmg > best_boom_dmg {
+                                best_boom_dmg = sm.mean_dmg;
+                                entry.boom_slot = m_i as u8;
+                            }
+                        } else {
+                            let eff = if (sm.flags & MOVE_FLAG_RECHARGE) != 0 {
+                                sm.mean_dmg * 0.55
+                            } else {
+                                sm.mean_dmg
+                            };
+                            if eff > best_norm_dmg {
+                                best_norm_dmg = eff;
+                                entry.best_norm_slot = m_i as u8;
+                            }
+                            if (sm.flags & MOVE_FLAG_PHYSICAL) != 0 {
+                                if eff > best_phys_dmg {
+                                    best_phys_dmg = eff;
+                                    entry.best_phys_slot = m_i as u8;
+                                }
+                            } else if eff > best_spec_dmg {
+                                best_spec_dmg = eff;
+                                entry.best_spec_slot = m_i as u8;
+                            }
+                        }
                     }
                     entries[att_side][att_slot][def_slot] = entry;
                 }
             }
         }
-        Self { entries }
+        Self { mons, entries }
     }
 }
 
@@ -2733,6 +2875,28 @@ fn summarize_kernel(kern: &DmgKernel1D, ms: &CompactMoveSpec) -> CachedMoveDmg {
         max_norm = kern.max_dmg as f32;
     }
     let crit_frac = if p_hit > 1e-4 { (p_crit / p_hit).clamp(0.0, 1.0) } else { 0.0 };
+    let mut flags = MOVE_FLAG_USABLE;
+    if ms.is_physical {
+        flags |= MOVE_FLAG_PHYSICAL;
+    }
+    if ms.fixed_damage != 0 {
+        flags |= MOVE_FLAG_FIXED;
+    }
+    if ms.is_water {
+        flags |= MOVE_FLAG_WATER;
+    }
+    if ms.is_fire {
+        flags |= MOVE_FLAG_FIRE;
+    }
+    if ms.is_solarbeam {
+        flags |= MOVE_FLAG_SOLARBEAM;
+    }
+    if ms.is_selfdestruct {
+        flags |= MOVE_FLAG_SELFDESTRUCT;
+    }
+    if ms.is_recharge {
+        flags |= MOVE_FLAG_RECHARGE;
+    }
     CachedMoveDmg {
         mean_dmg: kern.mean_dmg,
         min_norm,
@@ -2740,13 +2904,94 @@ fn summarize_kernel(kern: &DmgKernel1D, ms: &CompactMoveSpec) -> CachedMoveDmg {
         max_crit: (kern.max_dmg as f32).max(max_norm),
         p_hit: p_hit.clamp(0.0, 1.0),
         p_crit: crit_frac,
-        is_usable_dmg: true,
-        is_selfdestruct: ms.is_selfdestruct,
-        is_recharge: ms.is_recharge,
+        flags,
     }
 }
 
-#[inline]
+/// Apply Gen 2 boosts, Burn, Screens, Weather, and Acc/Eva to a cached clean `CachedMoveDmg` in O(1).
+#[inline(always)]
+fn scale_cached_move(
+    md: CachedMoveDmg,
+    att_boosts: &[i8; 7],
+    def_boosts: &[i8; 7],
+    att_burned: bool,
+    def_reflect: bool,
+    def_lightscreen: bool,
+    weather_kind: CompactWeather,
+    weather_active: bool,
+) -> CachedMoveDmg {
+    let mut out = md;
+    let acc_b = att_boosts[5];
+    let eva_b = def_boosts[6];
+    if acc_b != 0 || eva_b != 0 {
+        let ratio = GEN2_STAGE_MULT[(acc_b + 6).clamp(0, 12) as usize]
+            / GEN2_STAGE_MULT[(eva_b + 6).clamp(0, 12) as usize];
+        let old_h = out.p_hit.max(1e-4);
+        let new_h = (out.p_hit * ratio).clamp(0.05, 1.0);
+        out.mean_dmg *= new_h / old_h;
+        out.p_hit = new_h;
+    }
+    if (md.flags & MOVE_FLAG_FIXED) != 0 {
+        return out;
+    }
+    let is_phys = (md.flags & MOVE_FLAG_PHYSICAL) != 0;
+    let (atk_b, def_b) = if is_phys {
+        (att_boosts[0], def_boosts[1])
+    } else {
+        (att_boosts[2], def_boosts[3])
+    };
+    let stat_mult = if atk_b != 0 || def_b != 0 {
+        GEN2_STAGE_MULT[(atk_b + 6).clamp(0, 12) as usize]
+            / GEN2_STAGE_MULT[(def_b + 6).clamp(0, 12) as usize]
+    } else {
+        1.0
+    };
+    let burn_mult = if is_phys && att_burned { 0.5 } else { 1.0 };
+    let screen_mult = if (is_phys && def_reflect) || (!is_phys && def_lightscreen) {
+        0.5
+    } else {
+        1.0
+    };
+    let weather_mult = if weather_active {
+        match weather_kind {
+            CompactWeather::Rain => {
+                if (md.flags & MOVE_FLAG_WATER) != 0 {
+                    1.5
+                } else if (md.flags & (MOVE_FLAG_FIRE | MOVE_FLAG_SOLARBEAM)) != 0 {
+                    0.5
+                } else {
+                    1.0
+                }
+            }
+            CompactWeather::Sun => {
+                if (md.flags & MOVE_FLAG_FIRE) != 0 {
+                    1.5
+                } else if (md.flags & MOVE_FLAG_WATER) != 0 {
+                    0.5
+                } else {
+                    1.0
+                }
+            }
+            _ => 1.0,
+        }
+    } else {
+        1.0
+    };
+
+    let norm_mult = stat_mult * burn_mult * screen_mult * weather_mult;
+    // Gen 2 crit: ignores boosts/burn/screens iff atk_boost <= def_boost.
+    let crit_mult = if atk_b <= def_b { weather_mult } else { stat_mult * weather_mult };
+    if (norm_mult - 1.0).abs() > 1e-4 || (crit_mult - 1.0).abs() > 1e-4 {
+        let eff_mean_mult = (1.0 - out.p_crit) * norm_mult + out.p_crit * crit_mult;
+        out.mean_dmg *= eff_mean_mult;
+        out.min_norm *= norm_mult;
+        out.max_norm *= norm_mult;
+        out.max_crit = (out.max_crit * crit_mult).max(out.max_norm);
+    }
+    out
+}
+
+#[inline(always)]
 fn fast_ko_prob(m: &CachedMoveDmg, hp: f32) -> f64 {
     if hp <= 0.0 {
         return 1.0;
@@ -2788,6 +3033,7 @@ struct FastPair {
 }
 
 #[inline]
+#[allow(clippy::too_many_arguments)]
 fn compute_fast_pair(
     cb: &CompactBattle,
     table: &MatchTable,
@@ -2795,6 +3041,11 @@ fn compute_fast_pair(
     att_slot: usize,
     def_side: usize,
     def_slot: usize,
+    entry_hps: &[i16; 6],
+    speeds: &[i32; 6],
+    sleep_eff_delays: &[f64; 6],
+    ignore_att_boosts: bool,
+    ignore_def_boosts: bool,
     cache: Option<&TempoMatchCache>,
 ) -> FastPair {
     let att_idx = att_side * 3 + att_slot;
@@ -2804,11 +3055,21 @@ fn compute_fast_pair(
     let att_spec = &table.mons[att_idx];
     let def_spec = &table.mons[def_idx];
 
-    let s_att = effective_speed(cb, table, att_side, att_slot);
-    let s_def = effective_speed(cb, table, def_side, def_slot);
+    let s_att = if ignore_att_boosts && att_mon.boosts[4] != 0 {
+        let base = (att_spec.stored_stats[stat_idx::SPE] as i32).max(1);
+        if att_mon.status_raw() == Status::Par as u8 { (base / 4).max(1) } else { base }
+    } else {
+        speeds[att_idx]
+    };
+    let s_def = if ignore_def_boosts && def_mon.boosts[4] != 0 {
+        let base = (def_spec.stored_stats[stat_idx::SPE] as i32).max(1);
+        if def_mon.status_raw() == Status::Par as u8 { (base / 4).max(1) } else { base }
+    } else {
+        speeds[def_idx]
+    };
     let speed_cmp = if s_att > s_def { 1 } else if s_att < s_def { -1 } else { 0 };
 
-    let start_hp = entry_hp(cb, table, def_side, def_slot);
+    let start_hp = entry_hps[def_idx];
     if start_hp <= 0 || att_mon.hp() <= 0 {
         return FastPair {
             raw_ttk: if start_hp <= 0 { 0.0 } else { FAST_WALL_CAP },
@@ -2818,49 +3079,73 @@ fn compute_fast_pair(
         };
     }
 
-    let maxhp_f = def_spec.maxhp.max(1) as f64;
+    let (inv_maxhp, q16_frac, q8_frac, sand_immune) = if let Some(c) = cache {
+        let m = &c.mons[def_idx];
+        (m.inv_maxhp, m.q16_frac, m.q8_frac, m.sand_immune)
+    } else {
+        let inv = 1.0 / (def_spec.maxhp.max(1) as f64);
+        (
+            inv,
+            (def_spec.quantum_1_16 as f64) * inv,
+            (def_spec.quantum_1_8 as f64) * inv,
+            (def_spec.type_mask & table.sandstorm_immune_mask) != 0,
+        )
+    };
     let def_item = table.item_spec(def_mon.item);
 
     // Passive residuals on defender (positive = heals defender).
     let mut res_frac = 0.0f64;
     if def_item.is_leftovers {
-        res_frac += (def_spec.quantum_1_16 as f64) / maxhp_f;
+        res_frac += q16_frac;
     }
     let def_status = def_mon.status_raw();
     if def_status == Status::Brn as u8 || def_status == Status::Psn as u8 {
-        res_frac -= (def_spec.quantum_1_8 as f64) / maxhp_f;
+        res_frac -= q8_frac;
     } else if def_status == Status::Tox as u8 {
         let step = (def_mon.status_counter().max(1) as f64 + 1.5).min(15.0);
-        res_frac -= step * (def_spec.quantum_1_16 as f64) / maxhp_f;
+        res_frac -= step * q16_frac;
     }
     if (def_mon.vol_flags & vol_bit::LEECH_SEED) != 0 {
-        res_frac -= (def_spec.quantum_1_8 as f64) / maxhp_f;
+        res_frac -= q8_frac;
     }
-    if cb.weather_turns > 0
-        && cb.weather_kind == CompactWeather::Sandstorm
-        && (def_spec.type_mask & table.sandstorm_immune_mask) == 0
-    {
-        res_frac -= (def_spec.quantum_1_8 as f64) / maxhp_f;
+    if cb.weather_turns > 0 && cb.weather_kind == CompactWeather::Sandstorm && !sand_immune {
+        res_frac -= q8_frac;
     }
 
-    // Check O(1) cache validity for this pair.
+    let zero_boosts = [0i8; 7];
+    let eff_att_boosts = if ignore_att_boosts { &zero_boosts } else { &att_mon.boosts };
+    let eff_def_boosts = if ignore_def_boosts { &zero_boosts } else { &def_mon.boosts };
+    let att_status = att_mon.status_raw();
+    let att_burned = att_status == Status::Brn as u8;
+    let def_reflect = cb.sides[def_side].reflect_turns > 0;
+    let def_lightscreen = cb.sides[def_side].lightscreen_turns > 0;
+    let weather_active = cb.weather_turns > 0
+        && matches!(cb.weather_kind, CompactWeather::Rain | CompactWeather::Sun);
+
+    let needs_scale = *eff_att_boosts != [0; 7]
+        || *eff_def_boosts != [0; 7]
+        || att_burned
+        || def_reflect
+        || def_lightscreen
+        || weather_active;
+
+    // Cache stays valid even across boosts, burn, screens, weather, and consumed healing berries!
     let cached_entry = cache.and_then(|c| {
         let e = &c.entries[att_side][att_slot][def_slot];
-        let valid = att_mon.boosts == [0; 7]
-            && def_mon.boosts == [0; 7]
-            && att_mon.item == e.init_att_item
-            && def_mon.item == e.init_def_item
-            && !(e.any_phys && att_mon.status_raw() == Status::Brn as u8)
-            && !(e.any_weather && cb.weather_turns > 0)
-            && cb.sides[def_side].reflect_turns == 0
-            && cb.sides[def_side].lightscreen_turns == 0
-            && (def_mon.vol_flags & vol_bit::FORESIGHT) == 0
-            && !e.any_dynamic_bp;
-        if valid { Some(e) } else { None }
+        if e.any_dynamic_bp || (def_mon.vol_flags & vol_bit::FORESIGHT) != 0 {
+            return None;
+        }
+        let att_is = table.item_spec(att_mon.item);
+        let cm_a = &c.mons[att_idx];
+        let cm_d = &c.mons[def_idx];
+        let item_ok = att_is.boost_type == cm_a.init_boost_type
+            && att_is.castle_boost_type == cm_a.init_castle_boost_type
+            && att_is.stat_kind == cm_a.init_stat_kind
+            && def_item.stat_kind == cm_d.init_stat_kind;
+        if item_ok { Some(e) } else { None }
     });
 
     let start_hp_f = start_hp as f32;
-    let mut best_score = 0.0f64;
     let mut best_mean = 0.0f64;
     let mut best_max_norm = 0.0f64;
     let mut best_ohko = 0.0f64;
@@ -2868,49 +3153,167 @@ fn compute_fast_pair(
     let mut boom_ko = 0.0f64;
     let mut boom_dmg = 0.0f64;
 
-    let n_moves = att_spec.num_moves as usize;
-    for m_i in 0..n_moves {
-        if att_mon.pp[m_i] == 0 || att_mon.is_slot_disabled(m_i) {
-            continue;
-        }
-        let ms = &table.move_specs[att_idx][m_i];
-        if ms.is_status {
-            continue;
-        }
-        let md = if let Some(ce) = cached_entry {
-            ce.moves[m_i]
+    // Fast path: O(1) precomputed best-move lookup (handles clean AND boosted/burned/screened/weathered states!).
+    let mut used_fast_slot = false;
+    if let Some(ce) = cached_entry {
+        if !needs_scale {
+            let bs = ce.best_norm_slot as usize;
+            let b_ok = bs == 0xFF || (att_mon.pp[bs] > 0 && !att_mon.is_slot_disabled(bs));
+            if b_ok {
+                used_fast_slot = true;
+                if bs < 4 {
+                    let md = ce.moves[bs];
+                    let p_ko = fast_ko_prob(&md, start_hp_f);
+                    let mut d_mean = (md.mean_dmg as f64) * inv_maxhp;
+                    if (md.flags & MOVE_FLAG_RECHARGE) != 0 && p_ko < 0.85 {
+                        d_mean *= 0.55;
+                    }
+                    best_mean = d_mean;
+                    best_max_norm = (md.max_norm as f64) * inv_maxhp;
+                    best_ohko = p_ko;
+                    best_pp = att_mon.pp[bs];
+                }
+                let bms = ce.boom_slot as usize;
+                if bms < 4 && att_mon.pp[bms] > 0 && !att_mon.is_slot_disabled(bms) {
+                    let md = ce.moves[bms];
+                    boom_ko = fast_ko_prob(&md, start_hp_f);
+                    boom_dmg = (md.mean_dmg as f64) * inv_maxhp;
+                }
+            }
         } else {
-            let kern = DmgKernel1D::for_move(cb, table, att_side, att_slot, def_side, def_slot, m_i);
-            if kern.max_dmg <= 0 {
+            // Boosted/screened/burned/weathered O(1) path: check at most `best_phys_slot` + `best_spec_slot`!
+            let ps = ce.best_phys_slot as usize;
+            let ss = ce.best_spec_slot as usize;
+            let p_ok = ps == 0xFF || (att_mon.pp[ps] > 0 && !att_mon.is_slot_disabled(ps));
+            let s_ok = ss == 0xFF || (att_mon.pp[ss] > 0 && !att_mon.is_slot_disabled(ss));
+            if p_ok && s_ok {
+                used_fast_slot = true;
+                let mut best_score = 0.0f64;
+                for &slot_m in &[ps, ss] {
+                    if slot_m >= 4 {
+                        continue;
+                    }
+                    let md = scale_cached_move(
+                        ce.moves[slot_m],
+                        eff_att_boosts,
+                        eff_def_boosts,
+                        att_burned,
+                        def_reflect,
+                        def_lightscreen,
+                        cb.weather_kind,
+                        weather_active,
+                    );
+                    let p_ko = fast_ko_prob(&md, start_hp_f);
+                    let mut d_mean = (md.mean_dmg as f64) * inv_maxhp;
+                    if (md.flags & MOVE_FLAG_RECHARGE) != 0 && p_ko < 0.85 {
+                        d_mean *= 0.55;
+                    }
+                    let sc = d_mean + 0.15 * p_ko;
+                    if sc > best_score {
+                        best_score = sc;
+                        best_mean = d_mean;
+                        best_max_norm = (md.max_norm as f64) * inv_maxhp;
+                        best_ohko = p_ko;
+                        best_pp = att_mon.pp[slot_m];
+                    }
+                }
+                let bms = ce.boom_slot as usize;
+                if bms < 4 && att_mon.pp[bms] > 0 && !att_mon.is_slot_disabled(bms) {
+                    let md = scale_cached_move(
+                        ce.moves[bms],
+                        eff_att_boosts,
+                        eff_def_boosts,
+                        att_burned,
+                        def_reflect,
+                        def_lightscreen,
+                        cb.weather_kind,
+                        weather_active,
+                    );
+                    boom_ko = fast_ko_prob(&md, start_hp_f);
+                    boom_dmg = (md.mean_dmg as f64) * inv_maxhp;
+                }
+            }
+        }
+    }
+
+    if !used_fast_slot {
+        let mut best_score = 0.0f64;
+        let n_moves = att_spec.num_moves as usize;
+        for m_i in 0..n_moves {
+            if att_mon.pp[m_i] == 0 || att_mon.is_slot_disabled(m_i) {
                 continue;
             }
-            summarize_kernel(&kern, ms)
-        };
-        if !md.is_usable_dmg {
-            continue;
-        }
-        let p_ko = fast_ko_prob(&md, start_hp_f);
-        if md.is_selfdestruct {
-            if p_ko > boom_ko {
-                boom_ko = p_ko;
+            let ms = &table.move_specs[att_idx][m_i];
+            if ms.is_status {
+                continue;
             }
-            let bd = (md.mean_dmg as f64) / maxhp_f;
-            if bd > boom_dmg {
-                boom_dmg = bd;
+            let md = if let Some(ce) = cached_entry {
+                let raw = ce.moves[m_i];
+                if (raw.flags & MOVE_FLAG_USABLE) == 0 {
+                    continue;
+                }
+                if needs_scale {
+                    scale_cached_move(
+                        raw,
+                        eff_att_boosts,
+                        eff_def_boosts,
+                        att_burned,
+                        def_reflect,
+                        def_lightscreen,
+                        cb.weather_kind,
+                        weather_active,
+                    )
+                } else {
+                    raw
+                }
+            } else {
+                let mut tmp_cb;
+                let use_cb = if ignore_att_boosts || ignore_def_boosts {
+                    tmp_cb = *cb;
+                    if ignore_att_boosts {
+                        tmp_cb.mons[att_idx].boosts = [0; 7];
+                    }
+                    if ignore_def_boosts {
+                        tmp_cb.mons[def_idx].boosts = [0; 7];
+                    }
+                    &tmp_cb
+                } else {
+                    cb
+                };
+                let kern = DmgKernel1D::for_move(
+                    use_cb, table, att_side, att_slot, def_side, def_slot, m_i,
+                );
+                if kern.max_dmg <= 0 {
+                    continue;
+                }
+                summarize_kernel(&kern, ms)
+            };
+            if (md.flags & MOVE_FLAG_USABLE) == 0 {
+                continue;
             }
-            continue;
-        }
-        let mut d_mean = (md.mean_dmg as f64) / maxhp_f;
-        if md.is_recharge && p_ko < 0.85 {
-            d_mean *= 0.55;
-        }
-        let score = d_mean + 0.15 * p_ko;
-        if score > best_score {
-            best_score = score;
-            best_mean = d_mean;
-            best_max_norm = (md.max_norm as f64) / maxhp_f;
-            best_ohko = p_ko;
-            best_pp = att_mon.pp[m_i];
+            let p_ko = fast_ko_prob(&md, start_hp_f);
+            if (md.flags & MOVE_FLAG_SELFDESTRUCT) != 0 {
+                if p_ko > boom_ko {
+                    boom_ko = p_ko;
+                }
+                let bd = (md.mean_dmg as f64) * inv_maxhp;
+                if bd > boom_dmg {
+                    boom_dmg = bd;
+                }
+                continue;
+            }
+            let mut d_mean = (md.mean_dmg as f64) * inv_maxhp;
+            if (md.flags & MOVE_FLAG_RECHARGE) != 0 && p_ko < 0.85 {
+                d_mean *= 0.55;
+            }
+            let score = d_mean + 0.15 * p_ko;
+            if score > best_score {
+                best_score = score;
+                best_mean = d_mean;
+                best_max_norm = (md.max_norm as f64) * inv_maxhp;
+                best_ohko = p_ko;
+                best_pp = att_mon.pp[m_i];
+            }
         }
     }
 
@@ -2924,15 +3327,13 @@ fn compute_fast_pair(
     } else {
         0.0
     };
-    let eff_start_hp = if berry_hp > 0.0 && best_ohko < 0.5 {
-        ((start_hp as f64) + berry_hp).min(maxhp_f)
+    let hp_frac = if berry_hp > 0.0 && best_ohko < 0.5 {
+        (((start_hp as f64) + berry_hp) * inv_maxhp).min(1.0)
     } else {
-        start_hp as f64
+        ((start_hp as f64) * inv_maxhp).clamp(0.0, 1.0)
     };
-    let hp_frac = (eff_start_hp / maxhp_f).clamp(0.0, 1.0);
 
     // Attacker action efficiency & initial turn delays.
-    let att_status = att_mon.status_raw();
     let mut act_rate = 1.0f64;
     if att_status == Status::Par as u8 {
         act_rate *= 0.75;
@@ -2942,12 +3343,7 @@ fn compute_fast_pair(
     if (att_mon.vol_flags & vol_bit::CONFUSION) != 0 {
         act_rate *= 0.75;
     }
-    let mut delay = 0.0f64;
-    if att_status == Status::Slp as u8 {
-        let slp_t = expected_sleep_turns(cb, att_side, att_slot);
-        let st_rate = sleep_talk_attack_rate(cb, table, att_side, att_slot);
-        delay += slp_t * (1.0 - st_rate);
-    }
+    let mut delay = sleep_eff_delays[att_idx];
     if att_mon.must_recharge() {
         delay += 1.0;
     }
@@ -2959,7 +3355,7 @@ fn compute_fast_pair(
         0
     };
     let sub_turns = if sub_hp > 0 {
-        let sub_frac = (sub_hp as f64) / maxhp_f;
+        let sub_frac = (sub_hp as f64) * inv_maxhp;
         (sub_frac / (best_mean * act_rate).max(0.05)).clamp(1.0, 3.0)
     } else {
         0.0
@@ -2972,16 +3368,20 @@ fn compute_fast_pair(
 
     let d_net = best_mean * act_rate - res_frac;
 
-    // Closed-form blended continuous + discrete TTK (preserves KO thresholds AND smooth 1%-HP gradient).
+    // Closed-form blended continuous + discrete TTK:
+    // Every living Pokemon costs >= ~0.85..1.0 turns while keeping smooth 1%-HP gradient.
     let mut raw_ttk = if d_net <= 0.015 {
-        // Walled by Leftovers: still keep small smooth HP gradient so chipping has non-zero derivative.
         (FAST_WALL_CAP - 1.5 * (1.0 - hp_frac)).max(1.0)
     } else {
         let t_cont = hp_frac / d_net;
-        let t_disc = t_cont.ceil();
-        let mut t_hit = 0.55 * t_cont + 0.45 * t_disc;
+        let mut t_hit = if t_cont < 1.0 {
+            0.85 + 0.15 * t_cont
+        } else {
+            0.55 * t_cont + 0.45 * t_cont.ceil()
+        };
         if ohko_prob > 0.01 && t_cont <= 1.35 {
-            t_hit = ohko_prob * 1.0 + (1.0 - ohko_prob) * t_hit.max(1.6);
+            t_hit = ohko_prob * (0.85 + 0.15 * t_cont.min(1.0))
+                + (1.0 - ohko_prob) * t_hit.max(1.65);
         }
         (t_hit + delay + sub_turns).min(FAST_WALL_CAP)
     };
@@ -3015,6 +3415,7 @@ fn compute_fast_pair(
 }
 
 #[inline]
+#[allow(clippy::too_many_arguments)]
 fn apply_fast_recovery(
     cb: &CompactBattle,
     table: &MatchTable,
@@ -3024,7 +3425,10 @@ fn apply_fast_recovery(
     def_slot: usize,
     a2d: &mut FastPair,
     d2a: &mut FastPair,
+    entry_hps: &[i16; 6],
+    sleep_turns: &[f64; 6],
     is_1v1: bool,
+    cache: Option<&TempoMatchCache>,
 ) {
     if a2d.perish_capped {
         return;
@@ -3032,47 +3436,140 @@ fn apply_fast_recovery(
     let def_idx = def_side * 3 + def_slot;
     let def_mon = &cb.mons[def_idx];
     let def_spec = &table.mons[def_idx];
-    let def_hp = entry_hp(cb, table, def_side, def_slot);
-    if def_hp <= 0 || cb.mons[att_side * 3 + att_slot].hp() <= 0 {
-        return;
-    }
-    if def_mon.status_raw() == Status::Frz as u8 {
-        return;
-    }
-    let def_asleep = def_mon.status_raw() == Status::Slp as u8
-        && expected_sleep_turns(cb, def_side, def_slot) >= 1.0;
-    if def_asleep {
+    // Fast exit: if defender has neither Recover nor Rest in its moveset, skip immediately!
+    let (half_heal, half_pp, rest_pp, st_rate_cached, inv_maxhp, q16_frac, q8_frac, sand_immune) =
+        if let Some(c) = cache {
+            let m = &c.mons[def_idx];
+            if m.half_heal_slot == 0xFF && m.rest_slot == 0xFF {
+                return;
+            }
+            let (hh, hpp) = if m.half_heal_slot < 4 {
+                let s = m.half_heal_slot as usize;
+                if def_mon.pp[s] > 0 && !def_mon.is_slot_disabled(s) {
+                    let frac = if m.half_heal_is_weather && cb.weather_turns > 0 {
+                        match cb.weather_kind {
+                            CompactWeather::Sun => 1.0,
+                            CompactWeather::Rain | CompactWeather::Sandstorm => 0.25,
+                            CompactWeather::None => 0.5,
+                        }
+                    } else {
+                        0.5
+                    };
+                    (frac, def_mon.pp[s])
+                } else {
+                    (0.0, 0)
+                }
+            } else {
+                (0.0, 0)
+            };
+            let rpp = if m.rest_slot < 4 {
+                let s = m.rest_slot as usize;
+                if def_mon.pp[s] > 0 && !def_mon.is_slot_disabled(s) {
+                    def_mon.pp[s]
+                } else {
+                    0
+                }
+            } else {
+                0
+            };
+            let str_c = if m.sleep_talk_slot < 4 {
+                let s = m.sleep_talk_slot as usize;
+                if def_mon.pp[s] > 0 && !def_mon.is_slot_disabled(s) {
+                    m.st_attack_rate
+                } else {
+                    0.0
+                }
+            } else {
+                0.0
+            };
+            (hh, hpp, rpp, Some(str_c), m.inv_maxhp, m.q16_frac, m.q8_frac, m.sand_immune)
+        } else {
+            let mut hh = 0.0f64;
+            let mut hpp = 0u8;
+            let mut rpp = 0u8;
+            for m_i in 0..def_spec.num_moves as usize {
+                if def_mon.pp[m_i] == 0 || def_mon.is_slot_disabled(m_i) {
+                    continue;
+                }
+                let ms = &table.move_specs[def_idx][m_i];
+                if let Some(hf) = instant_heal_frac(cb, ms) {
+                    if hf > hh {
+                        hh = hf;
+                        hpp = def_mon.pp[m_i];
+                    }
+                }
+                if ms.is_rest {
+                    rpp = rpp.max(def_mon.pp[m_i]);
+                }
+            }
+            let inv = 1.0 / (def_spec.maxhp.max(1) as f64);
+            (
+                hh,
+                hpp,
+                rpp,
+                None,
+                inv,
+                (def_spec.quantum_1_16 as f64) * inv,
+                (def_spec.quantum_1_8 as f64) * inv,
+                (def_spec.type_mask & table.sandstorm_immune_mask) != 0,
+            )
+        };
+    if half_pp == 0 && rest_pp == 0 {
         return;
     }
 
-    let maxhp_f = def_spec.maxhp.max(1) as f64;
-    let hp_frac = (def_hp as f64) / maxhp_f;
+    let def_hp = entry_hps[def_idx];
+    if def_hp <= 0 || cb.mons[att_side * 3 + att_slot].hp() <= 0 {
+        return;
+    }
+    let def_status = def_mon.status_raw();
+    if def_status == Status::Frz as u8 {
+        return;
+    }
+
+    let raw_hp_frac = (def_hp as f64) * inv_maxhp;
+    let slp_t = sleep_turns[def_idx];
     let def_faster = d2a.speed_cmp > 0;
-    let p_surv = if def_faster { 1.0 } else { (1.0 - a2d.ohko_prob).clamp(0.0, 1.0) };
+
+    // Sleeping wall: does NOT lose Rest/Recover permanently; it takes `slp_t` free hits before waking!
+    // If attacker KOs it before wake-up, recovery fails; otherwise evaluate recovery from `wake_hp`.
+    let (hp_frac, p_surv) = if slp_t > 0.0 {
+        let wake_hp = raw_hp_frac - slp_t * a2d.net_dmg.max(0.0);
+        if wake_hp <= 0.04 || a2d.raw_ttk <= slp_t + 0.35 {
+            return;
+        }
+        let ps = if def_faster {
+            1.0
+        } else if a2d.max_norm_frac > 0.01 && wake_hp < a2d.max_norm_frac {
+            (wake_hp / a2d.max_norm_frac).clamp(0.0, 1.0)
+        } else {
+            (1.0 - a2d.ohko_prob).clamp(0.0, 1.0)
+        };
+        (wake_hp.clamp(0.04, 1.0), ps)
+    } else {
+        let ps = if def_faster { 1.0 } else { (1.0 - a2d.ohko_prob).clamp(0.0, 1.0) };
+        (raw_hp_frac, ps)
+    };
     if p_surv < 0.05 {
         return;
     }
 
-    let mut half_heal = 0.0f64;
-    let mut half_pp = 0u8;
-    let mut rest_pp = 0u8;
-    for m_i in 0..def_spec.num_moves as usize {
-        if def_mon.pp[m_i] == 0 || def_mon.is_slot_disabled(m_i) {
-            continue;
-        }
-        let ms = &table.move_specs[def_idx][m_i];
-        if let Some(hf) = instant_heal_frac(cb, ms) {
-            if hf > half_heal {
-                half_heal = hf;
-                half_pp = def_mon.pp[m_i];
-            }
-        }
-        if ms.is_rest {
-            rest_pp = rest_pp.max(def_mon.pp[m_i]);
-        }
-    }
+    // Paralyzed healer: 25% full-para reliably breaks Recover/Rest loops.
+    let is_par = def_status == Status::Par as u8;
+    let par_heal_mult = if is_par { 0.75 } else { 1.0 };
+    let par_wall_disc = if is_par { 0.58 } else { 1.0 };
 
     let wall_cap = if is_1v1 { FAST_WALL_CAP_1V1 } else { FAST_WALL_CAP };
+    // Lone-wall pressure: when defender is the LAST alive mon facing 2+ attackers, it cannot pivot
+    // out of dual-attacker pressure, status, crits, or 2x PP pool.
+    let lone_wall_disc = if !is_1v1
+        && cb.sides[def_side].alive_mask.count_ones() == 1
+        && cb.sides[att_side].alive_mask.count_ones() >= 2
+    {
+        0.50
+    } else {
+        1.0
+    };
     // Discount wall bonus if attacker carries a massive Explosion (>65% dmg) that breaks the wall.
     let boom_disc = if !is_1v1 && a2d.boom_dmg_frac > 0.65 {
         (1.0 - 0.55 * ((a2d.boom_dmg_frac - 0.65) / 0.35).clamp(0.0, 1.0)).clamp(0.45, 1.0)
@@ -3084,30 +3581,33 @@ fn apply_fast_recovery(
 
     // 50% Recover / Soft-Boiled / Milk Drink / Weather Heal
     if half_heal > 0.0 && half_pp > 0 {
+        let eff_heal = half_heal * par_heal_mult;
         let safe_after = if def_faster {
             (hp_frac + half_heal).min(1.0)
         } else {
             (1.0 - a2d.max_norm_frac + half_heal).min(1.0)
         };
-        if a2d.max_norm_frac < safe_after - 0.02 && a2d.net_dmg <= half_heal + 0.015 {
-            let duty = (a2d.net_dmg.max(0.0) / half_heal).clamp(0.0, 1.0);
+        if a2d.max_norm_frac < safe_after - 0.02 && a2d.net_dmg <= eff_heal + 0.015 {
+            let duty = (a2d.net_dmg.max(0.0) / eff_heal).clamp(0.0, 1.0);
             let pp_scale = ((half_pp as f64) / 16.0).clamp(0.35, 1.0);
-            // In 1v1, a Recover wall truly approaches `wall_cap`; in multi-mon, cap the extra bonus
-            // realistically (~1.5..3.5t scaled by free-turn margin, heal PP, and boom pressure).
             let wall_full = if is_1v1 {
-                (a2d.raw_ttk + (half_pp as f64) / duty.max(0.20)).min(wall_cap)
+                (a2d.raw_ttk + (half_pp as f64) * par_wall_disc / duty.max(0.20)).min(wall_cap)
             } else {
-                let extra = 3.5 * (1.0 - 0.45 * duty) * pp_scale * boom_disc;
+                let extra = 3.5
+                    * (1.0 - 0.45 * duty)
+                    * pp_scale
+                    * boom_disc
+                    * par_wall_disc
+                    * lone_wall_disc;
                 (a2d.raw_ttk + extra).min(wall_cap)
             };
-            // Smooth HP-deficit gradient: chipped wall owes `(1 - hp_frac) / heal_frac` heal turns!
-            let heal_debt = (1.0 - hp_frac) / half_heal;
+            let heal_debt = (1.0 - hp_frac) / eff_heal;
             let t_att = p_surv * (wall_full - 0.9 * heal_debt).max(a2d.raw_ttk)
                 + (1.0 - p_surv) * a2d.raw_ttk;
 
             let dmg_over_kill = d2a.raw_ttk * a2d.net_dmg.max(0.0);
             let excess_hp = (dmg_over_kill - (hp_frac - 0.15).max(0.0)).max(0.0);
-            let net_heal = half_heal - a2d.net_dmg.max(0.0);
+            let net_heal = eff_heal - a2d.net_dmg.max(0.0);
             let t_def = if excess_hp <= 1e-4 {
                 d2a.raw_ttk
             } else if net_heal > 0.025 {
@@ -3125,16 +3625,13 @@ fn apply_fast_recovery(
         let has_wake_berry = def_item.is_mintberry || def_item.is_miracleberry;
         let mut rest_res = 0.0;
         if def_item.is_leftovers {
-            rest_res += (def_spec.quantum_1_16 as f64) / maxhp_f;
+            rest_res += q16_frac;
         }
         if (def_mon.vol_flags & vol_bit::LEECH_SEED) != 0 {
-            rest_res -= (def_spec.quantum_1_8 as f64) / maxhp_f;
+            rest_res -= q8_frac;
         }
-        if cb.weather_turns > 0
-            && cb.weather_kind == CompactWeather::Sandstorm
-            && (def_spec.type_mask & table.sandstorm_immune_mask) == 0
-        {
-            rest_res -= (def_spec.quantum_1_8 as f64) / maxhp_f;
+        if cb.weather_turns > 0 && cb.weather_kind == CompactWeather::Sandstorm && !sand_immune {
+            rest_res -= q8_frac;
         }
         let att_mult = if cb.mons[att_side * 3 + att_slot].status_raw() == Status::Par as u8 {
             0.75
@@ -3147,7 +3644,8 @@ fn apply_fast_recovery(
         let h_rest = a2d.max_norm_frac.clamp(0.18, 0.48);
 
         if hp_after_wake > h_rest && a2d.max_norm_frac < 0.48 {
-            let st_rate = sleep_talk_attack_rate(cb, table, def_side, def_slot);
+            let st_rate =
+                st_rate_cached.unwrap_or_else(|| sleep_talk_attack_rate(cb, table, def_side, def_slot));
             let non_act = (3.0 - 2.0 * st_rate).max(1.0);
             let k_awake = if rest_net > 0.01 {
                 ((hp_after_wake - h_rest) / rest_net).max(0.0)
@@ -3157,9 +3655,14 @@ fn apply_fast_recovery(
             let duty = (non_act / (3.0 + k_awake)).clamp(0.0, 1.0);
             let pp_scale = ((rest_pp as f64) / 10.0).clamp(0.4, 1.0);
             let wall_full = if is_1v1 {
-                (a2d.raw_ttk + (rest_pp as f64) * 3.0).min(wall_cap)
+                (a2d.raw_ttk + (rest_pp as f64) * 3.0 * par_wall_disc).min(wall_cap)
             } else {
-                let extra = 3.2 * (1.0 - 0.40 * duty) * pp_scale * boom_disc;
+                let extra = 3.2
+                    * (1.0 - 0.40 * duty)
+                    * pp_scale
+                    * boom_disc
+                    * par_wall_disc
+                    * lone_wall_disc;
                 (a2d.raw_ttk + extra).min(wall_cap)
             };
             let heal_debt = (1.0 - hp_frac) * non_act;
@@ -3204,14 +3707,40 @@ fn apply_fast_recovery(
     }
 }
 
-/// Zero-alloc stack 3v3 Golf score solver (with Explosion option, switch-out boost wipe, and normalized softmin).
 #[inline]
+fn blend_fast_pair(a: FastPair, b: FastPair, w_b: f64) -> FastPair {
+    let w_a = 1.0 - w_b;
+    FastPair {
+        raw_ttk: w_a * a.raw_ttk + w_b * b.raw_ttk,
+        eff_ttk: w_a * a.eff_ttk + w_b * b.eff_ttk,
+        net_dmg: w_a * a.net_dmg + w_b * b.net_dmg,
+        raw_dmg: w_a * a.raw_dmg + w_b * b.raw_dmg,
+        max_norm_frac: w_a * a.max_norm_frac + w_b * b.max_norm_frac,
+        ohko_prob: w_a * a.ohko_prob + w_b * b.ohko_prob,
+        boom_ko_prob: w_a * a.boom_ko_prob + w_b * b.boom_ko_prob,
+        boom_dmg_frac: w_a * a.boom_dmg_frac + w_b * b.boom_dmg_frac,
+        heal_duty: w_a * a.heal_duty + w_b * b.heal_duty,
+        def_sustain: a.def_sustain || (w_b >= 0.5 && b.def_sustain),
+        speed_cmp: if w_b >= 0.5 { b.speed_cmp } else { a.speed_cmp },
+        perish_capped: a.perish_capped,
+        best_pp: a.best_pp,
+    }
+}
+
+/// Zero-alloc stack 3v3 Golf score solver with factored branch-and-bound pruning, strictly-monotonic
+/// exhausted-team spill accounting, last-enemy Explosion (+ 2-step teammate cleanup), and
+/// strictly-monotonic log-sum-exp team-depth backup turns (multi-mon only; 1v1 unchanged).
+#[inline]
+#[allow(clippy::too_many_arguments)]
 fn solve_fast_team_turns(
     cb: &CompactBattle,
     table: &MatchTable,
     side: usize,
     ttk: &[[[FastPair; 3]; 3]; 2],
     unb_active: Option<&[FastPair; 3]>,
+    entry_hps: &[i16; 6],
+    sleep_eff_delays: &[f64; 6],
+    cache: Option<&TempoMatchCache>,
 ) -> f64 {
     let opp = 1 - side;
     let mut allies = [0usize; 3];
@@ -3254,14 +3783,36 @@ fn solve_fast_team_turns(
     };
 
     if n_allies == 1 && n_enemies == 1 {
-        return (ttk[side][allies[0]][enemies[0]].eff_ttk + active_speed_adj).max(0.25);
+        let p = ttk[side][allies[0]][enemies[0]];
+        let p_opp = ttk[opp][enemies[0]][allies[0]];
+        if p.eff_ttk >= FAST_WALL_CAP_1V1 - 0.5 && p_opp.eff_ttk >= FAST_WALL_CAP_1V1 - 0.5 {
+            // Bounded pure turn-currency PP-stall tiebreaker ONLY in mutual 1v1 wall wars.
+            let e_idx = opp * 3 + enemies[0];
+            let mut opp_pp = 0u32;
+            for m in 0..table.mons[e_idx].num_moves as usize {
+                opp_pp += cb.mons[e_idx].pp[m] as u32;
+            }
+            return FAST_WALL_CAP_1V1 + 0.02 * (opp_pp as f64).min(80.0) + active_speed_adj;
+        }
+        return (p.eff_ttk + active_speed_adj).max(0.25);
     }
 
     let mut base_hp = [0.0f64; 3];
+    let mut opp_kill_ally = [2.5f64; 3];
     for &a in &allies[..n_allies] {
-        let hp = entry_hp(cb, table, side, a) as f64;
-        let maxhp = table.mons[side * 3 + a].maxhp.max(1) as f64;
-        base_hp[a] = (hp / maxhp).clamp(0.0, 1.0);
+        let idx = side * 3 + a;
+        let inv = cache.map_or_else(
+            || 1.0 / (table.mons[idx].maxhp.max(1) as f64),
+            |c| c.mons[idx].inv_maxhp,
+        );
+        base_hp[a] = ((entry_hps[idx] as f64) * inv).clamp(0.0, 1.0);
+        let mut min_opp_t = FAST_WALL_CAP;
+        for &e in &enemies[..n_enemies] {
+            if ttk[opp][e][a].eff_ttk < min_opp_t {
+                min_opp_t = ttk[opp][e][a].eff_ttk;
+            }
+        }
+        opp_kill_ally[a] = min_opp_t.clamp(1.0, 5.5);
     }
 
     let mut ordered_enemies = [0usize; 3];
@@ -3281,179 +3832,310 @@ fn solve_fast_team_turns(
         }
     }
 
-    let total_combos = n_allies.pow(n_enemies as u32);
-    let mut totals = [f64::INFINITY; 27];
-    let mut best_total = f64::INFINITY;
+    let opp_boom_threat_w = if n_enemies > n_allies { 0.85 } else { 0.30 };
 
-    for combo in 0..total_combos {
-        let mut assign = [0usize; 3];
-        let mut x = combo;
-        for idx_e in 0..n_enemies {
-            assign[idx_e] = allies[x % n_allies];
-            x /= n_allies;
+    // Single-step transition helper: ally `a` handles `ordered_enemies[idx_e]`, mutating `hp_rem`,
+    // `used_mask`, `switched_out_active`, and returning incremental turns added.
+    let step_enemy = |idx_e: usize,
+                      a: usize,
+                      hp_rem: &mut [f64; 3],
+                      used_mask: &mut u8,
+                      switched_out_active: &mut bool|
+     -> f64 {
+        let e = ordered_enemies[idx_e];
+        if a != act_ally {
+            *switched_out_active = true;
+        }
+        let pair_ae = if a == act_ally && *switched_out_active {
+            unb_active.map_or(ttk[side][a][e], |row| row[e])
+        } else {
+            ttk[side][a][e]
+        };
+        let pair_ea = ttk[opp][e][a];
+
+        let mut add_t = 0.0f64;
+        let mut entry_hit_hp = 0.0f64;
+        if ally_active_alive && enemy_active_alive && e == act_enemy && a != act_ally {
+            add_t += 0.65;
+            entry_hit_hp = (0.5 * pair_ea.net_dmg.max(0.0)).min(0.35);
+        } else if *used_mask != 0 && (*used_mask & (1 << a)) == 0 {
+            add_t += 0.45;
+        }
+        *used_mask |= 1 << a;
+
+        let t_need = pair_ae.eff_ttk;
+        let avail = hp_rem[a];
+        let is_last_enemy = idx_e + 1 == n_enemies;
+
+        // Explosion / Self-Destruct option: requires another living ally so user never self-loses.
+        let eff_boom_ko = if pair_ae.speed_cmp < 0 {
+            pair_ae.boom_ko_prob * (1.0 - pair_ea.ohko_prob).clamp(0.0, 1.0)
+        } else {
+            pair_ae.boom_ko_prob
+        };
+        let min_boom_hp = if a == act_ally && ally_active_alive {
+            0.02
+        } else {
+            (entry_hit_hp + 0.12).max(0.15)
+        };
+        if avail > min_boom_hp && (eff_boom_ko > 0.5 || (is_last_enemy && pair_ae.boom_dmg_frac > 0.50))
+        {
+            let has_other_alive = allies[..n_allies].iter().any(|&b| b != a && hp_rem[b] > 0.02);
+            if has_other_alive {
+                let sw_risk = if a == act_ally && ally_active_alive { 0.0 } else { 0.35 };
+                if eff_boom_ko > 0.5 && (is_last_enemy || t_need > 2.0) {
+                    let sac_pen = if is_last_enemy {
+                        0.0
+                    } else {
+                        let hp_ratio = (avail / base_hp[a].max(0.05)).clamp(0.15, 1.0);
+                        let opp_saved = opp_kill_ally[a] * hp_ratio;
+                        let has_absorber = enemies[..n_enemies]
+                            .iter()
+                            .any(|&e2| e2 != e && ttk[side][a][e2].boom_dmg_frac < 0.45);
+                        opp_saved + if has_absorber { 0.85 } else { 0.0 }
+                    };
+                    let boom_cost = 1.0 / eff_boom_ko + sac_pen + sw_risk;
+                    if boom_cost < t_need {
+                        hp_rem[a] = 0.0;
+                        return add_t + boom_cost;
+                    }
+                } else if is_last_enemy && pair_ae.boom_dmg_frac > 0.50 {
+                    // Last-enemy 2-step Explosion + Teammate Cleanup (e.g., Gengar Boom 75% -> Steelix finishes!).
+                    let p_exec = if pair_ae.speed_cmp < 0 {
+                        (1.0 - pair_ea.ohko_prob).clamp(0.0, 1.0)
+                    } else {
+                        1.0
+                    };
+                    if p_exec > 0.45 {
+                        let rem_hp = (1.0 - pair_ae.boom_dmg_frac).clamp(0.05, 0.50);
+                        let mut best_clean = f64::INFINITY;
+                        for &b in &allies[..n_allies] {
+                            if b == a || hp_rem[b] <= 0.02 {
+                                continue;
+                            }
+                            let t_fin = (rem_hp * ttk[side][b][e].raw_ttk).max(0.85);
+                            let fin_cost = t_fin + 0.35;
+                            if fin_cost < best_clean {
+                                best_clean = fin_cost;
+                            }
+                        }
+                        if best_clean.is_finite() {
+                            let combo_cost = 1.0 / p_exec + sw_risk + best_clean;
+                            if combo_cost < t_need {
+                                hp_rem[a] = 0.0;
+                                return add_t + combo_cost;
+                            }
+                        }
+                    }
+                }
+            }
         }
 
-        let mut hp_rem = base_hp;
-        let mut used_mask = 0u8;
-        let mut total = 0.0f64;
-        let mut switched_out_active = false;
-
-        for idx_e in 0..n_enemies {
-            let e = ordered_enemies[idx_e];
-            let a = assign[idx_e];
-            if a != act_ally {
-                switched_out_active = true;
-            }
-            // Switching `act_ally` out wipes all its stat boosts (O(1) cached unboosted row).
-            let pair_ae = if a == act_ally && switched_out_active {
-                unb_active.map_or(ttk[side][a][e], |row| row[e])
+        let e_slp = sleep_eff_delays[opp * 3 + e];
+        let raw_hits = if pair_ae.speed_cmp > 0 {
+            let base_h = (t_need - 1.0).max(0.0);
+            let miss_h = (1.0 - pair_ae.ohko_prob).clamp(0.0, 1.0);
+            base_h.max(miss_h)
+        } else if pair_ae.speed_cmp < 0 {
+            t_need.max(1.0)
+        } else {
+            (t_need - 0.5).max(0.5)
+        };
+        let eff_hits = (raw_hits - e_slp).max(0.0);
+        let raw_hp_drain = eff_hits * pair_ea.net_dmg.max(0.0);
+        let mut hits_taken = if pair_ea.def_sustain {
+            (0.35 * raw_hp_drain).max(0.15 * pair_ea.heal_duty)
+        } else {
+            raw_hp_drain
+        };
+        if n_enemies >= 2 && e_slp < 0.5 && pair_ea.boom_ko_prob > 0.45 {
+            let p_boom_hits = if pair_ae.speed_cmp > 0 {
+                (1.0 - pair_ae.ohko_prob).clamp(0.0, 1.0)
             } else {
-                ttk[side][a][e]
+                1.0
             };
-            let pair_ea = ttk[opp][e][a];
-
-            // Only charge voluntary switch cost (+1.0t + free entry hit) when `act_ally` is actually
-            // alive on the field; a faint replacement (`request == 2`) enters for FREE!
-            let mut entry_hit_hp = 0.0f64;
-            if ally_active_alive && enemy_active_alive && e == act_enemy && a != act_ally {
-                total += 1.0;
-                entry_hit_hp = pair_ea.net_dmg.max(0.0);
-            } else if used_mask != 0 && (used_mask & (1 << a)) == 0 {
-                total += 0.5;
+            let boom_drain =
+                opp_boom_threat_w * p_boom_hits * pair_ea.boom_ko_prob * pair_ea.boom_dmg_frac;
+            if boom_drain > hits_taken {
+                hits_taken = boom_drain;
             }
-            used_mask |= 1 << a;
-
-            let t_need = pair_ae.eff_ttk;
-            let avail = hp_rem[a];
-
-            // Explosion / Self-Destruct option: must survive to execute if slower than target!
-            let eff_boom_ko = if pair_ae.speed_cmp < 0 {
-                pair_ae.boom_ko_prob * (1.0 - pair_ea.ohko_prob).clamp(0.0, 1.0)
+        }
+        let fragile_bump = if !pair_ea.def_sustain
+            && e_slp < 0.5
+            && avail < pair_ea.raw_dmg
+            && pair_ea.raw_dmg > 0.05
+        {
+            let p_die_t1 = if pair_ae.speed_cmp > 0 {
+                1.0 - pair_ae.ohko_prob
             } else {
-                pair_ae.boom_ko_prob
+                1.0
             };
-            if n_allies >= 2
-                && eff_boom_ko > 0.5
-                && t_need > 2.2
-                && avail > entry_hit_hp + 0.02
-            {
-                let boom_cost = 1.0 / eff_boom_ko + 1.5 * avail;
-                if boom_cost < t_need {
-                    hp_rem[a] = 0.0;
-                    total += boom_cost;
+            p_die_t1 * (pair_ea.raw_dmg - avail) * 1.5
+        } else {
+            0.0
+        };
+        let hp_cost = (entry_hit_hp + hits_taken + fragile_bump).min(4.0);
+
+        if avail > 0.02 && (hp_cost <= avail + 1e-6 || hp_cost <= 1e-6) {
+            hp_rem[a] = (avail - hp_cost).max(0.0);
+            add_t + t_need
+        } else {
+            let frac_done = if avail <= 0.02 || entry_hit_hp >= avail {
+                0.0
+            } else {
+                let net_avail = (avail - entry_hit_hp).max(0.0);
+                let base = if hits_taken > 1e-6 {
+                    (net_avail / hits_taken).clamp(0.0, 0.999)
+                } else {
+                    0.0
+                };
+                if pair_ae.speed_cmp < 0 {
+                    base * (1.0 - pair_ea.ohko_prob).clamp(0.0, 1.0)
+                } else {
+                    base
+                }
+            };
+            let rem_frac = (1.0 - frac_done).max(0.0);
+            let deficit_hp = (hp_cost - avail).clamp(0.0, 2.0);
+            let turns_by_a = if avail <= 0.02 {
+                0.0
+            } else if frac_done <= 0.02 && pair_ae.speed_cmp <= 0 {
+                1.0
+            } else {
+                frac_done * t_need
+            };
+            hp_rem[a] = 0.0;
+
+            let mut best_spill = if avail <= 0.02 {
+                FAST_WALL_CAP
+            } else {
+                (rem_frac * (t_need.max(2.0) + 4.0) + 2.8 * deficit_hp).min(FAST_WALL_CAP)
+            };
+            let mut best_helper: Option<(usize, f64)> = None;
+            for &b in &allies[..n_allies] {
+                if b == a || hp_rem[b] <= 0.02 {
                     continue;
                 }
-            }
-
-            let hits_taken = if pair_ea.def_sustain {
-                0.15 * pair_ea.heal_duty
-            } else {
-                let raw_hits = if pair_ae.speed_cmp > 0 {
-                    (t_need - 1.0).max(0.0)
-                } else if pair_ae.speed_cmp < 0 {
-                    t_need
+                let pair_be = ttk[side][b][e];
+                let raw_fin = rem_frac * pair_be.raw_ttk;
+                let eff_fin = rem_frac * pair_be.eff_ttk;
+                let stall_w = ((raw_fin - 1.0) / 1.5).clamp(0.0, 1.0);
+                let t_b = raw_fin * (1.0 - stall_w) + eff_fin * stall_w;
+                let cost_b = if ttk[opp][e][b].def_sustain {
+                    0.20 * rem_frac
                 } else {
-                    (t_need - 0.5).max(0.0)
+                    let hits_b = if pair_be.speed_cmp > 0 { (t_b - 1.0).max(0.0) } else { t_b };
+                    hits_b * ttk[opp][e][b].net_dmg.max(0.0)
                 };
-                let enemy_sleep = expected_sleep_turns(cb, opp, e);
-                let enemy_st = sleep_talk_attack_rate(cb, table, opp, e);
-                let eff_hits = (raw_hits - enemy_sleep * (1.0 - enemy_st)).max(0.0);
-                eff_hits * pair_ea.net_dmg.max(0.0)
-            };
-            let hp_cost = (entry_hit_hp + hits_taken).min(4.0);
-
-            if hp_cost <= avail + 1e-6 || hp_cost <= 1e-6 {
-                hp_rem[a] = (avail - hp_cost).max(0.0);
-                total += t_need;
-            } else {
-                let frac_done = if entry_hit_hp >= avail {
+                let extra_pen = if cost_b > hp_rem[b] {
+                    let any_third =
+                        allies[..n_allies].iter().any(|&c| c != a && c != b && hp_rem[c] > 0.02);
+                    let mul = if any_third { 1.8 } else { 3.5 };
+                    (mul * (cost_b - hp_rem[b])).min(FAST_WALL_CAP - t_b).max(0.0)
+                } else {
                     0.0
-                } else {
-                    let net_avail = (avail - entry_hit_hp).max(0.0);
-                    if hits_taken > 1e-6 {
-                        (net_avail / hits_taken).clamp(0.0, 0.999)
-                    } else {
-                        0.0
-                    }
                 };
-                let rem_frac = (1.0 - frac_done).max(0.0);
-                let deficit_hp = (hp_cost - avail).clamp(0.0, 2.0);
-                let turns_by_a = if frac_done <= 0.02 && pair_ae.speed_cmp <= 0 {
-                    1.0
+                let pivot_pen = if (*used_mask & (1 << b)) == 0 {
+                    0.4 * (rem_frac * 2.0).min(1.0)
                 } else {
-                    frac_done * t_need
+                    0.0
                 };
-                hp_rem[a] = 0.0;
-
-                let mut best_spill = (rem_frac * t_need + 1.8 * deficit_hp).min(FAST_WALL_CAP);
-                let mut best_helper: Option<(usize, f64)> = None;
-                for &b in &allies[..n_allies] {
-                    if b == a || hp_rem[b] <= 0.02 {
-                        continue;
-                    }
-                    let pair_be = ttk[side][b][e];
-                    let raw_fin = rem_frac * pair_be.raw_ttk;
-                    let eff_fin = rem_frac * pair_be.eff_ttk;
-                    let stall_w = ((raw_fin - 1.0) / 1.5).clamp(0.0, 1.0);
-                    let t_b = raw_fin * (1.0 - stall_w) + eff_fin * stall_w;
-                    let cost_b = if ttk[opp][e][b].def_sustain {
-                        0.1 * rem_frac
-                    } else {
-                        let hits_b = if pair_be.speed_cmp > 0 { (t_b - 1.0).max(0.0) } else { t_b };
-                        hits_b * ttk[opp][e][b].net_dmg.max(0.0)
-                    };
-                    let extra_pen = if cost_b > hp_rem[b] {
-                        1.8 * (cost_b - hp_rem[b]).min(2.0)
-                    } else {
-                        0.0
-                    };
-                    let pivot_pen = if (used_mask & (1 << b)) == 0 {
-                        0.4 * (rem_frac * 2.0).min(1.0)
-                    } else {
-                        0.0
-                    };
-                    let cand = t_b + extra_pen + pivot_pen;
-                    if cand < best_spill {
-                        best_spill = cand;
-                        best_helper = Some((b, cost_b));
-                    }
+                let cand = (t_b + extra_pen + pivot_pen).min(FAST_WALL_CAP);
+                if cand < best_spill {
+                    best_spill = cand;
+                    best_helper = Some((b, cost_b));
                 }
-                if let Some((b, cost_b)) = best_helper {
-                    hp_rem[b] = (hp_rem[b] - cost_b).max(0.0);
-                    used_mask |= 1 << b;
-                }
-                total += turns_by_a + best_spill;
             }
+            if let Some((b, cost_b)) = best_helper {
+                hp_rem[b] = (hp_rem[b] - cost_b).max(0.0);
+                *used_mask |= 1 << b;
+            }
+            add_t + turns_by_a + best_spill
         }
+    };
 
-        let speed_adj = if ally_active_alive && enemy_active_alive && assign[0] == act_ally {
+    // Factored nested loops over `n_enemies in 1..=3` (eliminates integer `%`/`/` and shares
+    // Enemy-0 and Enemy-1 prefix states across all subtrees, cutting work ~3x!).
+    let mut best_total = f64::INFINITY;
+    for &a0 in &allies[..n_allies] {
+        let mut hp0 = base_hp;
+        let mut um0 = 0u8;
+        let mut sw0 = false;
+        let t0 = step_enemy(0, a0, &mut hp0, &mut um0, &mut sw0);
+        let speed_adj = if ally_active_alive && enemy_active_alive && a0 == act_ally {
             active_speed_adj
         } else {
             0.0
         };
-        let cand_total = (total + speed_adj).max(0.25);
-        totals[combo] = cand_total;
-        if cand_total < best_total {
-            best_total = cand_total;
+        if n_enemies == 1 {
+            let cand = (t0 + speed_adj).max(0.25);
+            if cand < best_total {
+                best_total = cand;
+            }
+            continue;
+        }
+        let min_rem1 = 0.85 * ((n_enemies - 1) as f64) + speed_adj;
+        if t0 + min_rem1 >= best_total {
+            continue;
+        }
+        for &a1 in &allies[..n_allies] {
+            let mut hp1 = hp0;
+            let mut um1 = um0;
+            let mut sw1 = sw0;
+            let t1 = t0 + step_enemy(1, a1, &mut hp1, &mut um1, &mut sw1);
+            if n_enemies == 2 {
+                let cand = (t1 + speed_adj).max(0.25);
+                if cand < best_total {
+                    best_total = cand;
+                }
+                continue;
+            }
+            if t1 + 0.85 + speed_adj >= best_total {
+                continue;
+            }
+            for &a2 in &allies[..n_allies] {
+                let mut hp2 = hp1;
+                let mut um2 = um1;
+                let mut sw2 = sw1;
+                let t2 = t1 + step_enemy(2, a2, &mut hp2, &mut um2, &mut sw2);
+                let cand = (t2 + speed_adj).max(0.25);
+                if cand < best_total {
+                    best_total = cand;
+                }
+            }
         }
     }
 
-    // Normalized softmin across feasible assignments (tau = 1.0 turn):
-    // Reduces turn cost smoothly when healthy/status-free backup allies provide redundant answers,
-    // without distorting `n_enemies` scaling (normalized by `1 / n_enemies`).
-    if n_allies <= 1 {
-        return best_total;
-    }
-    let tau = 1.0f64;
-    let mut sum_exp = 0.0f64;
-    for &t in &totals[..total_combos] {
-        let d = t - best_total;
-        if d < 14.0 {
-            sum_exp += (-d / tau).exp();
+    // Strictly-monotonic Log-Sum-Exp Free-Energy Team-Depth term (pure turn units, `n_allies >= 2` only):
+    // When `n_allies == 1`, there is no backup ally and `best_total` already accounts for exact sequential
+    // HP exhaustion across all enemies (blending `g_depth` when `n_allies == 1` would dilute dead-team spill!).
+    if n_allies >= 2 {
+        const DEPTH_W: f64 = 0.26;
+        const DEPTH_TAU: f64 = 2.2;
+        let inv_tau = 1.0 / DEPTH_TAU;
+        let mut g_depth = 0.0f64;
+        for &e in &enemies[..n_enemies] {
+            let mut z = 0.0f64;
+            for &a in &allies[..n_allies] {
+                let p = if a == act_ally && (!ally_active_alive || e != act_enemy) {
+                    unb_active.map_or(ttk[side][a][e], |row| row[e])
+                } else {
+                    ttk[side][a][e]
+                };
+                let w_a = 0.20 + 0.80 * base_hp[a];
+                z += w_a * (-p.eff_ttk * inv_tau).exp();
+            }
+            let td = if z > 1e-12 {
+                (-DEPTH_TAU * z.ln()).clamp(0.4, FAST_WALL_CAP)
+            } else {
+                FAST_WALL_CAP
+            };
+            g_depth += td;
         }
+        ((1.0 - DEPTH_W) * best_total + DEPTH_W * g_depth).max(0.25)
+    } else {
+        best_total
     }
-    let backup_bonus = (tau / (n_enemies as f64)) * sum_exp.max(1.0).ln();
-    (best_total - backup_bonus).max(0.25)
 }
 
 /// Output of `FastGolf` (v2) evaluator.
@@ -3464,7 +4146,7 @@ pub struct FastGolfEval {
     pub win_prob: f64,
 }
 
-/// Ultra-fast zero-alloc Turn-Economy ("FastGolf" v2) evaluator (~1-2 us/leaf with cache).
+/// Ultra-fast zero-alloc Turn-Economy ("FastGolf") evaluator (~0.4-0.6 us/leaf with cache).
 pub fn evaluate_fast_golf(
     cb: &CompactBattle,
     table: &MatchTable,
@@ -3479,8 +4161,44 @@ pub fn evaluate_fast_golf(
         return FastGolfEval { g_turns: [g0, g1], turn_advantage: g1 - g0, win_prob: wp };
     }
 
-    let is_1v1 =
-        cb.sides[0].alive_mask.count_ones() <= 1 && cb.sides[1].alive_mask.count_ones() <= 1;
+    let n0 = cb.sides[0].alive_mask.count_ones();
+    let n1 = cb.sides[1].alive_mask.count_ones();
+    let is_1v1 = n0 <= 1 && n1 <= 1;
+
+    // Precompute entry HP, effective speed, and sleep delays ONCE across all 6 mons.
+    let mut entry_hps = [0i16; 6];
+    let mut speeds = [1i32; 6];
+    let mut sleep_turns = [0.0f64; 6];
+    let mut sleep_eff_delays = [0.0f64; 6];
+    for s in 0..2 {
+        let mask = cb.sides[s].alive_mask;
+        for slot in 0..3 {
+            if (mask & (1 << slot)) == 0 {
+                continue;
+            }
+            let idx = s * 3 + slot;
+            entry_hps[idx] = entry_hp(cb, table, s, slot);
+            speeds[idx] = effective_speed(cb, table, s, slot);
+            if cb.mons[idx].status_raw() == Status::Slp as u8 {
+                let slp = expected_sleep_turns(cb, s, slot);
+                sleep_turns[idx] = slp;
+                let st_rate = if let Some(c) = cache {
+                    let st_s = c.mons[idx].sleep_talk_slot as usize;
+                    if st_s < 4
+                        && cb.mons[idx].pp[st_s] > 0
+                        && !cb.mons[idx].is_slot_disabled(st_s)
+                    {
+                        c.mons[idx].st_attack_rate
+                    } else {
+                        0.0
+                    }
+                } else {
+                    sleep_talk_attack_rate(cb, table, s, slot)
+                };
+                sleep_eff_delays[idx] = slp * (1.0 - st_rate);
+            }
+        }
+    }
 
     let mut ttk = [[[FastPair::default(); 3]; 3]; 2];
     for s0 in 0..3 {
@@ -3491,16 +4209,28 @@ pub fn evaluate_fast_golf(
             if (cb.sides[1].alive_mask & (1 << s1)) == 0 {
                 continue;
             }
-            let r01 = compute_fast_pair(cb, table, 0, s0, 1, s1, cache);
-            let r10 = compute_fast_pair(cb, table, 1, s1, 0, s0, cache);
+            let r01 = compute_fast_pair(
+                cb, table, 0, s0, 1, s1, &entry_hps, &speeds, &sleep_eff_delays, false, false,
+                cache,
+            );
+            let r10 = compute_fast_pair(
+                cb, table, 1, s1, 0, s0, &entry_hps, &speeds, &sleep_eff_delays, false, false,
+                cache,
+            );
 
             let mut a01 = r01;
             let mut b10 = r10;
-            apply_fast_recovery(cb, table, 0, s0, 1, s1, &mut a01, &mut b10, is_1v1);
+            apply_fast_recovery(
+                cb, table, 0, s0, 1, s1, &mut a01, &mut b10, &entry_hps, &sleep_turns, is_1v1,
+                cache,
+            );
 
             let mut a10 = r10;
             let mut b01 = r01;
-            apply_fast_recovery(cb, table, 1, s1, 0, s0, &mut a10, &mut b01, is_1v1);
+            apply_fast_recovery(
+                cb, table, 1, s1, 0, s0, &mut a10, &mut b01, &entry_hps, &sleep_turns, is_1v1,
+                cache,
+            );
 
             a01.eff_ttk = a01.eff_ttk.max(b01.eff_ttk);
             a10.eff_ttk = a10.eff_ttk.max(b10.eff_ttk);
@@ -3509,33 +4239,173 @@ pub fn evaluate_fast_golf(
         }
     }
 
-    // O(1)-cached unboosted row for active mon if it currently holds stat boosts (used if switched out).
-    let unb_fast = |s: usize| -> Option<[FastPair; 3]> {
+    // Zero-copy unboosted active rows (both offensive & defensive) + Phazer / Haze / Encore discount.
+    let unb_fast = |s: usize| -> Option<([FastPair; 3], [FastPair; 3])> {
         let act = cb.sides[s].active_idx as usize;
         let act_mon = &cb.mons[s * 3 + act];
         if act_mon.hp() <= 0 || act_mon.boosts == [0; 7] {
             return None;
         }
-        let mut cb_u = *cb;
-        cb_u.mons[s * 3 + act].boosts = [0; 7];
         let opp = 1 - s;
-        let mut row = [FastPair::default(); 3];
+        let mut att_row = [FastPair::default(); 3];
+        let mut def_row = [FastPair::default(); 3];
         for e in 0..3 {
             if (cb.sides[opp].alive_mask & (1 << e)) == 0 {
                 continue;
             }
-            let mut r_ae = compute_fast_pair(&cb_u, table, s, act, opp, e, cache);
-            let mut r_ea = compute_fast_pair(&cb_u, table, opp, e, s, act, cache);
-            apply_fast_recovery(&cb_u, table, s, act, opp, e, &mut r_ae, &mut r_ea, is_1v1);
-            row[e] = r_ae;
+            let r_ae = compute_fast_pair(
+                cb, table, s, act, opp, e, &entry_hps, &speeds, &sleep_eff_delays, true, false,
+                cache,
+            );
+            let r_ea = compute_fast_pair(
+                cb, table, opp, e, s, act, &entry_hps, &speeds, &sleep_eff_delays, false, true,
+                cache,
+            );
+            let mut a_ae = r_ae;
+            let mut b_ea = r_ea;
+            apply_fast_recovery(
+                cb, table, s, act, opp, e, &mut a_ae, &mut b_ea, &entry_hps, &sleep_turns, is_1v1,
+                cache,
+            );
+            let mut a_ea = r_ea;
+            let mut b_ae = r_ae;
+            apply_fast_recovery(
+                cb, table, opp, e, s, act, &mut a_ea, &mut b_ae, &entry_hps, &sleep_turns, is_1v1,
+                cache,
+            );
+            a_ae.eff_ttk = a_ae.eff_ttk.max(b_ae.eff_ttk);
+            a_ea.eff_ttk = a_ea.eff_ttk.max(b_ea.eff_ttk);
+            att_row[e] = a_ae;
+            def_row[e] = a_ea;
         }
-        Some(row)
+        Some((att_row, def_row))
     };
     let unb0 = unb_fast(0);
     let unb1 = unb_fast(1);
 
-    let g0 = solve_fast_team_turns(cb, table, 0, &ttk, unb0.as_ref());
-    let g1 = solve_fast_team_turns(cb, table, 1, &ttk, unb1.as_ref());
+    // Discount active stat boosts when opponent has a living healthy Phazer/Hazer or active is Encored!
+    for s in 0..2usize {
+        let unb_opt = if s == 0 { &unb0 } else { &unb1 };
+        let Some((ref unb_att, ref unb_def)) = *unb_opt else {
+            continue;
+        };
+        let act = cb.sides[s].active_idx as usize;
+        let act_idx = s * 3 + act;
+        let act_mon = &cb.mons[act_idx];
+        let pos_boosts = act_mon.boosts[0].max(0)
+            + act_mon.boosts[1].max(0)
+            + act_mon.boosts[2].max(0)
+            + act_mon.boosts[3].max(0);
+        if pos_boosts <= 0 {
+            continue;
+        }
+        let opp = 1 - s;
+        let my_alive = cb.sides[s].alive_mask.count_ones();
+        let opp_act = cb.sides[opp].active_idx as usize;
+
+        let mut blend_active = 0.0f64;
+        let mut blend_bench = 0.0f64;
+
+        // 1. Encore lock on a boosted setup mon without Baton Pass.
+        if (act_mon.vol_flags & vol_bit::ENCORE) != 0 {
+            let has_bp = if let Some(c) = cache {
+                let bs = c.mons[act_idx].bp_slot as usize;
+                bs < 4 && act_mon.pp[bs] > 0 && !act_mon.is_slot_disabled(bs)
+            } else {
+                (0..table.mons[act_idx].num_moves as usize).any(|m| {
+                    act_mon.pp[m] > 0
+                        && !act_mon.is_slot_disabled(m)
+                        && table.move_specs[act_idx][m].special_kind == SpecialMoveKind::BatonPass
+                })
+            };
+            if !has_bp {
+                blend_active = blend_active.max(0.65);
+                blend_bench = blend_bench.max(0.65);
+            }
+        }
+
+        // 2. Living healthy opponent Phazer (Roar/Whirlwind) or Hazer.
+        for e in 0..3usize {
+            if (cb.sides[opp].alive_mask & (1 << e)) == 0 {
+                continue;
+            }
+            let e_idx = opp * 3 + e;
+            let e_mon = &cb.mons[e_idx];
+            if e_mon.hp() <= 0 || e_mon.status_raw() == Status::Frz as u8 || sleep_turns[e_idx] >= 1.5
+            {
+                continue;
+            }
+            let (can_phaze, can_haze) = if let Some(c) = cache {
+                let ps = c.mons[e_idx].phaze_slot as usize;
+                let hs = c.mons[e_idx].haze_slot as usize;
+                (
+                    my_alive >= 2 && ps < 4 && e_mon.pp[ps] > 0 && !e_mon.is_slot_disabled(ps),
+                    hs < 4 && e_mon.pp[hs] > 0 && !e_mon.is_slot_disabled(hs),
+                )
+            } else {
+                let mut cp = false;
+                let mut ch = false;
+                for m in 0..table.mons[e_idx].num_moves as usize {
+                    if e_mon.pp[m] == 0 || e_mon.is_slot_disabled(m) {
+                        continue;
+                    }
+                    match table.move_specs[e_idx][m].special_kind {
+                        SpecialMoveKind::Phaze if my_alive >= 2 => cp = true,
+                        SpecialMoveKind::Haze => ch = true,
+                        _ => {}
+                    }
+                }
+                (cp, ch)
+            };
+            if !can_phaze && !can_haze {
+                continue;
+            }
+            let p_ae = ttk[s][act][e];
+            let surv = (1.0 - p_ae.ohko_prob).clamp(0.0, 1.0);
+            if e == opp_act && p_ae.raw_ttk >= 1.35 {
+                let w = 0.65 * surv;
+                blend_active = blend_active.max(w);
+                blend_bench = blend_bench.max(w);
+            } else if e != opp_act && p_ae.raw_ttk >= 2.0 {
+                // Bench phazer can switch in and force out after at most 1 boosted hit on active enemy.
+                blend_bench = blend_bench.max(0.45 * surv);
+            }
+        }
+
+        if blend_active > 0.0 || blend_bench > 0.0 {
+            for e in 0..3usize {
+                if (cb.sides[opp].alive_mask & (1 << e)) == 0 {
+                    continue;
+                }
+                let w = if e == opp_act { blend_active } else { blend_bench };
+                if w > 0.0 {
+                    ttk[s][act][e] = blend_fast_pair(ttk[s][act][e], unb_att[e], w);
+                    ttk[opp][e][act] = blend_fast_pair(ttk[opp][e][act], unb_def[e], w);
+                }
+            }
+        }
+    }
+
+    let g0 = solve_fast_team_turns(
+        cb,
+        table,
+        0,
+        &ttk,
+        unb0.as_ref().map(|x| &x.0),
+        &entry_hps,
+        &sleep_eff_delays,
+        cache,
+    );
+    let g1 = solve_fast_team_turns(
+        cb,
+        table,
+        1,
+        &ttk,
+        unb1.as_ref().map(|x| &x.0),
+        &entry_hps,
+        &sleep_eff_delays,
+        cache,
+    );
     let adv = g1 - g0;
     let wp = if g0 <= 0.0 && g1 <= 0.0 {
         0.5
@@ -3544,7 +4414,17 @@ pub fn evaluate_fast_golf(
     } else if g1 <= 0.0 {
         0.0
     } else {
-        let sigma = (FAST_RACE_VAR * (g0 + g1).max(1.0)).sqrt();
+        // Empirically calibrated Brownian race variance per turn:
+        // sharp in pure 1v1 races (`0.60/turn`, beating `linear.rs` Brier by -0.060!),
+        // calm in multi-mon switch games (`3.9..7.2/turn`) so DUCT MCTS exploration (`c = 0.4`)
+        // and Nash LP payoff averaging match calibrated win probabilities.
+        let var_per_turn = if is_1v1 {
+            0.55
+        } else {
+            let extra_mons = (n0 + n1).saturating_sub(2) as f64;
+            2.2 + 1.0 * extra_mons
+        };
+        let sigma = (var_per_turn * (g0 + g1).max(1.0)).sqrt();
         normal_cdf(adv / sigma)
     };
     FastGolfEval { g_turns: [g0, g1], turn_advantage: adv, win_prob: wp }
@@ -4063,6 +4943,47 @@ mod tests {
             "FastGolf must give positive gradient for chipping a Rest wall: full={:+.2}t chip={:+.2}t",
             fg_full.turn_advantage,
             fg_chip.turn_advantage
+        );
+
+        // 9. FastGolf v8 invariants:
+        // (a) Strict bench-HP monotonicity (losing HP on ANY living ally must never improve own score).
+        let mut cb_own_chip = cb_l;
+        cb_own_chip.mons[1].hp_pool[0] = (t_l.mons[1].maxhp * 50) / 100;
+        let fg_own_chip = evaluate_fast_golf(&cb_own_chip, &t_l, Some(&c_l));
+        assert!(
+            fg_own_chip.turn_advantage < fg_full.turn_advantage - 0.05,
+            "Chipping own bench mon must strictly worsen turn advantage: full={:+.2}t own_chip={:+.2}t",
+            fg_full.turn_advantage,
+            fg_own_chip.turn_advantage
+        );
+
+        // (b) Cached O(1) boost scaling stays accurate vs uncached DmgKernel1D on boosted states.
+        let mut cb_boost = cb_l;
+        cb_boost.mons[0].boosts[0] = 2;
+        cb_boost.mons[0].boosts[1] = 2;
+        let fg_cached_b = evaluate_fast_golf(&cb_boost, &t_l, Some(&c_l));
+        let fg_uncached_b = evaluate_fast_golf(&cb_boost, &t_l, None);
+        assert!(
+            (fg_cached_b.win_prob - fg_uncached_b.win_prob).abs() < 0.05,
+            "Cached O(1) boost scaling must closely match uncached kernel: cached={:.3} uncached={:.3}",
+            fg_cached_b.win_prob,
+            fg_uncached_b.win_prob
+        );
+
+        // (c) Last-enemy Explosion in 2v1 must win cleanly (zero sacrifice penalty on final enemy).
+        let p1_boom = vec![
+            mk("Forretress", 50, "Leftovers", &["Explosion", "Spikes"]),
+            mk("Starmie", 50, "Leftovers", &["Surf", "Recover"]),
+        ];
+        let p2_sole = vec![mk("Tauros", 50, "Leftovers", &["Body Slam", "Earthquake"])];
+        let b_boom = start(&dex, &p1_boom, &p2_sole);
+        let (t_b, cb_b) = CompactBattle::from_battle(&b_boom, &dex);
+        let c_b = TempoMatchCache::build(&cb_b, &t_b);
+        let fg_boom = evaluate_fast_golf(&cb_b, &t_b, Some(&c_b));
+        assert!(
+            fg_boom.g_turns[0] < 2.2 && fg_boom.win_prob > 0.70,
+            "2v1 with Forretress Explosion on last enemy must score fast win: {:?}",
+            fg_boom
         );
     }
 }
