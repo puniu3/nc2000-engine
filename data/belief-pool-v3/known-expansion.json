@@ -4171,10 +4171,5 @@
         }
       ]
     }
-  ],
-  "preview": {
-    "total": 990,
-    "retained": 625,
-    "invalidated": 365
-  }
+  ]
 }

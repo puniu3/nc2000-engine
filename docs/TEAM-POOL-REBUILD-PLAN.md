@@ -48,23 +48,19 @@ The offline pipeline is split into explicit versioned directories and tools:
    [`data/team-selection-v2/PROTOCOL.md`](../data/team-selection-v2/PROTOCOL.md),
    [`data/team-selection-v2/README.md`](../data/team-selection-v2/README.md), and
    [`data/meta-nash-v3/README.md`](../data/meta-nash-v3/README.md).
-4. **Product generation & verification (step 6)** (`tools/build-team-products-v2.js`):
+4. **Product generation & verification (step 6)** (`tools/build-team-products-v2.js`, `tools/build-team-products-v3.js`):
    Assembles the shipped catalog and checks memberships, canonical sets, draw
-   weights, and prior/training alignment. Current compiled preview policies
-   computed against the active catalog and prior are stored in
-   [`data/compiled-preview-v1.json`](../data/compiled-preview-v1.json)
-   (baked via [`crates/bot/examples/meta_eco/catalog_preview.rs`](../crates/bot/examples/meta_eco/catalog_preview.rs))
-   and documented in [`PREVIEW-PRIOR-COMPATIBILITY.md`](./PREVIEW-PRIOR-COMPATIBILITY.md).
+   weights, and prior/training alignment. Browser Team Preview now runs live
+   search directly on `CompactBattle` (the former pre-baked `compiled-preview-v1.json`
+   table was retired once live preview search became fast enough).
 
 ## Progress
 
 The blind rebuild (`c = 0.4`, unified catalog + broad opponent prior) and
-subsequent `training-v3` normalization, prior expansion, and compiled-preview
-bake are complete and live. For current artifact counts, fingerprints, and
-verification outputs, consult the authoritative data directories directly rather
-than duplicating snapshots here:
+subsequent `training-v3` normalization and prior expansion are complete and live.
+For current artifact counts, fingerprints, and verification outputs, consult the
+authoritative data directories directly rather than duplicating snapshots here:
 
 - Catalog: [`data/team-pool-v2/README.md`](../data/team-pool-v2/README.md)
 - Opponent prior: [`data/belief-pool-v3/README.md`](../data/belief-pool-v3/README.md)
 - Training & spread checks: [`data/training-v3/README.md`](../data/training-v3/README.md)
-- Compiled preview bake: [`data/compiled-preview-v1.json`](../data/compiled-preview-v1.json) & [`crates/bot/examples/meta_eco/catalog_preview.rs`](../crates/bot/examples/meta_eco/catalog_preview.rs)

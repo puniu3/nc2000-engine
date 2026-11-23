@@ -171,6 +171,349 @@ pub fn is_compact_tree_supported(battle: &Battle, dex: &Dex) -> bool {
     true
 }
 
+/// Returns `true` when `battle` is a fresh Team Preview state eligible to run
+/// ply 1+ of the search tree natively on [`CompactBattle`] via [`CompactPreviewRoster`].
+/// Supports Turn-0 Berserk Gene natively and excludes `sleepclausemod`, unsupported moves,
+/// transformed/damaged/statused mons, `turn_limit == Some(0)`, non-mid-turn synthetic roots,
+/// and items with `onStart` handlers so those cases fall back transparently to `Battle`.
+pub fn is_compact_preview_supported(battle: &Battle, dex: &Dex) -> bool {
+    use crate::state::{ActionKind, RequestState};
+    if battle.ended
+        || !battle.started
+        || !battle.mid_turn
+        || battle.turn != 0
+        || battle.request_state != RequestState::TeamPreview
+        || !battle.faint_queue.is_empty()
+        || !battle.event_stack.is_empty()
+        || !battle.effect_stack.is_empty()
+        || battle.active_move.is_some()
+        || battle.pending_boosts.is_some()
+        || battle.field.weather.is_some()
+        || battle.triple_kick_mult != 0
+        || battle.recoil_ko_side.is_some()
+        || battle.bp_switched_this_turn != [false, false]
+        || battle.queue.len() != 1
+        || !matches!(battle.queue[0].choice, ActionKind::Start)
+        || battle.ruleset.turn_limit().is_some_and(|lim| lim == 0)
+    {
+        return false;
+    }
+    if let Some(scm) = dex.conds_id("sleepclausemod") {
+        if battle.field.has_pseudo_weather(scm) {
+            return false;
+        }
+    }
+    for side in &battle.sides {
+        if side.request_state() != Some(RequestKind::TeamPreview)
+            || side.party.is_empty()
+            || side.party.len() > 6
+            || side.roster.len() > 6
+            || side.pokemon_left <= 0
+            || side.active.is_some()
+            || !side.side_conditions.is_empty()
+            || !side.slot_conditions.is_empty()
+            || side.choice.forced_passes_left > 0
+            || !side.choice.actions.is_empty()
+            || !side.choice.switch_ins.is_empty()
+        {
+            return false;
+        }
+        for &slot in &side.party {
+            let Some(p) = side.roster.get(slot as usize) else {
+                return false;
+            };
+            if p.transformed
+                || p.fainted
+                || p.hp <= 0
+                || p.hp != p.maxhp
+                || p.status != Status::None
+                || !p.volatiles.is_empty()
+                || p.boosts != [0; 7]
+                || p.move_slots.len() > 4
+                || p.item.is_some_and(|i| {
+                    (i.0 as usize) >= 127 || dex.items.get(i).mask.has(dex.known.on_start)
+                })
+            {
+                return false;
+            }
+            for ms in &p.move_slots {
+                if ms.pp != ms.maxpp || !is_supported_move_castle(dex, ms.id) {
+                    return false;
+                }
+            }
+            for ms in &p.base_move_slots {
+                if !is_supported_move_castle(dex, ms.id) {
+                    return false;
+                }
+            }
+        }
+    }
+    true
+}
+
+/// Precompiled 6-mon-per-side Team Preview snapshot enabling O(1) Turn-1
+/// `(MatchTable, CompactBattle)` synthesis for any legal `(pick0, pick1)` pair
+/// without touching `Battle` or allocating on the heap.
+#[derive(Clone)]
+pub struct CompactPreviewRoster {
+    mons: [[StaticMonSpec; 6]; 2],
+    move_specs: [[[CompactMoveSpec; 4]; 6]; 2],
+    init_mons: [[CompactMon; 6]; 2],
+    party_map: [[u8; 6]; 2],
+    party_len: [u8; 2],
+    picked_len: [u8; 2],
+    roster_len: [u8; 2],
+    quick_claw_mask: [u8; 2],
+    berserk_gene_mask: [u8; 2],
+    clause_flags: u8,
+    pub ruleset: crate::rules::Ruleset,
+    dt: &'static CompactDexTables,
+}
+
+impl CompactPreviewRoster {
+    /// Extract a reusable Team Preview roster snapshot from a supported Team Preview `Battle`.
+    pub fn from_battle(
+        battle: &Battle,
+        dex: &Dex,
+        roster_cache: Option<&RosterCompactCache>,
+    ) -> Self {
+        let dt = dex_tables(dex);
+        let mut mons = [[StaticMonSpec::default(); 6]; 2];
+        let mut move_specs = [[[CompactMoveSpec::default(); 4]; 6]; 2];
+        let mut init_mons = [[CompactMon::default(); 6]; 2];
+        let mut party_map = [[0u8; 6]; 2];
+        let mut party_len = [0u8; 2];
+        let mut picked_len = [0u8; 2];
+        let mut roster_len = [0u8; 2];
+        let mut quick_claw_mask = [0u8; 2];
+        let mut berserk_gene_mask = [0u8; 2];
+
+        for side_n in 0..2usize {
+            let side = &battle.sides[side_n];
+            let plen = side.party.len().min(6);
+            let rlen = side.roster.len().min(6);
+            party_len[side_n] = plen as u8;
+            picked_len[side_n] = plen.min(3) as u8;
+            roster_len[side_n] = rlen as u8;
+            for (pos, &r_slot) in side.party.iter().take(6).enumerate() {
+                party_map[side_n][pos] = r_slot;
+            }
+            for r_slot in 0..rlen {
+                let p = &side.roster[r_slot];
+                let num_moves = p.move_slots.len().min(4) as u8;
+                let cached_hit = roster_cache
+                    .and_then(|rc| rc.entries[side_n].get(r_slot))
+                    .and_then(|opt| opt.as_ref())
+                    .filter(|cm| {
+                        !p.transformed
+                            && p.species == cm.spec.species
+                            && p.level == cm.spec.level
+                            && p.maxhp == cm.guard_maxhp
+                            && p.stored_stats == cm.guard_stored_stats
+                            && p.types == cm.guard_types
+                            && p.item == cm.guard_item
+                            && p.hp_type == cm.guard_hp_type
+                            && p.hp_power == cm.guard_hp_power
+                            && p.happiness == cm.guard_happiness
+                            && num_moves == cm.spec.num_moves
+                            && (0..num_moves as usize).all(|m_i| {
+                                let sl = p.move_slots[m_i];
+                                sl.id == cm.spec.moves[m_i] && sl.maxpp == cm.guard_maxpp[m_i]
+                            })
+                    });
+                let (spec, ms) = if let Some(cm) = cached_hit {
+                    (cm.spec, cm.move_specs)
+                } else {
+                    build_static_mon_spec(p, dex, dt)
+                };
+                mons[side_n][r_slot] = spec;
+                move_specs[side_n][r_slot] = ms;
+
+                let item = p.item.map(|i| (i.0 & 0x7F) as u8 + 1).unwrap_or(0);
+                if item != 0 {
+                    if let Some(ispec) = dt.item_specs.get((item - 1) as usize) {
+                        if ispec.is_quick_claw {
+                            quick_claw_mask[side_n] |= 1u8 << r_slot;
+                        }
+                        if ispec.is_berserk_gene {
+                            berserk_gene_mask[side_n] |= 1u8 << r_slot;
+                        }
+                    }
+                }
+                let gender_byte = match p.gender {
+                    Gender::M => 1,
+                    Gender::F => 2,
+                    Gender::N => 0,
+                };
+                let mut c_mon = CompactMon {
+                    hp_pool: [p.hp.clamp(0, i16::MAX as i32) as i16, 0],
+                    pp: [0u8; 4],
+                    status_packed: 0,
+                    item,
+                    vol_flags: 0,
+                    timers: [0u8; 4],
+                    boosts: [0; 7],
+                    slot_refs: 0,
+                    ext_flags: 0,
+                    ext_timers: [0u8; 4],
+                    gender: gender_byte,
+                    rollout_rage: 0,
+                };
+                for m_i in 0..num_moves as usize {
+                    c_mon.pp[m_i] = p.move_slots[m_i].pp.clamp(0, 64) as u8;
+                }
+                init_mons[side_n][r_slot] = c_mon;
+            }
+        }
+
+        let mut clause_flags = 0u8;
+        if !battle.field.pseudo_weather.is_empty() {
+            for &(cid, _) in &battle.field.pseudo_weather {
+                if Some(cid) == dt.sleep_clause_cond {
+                    clause_flags |= 1;
+                } else if Some(cid) == dt.freeze_clause_cond {
+                    clause_flags |= 4;
+                }
+            }
+        }
+
+        Self {
+            mons,
+            move_specs,
+            init_mons,
+            party_map,
+            party_len,
+            picked_len,
+            roster_len,
+            quick_claw_mask,
+            berserk_gene_mask,
+            clause_flags,
+            ruleset: battle.ruleset,
+            dt,
+        }
+    }
+
+    /// Synthesize the Turn-1 `(MatchTable, CompactBattle)` resulting from both sides'
+    /// 1-based `SearchChoice::Team` picks (`0` for unused slots when `picked_len < 3`).
+    #[inline]
+    pub fn build_turn1(&self, picks: [[u8; 3]; 2], seed: u64) -> (MatchTable, CompactBattle) {
+        let mut static_mons = [StaticMonSpec::default(); 6];
+        let mut move_specs = [[CompactMoveSpec::default(); 4]; 6];
+        let mut compact_mons = [CompactMon::default(); 6];
+        let mut compact_sides = [CompactSide::default(); 2];
+        let mut any_quick_claw = false;
+
+        for side_n in 0..2usize {
+            let picked = self.picked_len[side_n] as usize;
+            let plen = self.party_len[side_n] as usize;
+            let rlen = self.roster_len[side_n];
+            let mut party_roster = [0u8; 3];
+            let mut alive_mask = 0u8;
+            for p_idx in 0..3usize {
+                let c_idx = side_n * 3 + p_idx;
+                if p_idx < picked {
+                    let disp = (picks[side_n][p_idx].saturating_sub(1) as usize)
+                        .min(plen.saturating_sub(1));
+                    let r_slot = self.party_map[side_n][disp];
+                    party_roster[p_idx] = r_slot;
+                    alive_mask |= 1u8 << p_idx;
+                    static_mons[c_idx] = self.mons[side_n][r_slot as usize];
+                    move_specs[c_idx] = self.move_specs[side_n][r_slot as usize];
+                    compact_mons[c_idx] = self.init_mons[side_n][r_slot as usize];
+                    if (self.quick_claw_mask[side_n] & (1u8 << r_slot)) != 0 {
+                        any_quick_claw = true;
+                    }
+                } else {
+                    party_roster[p_idx] = (p_idx as u8).min(rlen.saturating_sub(1));
+                    compact_mons[c_idx].mark_fainted();
+                }
+            }
+            compact_sides[side_n] = CompactSide {
+                active_idx: 0,
+                party_roster,
+                alive_mask,
+                reflect_turns: 0,
+                lightscreen_turns: 0,
+                safeguard_turns: 0,
+                side_flags: 0,
+                last_move_selfko: u8::MAX,
+                request: 1,
+                pad: 0,
+            };
+        }
+
+        let mut fp = 0xcbf29ce484222325u64;
+        for m in &static_mons {
+            fp = fp.wrapping_add(m.static_fp).wrapping_mul(0xf1357aea2e62a9c5);
+        }
+        let rs_tag = self.ruleset.fingerprint_tag();
+        if rs_tag != 0 {
+            fp = fp.wrapping_add(rs_tag).wrapping_mul(0xf1357aea2e62a9c5);
+        }
+        compact_sides[0].pad = (fp >> 16) as u8;
+        compact_sides[1].pad = (fp >> 24) as u8;
+
+        let mut prng = Prng::new(seed);
+
+        let dt = self.dt;
+        let table = MatchTable {
+            mons: static_mons,
+            move_specs,
+            type_chart: &dt.type_chart,
+            item_specs: &dt.item_specs,
+            normal_type: dt.normal_type,
+            fighting_type: dt.fighting_type,
+            flying_type: dt.flying_type,
+            poison_type: dt.poison_type,
+            ground_type: dt.ground_type,
+            ghost_type: dt.ghost_type,
+            grass_type: dt.grass_type,
+            fire_type: dt.fire_type,
+            electric_type: dt.electric_type,
+            ice_type: dt.ice_type,
+            sandstorm_immune_mask: dt.sandstorm_immune_mask,
+            poison_immune_mask: dt.poison_immune_mask,
+            match_fingerprint: fp,
+            ruleset: self.ruleset,
+            any_quick_claw,
+        };
+        let mut cb = CompactBattle {
+            mons: compact_mons,
+            sides: compact_sides,
+            turn: 1,
+            weather_kind: CompactWeather::None,
+            weather_turns: 0,
+            quick_claw_roll: 0,
+            outcome: 0,
+            speed_order: 0,
+            clause_flags: self.clause_flags,
+            hurt_damage_this_turn: [0, 0],
+            hurt_cat_this_turn: [0, 0],
+            match_fp_lo: fp as u16,
+            future_sight_dmg: [0, 0],
+            future_sight_turns: [0, 0],
+            future_sight_src: [0, 0],
+            bp_switch_flags: 0,
+            triple_kick_mult: 0,
+            turn_extra_flags: 0,
+            reserved_castle: [0; 5],
+            prng_seed: 0,
+        };
+        if (self.berserk_gene_mask[0] | self.berserk_gene_mask[1]) != 0 {
+            for s in 0..2usize {
+                let lead_r = cb.sides[s].party_roster[0];
+                if (self.berserk_gene_mask[s] & (1u8 << lead_r)) != 0 {
+                    cb.trigger_berserk_gene(&table, s, &mut prng);
+                }
+            }
+        }
+        let qc = Battle::roll_quick_claw_with(self.ruleset, &mut prng);
+        cb.quick_claw_roll = (qc[0] as u8) | ((qc[1] as u8) << 1);
+        cb.prng_seed = prng.seed();
+        (table, cb)
+    }
+}
+
 /// Indices into [`CompactMon::timers`] (`[confusion, encore, disable, perish/stall]`).
 pub mod timer_idx {
     pub const CONFUSION: usize = 0;
@@ -10861,5 +11204,181 @@ mod tests {
         let mut b_mis = b_ps.clone();
         b_mis.sides[0].active = Some(b_mis.sides[0].party[1]);
         assert!(!is_compact_tree_supported(&b_mis, &dex));
+    }
+
+    #[test]
+    fn compact_preview_roster_matches_battle_team_preview_transition_bit_exact() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../data/gen2stadium2.json");
+        let json = std::fs::read_to_string(&path).unwrap();
+        let dex = Dex::from_json(&json).unwrap();
+        let mk = |species: &str, level: u8, item: &str, moves: &[&str]| -> crate::battle::PokemonSet {
+            crate::battle::PokemonSet {
+                name: species.to_string(),
+                species: species.to_string(),
+                item: item.to_string(),
+                ability: String::new(),
+                moves: moves.iter().map(|s| s.to_string()).collect(),
+                gender: None,
+                evs: None,
+                ivs: None,
+                level,
+                happiness: Some(255),
+            }
+        };
+        let p1_6 = vec![
+            mk("Suicune", 55, "Leftovers", &["Surf", "Ice Beam", "Rest", "Sleep Talk"]),
+            mk("Skarmory", 50, "Mint Berry", &["Drill Peck", "Whirlwind", "Rest", "Curse"]),
+            mk("Snorlax", 55, "Quick Claw", &["Body Slam", "Earthquake", "Rest", "Curse"]),
+            mk("Zapdos", 50, "Bright Powder", &["Thunderbolt", "Hidden Power Ice", "Rest", "Sleep Talk"]),
+            mk("Cloyster", 50, "Gold Berry", &["Surf", "Ice Beam", "Spikes", "Explosion"]),
+            mk("Marowak", 55, "Thick Club", &["Earthquake", "Rock Slide", "Swords Dance", "Fire Blast"]),
+        ];
+        let p2_6 = vec![
+            mk("Jolteon", 50, "Miracle Berry", &["Thunderbolt", "Substitute", "Agility", "Baton Pass"]),
+            mk("Raikou", 55, "Magnet", &["Thunder", "Hidden Power Ice", "Rest", "Sleep Talk"]),
+            mk("Exeggutor", 50, "Leftovers", &["Psychic", "Giga Drain", "Sleep Powder", "Explosion"]),
+            mk("Tyranitar", 55, "Scope Lens", &["Rock Slide", "Earthquake", "Ice Beam", "Dynamic Punch"]),
+            mk("Steelix", 50, "Polkadot Bow", &["Earthquake", "Sandstorm", "Roar", "Explosion"]),
+            mk("Blissey", 50, "PRZ Cure Berry", &["Double-Edge", "Curse", "Counter", "Soft-Boiled"]),
+        ];
+
+        for rs in [
+            crate::rules::Ruleset::PsStadium2,
+            crate::rules::Ruleset::castle_tournament(),
+        ] {
+            for (t1, t2, picks_list) in [
+                (
+                    &p1_6[..6],
+                    &p2_6[..6],
+                    vec![
+                        ([1u8, 2, 5], [1u8, 2, 3]),
+                        ([6u8, 4, 2], [5u8, 3, 1]),
+                        ([3u8, 5, 4], [2u8, 6, 5]),
+                    ],
+                ),
+                (
+                    &p1_6[..2],
+                    &p2_6[..2],
+                    vec![([2u8, 1, 0], [1u8, 2, 0])],
+                ),
+                (
+                    &p1_6[..1],
+                    &p2_6[..1],
+                    vec![([1u8, 0, 0], [1u8, 0, 0])],
+                ),
+            ] {
+                let mut b = Battle::from_fixture_with_ruleset(&dex, "1,2,3,4", t1, t2, rs).unwrap();
+                assert!(is_compact_preview_supported(&b, &dex));
+                assert!(!is_compact_tree_supported(&b, &dex));
+
+                let rc = RosterCompactCache::from_battle(&b, &dex);
+                let roster = CompactPreviewRoster::from_battle(&b, &dex, Some(&rc));
+
+                for (p0, p1) in picks_list {
+                    let mut b_ref = b.clone();
+                    b_ref
+                        .apply_choices(
+                            &dex,
+                            [
+                                Some(crate::battle::SearchChoice::Team(p0)),
+                                Some(crate::battle::SearchChoice::Team(p1)),
+                            ],
+                        )
+                        .unwrap();
+                    let (exp_mt, exp_cb) = CompactBattle::from_battle(&b_ref, &dex);
+                    let (got_mt, got_cb) = roster.build_turn1([p0, p1], 0x1234_5678);
+
+                    assert_eq!(got_mt.match_fingerprint, exp_mt.match_fingerprint);
+                    assert_eq!(got_mt.any_quick_claw, exp_mt.any_quick_claw);
+                    assert_eq!(got_mt.ruleset, exp_mt.ruleset);
+                    assert_eq!(got_cb.turn, exp_cb.turn);
+                    assert_eq!(got_cb.clause_flags, exp_cb.clause_flags);
+                    assert_eq!(got_cb.outcome, exp_cb.outcome);
+                    assert_eq!(got_cb.sides, exp_cb.sides);
+                    assert_eq!(got_cb.mons, exp_cb.mons);
+                    assert_eq!(
+                        got_cb.search_key(&got_mt, 16, true),
+                        exp_cb.search_key(&exp_mt, 16, true)
+                    );
+                    assert_eq!(
+                        got_cb.search_key(&got_mt, 0, true),
+                        exp_cb.search_key(&exp_mt, 0, true)
+                    );
+                    assert_eq!(
+                        got_cb.quick_claw_observable(&got_mt),
+                        exp_cb.quick_claw_observable(&exp_mt)
+                    );
+
+                    // `sync_to_battle` from a TeamPreview Battle template must roundtrip Turn-1 state cleanly.
+                    let mut synced = b.clone();
+                    let mut got_sync_cb = got_cb;
+                    got_sync_cb.quick_claw_roll = exp_cb.quick_claw_roll;
+                    got_sync_cb.prng_seed = exp_cb.prng_seed;
+                    got_sync_cb.sync_to_battle(&got_mt, &dex, &mut synced);
+                    assert_eq!(synced.turn, 1);
+                    assert_eq!(synced.request_state, crate::state::RequestState::Move);
+                    assert_eq!(synced.sides[0].party.as_slice(), b_ref.sides[0].party.as_slice());
+                    assert_eq!(synced.sides[1].party.as_slice(), b_ref.sides[1].party.as_slice());
+                    assert_eq!(synced.legal_choices(&dex, 0), b_ref.legal_choices(&dex, 0));
+                    assert_eq!(synced.legal_choices(&dex, 1), b_ref.legal_choices(&dex, 1));
+                }
+                let _ = &mut b;
+            }
+        }
+
+        // Berserk Gene is natively supported on Team Preview: triggers on lead (+2 Atk, Confusion, item consumed)
+        // and stays unconsumed on bench, matching `Battle::apply_choices(Team, Team)`.
+        let mut p1_bg = p1_6.clone();
+        p1_bg[1].item = "Berserk Gene".to_string(); // L50 Skarmory
+        let b_bg = Battle::from_fixture(&dex, "1,2,3,4", &p1_bg, &p2_6).unwrap();
+        assert!(is_compact_preview_supported(&b_bg, &dex));
+        let roster_bg = CompactPreviewRoster::from_battle(&b_bg, &dex, None);
+        // Lead Berserk Gene (`[2, 1, 5]` -> Skarmory leads)
+        let (mt_bg_lead, cb_bg_lead) = roster_bg.build_turn1([[2, 1, 5], [1, 2, 3]], 0x9999);
+        let mut b_bg_lead = b_bg.clone();
+        b_bg_lead
+            .apply_choices(
+                &dex,
+                [
+                    Some(crate::battle::SearchChoice::Team([2, 1, 5])),
+                    Some(crate::battle::SearchChoice::Team([1, 2, 3])),
+                ],
+            )
+            .unwrap();
+        let (exp_mt_bg, exp_cb_bg) = CompactBattle::from_battle(&b_bg_lead, &dex);
+        assert_eq!(mt_bg_lead.match_fingerprint, exp_mt_bg.match_fingerprint);
+        assert_eq!(cb_bg_lead.mons[0].item, 0);
+        assert_eq!(cb_bg_lead.mons[0].boosts[stat_idx::ATK], 2);
+        assert_ne!(cb_bg_lead.mons[0].vol_flags & vol_bit::CONFUSION, 0);
+        assert!((2..=5).contains(&cb_bg_lead.mons[0].timers[timer_idx::CONFUSION]));
+        assert_eq!(exp_cb_bg.mons[0].item, 0);
+        assert_eq!(exp_cb_bg.mons[0].boosts[stat_idx::ATK], 2);
+        assert_ne!(exp_cb_bg.mons[0].vol_flags & vol_bit::CONFUSION, 0);
+        // Bench Berserk Gene (`[1, 2, 5]` -> Skarmory stays on bench unconsumed)
+        let (_, cb_bg_bench) = roster_bg.build_turn1([[1, 2, 5], [1, 2, 3]], 0x9999);
+        assert_ne!(cb_bg_bench.mons[1].item, 0);
+        assert_eq!(cb_bg_bench.mons[1].boosts[stat_idx::ATK], 0);
+        assert_eq!(cb_bg_bench.mons[1].vol_flags & vol_bit::CONFUSION, 0);
+
+        // Unsupported move (`Solar Beam`) must trigger Battle fallback on Team Preview.
+        let mut p1_sb = p1_6.clone();
+        p1_sb[5].moves[0] = "Solar Beam".to_string();
+        let b_sb = Battle::from_fixture(&dex, "1,2,3,4", &p1_sb, &p2_6).unwrap();
+        assert!(!is_compact_preview_supported(&b_sb, &dex));
+
+        // Synthetic TeamPreview battle with `mid_turn == false` must fall back to Battle.
+        let mut b_nmt = Battle::from_fixture(&dex, "1,2,3,4", &p1_6, &p2_6).unwrap();
+        b_nmt.mid_turn = false;
+        assert!(!is_compact_preview_supported(&b_nmt, &dex));
+
+        // `sleepclausemod` must trigger Battle fallback on Team Preview.
+        let mut b_scm = Battle::from_fixture(&dex, "1,2,3,4", &p1_6, &p2_6).unwrap();
+        if let Some(scm) = dex.conds_id("sleepclausemod") {
+            let mut st = crate::state::EffectState::default();
+            st.id = crate::state::EffId::Cond(scm);
+            b_scm.field.pseudo_weather.push((scm, st));
+            assert!(!is_compact_preview_supported(&b_scm, &dex));
+        }
     }
 }

@@ -16,7 +16,6 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const read = name => fs.readFileSync(path.join(root, name), 'utf8');
 const data = name => JSON.parse(read('data/' + name + '.json'));
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
-const compiled = path.join(root, 'web/src/compiled-preview.ts');
 const live = data('live-search');
 const { c } = data('search-profiles').blind;
 
@@ -27,15 +26,6 @@ const teamFiles = [
   'team-pool-v2/team-pool',
   incumbentFile,
 ];
-
-async function buildCompiledPicker() {
-  const { build } = await import('vite');
-  const bundle = await build({ configFile: false, logLevel: 'silent',
-    define: { __COMPILED_PREVIEW_ENABLED__: 'true' },
-    build: { write: false, lib: { entry: compiled, formats: ['es'], fileName: 'picker' } },
-  });
-  return 'data:text/javascript;base64,' + Buffer.from(bundle[0].output[0].code).toString('base64');
-}
 
 async function start() {
   const [, , taskFile, output, n = '8'] = process.argv;
@@ -49,9 +39,9 @@ async function start() {
   fs.mkdirSync(output); // refuse to mix builds or overwrite an earlier run
   const logDir = process.env.NASH_SAVE_LOGS === '1' ? path.join(output, 'logs') : null;
   if (logDir) fs.mkdirSync(logDir);
-  const picker = tasks.some(task => !task.mixtures) ? await buildCompiledPicker() : null;
+  const needsDefaultPool = tasks.some(task => !task.mixtures);
   const inputs = [...teamFiles, 'live-search', 'search-profiles'];
-  if (picker) inputs.push('compiled-preview-v1', 'belief-pool-v3/belief-pool');
+  if (needsDefaultPool) inputs.push('belief-pool-v3/belief-pool');
   const hasDisclosure = tasks.some(task => task.mixtures);
   if (hasDisclosure) inputs.push(candidateFile);
   const poolsText = process.env.NASH_POOLS ? fs.readFileSync(process.env.NASH_POOLS, 'utf8') : null;
@@ -62,13 +52,12 @@ async function start() {
     ...(needsOld ? { oldWasm: hash(fs.readFileSync(path.join(oldPath, 'nc2000_wasm_bg.wasm'))) } : {}),
     tasks: hash(fs.readFileSync(taskFile)),
     wasm: hash(fs.readFileSync(path.join(root, 'crates/wasm/pkg-node/nc2000_wasm_bg.wasm'))),
-    ...(picker ? { picker: hash(picker) } : {}),
     data: Object.fromEntries(inputs.map(k => [k, hash(read('data/' + k + '.json'))])),
   };
   fs.writeFileSync(path.join(output, 'manifest.json'), JSON.stringify(stamp));
   let next = 0;
   await Promise.all(Array.from({ length: Math.min(+n, tasks.length) }, () => new Promise((resolve, reject) => {
-    const thread = new Worker(new URL(import.meta.url), { workerData: { picker, hasDisclosure, oldPath, poolsText, logDir } });
+    const thread = new Worker(new URL(import.meta.url), { workerData: { needsDefaultPool, hasDisclosure, oldPath, poolsText, logDir } });
     thread.on('error', reject);
     thread.on('exit', code => code ? reject(Error('worker exit ' + code)) : resolve());
     thread.on('message', result => {
@@ -84,14 +73,7 @@ async function start() {
 }
 
 async function worker() {
-  let pool, compiledPreviewPick, allowed;
-  if (workerData.picker) {
-    pool = read('data/belief-pool-v3/belief-pool.json');
-    const module = await import(workerData.picker);
-    compiledPreviewPick = module.compiledPreviewPick;
-    allowed = await module.compiledPreviewCompatibility(pool, wasm.embeddedDexJson());
-    assert(allowed.size > 0);
-  }
+  const pool = workerData.needsDefaultPool ? read('data/belief-pool-v3/belief-pool.json') : null;
   const dex = new wasm.Dex();
   const old = workerData.oldPath ? (await import(pathToFileURL(path.join(workerData.oldPath, 'nc2000_wasm.js')))).default : null;
   const oldDex = old ? new old.Dex() : null;
@@ -169,17 +151,11 @@ async function worker() {
           assert(!belief.fallback && belief.candidates.includes(ids[1-side]), 'disclosure lost the played team');
           if (first) previewBeliefs[side] = belief.candidates;
         }
-        if (first && !mixtures) {
-          input = compiledPreviewPick(agent.compiledPreviewBuild(), agent.compiledPreviewKey(),
-            seeds[side], c, agent.previewPublicInfo(), allowed);
+        if (first && !mixtures && picks[side]) {
           const legal = pick => frame.legal_actions.some(a => a.replaceAll(' ', '') === pick.replaceAll(' ', ''));
-          if (input && legal(input)) source = 'table';
-          else input = null;
-          if (picks[side]) {
-            assert(legal(picks[side]), 'illegal forced selection');
-            source = 'forced';
-            input = picks[side];
-          }
+          assert(legal(picks[side]), 'illegal forced selection');
+          source = 'forced';
+          input = picks[side];
         }
         if (!input) {
           if (policies[side] === 'current') agent.stepAdaptiveBattle(first ? live.unknownPreview : live.battle.adaptive);

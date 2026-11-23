@@ -26,7 +26,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
-use nc2000_bot::compiled_preview;
 use nc2000_bot::decision::{DecisionPolicy, DecisionSampler, PolicyMode};
 use nc2000_bot::player::PlayerChannel;
 use nc2000_bot::preview::{MetaPool, MetaTeam};
@@ -115,125 +114,6 @@ struct SearchProfilesCfg {
 #[derive(Deserialize)]
 struct BlindProfileCfg {
     c: f64,
-}
-
-#[derive(Deserialize)]
-struct CompiledPreviewFile {
-    format: String,
-    #[serde(default)]
-    status: Option<String>,
-    build: String,
-    c: f64,
-    #[serde(rename = "priorSha256")]
-    prior_sha256: String,
-    #[serde(rename = "dexSha256")]
-    dex_sha256: String,
-    policies: HashMap<String, Vec<String>>,
-}
-
-struct CompiledPreviewPicker {
-    artifact: CompiledPreviewFile,
-    public_rosters: HashMap<String, Option<String>>,
-    enabled: bool,
-}
-
-impl CompiledPreviewPicker {
-    fn load(root: &Path, dex_bytes: &[u8], pool_bytes: &[u8]) -> Self {
-        let raw = fs::read_to_string(root.join("data/compiled-preview-v1.json"))
-            .expect("read data/compiled-preview-v1.json");
-        let artifact: CompiledPreviewFile =
-            serde_json::from_str(&raw).expect("parse data/compiled-preview-v1.json");
-        let enabled = artifact.format == "nc2000-compiled-preview-v1"
-            && artifact.status.as_deref() != Some("retired-training-v3")
-            && artifact.dex_sha256 == sha256_hex(dex_bytes)
-            && artifact.prior_sha256 == sha256_hex(pool_bytes);
-        let mut public_rosters: HashMap<String, Option<String>> = HashMap::new();
-        if enabled {
-            for key in artifact.policies.keys() {
-                let parsed: Value = serde_json::from_str(key).expect("compiled preview key json");
-                let Some(own) = parsed[0].as_array() else {
-                    // Castle keys store `[meta, own, foe]` where `parsed[0]` is a metadata object.
-                    continue;
-                };
-                let roster: Vec<Value> = own.iter().map(|p| json!([p[0], p[1]])).collect();
-                let facts: Vec<Value> = own
-                    .iter()
-                    .map(|p| json!([p[0], p[1], p[2], !p[8].is_null()]))
-                    .collect();
-                let roster_str = serde_json::to_string(&roster).unwrap();
-                let facts_str = serde_json::to_string(&facts).unwrap();
-                match public_rosters.get(&roster_str) {
-                    Some(existing) if existing.as_deref() != Some(facts_str.as_str()) => {
-                        public_rosters.insert(roster_str, None);
-                    }
-                    None => {
-                        public_rosters.insert(roster_str, Some(facts_str));
-                    }
-                    _ => {}
-                }
-            }
-        }
-        Self {
-            artifact,
-            public_rosters,
-            enabled,
-        }
-    }
-
-    fn pick(
-        &self,
-        agent: &ProtocolAgent,
-        seed: u32,
-        c: f64,
-    ) -> Option<String> {
-        if !self.enabled {
-            return None;
-        }
-        let battle = agent.battle()?;
-        let observer = agent.observer()?;
-        let search = agent.search()?;
-        if !search.is_preview() {
-            return None;
-        }
-        if compiled_preview::policy_epoch_for(battle.ruleset) != self.artifact.build
-            || c != self.artifact.c
-        {
-            return None;
-        }
-        let key = if battle.is_castle() {
-            let foe_items: Vec<bool> = observer.mons().iter().map(|m| m.preview_has_item).collect();
-            compiled_preview::castle_key_from_flags(battle, agent.side(), &foe_items)?
-        } else {
-            compiled_preview::key(battle, agent.side())?
-        };
-        if !battle.is_castle() {
-            let parsed: Value = serde_json::from_str(&key).ok()?;
-            let foe_str = serde_json::to_string(&parsed[1]).ok()?;
-            let observed: Vec<Value> = observer
-                .mons()
-                .iter()
-                .map(|m| {
-                    json!([
-                        m.species.0,
-                        m.level,
-                        format!("{:?}", m.gender),
-                        m.preview_has_item
-                    ])
-                })
-                .collect();
-            let observed_str = serde_json::to_string(&observed).ok()?;
-            if self.public_rosters.get(&foe_str).and_then(|v| v.as_deref())
-                != Some(observed_str.as_str())
-            {
-                return None;
-            }
-        }
-        let choices = self.artifact.policies.get(&key)?;
-        if choices.is_empty() {
-            return None;
-        }
-        Some(choices[(seed as usize) % choices.len()].clone())
-    }
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
@@ -562,7 +442,6 @@ struct SharedState {
     team_json_map: HashMap<String, String>,
     disclosed: HashMap<String, MetaPool>,
     default_pool: Option<MetaPool>,
-    picker: Option<CompiledPreviewPicker>,
     preview_iters: u32,
     battle_iters: u32,
     battle_mode: BattleMode,
@@ -700,23 +579,15 @@ fn run_game(shared: &SharedState, index: usize, task: &Task) -> Value {
             }
 
             if first && task.mixtures.is_none() {
-                let is_legal = |pick: &str| {
-                    let norm = canonical_no_spaces(pick);
-                    frame
-                        .legal_actions
-                        .iter()
-                        .any(|a| canonical_no_spaces(a) == norm)
-                };
-                if let Some(picker) = &shared.picker {
-                    if let Some(pick) = picker.pick(agent, task.seeds[side], shared.blind_c) {
-                        if is_legal(&pick) {
-                            chosen = Some(pick);
-                            source = "table";
-                        }
-                    }
-                }
                 if let Some(forced) = picks.get(side).filter(|s| !s.is_empty()) {
-                    assert!(is_legal(forced), "illegal forced selection: {forced}");
+                    let norm = canonical_no_spaces(forced);
+                    assert!(
+                        frame
+                            .legal_actions
+                            .iter()
+                            .any(|a| canonical_no_spaces(a) == norm),
+                        "illegal forced selection: {forced}"
+                    );
                     chosen = Some(forced.clone());
                     source = "forced";
                 }
@@ -1322,7 +1193,7 @@ fn main() {
     }
 
     let has_disclosure = tasks.iter().any(|t| t.mixtures.is_some());
-    let needs_picker = tasks.iter().any(|t| t.mixtures.is_none());
+    let needs_default_pool = tasks.iter().any(|t| t.mixtures.is_none());
 
     let mut disclosed: HashMap<String, MetaPool> = HashMap::new();
     if has_disclosure {
@@ -1429,21 +1300,19 @@ fn main() {
         }
     }
 
-    let (default_pool, picker) = if needs_picker {
+    let default_pool = if needs_default_pool {
         let pool_bytes = fs::read(root.join("data/belief-pool-v3/belief-pool.json"))
             .expect("read data/belief-pool-v3/belief-pool.json");
         let pool: MetaPool = serde_json::from_slice(&pool_bytes).expect("parse belief-pool");
-        let picker = CompiledPreviewPicker::load(&root, &dex_bytes, &pool_bytes);
-        (Some(pool), Some(picker))
+        Some(pool)
     } else {
-        (None, None)
+        None
     };
 
     let mut inputs: Vec<&str> = TEAM_FILES.to_vec();
     inputs.push("live-search");
     inputs.push("search-profiles");
-    if needs_picker {
-        inputs.push("compiled-preview-v1");
+    if needs_default_pool {
         inputs.push("belief-pool-v3/belief-pool");
     }
     if has_disclosure {
@@ -1561,7 +1430,6 @@ fn main() {
         team_json_map,
         disclosed,
         default_pool,
-        picker,
         preview_iters,
         battle_iters,
         battle_mode,

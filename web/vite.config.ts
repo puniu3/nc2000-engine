@@ -26,15 +26,10 @@ import fs from "node:fs";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
-import { compatiblePolicyKeys } from "./src/preview-prior.mjs";
-
 const webDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(webDir, "..");
 const dataDir = path.join(repoRoot, "data");
 const base = process.env.NC2000_BASE ?? "/";
-// Research builds execute live search exclusively; the default production
-// build still requires a freshly baked, source-matching preview artifact.
-const compiledPreviewEnabled = process.env.NC2000_DISABLE_COMPILED_PREVIEW !== "1";
 
 function serveRepoData(): Plugin {
   // The app fetches `${BASE_URL}data/...`; accept both the based path and
@@ -93,84 +88,6 @@ function readEpochs(): { engineEpoch: string; policyEpoch: string } {
   return { engineEpoch: engineMatch[1], policyEpoch: policyMatch[1] };
 }
 
-function sha256File(relative: string): string {
-  return createHash("sha256").update(fs.readFileSync(path.join(repoRoot, relative))).digest("hex");
-}
-
-// Soft preview cache: compiled previews accelerate Turn-0 Team Preview when
-// `POLICY_EPOCH`, dex, search coefficient, and shell priors match; on any
-// mismatch, builds warn and runtime seamlessly falls back to live search.
-function verifyCompiledPreview(): Plugin {
-  const { policyEpoch } = readEpochs();
-  return {
-    name: "verify-compiled-preview",
-    apply: "build",
-    enforce: "pre",
-    async load(id) {
-      if (!compiledPreviewEnabled || !id.endsWith('/data/compiled-preview-v1.json?raw')) return;
-      const previewPath = path.join(dataDir, "compiled-preview-v1.json");
-      if (!fs.existsSync(previewPath)) {
-        return `export default ${JSON.stringify(JSON.stringify({ format: "nc2000-compiled-preview-v1", build: policyEpoch, c: 0.4, priorSha256: "", dexSha256: "", iterations: 0, policies: {} }))};`;
-      }
-      const artifact = JSON.parse(fs.readFileSync(previewPath, "utf8"));
-      const profiles = JSON.parse(fs.readFileSync(path.join(dataDir, "search-profiles.json"), "utf8"));
-      const dexSha = sha256File("data/gen2stadium2.json");
-      if (artifact.status || artifact.format !== "nc2000-compiled-preview-v1" || artifact.build !== policyEpoch || artifact.c !== profiles.blind.c || artifact.dexSha256 !== dexSha) {
-        artifact.policies = {};
-        return `export default ${JSON.stringify(JSON.stringify(artifact))};`;
-      }
-      if (!artifact.priorDependencies) return;
-      const prior = JSON.parse(fs.readFileSync(path.join(dataDir, "belief-pool-v3/belief-pool.json"), "utf8"));
-      const dex = JSON.parse(fs.readFileSync(path.join(dataDir, "gen2stadium2.json"), "utf8"));
-      const valid = await compatiblePolicyKeys(artifact, prior, dex,
-        (text: string) => createHash("sha256").update(text).digest("hex"));
-      // Only ship policy keys whose shell priors still match.
-      artifact.policies = Object.fromEntries(Object.entries(artifact.policies ?? {}).filter(([key]) => valid.has(key)));
-      return `export default ${JSON.stringify(JSON.stringify(artifact))};`;
-    },
-    async buildStart() {
-      if (!compiledPreviewEnabled) return;
-      const previewPath = path.join(dataDir, "compiled-preview-v1.json");
-      if (!fs.existsSync(previewPath)) {
-        this.warn("compiled-preview-v1.json not found; browser previews will use live search.");
-        return;
-      }
-      const artifact = JSON.parse(fs.readFileSync(previewPath, "utf8"));
-      const catalog = JSON.parse(fs.readFileSync(path.join(dataDir, "team-pool-v3/team-pool.json"), "utf8"));
-      const profiles = JSON.parse(fs.readFileSync(path.join(dataDir, "search-profiles.json"), "utf8"));
-      if (artifact.status) {
-        this.warn(`compiled-preview-v1.json status=${artifact.status}; browser previews will use live search.`);
-        return;
-      }
-      if (artifact.build !== policyEpoch) {
-        this.warn(`compiled-preview-v1.json build=${artifact.build} != ${policyEpoch}; browser previews will use live search.`);
-        return;
-      }
-      if (artifact.c !== profiles.blind.c) {
-        this.warn(`compiled-preview-v1.json c=${artifact.c} != ${profiles.blind.c}; browser previews will use live search.`);
-        return;
-      }
-      if (artifact.dexSha256 !== sha256File("data/gen2stadium2.json")) {
-        this.warn("compiled-preview-v1.json dexSha256 differs; browser previews will use live search.");
-        return;
-      }
-      const publicRosters = new Set(catalog.teams.map((t: { sets: { species: string; level: number }[] }) => JSON.stringify(t.sets.map(p => [p.species, p.level]))));
-      if (artifact.format !== "nc2000-compiled-preview-v1" || artifact.matchups !== catalog.teams.length * publicRosters.size || Object.keys(artifact.policies ?? {}).length !== artifact.matchups) {
-        this.warn("compiled-preview-v1.json coverage is incomplete; missing keys will use live search.");
-        return;
-      }
-      if (artifact.priorDependencies) {
-        const prior = JSON.parse(fs.readFileSync(path.join(dataDir, "belief-pool-v3/belief-pool.json"), "utf8"));
-        const dex = JSON.parse(fs.readFileSync(path.join(dataDir, "gen2stadium2.json"), "utf8"));
-        const valid = await compatiblePolicyKeys(artifact, prior, dex,
-          (text: string) => createHash("sha256").update(text).digest("hex"));
-        if (valid.size !== artifact.matchups)
-          this.warn(`${artifact.matchups - valid.size} preview keys have changed shell priors and will use live search.`);
-      }
-    },
-  };
-}
-
 function evaluatorBuildId(): string {
   const { engineEpoch, policyEpoch } = readEpochs();
   const hash = createHash("sha256");
@@ -190,9 +107,8 @@ export default defineConfig({
   base,
   define: {
     __EVALUATOR_BUILD__: JSON.stringify(evaluatorBuildId()),
-    __COMPILED_PREVIEW_ENABLED__: compiledPreviewEnabled,
   },
-  plugins: [verifyCompiledPreview(), serveRepoData()],
+  plugins: [serveRepoData()],
   esbuild: {
     jsx: "automatic",
     jsxImportSource: "preact",
@@ -202,7 +118,6 @@ export default defineConfig({
   },
   worker: {
     format: "es",
-    plugins: () => [verifyCompiledPreview()],
   },
   build: {
     target: "es2020",

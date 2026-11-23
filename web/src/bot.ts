@@ -21,8 +21,8 @@ export interface SearchOutcome {
   ms: number;
   wasmMemoryBytes: number;
   endgame?: string;
-  /** Where the pick came from (preview: "table" | "search"). */
-  src?: "table" | "search";
+  /** Where the pick came from (always live search). */
+  src?: "search";
 }
 
 export class BotWorker {
@@ -133,7 +133,6 @@ export class BotWorker {
       seed: number;
       priorJson?: string;
       pickPriorJson?: string;
-      compiledPreview?: boolean;
       adaptiveBudget?: boolean;
       endgame?: EndgameSettings;
       actionPolicy?: ActionPolicyMode;

@@ -883,13 +883,19 @@ struct CompactWorld {
     root: usize,
 }
 
+struct CompactPreviewWorld {
+    roster: nc2000_engine::compact::CompactPreviewRoster,
+    sim_template: Arc<Battle>,
+}
+
 struct CachedDetRoot {
-    sim: Battle,
+    sim: Arc<Battle>,
     root: usize,
     type_index: usize,
     cache: Arc<nc2000_engine::battle::BattleSearchCache>,
     world_id: u64,
     compact: Option<Arc<CompactWorld>>,
+    preview_compact: Option<Arc<CompactPreviewWorld>>,
 }
 
 struct SampledWorld {
@@ -908,9 +914,30 @@ enum NextWorld {
         cb: nc2000_engine::compact::CompactBattle,
         world_idx: usize,
     },
+    CompactPreview {
+        cpw: Arc<CompactPreviewWorld>,
+        turn1_seed: u64,
+    },
     Battle {
         sim: Box<Battle>,
         cache: Arc<nc2000_engine::battle::BattleSearchCache>,
+    },
+}
+
+enum DetRootOutcome {
+    CompactPreview {
+        cpw: Arc<CompactPreviewWorld>,
+        turn1_seed: u64,
+        root: usize,
+        type_index: usize,
+    },
+    Battle {
+        sim: Box<Battle>,
+        root: usize,
+        type_index: usize,
+        cache: Arc<nc2000_engine::battle::BattleSearchCache>,
+        world_id: u64,
+        compact: Option<Arc<CompactWorld>>,
     },
 }
 
@@ -1347,20 +1374,50 @@ impl BlindSearch {
         }))
     }
 
+    fn try_build_compact_preview_world(
+        &self,
+        dex: &Dex,
+        sim: &Battle,
+        battle_root: usize,
+        cache: &nc2000_engine::battle::BattleSearchCache,
+        sim_template: Arc<Battle>,
+    ) -> Option<Arc<CompactPreviewWorld>> {
+        if !self.is_preview()
+            || !self.hidden_timers.is_empty()
+            || !nc2000_engine::compact::is_compact_preview_supported(sim, dex)
+        {
+            return None;
+        }
+        let root_acts = &self.nodes[battle_root].acts;
+        if root_acts[0].is_empty()
+            || root_acts[1].is_empty()
+            || !root_acts[0]
+                .iter()
+                .all(|c| matches!(c, SearchChoice::Team(_)))
+            || !root_acts[1]
+                .iter()
+                .all(|c| matches!(c, SearchChoice::Team(_)))
+        {
+            return None;
+        }
+        let roster = nc2000_engine::compact::CompactPreviewRoster::from_battle(
+            sim,
+            dex,
+            Some(&cache.roster_compact),
+        );
+        Some(Arc::new(CompactPreviewWorld {
+            roster,
+            sim_template,
+        }))
+    }
+
     fn determinize_and_resolve_root(
         &mut self,
         dex: &Dex,
         belief: &Belief,
         obs: &Observer,
         plan_pick: TeamPlanPick,
-    ) -> (
-        Box<Battle>,
-        usize,
-        usize,
-        Arc<nc2000_engine::battle::BattleSearchCache>,
-        u64,
-        Option<Arc<CompactWorld>>,
-    ) {
+    ) -> DetRootOutcome {
         let obs_rev = obs.revision();
         if self.det_cache_obs_rev != obs_rev {
             self.det_cache.clear();
@@ -1370,7 +1427,13 @@ impl BlindSearch {
         let unseen_idle = self.base_idle;
         let zero_preview_qc = self.is_preview();
         let share_qc_cache = unseen_idle || zero_preview_qc;
-        if self.base.queue.is_empty() && !belief.has_active_pick_draws(obs) {
+        let preview_queue_ok = zero_preview_qc
+            && self.base.queue.len() == 1
+            && matches!(
+                self.base.queue[0].choice,
+                nc2000_engine::state::ActionKind::Start
+            );
+        if (self.base.queue.is_empty() && !belief.has_active_pick_draws(obs)) || preview_queue_ok {
             let mut rng_probe = self.rng.clone();
             if let Some(fb_key) =
                 belief.predict_plan_draws(plan_pick, &self.base, 1 - self.side, &mut rng_probe)
@@ -1385,10 +1448,18 @@ impl BlindSearch {
                 );
                 if let Some(cached) = self.det_cache.get(&cache_key) {
                     self.rng = rng_probe;
-                    let cache = cached.cache.clone();
-                    let world_id = cached.world_id;
                     let root = cached.root;
                     let type_index = cached.type_index;
+                    if let Some(cpw) = cached.preview_compact.clone() {
+                        return DetRootOutcome::CompactPreview {
+                            cpw,
+                            turn1_seed: post_qc_seed,
+                            root,
+                            type_index,
+                        };
+                    }
+                    let cache = cached.cache.clone();
+                    let world_id = cached.world_id;
                     let compact = cached.compact.clone();
                     let mut same_sets = [false, false];
                     same_sets[self.side] = self.scratch_world_id != 0;
@@ -1398,13 +1469,20 @@ impl BlindSearch {
                             sim.reset_search_sim(&cached.sim, same_sets);
                             sim
                         }
-                        None => Box::new(cached.sim.clone()),
+                        None => Box::new((*cached.sim).clone()),
                     };
                     self.scratch_world_id = world_id;
                     sim.reseed(post_qc_seed);
                     sim.quick_claw_rolls = if zero_preview_qc { [false, false] } else { qc };
                     std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
-                    return (sim, root, type_index, cache, world_id, compact);
+                    return DetRootOutcome::Battle {
+                        sim,
+                        root,
+                        type_index,
+                        cache,
+                        world_id,
+                        compact,
+                    };
                 }
 
                 let mut sim = match self.scratch.take() {
@@ -1444,26 +1522,64 @@ impl BlindSearch {
                 std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
                 let (root, type_index) = self.resolve_root(dex, &mut sim, Some(&cache));
                 let compact = self.try_build_compact_world(dex, &sim, root, &cache);
+                let mut cached_sim_arc: Option<Arc<Battle>> = None;
+                let preview_compact = if zero_preview_qc
+                    && self.hidden_timers.is_empty()
+                    && nc2000_engine::compact::is_compact_preview_supported(&sim, dex)
+                {
+                    std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
+                    let arc = Arc::new((*sim).clone());
+                    std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
+                    cached_sim_arc = Some(arc.clone());
+                    self.try_build_compact_preview_world(dex, &sim, root, &cache, arc)
+                } else {
+                    None
+                };
                 if can_cache {
-                    std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
-                    let cached_sim = (*sim).clone();
-                    std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
+                    let sim_arc = match cached_sim_arc {
+                        Some(arc) => arc,
+                        None => {
+                            std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
+                            let arc = Arc::new((*sim).clone());
+                            std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
+                            arc
+                        }
+                    };
                     self.det_cache.insert(
                         cache_key,
                         CachedDetRoot {
-                            sim: cached_sim,
+                            sim: sim_arc,
                             root,
                             type_index,
                             cache: cache.clone(),
                             world_id,
                             compact: compact.clone(),
+                            preview_compact: preview_compact.clone(),
                         },
                     );
+                }
+                if let Some(cpw) = preview_compact {
+                    let turn1_seed = sim.prng.lcg.seed();
+                    std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
+                    self.scratch = Some(sim);
+                    return DetRootOutcome::CompactPreview {
+                        cpw,
+                        turn1_seed,
+                        root,
+                        type_index,
+                    };
                 }
                 if unseen_idle {
                     sim.quick_claw_rolls = sampled_qc;
                 }
-                return (sim, root, type_index, cache, world_id, compact);
+                return DetRootOutcome::Battle {
+                    sim,
+                    root,
+                    type_index,
+                    cache,
+                    world_id,
+                    compact,
+                };
             }
         }
 
@@ -1500,11 +1616,38 @@ impl BlindSearch {
         self.scratch_world_id = world_id;
         std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
         let (root, type_index) = self.resolve_root(dex, &mut sim, Some(&cache));
+        if zero_preview_qc
+            && self.hidden_timers.is_empty()
+            && nc2000_engine::compact::is_compact_preview_supported(&sim, dex)
+        {
+            std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
+            let sim_arc = Arc::new((*sim).clone());
+            if let Some(cpw) =
+                self.try_build_compact_preview_world(dex, &sim, root, &cache, sim_arc)
+            {
+                let turn1_seed = sim.prng.lcg.seed();
+                self.scratch = Some(sim);
+                return DetRootOutcome::CompactPreview {
+                    cpw,
+                    turn1_seed,
+                    root,
+                    type_index,
+                };
+            }
+            std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
+        }
         let compact = self.try_build_compact_world(dex, &sim, root, &cache);
         if unseen_idle {
             sim.quick_claw_rolls = sampled_qc;
         }
-        (sim, root, type_index, cache, world_id, compact)
+        DetRootOutcome::Battle {
+            sim,
+            root,
+            type_index,
+            cache,
+            world_id,
+            compact,
+        }
     }
 
     fn next_determinized_world(
@@ -1541,7 +1684,29 @@ impl BlindSearch {
             };
             let pick = plan_pick.pool_index();
             let (mut sim, root, type_index, cache, world_id, compact) =
-                self.determinize_and_resolve_root(dex, belief, obs, plan_pick);
+                match self.determinize_and_resolve_root(dex, belief, obs, plan_pick) {
+                    DetRootOutcome::CompactPreview {
+                        cpw,
+                        turn1_seed,
+                        root,
+                        type_index,
+                    } => {
+                        return (
+                            NextWorld::CompactPreview { cpw, turn1_seed },
+                            root,
+                            type_index,
+                            pick,
+                        );
+                    }
+                    DetRootOutcome::Battle {
+                        sim,
+                        root,
+                        type_index,
+                        cache,
+                        world_id,
+                        compact,
+                    } => (sim, root, type_index, cache, world_id, compact),
+                };
             if !self.is_preview() {
                 std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
                 let cached_sim = (*sim).clone();
@@ -1720,6 +1885,57 @@ impl BlindSearch {
                     std::mem::swap(&mut battle_buf.listener_pool, &mut self.base.listener_pool);
                     // `sync_to_battle` mutates picked bench mons without advancing `previously_switched_in`;
                     // invalidate `scratch_world_id` so subsequent `reset_search_sim` resets all mons cleanly.
+                    self.scratch_world_id = 0;
+                    self.scratch = Some(battle_buf);
+                    v
+                }
+            }
+            NextWorld::CompactPreview { cpw, turn1_seed } => {
+                if leaf.is_none() && trace.is_none() && root_child_value.is_none() {
+                    crate::smmcts::run_compact_preview_iteration(
+                        &self.cfg,
+                        &mut self.rng,
+                        &mut self.nodes[root],
+                        &mut self.compact_nodes,
+                        &mut self.compact_table,
+                        &cpw.roster,
+                        turn1_seed,
+                        self.turn_cap,
+                        force,
+                        joint,
+                        &mut iter_depth,
+                    )
+                } else {
+                    let mut battle_buf = match self.scratch.take() {
+                        Some(mut sim) => {
+                            sim.reset_search_sim(&cpw.sim_template, [false, false]);
+                            sim
+                        }
+                        None => Box::new((*cpw.sim_template).clone()),
+                    };
+                    battle_buf.reseed(turn1_seed);
+                    battle_buf.quick_claw_rolls = [false, false];
+                    std::mem::swap(&mut battle_buf.listener_pool, &mut self.base.listener_pool);
+                    let v = crate::smmcts::run_compact_preview_iteration_with_hooks(
+                        &self.cfg,
+                        &mut self.rng,
+                        &mut self.nodes[root],
+                        root,
+                        &mut self.compact_nodes,
+                        &mut self.compact_table,
+                        &cpw.roster,
+                        turn1_seed,
+                        dex,
+                        &mut battle_buf,
+                        self.turn_cap,
+                        force,
+                        joint,
+                        &mut iter_depth,
+                        leaf,
+                        trace,
+                        root_child_value,
+                    );
+                    std::mem::swap(&mut battle_buf.listener_pool, &mut self.base.listener_pool);
                     self.scratch_world_id = 0;
                     self.scratch = Some(battle_buf);
                     v
@@ -2468,6 +2684,56 @@ impl BlindSearch {
                                     sim
                                 }
                                 None => Box::new(w_sim.clone()),
+                            };
+                            std::mem::swap(&mut battle_buf.listener_pool, base_lp);
+                            cb_leaf.sync_to_battle(mt_leaf, dex, &mut battle_buf);
+                            let mut clk_ref = || clk();
+                            let lv = sess.leaf(
+                                dex,
+                                &cfg,
+                                turn_cap,
+                                &mut battle_buf,
+                                rng_leaf,
+                                rollout,
+                                &mut clk_ref,
+                            );
+                            std::mem::swap(&mut battle_buf.listener_pool, base_lp);
+                            *scratch_world_id = 0;
+                            *scratch = Some(battle_buf);
+                            lv
+                        },
+                    );
+                    self.depth_sum += u64::from(iter_depth);
+                    self.max_depth = self.max_depth.max(iter_depth);
+                    v
+                }
+                NextWorld::CompactPreview { cpw, turn1_seed } => {
+                    let mut iter_depth = 0u32;
+                    let scratch = &mut self.scratch;
+                    let scratch_world_id = &mut self.scratch_world_id;
+                    let base_lp = &mut self.base.listener_pool;
+                    let sim_template = &cpw.sim_template;
+                    let v = crate::smmcts::run_compact_preview_iteration_with_endgame(
+                        &self.cfg,
+                        &mut self.rng,
+                        &mut self.nodes[root],
+                        &mut self.compact_nodes,
+                        &mut self.compact_table,
+                        &cpw.roster,
+                        turn1_seed,
+                        self.turn_cap,
+                        force,
+                        &mut joint,
+                        &mut iter_depth,
+                        session,
+                        clock,
+                        &mut |cb_leaf, mt_leaf, rng_leaf, rollout, sess, clk| {
+                            let mut battle_buf = match scratch.take() {
+                                Some(mut sim) => {
+                                    sim.reset_search_sim(sim_template, [false, false]);
+                                    sim
+                                }
+                                None => Box::new((**sim_template).clone()),
                             };
                             std::mem::swap(&mut battle_buf.listener_pool, base_lp);
                             cb_leaf.sync_to_battle(mt_leaf, dex, &mut battle_buf);
@@ -4316,5 +4582,224 @@ mod mixed_selection_tests {
         assert_eq!(info.chosen_idx, 0);
         assert_eq!(info.legacy_idx, 0);
         assert_eq!(search.best(), Some(search.my_acts[0]));
+    }
+
+    #[test]
+    fn compact_preview_det_cache_hooks_and_castle_parity() {
+        let dex = conformance::load_dex();
+        let pool = crate::preview::load_meta_pool(std::path::Path::new(
+            "../../data/meta-pool-v0/meta-pool.json",
+        ));
+        let t0 = &pool.teams[0].sets;
+        let t1 = &pool.teams[1].sets;
+        let battle = Battle::from_fixture(&dex, "10,20,30,40", t0, t1).unwrap();
+        assert_eq!(
+            battle.request_state,
+            nc2000_engine::state::RequestState::TeamPreview
+        );
+        let obs = Observer::new(&battle, 0);
+        let mut belief = Belief::new(&dex, &pool, &obs);
+        belief.sync(&dex, &obs);
+
+        // 1. `det_cache` populates at TeamPreview with `preview_compact` and is bit-identical to uncached.
+        let cfg = RmConfig::default();
+        let mut cached = BlindSearch::new(&battle, &dex, cfg.clone(), 0, 0xBEEF_1234);
+        cached.step(&dex, &belief, &obs, 400);
+        assert!(
+            !cached.det_cache.is_empty(),
+            "det_cache must populate at TeamPreview"
+        );
+        assert!(
+            cached
+                .det_cache
+                .values()
+                .all(|e| e.preview_compact.is_some()),
+            "supported TeamPreview worlds must populate preview_compact"
+        );
+        assert!(
+            !cached.compact_nodes.is_empty(),
+            "ply 1+ TeamPreview nodes must live in compact_nodes"
+        );
+        assert_eq!(cached.node_count(), cached.nodes.len() + cached.compact_nodes.len());
+
+        let mut uncached = BlindSearch::new(&battle, &dex, cfg.clone(), 0, 0xBEEF_1234);
+        for _ in 0..400 {
+            uncached.det_cache.clear();
+            uncached.step_one(&dex, &belief, &obs);
+        }
+        assert_eq!(cached.visits(), uncached.visits());
+        assert_eq!(cached.means(), uncached.means());
+        assert_eq!(cached.best(), uncached.best());
+        assert_eq!(cached.search_rng_state(), uncached.search_rng_state());
+        assert_eq!(cached.node_count(), uncached.node_count());
+        assert_eq!(cached.root_matrix(), uncached.root_matrix());
+        assert_eq!(cached.root_replies(), uncached.root_replies());
+
+        // 2. `step_observed` matches plain `step` bit-for-bit on CompactPreview.
+        let mut ref_s = BlindSearch::new(&battle, &dex, cfg.clone(), 0, 0x5151_5151);
+        let mut obs_s = BlindSearch::new(&battle, &dex, cfg.clone(), 0, 0x5151_5151);
+        let mut results = 0usize;
+        let mut root_choices = 0usize;
+        let mut ply0_nodes = std::collections::HashSet::new();
+        let mut ply1_nodes = std::collections::HashSet::new();
+        ref_s.step(&dex, &belief, &obs, 120);
+        obs_s.step_observed(&dex, &belief, &obs, 120, &mut |ev| match ev {
+            crate::smmcts::SearchTrace::Choice { battle, node, .. } => {
+                if battle.turn == 0 {
+                    root_choices += 1;
+                    ply0_nodes.insert(node);
+                } else {
+                    ply1_nodes.insert(node);
+                }
+            }
+            crate::smmcts::SearchTrace::Result { battle, .. } => {
+                assert!(battle.turn >= 1);
+                results += 1;
+            }
+            _ => {}
+        });
+        assert_eq!(results, 120);
+        assert_eq!(root_choices, 120);
+        assert!(ply0_nodes.is_disjoint(&ply1_nodes));
+        assert_eq!(ref_s.visits(), obs_s.visits());
+        assert_eq!(ref_s.means(), obs_s.means());
+        assert_eq!(ref_s.node_count(), obs_s.node_count());
+
+        // 3. `step_forced_joint_with_root_child_value` works on CompactPreview.
+        let mut cut = BlindSearch::new(&battle, &dex, cfg.clone(), 0, 0x7777);
+        cut.step(&dex, &belief, &obs, 80);
+        let before_nodes = cut.node_count();
+        let opp_pick = SearchChoice::Team([1, 2, 3]);
+        for _ in 0..10 {
+            let v = cut.step_forced_joint_with_root_child_value(
+                &dex,
+                &belief,
+                &obs,
+                0,
+                opp_pick,
+                &mut |child| {
+                    assert_eq!(child.turn, 1);
+                    assert_eq!(child.sides[0].party.len(), 3);
+                    assert_eq!(child.sides[1].party.len(), 3);
+                    Some(0.625)
+                },
+            );
+            assert_eq!(v, 0.625);
+        }
+        assert_eq!(cut.node_count(), before_nodes);
+
+        // 4. `step_with_endgame` runs cleanly on CompactPreview.
+        let mut eg_s = BlindSearch::new(&battle, &dex, cfg.clone(), 0, 0x8888);
+        let mut session = crate::endgame::EndgameSession::new(
+            crate::endgame::EndgameConfig::default(),
+            0.0,
+            1000.0,
+        )
+        .unwrap();
+        eg_s.step_with_endgame(&dex, &belief, &obs, 100, &mut session, &mut || 0.0);
+        assert_eq!(eg_s.iterations(), 100);
+        assert!(!eg_s.compact_nodes.is_empty());
+
+        // 5. Castle PBS TeamPreview activates CompactPreview cleanly.
+        let b_castle = Battle::from_fixture_with_ruleset(
+            &dex,
+            "10,20,30,40",
+            t0,
+            t1,
+            nc2000_engine::rules::Ruleset::castle_tournament(),
+        )
+        .unwrap();
+        let obs_c = Observer::new(&b_castle, 0);
+        let mut belief_c = Belief::new(&dex, &pool, &obs_c);
+        belief_c.sync(&dex, &obs_c);
+        let mut sc = BlindSearch::new(&b_castle, &dex, cfg.clone(), 0, 0x9999);
+        sc.step(&dex, &belief_c, &obs_c, 160);
+        assert!(sc.det_cache.values().all(|e| e.preview_compact.is_some()));
+        assert!(!sc.compact_nodes.is_empty());
+
+        // 6. Berserk Gene activates CompactPreview natively; Solar Beam falls back cleanly to Battle tree.
+        let mut t0_bg = t0.clone();
+        t0_bg[0].item = "Berserk Gene".to_string();
+        let b_bg = Battle::from_fixture(&dex, "10,20,30,40", &t0_bg, t1).unwrap();
+        let obs_bg = Observer::new(&b_bg, 0);
+        let mut belief_bg = Belief::new(&dex, &pool, &obs_bg);
+        belief_bg.sync(&dex, &obs_bg);
+        let mut s_bg = BlindSearch::new(&b_bg, &dex, cfg.clone(), 0, 0xAAAA);
+        s_bg.step(&dex, &belief_bg, &obs_bg, 60);
+        assert!(!s_bg.compact_nodes.is_empty());
+        assert!(s_bg.det_cache.values().all(|e| e.preview_compact.is_some()));
+        assert_eq!(s_bg.iterations(), 60);
+
+        let mut t0_sb = t0.clone();
+        t0_sb[0].moves[0] = "Solar Beam".to_string();
+        let b_sb = Battle::from_fixture(&dex, "10,20,30,40", &t0_sb, t1).unwrap();
+        let obs_sb = Observer::new(&b_sb, 0);
+        let mut belief_sb = Belief::new(&dex, &pool, &obs_sb);
+        belief_sb.sync(&dex, &obs_sb);
+        let mut s_sb = BlindSearch::new(&b_sb, &dex, cfg.clone(), 0, 0xBBBB);
+        s_sb.step(&dex, &belief_sb, &obs_sb, 60);
+        assert!(s_sb.compact_nodes.is_empty());
+        assert!(s_sb.det_cache.values().all(|e| e.preview_compact.is_none()));
+        assert_eq!(s_sb.iterations(), 60);
+
+        // 7. Active PickPrior (`has_active_pick_draws == true` + `opponent_preview_prior`) must still
+        //    hit `det_cache` and stay bit-identical to uncached TeamPreview search.
+        let pick_prior = crate::pick_prior::PickPrior::from_json(
+            &serde_json::json!({
+                "schema": "nc2000-pick-prior-v1",
+                "smoothing": 0.2,
+                "source": {},
+                "rows": [{
+                    "team": pool.teams[1].id,
+                    "side": 1,
+                    "enemy_preview": [],
+                    "choices": [{
+                        "species": [
+                            pool.teams[1].sets[0].species.to_lowercase(),
+                            pool.teams[1].sets[1].species.to_lowercase(),
+                            pool.teams[1].sets[2].species.to_lowercase()
+                        ],
+                        "count": 100
+                    }]
+                }]
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let mut belief_pp = Belief::new(&dex, &pool, &obs);
+        belief_pp.sync(&dex, &obs);
+        let own_preview: Vec<crate::pick_prior::PreviewMon> = battle.sides[0]
+            .roster
+            .iter()
+            .map(|p| crate::pick_prior::PreviewMon {
+                species: dex.species.key(p.species).to_string(),
+                level: p.level,
+                gender: String::new(),
+                item: p.item.is_some(),
+            })
+            .collect();
+        belief_pp.condition_pick_prior(&dex, &pick_prior, &own_preview, &obs);
+        assert!(belief_pp.has_active_pick_draws(&obs));
+
+        let mut pp_cached = BlindSearch::new(&battle, &dex, cfg.clone(), 0, 0xCCCC_1234);
+        pp_cached.set_opponent_preview_prior(true);
+        pp_cached.step(&dex, &belief_pp, &obs, 200);
+        assert!(
+            !pp_cached.det_cache.is_empty(),
+            "det_cache must still populate at TeamPreview when PickPrior is active"
+        );
+        assert!(pp_cached.det_cache.values().all(|e| e.preview_compact.is_some()));
+
+        let mut pp_uncached = BlindSearch::new(&battle, &dex, cfg, 0, 0xCCCC_1234);
+        pp_uncached.set_opponent_preview_prior(true);
+        for _ in 0..200 {
+            pp_uncached.det_cache.clear();
+            pp_uncached.step_one(&dex, &belief_pp, &obs);
+        }
+        assert_eq!(pp_cached.visits(), pp_uncached.visits());
+        assert_eq!(pp_cached.means(), pp_uncached.means());
+        assert_eq!(pp_cached.best(), pp_uncached.best());
+        assert_eq!(pp_cached.search_rng_state(), pp_uncached.search_rng_state());
+        assert_eq!(pp_cached.node_count(), pp_uncached.node_count());
     }
 }

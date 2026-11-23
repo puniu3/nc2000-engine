@@ -235,9 +235,9 @@ Reproduce the position screen with `cargo run --release -p nc2000-bot --example 
 
 - **Strength screening order**:
   1. Inspect concrete boards and measure top-1 flip rate vs the single-seed noise floor at `81k` (`node tools/diagnose-position.js`, `cargo run --release -p nc2000-bot --example setup_gauntlet`, `combo_gauntlet`, `belief_probe`).
-  2. Run paired CRN duels (`cargo run --release -p nc2000-bot --example arena -- ... --crn-seeds`) on `team-pool-v2` / `belief-pool-v3` (`>= 3,000–9,000` iters) before touching compiled preview tables.
+  2. Run paired CRN duels (`cargo run --release -p nc2000-bot --example arena -- ... --crn-seeds`) on `team-pool-v2` / `belief-pool-v3` (`>= 3,000–9,000` iters).
 - **Performance profiling (always measure current `HEAD`)**:
   - Native throughput: `cargo run --release -p nc2000-bot --example perf_probe`
   - Multi-turn live hotspot flamegraph: `cargo run --release -p nc2000-bot --example profile_blind -- <RECORDED_GAMES> tmp/blind.svg` (avoid single-turn `profile_mcts`, which measures cold allocator setup)
   - Portable WASM/browser gate: `node web/tests/portable-perf.mjs`
-- **Epoch & cache discipline**: Bump `replay::ENGINE_EPOCH` on breaking mechanics/`NC2-…` replay changes and `compiled_preview::POLICY_EPOCH` on search/policy changes (`data/compiled-preview-v1.json` falls back cleanly to live search on epoch mismatch); follow [`AGENTS.md`](../AGENTS.md) §2.
+- **Epoch & cache discipline**: Bump `replay::ENGINE_EPOCH` on breaking mechanics/`NC2-…` replay changes and `compiled_preview::POLICY_EPOCH` on search/policy changes (governs server-side preview cache identity and evaluator build IDs); follow [`AGENTS.md`](../AGENTS.md) §2.

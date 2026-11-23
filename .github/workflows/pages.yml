@@ -22,9 +22,8 @@ on:
       - "tools/render-preview-cache-doc.py"
       - "tools/normalize-training*"
       - "tools/build-training-products.js"
-      - "tools/preview-prior*"
       - "tools/belief-pool-v3.py"
-      - "tools/build-known-prior.mjs"
+      - "tools/build-known-prior*"
       - "tools/build-team-products-v2.js"
       - "tools/build-team-products-v3.js"
       - "tools/optimize-low-attack*"
@@ -80,10 +79,10 @@ jobs:
       - name: Verify normalized training and exact prior coverage
         run: |
           node tools/build-training-products.js
-          git diff --exit-code -- data/team-pool-v3/team-pool.json data/team-pool-v3/flagship-mixture.json data/belief-pool-v3/known-expansion.json data/belief-pool-v3/belief-pool.json data/team-pool-v2/team-pool.json data/team-selection-v2/reference.json data/meta-nash-v3/pool-artifact.json data/kodoku-r3/conclusion-equilibrium-deme.json data/kodoku-r3/conclusion-equilibrium-r1.json data/training-v3/supplemental.json data/training-v3/rentals.json data/compiled-preview-v1.json data/team-pool-v2/preview-nash-matrix.json
+          git diff --exit-code -- data/team-pool-v3/team-pool.json data/team-pool-v3/flagship-mixture.json data/belief-pool-v3/known-expansion.json data/belief-pool-v3/belief-pool.json data/team-pool-v2/team-pool.json data/team-selection-v2/reference.json data/meta-nash-v3/pool-artifact.json data/kodoku-r3/conclusion-equilibrium-deme.json data/kodoku-r3/conclusion-equilibrium-r1.json data/training-v3/supplemental.json data/training-v3/rentals.json data/team-pool-v2/preview-nash-matrix.json
           cargo run --quiet -p nc2000-bot --example verify_training -- target/training-verification.json
           cmp data/training-v3/verification.json target/training-verification.json
-          node --test tools/normalize-training.test.js tools/optimize-low-attack.test.js web/tests/preview-prior.test.mjs
+          node --test tools/normalize-training.test.js tools/optimize-low-attack.test.js tools/build-known-prior.test.mjs
           cargo test -p nc2000-bot --example meta_eco catalog_preview::tests
 
       - name: Build web (project-pages base)
@@ -128,15 +127,12 @@ jobs:
           test -s web/dist/data/kodoku-r3/conclusion-equilibrium-r1.json
           test -s web/dist/data/kodoku-r3/conclusion-equilibrium-deme.json
 
-      - name: Verify complete production preview lookup
+      - name: Verify live browser worker search and policies
         working-directory: web
-        env:
-          NC2000_BASE: /nc2000-engine/
-          NC2000_PREVIEW_CHECK_OUT: ../target/production-preview-verification.json
         run: |
           npx playwright install --with-deps chromium
-          npm run test:preview-production
-          NC2000_BASE=/ NC2000_CHECK_OUT=../target node tests/compiled-preview-coverage.mjs
+          npm run test:worker
+          npm run test:policy
 
       - name: Verify server cache bindings
         run: |

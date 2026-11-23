@@ -2,10 +2,32 @@
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import {createRequire} from 'node:module';
-import {teamMaterial, compatiblePolicyKeys, materialShell} from '../web/src/preview-prior.mjs';
 const require = createRequire(import.meta.url);
 const {normalizeTraining} = require('./normalize-training.js');
 const wasm = require('../crates/wasm/pkg-node/nc2000_wasm.js');
+const id = value => String(value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const stats = ['hp', 'atk', 'def', 'spa', 'spd', 'spe'];
+const sorted = rows => rows.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b), 'en'));
+const shellOf = rows => JSON.stringify(sorted(rows));
+export function teamMaterial(sets, dex) {
+ return sets.map(p => {
+  const species = id(p.species);
+  if (!dex.species[species]) throw Error(`Unknown species: ${species}`);
+  const gender = p.gender ?? dex.species[species].gender;
+  if (!['M', 'F', 'N'].includes(gender)) throw Error('Explicit gender required');
+  const item = id(p.item);
+  if (item && !dex.items[item]) throw Error(`Unknown item: ${item}`);
+  const moves = p.moves.map(m => {
+   const name = id(m);
+   if (!dex.moves[name]) throw Error(`Unknown move: ${name}`);
+   return name.startsWith('hiddenpower') ? 'hiddenpower' : name;
+  });
+  return [species, p.level, gender, p.happiness ?? 255,
+   stats.map(s => Math.min(31, Math.max(0, p.ivs?.[s] ?? 31)) & 30),
+   stats.map(s => Math.min(255, Math.max(0, p.evs?.[s] ?? 0))), item, moves];
+ }).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'en'));
+}
+const materialShell = material => shellOf(material.map(p => [p[0], p[1], p[2], !!p[6]]));
 const read = p => JSON.parse(fs.readFileSync(p));
 const digest = s => crypto.createHash('sha256').update(s).digest('hex');
 const baselinePath = 'data/belief-pool-v3/bake-prior.json';
@@ -54,13 +76,10 @@ for (const t of catalog.teams) if (!types.has(identity(t.sets))) throw Error(`Mi
 const out = {...baseline, generator: 'tools/belief-pool-v3.py build -> tools/build-known-prior.mjs',
  note: 'Known real-world parties including variants; generated parties only when their exact sets occur in the current catalog. Existing admitted weights are retained; new real-world types default to weight 1. Duplicate source aliases do not add mass. Invalid-format parties are listed in known-expansion.json. Catalog and Nash draws are unchanged.',
  membershipPolicy: 'known-real-and-catalog-generated-v1', teams};
-const artifact = read('data/compiled-preview-v1.json');
-const valid = await compatiblePolicyKeys(artifact, out, dex, digest);
 const proof = {baseline: baselinePath, inputs: Object.fromEntries([baselinePath, ...sources.map(([,p])=>p)].map(p=>[p,digest(fs.readFileSync(p))])),
  parties: teams.length, human: teams.filter(t=>t.provenance.origin==='human').length,
  generated: teams.filter(t=>t.provenance.origin!=='human').length,
- removedGenerated: removed, additions, duplicateSourceAliases: aliases, excludedInvalidFormat: excluded,
- preview: {total: Object.keys(artifact.policies).length, retained: valid.size, invalidated: Object.keys(artifact.policies).length-valid.size}};
+ removedGenerated: removed, additions, duplicateSourceAliases: aliases, excludedInvalidFormat: excluded};
 fs.writeFileSync('data/belief-pool-v3/belief-pool.json', JSON.stringify(out,null,1)+'\n');
 fs.writeFileSync('data/belief-pool-v3/known-expansion.json', JSON.stringify(proof,null,2)+'\n');
-console.log(JSON.stringify({parties:proof.parties,added:additions.length,removed:removed.length,excluded:excluded.length,preview:proof.preview}));
+console.log(JSON.stringify({parties:proof.parties,added:additions.length,removed:removed.length,excluded:excluded.length}));

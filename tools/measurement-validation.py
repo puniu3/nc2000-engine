@@ -207,7 +207,10 @@ def main():
         "data/compiled-preview-v1.json", "data/live-search.json", PARTY_PATH,
     ]
     frozen = {
-        path: {"historical_sha256": sha(git_blob(path)), "working_sha256": sha((ROOT / path).read_bytes())}
+        path: {
+            "historical_sha256": sha(git_blob(path)),
+            "working_sha256": sha((ROOT / path).read_bytes()) if (ROOT / path).exists() else None,
+        }
         for path in paths
     }
     result = {

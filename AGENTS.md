@@ -14,8 +14,8 @@
 
 - **2-axis epoch tracking**:
   - `ENGINE_EPOCH = 1` in `crates/engine/src/replay.rs` governs compact replay (`NC2-…`) and kifu structural compatibility; bump only on breaking mechanics or replay format changes.
-  - `POLICY_EPOCH = "policy-v1"` in `crates/bot/src/compiled_preview.rs` governs compiled preview table compatibility (`data/compiled-preview-v1.json`). `web/vite.config.ts` and `web/src/compiled-preview.ts` validate `POLICY_EPOCH`, `dexSha256`, `catalogSha256`, and `priorSha256` / `priorDependencies`, treating mismatches as a soft-cache miss that falls back to live search rather than failing builds.
-- `tools/bundle-core-sdk.js` writes `dist/nc2000-core-sdk/engine-manifest.json` (untracked); `web/tests/compiled-preview-coverage.mjs` and `web/tests/compiled-preview-production.mjs` write verification outputs under `../target/` by default.
+  - `POLICY_EPOCH = "policy-v1"` (`CASTLE_POLICY_EPOCH = "castle-policy-v1"`) in `crates/bot/src/compiled_preview.rs` governs server-side preview cache identity (`crates/wasm/src/preview_cache.rs`, `tools/preview-cache.js`) and evaluator build versioning (`web/vite.config.ts`). Browser Team Preview runs live search directly (no pre-baked preview table).
+- `tools/bundle-core-sdk.js` writes `dist/nc2000-core-sdk/engine-manifest.json` (untracked).
 
 ## 3. Research & Strength Roadmap
 

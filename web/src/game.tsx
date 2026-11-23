@@ -15,8 +15,8 @@
 // is surfaced as the belief chip: it is information ABOUT the bot, not
 // about the foe.
 //
-// Known preview information sets use the current compiled policy artifact;
-// other previews run the separately measured fixed selection budget.
+// Team Preview runs live search at the configured selection budget
+// (`data/live-search.json`).
 
 import { toolText } from "./tool-strings";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";

@@ -18,9 +18,7 @@ shared [`training-v3`](../training-v3/README.md) normalization across all sets
 (including exact full-set/stat support for all 33 current catalog parties).
 Authoritative counts, sources, exclusions for invalid-format parties, and file
 hashes live in `known-expansion.json` (excluded records are never silently
-converted into different legal parties). For native verification and
-compiled-preview compatibility status, run `cargo test` and consult
-[`data/preview-training-v3/README.md`](../preview-training-v3/README.md).
+converted into different legal parties). For native verification, run `cargo test`.
 
 ## Allocation & Historical Provenance
 

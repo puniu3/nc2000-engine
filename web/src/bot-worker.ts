@@ -8,10 +8,8 @@ import init, {
   Battle,
   PlayerChannel,
   ProtocolSearcher,
-  embeddedDexJson,
 } from "../../crates/wasm/pkg-web/nc2000_wasm";
 import { searchProfile } from "./search-profile";
-import { compiledPreviewCompatibility, compiledPreviewPick } from "./compiled-preview";
 import type { ActionPolicyMode, PlayPolicy } from "./types";
 import type { EndgameSettings } from "./endgame-settings";
 import { runEndgameSearch } from "./endgame-search";
@@ -29,7 +27,6 @@ export type WorkerRequest =
         ruleset?: string;
         priorJson?: string;
         pickPriorJson?: string;
-        compiledPreview?: boolean;
         adaptiveBudget?: boolean;
         endgame?: EndgameSettings;
         actionPolicy?: ActionPolicyMode;
@@ -80,11 +77,10 @@ export type WorkerResponse =
       policy: string;
       playPolicy: PlayPolicy | null;
       ms: number;
-      previewLookupMs?: number;
       wasmMemoryBytes: number;
       endgame?: string;
-      /** Known preview lookup or a live fixed-budget search. */
-      src?: "table" | "search";
+      /** Live fixed-budget search. */
+      src?: "search";
     }
   /** Raw `setBeliefPrior` report JSON, posted once per battle that carried a
    * `priorJson` — applied or refused, the caller gets the verdict rather
@@ -107,8 +103,6 @@ const ready = init().then(exports => {
 });
 
 let battle: Battle | null = null;
-let compiledAllowed: Promise<Set<string>> = Promise.resolve(new Set());
-let previewSeed = 0;
 let actionPolicy: ActionPolicyMode = "legacy";
 let forked: {
   channel: PlayerChannel | null;
@@ -140,9 +134,6 @@ async function handle(m: WorkerRequest): Promise<void> {
     case "battle": {
       actionPolicy = m.searcher.actionPolicy ?? "legacy";
       gen += 1;
-      previewSeed = m.searcher.seed;
-      compiledAllowed = actionPolicy !== "legacy" || m.searcher.compiledPreview === false || m.searcher.priorJson || m.searcher.pickPriorJson
-        ? Promise.resolve(new Set<string>()) : compiledPreviewCompatibility(m.searcher.poolJson, embeddedDexJson()).catch(() => new Set<string>());
       dropForked();
       battle?.free();
       battle = null;
@@ -262,22 +253,6 @@ async function runForkSearch(m: SearchMsg): Promise<void> {
       throw new Error("fork: search requested on a wait request");
   }
   if (f.live) post({ t: "belief", info: f.searcher.beliefInfo(), prior: f.searcher.beliefPriorInfo() });
-  if (f.live && !f.endgame) {
-    const allowed = await compiledAllowed;
-    if (gen !== myGen) return;
-    const lookupStarted = performance.now();
-    const compiled = allowed.size ? compiledPreviewPick(f.searcher.compiledPreviewBuild(),
-      f.searcher.compiledPreviewKey(), previewSeed, searchProfile("blind").c, f.searcher.previewPublicInfo(), allowed) : undefined;
-    const previewLookupMs = performance.now() - lookupStarted;
-    if (compiled && frame.legal_actions.some(input => input.replace(/\s/g, "") === compiled.replace(/\s/g, ""))) {
-      post({ t: "result", id: m.id, best: compiled,
-        playPolicy: { source: "preview-sampled", actions: [{ input: compiled, probability: 1 }] },
-        policy: JSON.stringify({ iterations: 0, preview: true, baked: true,
-          actions: [{ input: compiled, visits: 0, mean: 0.5, frac: 1 }] }),
-        ms: performance.now()-t0, previewLookupMs, wasmMemoryBytes: wasmMemory.buffer.byteLength, src: "table" });
-      return;
-    }
-  }
   if (f.endgame) {
     const current = await runEndgameSearch(f.searcher, f.endgame, {
       cancelled: () => gen !== myGen,
