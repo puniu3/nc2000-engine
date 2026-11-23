@@ -415,18 +415,29 @@ impl Agent for FixedPreviewWrap {
 }
 
 fn parse_leaf_rollout(rest: &str) -> Option<(TempoLeafMode, u16, u32)> {
-    // Parses e.g. `golf-0r:1000`, `golf-4r:2500`, `bs-8r:1000`, `eval-0r:1000`
+    let (leaf, turns, iters, _) = parse_leaf_rollout_adaptive(rest)?;
+    Some((leaf, turns, iters))
+}
+
+fn parse_leaf_rollout_adaptive(rest: &str) -> Option<(TempoLeafMode, u16, u32, bool)> {
+    // Parses e.g. `golf-0r:1000`, `hybrid-0r:a243000`, `hybrid-2r:486000`, `bs-8r:1000`
     let (head, it_s) = rest.split_once(':')?;
-    let iters: u32 = it_s.parse().ok()?;
+    let (adaptive, num_s) = if let Some(s) = it_s.strip_prefix('a') {
+        (true, s)
+    } else {
+        (false, it_s)
+    };
+    let iters: u32 = num_s.parse().ok()?;
     let (leaf_s, r_s) = head.split_once('-')?;
     let leaf = match leaf_s {
         "golf" | "v2" => TempoLeafMode::FastGolf,
+        "hybrid" | "hy" => TempoLeafMode::HybridGolf,
         "bs" | "blindspot" => TempoLeafMode::EvalBlindspot,
         "eval" => TempoLeafMode::EvalStatic,
         _ => return None,
     };
     let turns: u16 = r_s.strip_suffix('r')?.parse().ok()?;
-    Some((leaf, turns, iters))
+    Some((leaf, turns, iters, adaptive))
 }
 
 fn build_agent(spec: &str, seed: u64, fixed_preview: bool) -> Box<dyn Agent> {
@@ -1078,9 +1089,17 @@ fn run_calib(dex: &Dex, args: &[String]) {
         .or_else(|| flag("--arm"))
         .unwrap_or_else(|| "mcts-eval:300".to_string());
     let arm_b = flag("--arm-b").unwrap_or_else(|| arm_a.clone());
+    let pool_kind = flag("--pool").unwrap_or_else(|| "v0".to_string());
     let root = repo_root();
-    let pool = load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
-    let teams: Vec<Vec<PokemonSet>> = pool.teams.iter().map(|t| t.sets.clone()).collect();
+    let teams: Vec<Vec<PokemonSet>> = if pool_kind == "v2" {
+        let cat_txt = std::fs::read_to_string(root.join("data/team-pool-v2/team-pool.json"))
+            .expect("read team-pool-v2");
+        let catalog: WeightedCatalog = serde_json::from_str(&cat_txt).expect("parse team-pool-v2");
+        catalog.teams.into_iter().map(|t| t.sets).collect()
+    } else {
+        let pool = load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
+        pool.teams.iter().map(|t| t.sets.clone()).collect()
+    };
 
     let mut sched = nc2000_bot::SplitMix64::new(seed);
     let mut jobs = Vec::with_capacity(games);
@@ -1099,6 +1118,7 @@ fn run_calib(dex: &Dex, args: &[String]) {
         g0: f64,
         g1: f64,
         fg_p: f64,
+        hy_p: f64,
         ev_p: f64,
         bs_p: f64,
         desc: String,
@@ -1122,7 +1142,7 @@ fn run_calib(dex: &Dex, args: &[String]) {
                     b.apply_choices(dex_ref, [Some(tp0), Some(tp1)]).unwrap();
                     let mut a0 = build_agent(arm_a_ref, 30000 + g as u64, true);
                     let mut a1 = build_agent(arm_b_ref, 40000 + g as u64, true);
-                    let mut game_rows: Vec<(usize, f64, f64, f64, f64, f64, String)> = Vec::new();
+                    let mut game_rows: Vec<(usize, f64, f64, f64, f64, f64, f64, String)> = Vec::new();
                     for _ in 0..160 {
                         if b.outcome().is_some() {
                             break;
@@ -1138,6 +1158,7 @@ fn run_calib(dex: &Dex, args: &[String]) {
                             _ => 3,
                         };
                         let fg = nc2000_bot::tempo::evaluate_fast_golf(&cb, &table, None);
+                        let hy = nc2000_bot::tempo::evaluate_hybrid_golf(&cb, &table, None);
                         let ev = nc2000_bot::eval::compact_eval01(&cb, &table, &w);
                         let bs = nc2000_bot::eval::compact_eval_leaf_blindspot(&cb, &table, &w);
                         let desc = if (fg.win_prob - bs).abs() > 0.18 || (bucket == 1 && (fg.win_prob - bs).abs() > 0.10) {
@@ -1171,7 +1192,7 @@ fn run_calib(dex: &Dex, args: &[String]) {
                         } else {
                             String::new()
                         };
-                        game_rows.push((bucket, fg.g_turns[0], fg.g_turns[1], fg.win_prob, ev, bs, desc));
+                        game_rows.push((bucket, fg.g_turns[0], fg.g_turns[1], fg.win_prob, hy, ev, bs, desc));
 
                         let cs0 = b.legal_choices(dex_ref, 0);
                         let cs1 = b.legal_choices(dex_ref, 1);
@@ -1186,8 +1207,8 @@ fn run_calib(dex: &Dex, args: &[String]) {
                         Some(nc2000_engine::battle::Outcome::P2Win) => 0.0,
                         _ => continue,
                     };
-                    for (bucket, g0, g1, fg_p, ev_p, bs_p, desc) in game_rows {
-                        local.push(Sample { game: g, bucket, y, g0, g1, fg_p, ev_p, bs_p, desc });
+                    for (bucket, g0, g1, fg_p, hy_p, ev_p, bs_p, desc) in game_rows {
+                        local.push(Sample { game: g, bucket, y, g0, g1, fg_p, hy_p, ev_p, bs_p, desc });
                     }
                 }
                 local
@@ -1282,27 +1303,67 @@ fn run_calib(dex: &Dex, args: &[String]) {
         ((best_v * 100.0).round() / 100.0, (best_b * 10000.0).round() / 10000.0)
     };
 
+    // Grid-search optimal log-odds blend `(w_fg, w_bs)` per bucket for `HybridGolf`
+    let best_blend = |rows: &[&Sample]| -> (f64, f64, f64) {
+        let logit = |p: f64| -> f64 {
+            let q = p.clamp(0.000_5, 0.999_5);
+            (q / (1.0 - q)).ln()
+        };
+        let mut best_pair = (1.0, 0.0);
+        let mut best_b = f64::INFINITY;
+        for a_i in 0..=24 {
+            let w_fg = a_i as f64 * 0.05;
+            for b_i in 0..=20 {
+                let w_bs = b_i as f64 * 0.05;
+                if a_i == 0 && b_i == 0 {
+                    continue;
+                }
+                let mut bsum = 0.0;
+                for r in rows {
+                    let z = w_fg * logit(r.fg_p) + w_bs * logit(r.bs_p);
+                    let p = 1.0 / (1.0 + (-z).exp());
+                    bsum += (p - r.y) * (p - r.y);
+                }
+                let b = bsum / rows.len().max(1) as f64;
+                if b < best_b {
+                    best_b = b;
+                    best_pair = (w_fg, w_bs);
+                }
+            }
+        }
+        (
+            (best_pair.0 * 100.0).round() / 100.0,
+            (best_pair.1 * 100.0).round() / 100.0,
+            (best_b * 10000.0).round() / 10000.0,
+        )
+    };
+
     let bucket_names = ["1v1", "2v1", "2v2", "3v2_3v1", "3v3"];
     let mut by_bucket = serde_json::Map::new();
     for b_idx in 0..5 {
         let sub: Vec<&Sample> = all_samples.iter().filter(|s| s.bucket == b_idx).collect();
         let fg_pts: Vec<(f64, f64)> = sub.iter().map(|s| (s.fg_p, s.y)).collect();
+        let hy_pts: Vec<(f64, f64)> = sub.iter().map(|s| (s.hy_p, s.y)).collect();
         let ev_pts: Vec<(f64, f64)> = sub.iter().map(|s| (s.ev_p, s.y)).collect();
         let bs_pts: Vec<(f64, f64)> = sub.iter().map(|s| (s.bs_p, s.y)).collect();
         let (opt_v, opt_b) = best_var_brier(&sub);
+        let (opt_wfg, opt_wbs, opt_blend_b) = best_blend(&sub);
         by_bucket.insert(
             bucket_names[b_idx].to_string(),
             json!({
                 "fg": metrics(&fg_pts),
+                "hy": metrics(&hy_pts),
                 "ev": metrics(&ev_pts),
                 "bs": metrics(&bs_pts),
                 "fg_opt_var": opt_v,
                 "fg_opt_brier": opt_b,
+                "opt_blend": [opt_wfg, opt_wbs, opt_blend_b],
             }),
         );
     }
 
     let fg_all: Vec<(f64, f64)> = all_samples.iter().map(|s| (s.fg_p, s.y)).collect();
+    let hy_all: Vec<(f64, f64)> = all_samples.iter().map(|s| (s.hy_p, s.y)).collect();
     let ev_all: Vec<(f64, f64)> = all_samples.iter().map(|s| (s.ev_p, s.y)).collect();
     let bs_all: Vec<(f64, f64)> = all_samples.iter().map(|s| (s.bs_p, s.y)).collect();
 
@@ -1348,6 +1409,7 @@ fn run_calib(dex: &Dex, args: &[String]) {
             "samples": all_samples.len(),
             "overall": {
                 "fg": metrics(&fg_all),
+                "hy": metrics(&hy_all),
                 "ev": metrics(&ev_all),
                 "bs": metrics(&bs_all),
             },
@@ -1458,6 +1520,10 @@ impl TimedAgentWrap {
 }
 
 impl Agent for TimedAgentWrap {
+    fn requires_player_log(&self) -> bool {
+        self.inner.requires_player_log()
+    }
+
     fn name(&self) -> String {
         self.inner.name()
     }
@@ -1494,25 +1560,64 @@ fn build_blind_arm(
     preview_triple: [u8; 3],
 ) -> Box<dyn Agent> {
     if let Some(rest) = spec.strip_prefix("blind-shipped:") {
-        let iters: u32 = rest.parse().unwrap_or_else(|_| panic!("bad spec: {spec}"));
-        let cfg = RmConfig { iterations: iters, rule: SelRule::Ucb, c: 0.4, ..Default::default() };
-        Box::new(
-            BlindAgent::new(cfg, pool, None, seed)
-                .with_own_preview_policy(one_hot_preview_policy(preview_triple)),
-        )
-    } else if let Some(rest) = spec.strip_prefix("bcmcts-") {
-        let (leaf, rollout_turns, iterations) =
-            parse_leaf_rollout(rest).unwrap_or_else(|| panic!("bad bcmcts spec: {spec}"));
+        if rest == "adaptive" {
+            let cfg = RmConfig {
+                iterations: nc2000_bot::adaptive_budget::BATTLE_CAP,
+                rule: SelRule::Ucb,
+                c: 0.4,
+                ..Default::default()
+            };
+            Box::new(
+                BlindAgent::new(cfg, pool, None, seed)
+                    .with_adaptive_battle_budget()
+                    .with_own_preview_policy(one_hot_preview_policy(preview_triple)),
+            )
+        } else {
+            let iters: u32 = rest.parse().unwrap_or_else(|_| panic!("bad spec: {spec}"));
+            let cfg = RmConfig { iterations: iters, rule: SelRule::Ucb, c: 0.4, ..Default::default() };
+            Box::new(
+                BlindAgent::new(cfg, pool, None, seed)
+                    .with_own_preview_policy(one_hot_preview_policy(preview_triple)),
+            )
+        }
+    } else if let Some(rest) = spec.strip_prefix("bcmcts2-") {
+        let (leaf, rollout_turns, iterations, adaptive) =
+            parse_leaf_rollout_adaptive(rest).unwrap_or_else(|| panic!("bad bcmcts2 spec: {spec}"));
         Box::new(BlindCmctsAgent::new(
             BlindCmctsConfig {
                 iterations,
                 c: 0.4,
-                max_depth: 64,
+                max_depth: 128,
                 leaf,
                 rollout_turns,
                 max_worlds: 24,
                 preview_iterations: 27_000,
                 own_preview_triple: Some(preview_triple),
+                adaptive,
+                adaptive_interval: 13_500,
+                adaptive_min_gap: 0.01,
+                stage2_root: true,
+            },
+            pool,
+            seed,
+        ))
+    } else if let Some(rest) = spec.strip_prefix("bcmcts-") {
+        let (leaf, rollout_turns, iterations, adaptive) =
+            parse_leaf_rollout_adaptive(rest).unwrap_or_else(|| panic!("bad bcmcts spec: {spec}"));
+        Box::new(BlindCmctsAgent::new(
+            BlindCmctsConfig {
+                iterations,
+                c: 0.4,
+                max_depth: 128,
+                leaf,
+                rollout_turns,
+                max_worlds: 24,
+                preview_iterations: 27_000,
+                own_preview_triple: Some(preview_triple),
+                adaptive,
+                adaptive_interval: 13_500,
+                adaptive_min_gap: 0.01,
+                stage2_root: false,
             },
             pool,
             seed,
@@ -1592,6 +1697,7 @@ fn run_blind_duel(dex: &Dex, args: &[String]) {
     let preview_cache = flag("--preview-cache").map(PathBuf::from);
     let out_path = flag("--out").map(PathBuf::from);
     let max_turns: u16 = flag("--max-turns").map_or(500, |v| v.parse().unwrap());
+    let preview_only = args.iter().any(|a| a == "--preview-only");
     let total_pairs_needed = pair_start + pairs;
 
     let root = repo_root();
@@ -1768,6 +1874,13 @@ fn run_blind_duel(dex: &Dex, args: &[String]) {
         let (pa, pb) = cached_prev[&sc.pair_idx];
         sc.prev_a = pa;
         sc.prev_b = pb;
+    }
+    if preview_only {
+        println!(
+            "{}",
+            json!({"cmd":"preview-only","seed":seed,"preview_iters":preview_iters,"pair_start":pair_start,"pairs":pairs,"cached":cached_prev.len()})
+        );
+        return;
     }
 
     let t0 = Instant::now();

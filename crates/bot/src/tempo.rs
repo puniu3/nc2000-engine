@@ -39,7 +39,8 @@ use crate::player_state::{submitted_team, HiddenTimerKind, HiddenTimerSpec, Loca
 use crate::preview::MetaPool;
 use crate::rng::SplitMix64;
 use crate::root_policy::{
-    solve_bayesian_equilibrium_with_priors, RootCell, RootType, MIN_MIX_MARGIN,
+    solve_bayesian_equilibrium_stage2, solve_bayesian_equilibrium_with_priors,
+    solve_initial_bayesian_prior, RootCell, RootType, Stage2BayesianEquilibrium, MIN_MIX_MARGIN,
 };
 use crate::smmcts::{RmConfig, SelRule, SkuctSearch};
 
@@ -57,6 +58,7 @@ pub enum TempoLeafMode {
     TempoFull,
     TempoRaw,
     FastGolf,
+    HybridGolf,
     EvalStatic,
     EvalBlindspot,
 }
@@ -340,6 +342,9 @@ fn sleep_talk_attack_rate(cb: &CompactBattle, table: &MatchTable, side: usize, s
 /// Normal CDF approximation (Abramowitz-Stegun 7.1.26, max error < 1.5e-7).
 #[inline]
 pub fn normal_cdf(z: f64) -> f64 {
+    if z == 0.0 {
+        return 0.5;
+    }
     if z <= -8.0 {
         return 0.0;
     }
@@ -2682,18 +2687,73 @@ fn mix64(mut h: u64, v: u64) -> u64 {
     h ^ (h >> 31)
 }
 
-/// Compact 16-HP-bucket state hash for zero-alloc DUCT tree indexing.
-/// Includes every action-legality bit (Encore/Disable slot, active PP==0 mask, multi-turn lock +
-/// locked slot, partial trap, Recharge, mid-turn BP / pending move flags) so two states with
-/// different `CompactBattle::legal_actions` never share a `DuctNode`.
 #[inline]
-fn compact_duct_key(cb: &CompactBattle, table: &MatchTable, depth: u8) -> u64 {
-    compact_duct_key_seeded(cb, table, depth, 0x517C_C1B7_2722_0A95)
+fn compact_world_has_qc(cb: &CompactBattle, table: &MatchTable) -> bool {
+    for i in 0..6usize {
+        if table.item_spec(cb.mons[i].item).is_quick_claw {
+            return true;
+        }
+    }
+    false
 }
 
 #[inline]
-fn compact_duct_key_seeded(cb: &CompactBattle, table: &MatchTable, depth: u8, seed: u64) -> u64 {
-    let mut h = mix64(seed, depth as u64);
+fn compact_observable_qc_bits(cb: &CompactBattle, table: &MatchTable, any_qc: bool) -> u8 {
+    if !any_qc || cb.quick_claw_roll == 0 {
+        return 0;
+    }
+    let non_idle = cb.sides[0].request != 1 || cb.sides[1].request != 1;
+    let mut live_qc = 0u8;
+    for s in 0..2usize {
+        let mask = cb.sides[s].alive_mask;
+        for slot in 0..3usize {
+            let idx = s * 3 + slot;
+            if table.item_spec(cb.mons[idx].item).is_quick_claw
+                && (non_idle || ((mask & (1 << slot)) != 0 && cb.mons[idx].hp() > 0))
+            {
+                live_qc |= 1u8 << s;
+                break;
+            }
+        }
+    }
+    if live_qc == 0 {
+        return 0;
+    }
+    if table.ruleset.is_castle() {
+        cb.quick_claw_roll & live_qc
+    } else {
+        cb.quick_claw_roll & 1
+    }
+}
+
+/// Compact 16-HP-bucket state hash for zero-alloc DUCT tree indexing.
+/// Includes every action-legality bit, turn counter, items, timers, Protect stall counter,
+/// weather/screen/Safeguard durations, Future Sight, Castle overlay flags, and observable Quick Claw.
+#[inline]
+fn compact_duct_key(cb: &CompactBattle, table: &MatchTable, _depth: u8) -> u64 {
+    let any_qc = compact_world_has_qc(cb, table);
+    let qc = if _depth == 0 && cb.sides[0].request == 1 && cb.sides[1].request == 1 {
+        0
+    } else {
+        compact_observable_qc_bits(cb, table, any_qc)
+    };
+    compact_duct_key_seeded_qc(cb, table, 0x517C_C1B7_2722_0A95, qc)
+}
+
+#[inline]
+fn compact_duct_key_seeded_qc(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    seed: u64,
+    qc_bits: u8,
+) -> u64 {
+    let hdr = (cb.turn as u64)
+        | ((cb.weather_turns as u64) << 16)
+        | ((cb.turn_extra_flags as u64) << 24)
+        | ((qc_bits as u64) << 32)
+        | ((cb.future_sight_dmg[0] as u64) << 40)
+        | (((cb.future_sight_dmg[1] as u64) & 0xFF) << 56);
+    let mut h = mix64(seed, hdr);
     let s0 = &cb.sides[0];
     let s1 = &cb.sides[1];
     let side_word = ((s0.active_idx as u64) << 0)
@@ -2702,22 +2762,22 @@ fn compact_duct_key_seeded(cb: &CompactBattle, table: &MatchTable, depth: u8, se
         | (((s0.side_flags & 0x7F) as u64) << 8)
         | (((s0.reflect_turns.min(7)) as u64) << 15)
         | (((s0.lightscreen_turns.min(7)) as u64) << 18)
-        | (((s0.safeguard_turns > 0) as u64) << 21)
-        | ((s1.active_idx as u64) << 22)
-        | ((s1.alive_mask as u64) << 25)
-        | ((s1.request as u64) << 28)
-        | (((s1.side_flags & 0x7F) as u64) << 30)
-        | (((s1.reflect_turns.min(7)) as u64) << 37)
-        | (((s1.lightscreen_turns.min(7)) as u64) << 40)
-        | (((s1.safeguard_turns > 0) as u64) << 43)
+        | (((s0.safeguard_turns.min(7)) as u64) << 21)
+        | ((s1.active_idx as u64) << 24)
+        | ((s1.alive_mask as u64) << 27)
+        | ((s1.request as u64) << 30)
+        | (((s1.side_flags & 0x7F) as u64) << 32)
+        | (((s1.reflect_turns.min(7)) as u64) << 39)
+        | (((s1.lightscreen_turns.min(7)) as u64) << 42)
+        | (((s1.safeguard_turns.min(7)) as u64) << 45)
         | (if cb.weather_turns > 0 {
-            (cb.weather_kind as u64) << 44
+            (cb.weather_kind as u64) << 48
         } else {
             0
         })
-        | ((cb.bp_switch_flags as u64) << 46)
-        | (((cb.future_sight_turns[0].min(3)) as u64) << 54)
-        | (((cb.future_sight_turns[1].min(3)) as u64) << 56);
+        | ((cb.bp_switch_flags as u64) << 50)
+        | (((cb.future_sight_turns[0].min(3)) as u64) << 58)
+        | (((cb.future_sight_turns[1].min(3)) as u64) << 60);
     h = mix64(h, side_word);
 
     for side in 0..2usize {
@@ -2764,7 +2824,6 @@ fn compact_duct_key_seeded(cb: &CompactBattle, table: &MatchTable, depth: u8, se
                         | vol_bit::DESTINY_BOND)) as u64;
                 // Encodes encore_slot (bits 2..3), disable_slot (bits 4..5), must_recharge (bit 7).
                 let slot_ctrl = (mon.slot_refs & 0xBC) as u64;
-                // Encodes rollout_count (0..2), locked_move_slot (3..4), lock_on_turns (5..6), two_turn_locked (7).
                 let lock_ctrl = mon.rollout_rage as u64;
                 let mut pp_nz = 0u64;
                 for m in 0..4usize {
@@ -2772,6 +2831,7 @@ fn compact_duct_key_seeded(cb: &CompactBattle, table: &MatchTable, depth: u8, se
                         pp_nz |= 1u64 << m;
                     }
                 }
+                // Zero bit overlap: mword uses bits 0..58; mon.item lives in bword bits 48..56.
                 mword |= (sub << 17)
                     | (perish << 18)
                     | (ptrap << 21)
@@ -2780,12 +2840,22 @@ fn compact_duct_key_seeded(cb: &CompactBattle, table: &MatchTable, depth: u8, se
                     | (slot_ctrl << 42)
                     | (lock_ctrl << 50);
                 h = mix64(h, mword);
-                let mut bword = (mon.ext_flags as u64) << 32;
+                let mut bword = ((mon.ext_flags as u64) << 32) | ((mon.item as u64) << 48);
                 for (bi, &bv) in mon.boosts.iter().enumerate() {
                     bword |= (((bv + 6).clamp(0, 12) as u64) & 0xF) << (bi * 4);
                 }
+                let tword = (mon.timers[0] as u64)
+                    | ((mon.timers[1] as u64) << 8)
+                    | ((mon.timers[2] as u64) << 16)
+                    | ((mon.timers[3] as u64) << 24)
+                    | ((mon.ext_timers[0] as u64) << 32)
+                    | ((mon.ext_timers[1] as u64) << 40)
+                    | ((mon.ext_timers[2] as u64) << 48)
+                    | ((mon.ext_timers[3] as u64) << 56);
                 h = mix64(h, bword);
+                h = mix64(h, tword);
             } else {
+                mword |= (mon.item as u64) << 17;
                 h = mix64(h, mword);
             }
         }
@@ -2810,7 +2880,7 @@ fn eval_duct_leaf(
     if let Some(v) = compact_turn_limit_outcome(cb, table) {
         return v;
     }
-    match mode {
+    let raw = match mode {
         TempoLeafMode::TempoFull => {
             evaluate_compact_tempo_variant(cb, table, TempoVariant::Full).win_prob
         }
@@ -2818,21 +2888,31 @@ fn eval_duct_leaf(
             evaluate_compact_tempo_variant(cb, table, TempoVariant::Raw).win_prob
         }
         TempoLeafMode::FastGolf => evaluate_fast_golf(cb, table, cache).win_prob,
+        TempoLeafMode::HybridGolf => evaluate_hybrid_golf(cb, table, cache),
         TempoLeafMode::EvalStatic => compact_eval01(cb, table, &EvalWeights::default()),
         TempoLeafMode::EvalBlindspot => {
             compact_eval_leaf_blindspot(cb, table, &EvalWeights::default())
         }
-    }
+    };
+    // Keep non-terminal heuristic leaves strictly away from exact 0/1 terminal thresholds
+    // so `backed_up_value` and `EndgameRootStats::is_win/is_loss` never misclassify leaves as terminals.
+    raw.clamp(0.000_1, 0.999_9)
 }
 
 /// Fast `CompactBattle`-native ε-greedy (`eps=0.20`) heavy rollout action picker for controlled
-/// rollout-vs-zero-rollout ablations (`rollout_turns = 0, 2, 4, 8`).
+/// rollout-vs-zero-rollout ablations (`rollout_turns = 0, 2, 4, 8`), aligned with `mcts.rs`
+/// (`linear::compact_rollout_linear_pick`, `relay::rollout_relay_pick`, `best_midturn_bp_switch`,
+/// Perish trap/escape).
 #[inline]
+#[allow(clippy::too_many_arguments)]
 fn compact_rollout_pick_fast(
     cb: &CompactBattle,
     table: &MatchTable,
+    weights: &EvalWeights,
     side: usize,
     cs: &[u8],
+    turn_offset: u8,
+    pivot_token: &mut [u8; 2],
     rng: &mut SplitMix64,
 ) -> u8 {
     if cs.len() == 1 {
@@ -2863,7 +2943,7 @@ fn compact_rollout_pick_fast(
         cs[rng.below(cs.len())]
     };
 
-    // Perish Song last-turn escape (matches mcts.rs heavy playout).
+    // Perish Song last-turn escape (matching mcts.rs: `hp_frac * (1.0 - inc)`).
     if cb.sides[side].request == 1
         && (cb.mons[att_idx].vol_flags & vol_bit::PERISH_SONG) != 0
         && cb.mons[att_idx].perish_turns() == 1
@@ -2875,13 +2955,16 @@ fn compact_rollout_pick_fast(
         for &c in cs {
             if (4..7).contains(&c) {
                 let sl = (c - 4) as usize;
+                let idx = side * 3 + sl;
                 let inc = if foe_alive {
                     cb.best_hit_fraction(table, def_side, def_slot, side, sl)
                 } else {
                     0.0
                 };
-                let sc = 1.0 - inc;
-                if sc > best_score {
+                let sc = (cb.mons[idx].hp() as f64)
+                    / (table.mons[idx].maxhp.max(1) as f64)
+                    * (1.0 - inc).max(0.0);
+                if best_sw.is_none() || sc >= best_score {
                     best_score = sc;
                     best_sw = Some(c);
                 }
@@ -2896,10 +2979,31 @@ fn compact_rollout_pick_fast(
         return rand_safe(rng);
     }
 
+    if turn_offset < 5
+        && (cb.sides[0].side_flags & nc2000_engine::compact::SIDE0_DISABLE_BP_FIX) == 0
+    {
+        if let crate::relay::RelayRolloutDecision::Chosen(act) = crate::relay::rollout_relay_pick(
+            cb,
+            table,
+            weights,
+            side,
+            cs,
+            turn_offset,
+            pivot_token,
+            false,
+            rng,
+        ) {
+            return act;
+        }
+    }
+
     if cb.sides[side].request == 1
         && (cb.sides[side].alive_mask & (1 << att_slot)) != 0
         && (cb.sides[def_side].alive_mask & (1 << def_slot)) != 0
     {
+        if let Some(la_pick) = crate::linear::compact_rollout_linear_pick(cb, table, side, cs) {
+            return la_pick;
+        }
         let mut best_c = None;
         let mut best_s = 0.0f64;
         for &c in cs {
@@ -2919,9 +3023,25 @@ fn compact_rollout_pick_fast(
         return rand_safe(rng);
     }
 
-    // Forced switch: pick best immediate matchup (`own_hit - foe_hit`).
+    // Forced or mid-turn Baton Pass switch: reuse `relay::best_midturn_bp_switch` when passing alive.
     let foe_alive = (cb.sides[def_side].alive_mask & (1 << def_slot)) != 0
         && cb.mons[def_side * 3 + def_slot].hp() > 0;
+    let passing_alive = cb.sides[side].request == 2
+        && att_slot < 3
+        && cb.mons[att_idx].hp() > 0
+        && foe_alive
+        && (cb.mons[att_idx].boosts[0] > 0
+            || cb.mons[att_idx].boosts[1] > 0
+            || cb.mons[att_idx].boosts[2] > 0
+            || cb.mons[att_idx].boosts[3] > 0
+            || cb.mons[att_idx].boosts[4] > 0
+            || cb.mons[att_idx].boosts[6] > 0
+            || (cb.mons[att_idx].vol_flags & vol_bit::SUBSTITUTE) != 0);
+    if passing_alive {
+        if let Some(sw) = crate::relay::best_midturn_bp_switch(cb, table, weights, side, cs) {
+            return sw;
+        }
+    }
     let mut best_sw = cs[0];
     let mut best_s = f64::NEG_INFINITY;
     for &c in cs {
@@ -2955,17 +3075,21 @@ fn eval_duct_leaf_with_rollout(
     if rollout_turns == 0 || cb.outcome != 0 {
         return eval_duct_leaf(cb, table, mode, cache);
     }
+    let start_turn = cb.turn;
     let raw_cutoff = cb.turn.saturating_add(rollout_turns.saturating_sub(1));
     let cutoff = table
         .ruleset
         .turn_limit()
         .map_or(raw_cutoff, |lim| raw_cutoff.min(lim));
+    let weights = EvalWeights::default();
+    let mut pivot_token = [1u8; 2];
     let mut safety = 0u8;
     while cb.outcome == 0 && cb.turn <= cutoff && safety < 32 {
         safety += 1;
         if let Some(v) = compact_turn_limit_outcome(cb, table) {
             return v;
         }
+        let turn_offset = cb.turn.saturating_sub(start_turn).min(255) as u8;
         let mut picks = [7u8; 2];
         for s in 0..2usize {
             if cb.sides[s].request == 0 {
@@ -2974,11 +3098,20 @@ fn eval_duct_leaf_with_rollout(
             let mut cs = [0u8; 7];
             let n = cb.legal_actions(table, s, &mut cs);
             if n > 0 {
-                picks[s] = compact_rollout_pick_fast(cb, table, s, &cs[..n], rng);
+                picks[s] = compact_rollout_pick_fast(
+                    cb,
+                    table,
+                    &weights,
+                    s,
+                    &cs[..n],
+                    turn_offset,
+                    &mut pivot_token,
+                    rng,
+                );
             }
         }
         cb.prng_seed = rng.next();
-        cb.apply_actions(table, picks);
+        crate::mcts::apply_compact_actions_with_bp_target(cb, table, picks);
     }
     eval_duct_leaf(cb, table, mode, cache)
 }
@@ -3001,14 +3134,15 @@ const GEN2_ACC_STAGE_MULT: [f32; 13] = [
     0.33, 0.36, 0.43, 0.50, 0.60, 0.75, 1.0, 1.33, 1.66, 2.0, 2.33, 2.66, 3.0,
 ];
 
-const MOVE_FLAG_USABLE: u8 = 1 << 0;
-const MOVE_FLAG_PHYSICAL: u8 = 1 << 1;
-const MOVE_FLAG_FIXED: u8 = 1 << 2;
-const MOVE_FLAG_WATER: u8 = 1 << 3;
-const MOVE_FLAG_FIRE: u8 = 1 << 4;
-const MOVE_FLAG_SOLARBEAM: u8 = 1 << 5;
-const MOVE_FLAG_SELFDESTRUCT: u8 = 1 << 6;
-const MOVE_FLAG_RECHARGE: u8 = 1 << 7;
+const MOVE_FLAG_USABLE: u16 = 1 << 0;
+const MOVE_FLAG_PHYSICAL: u16 = 1 << 1;
+const MOVE_FLAG_FIXED: u16 = 1 << 2;
+const MOVE_FLAG_WATER: u16 = 1 << 3;
+const MOVE_FLAG_FIRE: u16 = 1 << 4;
+const MOVE_FLAG_SOLARBEAM: u16 = 1 << 5;
+const MOVE_FLAG_SELFDESTRUCT: u16 = 1 << 6;
+const MOVE_FLAG_RECHARGE: u16 = 1 << 7;
+const MOVE_FLAG_ALWAYS_HIT: u16 = 1 << 8;
 
 #[derive(Clone, Copy, Default)]
 struct CachedMoveDmg {
@@ -3018,7 +3152,7 @@ struct CachedMoveDmg {
     max_crit: f32,
     p_hit: f32,
     p_crit: f32,
-    flags: u8,
+    flags: u16,
 }
 
 #[derive(Clone, Copy)]
@@ -3040,6 +3174,8 @@ struct StaticMonCache {
     init_boost_type: u8,
     init_castle_boost_type: u8,
     init_stat_kind: nc2000_engine::compact::ItemStatKind,
+    init_brightpowder: bool,
+    init_scope_lens: bool,
 }
 
 impl Default for StaticMonCache {
@@ -3062,6 +3198,8 @@ impl Default for StaticMonCache {
             init_boost_type: 0xFF,
             init_castle_boost_type: 0xFF,
             init_stat_kind: nc2000_engine::compact::ItemStatKind::None,
+            init_brightpowder: false,
+            init_scope_lens: false,
         }
     }
 }
@@ -3070,11 +3208,11 @@ impl Default for StaticMonCache {
 struct CachedPairEntry {
     moves: [CachedMoveDmg; 4],
     best_norm_slot: u8,
-    best_phys_slot: u8,
-    best_spec_slot: u8,
     boom_slot: u8,
     any_dynamic_bp: bool,
     has_weather_acc: bool,
+    has_drain: bool,
+    has_recharge: bool,
 }
 
 impl Default for CachedPairEntry {
@@ -3082,11 +3220,11 @@ impl Default for CachedPairEntry {
         Self {
             moves: [CachedMoveDmg::default(); 4],
             best_norm_slot: 0xFF,
-            best_phys_slot: 0xFF,
-            best_spec_slot: 0xFF,
             boom_slot: 0xFF,
             any_dynamic_bp: false,
             has_weather_acc: false,
+            has_drain: false,
+            has_recharge: false,
         }
     }
 }
@@ -3229,6 +3367,8 @@ impl TempoMatchCache {
                 init_boost_type: ispec.boost_type,
                 init_castle_boost_type: ispec.castle_boost_type,
                 init_stat_kind: ispec.stat_kind,
+                init_brightpowder: ispec.is_brightpowder,
+                init_scope_lens: ispec.is_scope_lens,
             };
         }
 
@@ -3242,13 +3382,17 @@ impl TempoMatchCache {
                     let def_idx = def_side * 3 + def_slot;
                     let mut entry = CachedPairEntry::default();
                     let mut best_norm_dmg = 0.0f32;
-                    let mut best_phys_dmg = 0.0f32;
-                    let mut best_spec_dmg = 0.0f32;
                     let mut best_boom_dmg = 0.0f32;
                     for m_i in 0..n_moves {
                         let ms = &table.move_specs[att_idx][m_i];
                         if ms.is_status {
                             continue;
+                        }
+                        if ms.drain_half {
+                            entry.has_drain = true;
+                        }
+                        if ms.is_recharge {
+                            entry.has_recharge = true;
                         }
                         if matches!(
                             ms.special_kind,
@@ -3297,15 +3441,6 @@ impl TempoMatchCache {
                             if eff > best_norm_dmg {
                                 best_norm_dmg = eff;
                                 entry.best_norm_slot = m_i as u8;
-                            }
-                            if (sm.flags & MOVE_FLAG_PHYSICAL) != 0 {
-                                if eff > best_phys_dmg {
-                                    best_phys_dmg = eff;
-                                    entry.best_phys_slot = m_i as u8;
-                                }
-                            } else if eff > best_spec_dmg {
-                                best_spec_dmg = eff;
-                                entry.best_spec_slot = m_i as u8;
                             }
                         }
                     }
@@ -3371,6 +3506,9 @@ fn summarize_kernel(kern: &DmgKernel1D, ms: &CompactMoveSpec) -> CachedMoveDmg {
     if ms.is_recharge {
         flags |= MOVE_FLAG_RECHARGE;
     }
+    if ms.always_hit {
+        flags |= MOVE_FLAG_ALWAYS_HIT;
+    }
     CachedMoveDmg {
         mean_dmg: kern.mean_dmg,
         min_norm,
@@ -3397,7 +3535,7 @@ fn scale_cached_move(
     let mut out = md;
     let acc_b = att_boosts[5];
     let eva_b = def_boosts[6];
-    if acc_b != 0 || eva_b != 0 {
+    if (md.flags & MOVE_FLAG_ALWAYS_HIT) == 0 && (acc_b != 0 || eva_b != 0) {
         let ratio = GEN2_ACC_STAGE_MULT[(acc_b + 6).clamp(0, 12) as usize]
             / GEN2_ACC_STAGE_MULT[(eva_b + 6).clamp(0, 12) as usize];
         let old_h = out.p_hit.max(1e-4);
@@ -3638,8 +3776,10 @@ fn compute_fast_pair(
         ext_vol_bit::MINIMIZE | ext_vol_bit::TRANSFORMED | ext_vol_bit::DIGGING | ext_vol_bit::FLYING;
     let cached_entry = cache.and_then(|c| {
         let e = c.pair(att_side, att_slot, def_slot);
+        let def_has_sub = cb.sides[def_side].active_idx as usize == def_slot && def_mon.sub_hp() > 0;
         if e.any_dynamic_bp
             || (e.has_weather_acc && weather_active)
+            || (e.has_drain && def_has_sub)
             || (def_mon.vol_flags & vol_bit::FORESIGHT) != 0
             || (att_mon.ext_flags & ATT_CACHE_BREAK_EXT) != 0
             || (def_mon.ext_flags & DEF_CACHE_BREAK_EXT) != 0
@@ -3655,7 +3795,9 @@ fn compute_fast_pair(
         let item_ok = att_is.boost_type == cm_a.init_boost_type
             && att_is.castle_boost_type == cm_a.init_castle_boost_type
             && att_is.stat_kind == cm_a.init_stat_kind
-            && def_item.stat_kind == cm_d.init_stat_kind;
+            && att_is.is_scope_lens == cm_a.init_scope_lens
+            && def_item.stat_kind == cm_d.init_stat_kind
+            && def_item.is_brightpowder == cm_d.init_brightpowder;
         if item_ok { Some(e) } else { None }
     });
 
@@ -3673,10 +3815,12 @@ fn compute_fast_pair(
     let mut boom_ko = 0.0f64;
     let mut boom_dmg = 0.0f64;
 
-    // Fast path: O(1) precomputed best-move lookup (handles clean AND boosted/burned/screened/weathered states!).
+    // Fast path: O(1) precomputed best-move lookup for clean unboosted states; scaled states scan
+    // all <=4 cached moves (O(1) arithmetic, zero DmgKernel1D) so weather/fixed-dmg/Hyper-Beam OHKOs
+    // are never missed.
     let mut used_fast_slot = false;
     if let Some(ce) = cached_entry {
-        if !needs_scale {
+        if !needs_scale && !ce.has_recharge {
             let bs = ce.best_norm_slot as usize;
             let b_ok = bs == 0xFF || (att_mon.pp[bs] > 0 && !att_mon.is_slot_disabled(bs));
             if b_ok {
@@ -3696,59 +3840,6 @@ fn compute_fast_pair(
                 let bms = ce.boom_slot as usize;
                 if bms < 4 && att_mon.pp[bms] > 0 && !att_mon.is_slot_disabled(bms) {
                     let md = ce.moves[bms];
-                    boom_ko = fast_ko_prob(&md, ko_hp_f);
-                    boom_dmg = (md.mean_dmg as f64) * inv_maxhp;
-                }
-            }
-        } else {
-            // Boosted/screened/burned/weathered O(1) path: check at most `best_phys_slot` + `best_spec_slot`!
-            let ps = ce.best_phys_slot as usize;
-            let ss = ce.best_spec_slot as usize;
-            let p_ok = ps == 0xFF || (att_mon.pp[ps] > 0 && !att_mon.is_slot_disabled(ps));
-            let s_ok = ss == 0xFF || (att_mon.pp[ss] > 0 && !att_mon.is_slot_disabled(ss));
-            if p_ok && s_ok {
-                used_fast_slot = true;
-                let mut best_score = 0.0f64;
-                for &slot_m in &[ps, ss] {
-                    if slot_m >= 4 {
-                        continue;
-                    }
-                    let md = scale_cached_move(
-                        ce.moves[slot_m],
-                        eff_att_boosts,
-                        eff_def_boosts,
-                        att_burned,
-                        def_reflect_turns,
-                        def_lightscreen_turns,
-                        cb.weather_kind,
-                        weather_active,
-                    );
-                    let p_ko = fast_ko_prob(&md, ko_hp_f);
-                    let mut d_mean = (md.mean_dmg as f64) * inv_maxhp;
-                    if (md.flags & MOVE_FLAG_RECHARGE) != 0 && p_ko < 0.85 {
-                        d_mean *= 0.55;
-                    }
-                    let sc = d_mean + 0.15 * p_ko;
-                    if sc > best_score {
-                        best_score = sc;
-                        best_mean = d_mean;
-                        best_max_norm = (md.max_norm as f64) * inv_maxhp;
-                        best_ohko = p_ko;
-                        best_pp = att_mon.pp[slot_m];
-                    }
-                }
-                let bms = ce.boom_slot as usize;
-                if bms < 4 && att_mon.pp[bms] > 0 && !att_mon.is_slot_disabled(bms) {
-                    let md = scale_cached_move(
-                        ce.moves[bms],
-                        eff_att_boosts,
-                        eff_def_boosts,
-                        att_burned,
-                        def_reflect_turns,
-                        def_lightscreen_turns,
-                        cb.weather_kind,
-                        weather_active,
-                    );
                     boom_ko = fast_ko_prob(&md, ko_hp_f);
                     boom_dmg = (md.mean_dmg as f64) * inv_maxhp;
                 }
@@ -5003,11 +5094,15 @@ pub fn evaluate_fast_golf(
     let unb1 = unb_fast(1);
 
     // Discount active stat boosts when opponent has a living healthy Phazer/Hazer or active is Encored!
+    // Compute weights for both sides from unmodified `ttk` first, then blend symmetrically so
+    // dual-boosted dual-phazer states preserve exact side-swap antisymmetry (`v(A,B) + v(B,A) == 1`).
+    let mut blend_active_s = [0.0f64; 2];
+    let mut blend_bench_s = [0.0f64; 2];
     for s in 0..2usize {
         let unb_opt = if s == 0 { &unb0 } else { &unb1 };
-        let Some((ref unb_att, ref unb_def)) = *unb_opt else {
+        if unb_opt.is_none() {
             continue;
-        };
+        }
         let act = cb.sides[s].active_idx as usize;
         let act_idx = s * 3 + act;
         let act_mon = &cb.mons[act_idx];
@@ -5091,18 +5186,78 @@ pub fn evaluate_fast_golf(
                 blend_bench = blend_bench.max(0.45 * surv);
             }
         }
+        blend_active_s[s] = blend_active;
+        blend_bench_s[s] = blend_bench;
+    }
 
-        if blend_active > 0.0 || blend_bench > 0.0 {
-            for e in 0..3usize {
-                if (cb.sides[opp].alive_mask & (1 << e)) == 0 {
-                    continue;
-                }
-                let w = if e == opp_act { blend_active } else { blend_bench };
-                if w > 0.0 {
-                    ttk[s][act][e] = blend_fast_pair(ttk[s][act][e], unb_att[e], w);
-                    ttk[opp][e][act] = blend_fast_pair(ttk[opp][e][act], unb_def[e], w);
-                }
+    let act0 = cb.sides[0].active_idx as usize;
+    let act1 = cb.sides[1].active_idx as usize;
+    // Active-vs-active cell: apply commutative symmetric blend if both sides are discounted.
+    let w0_act = if unb0.is_some() { blend_active_s[0] } else { 0.0 };
+    let w1_act = if unb1.is_some() { blend_active_s[1] } else { 0.0 };
+    if w0_act > 0.0 && w1_act > 0.0 {
+        let (ref u0_att, ref u0_def) = unb0.as_ref().unwrap();
+        let (ref u1_att, ref u1_def) = unb1.as_ref().unwrap();
+        let sum_w = w0_act + w1_act;
+        let tot = sum_w.min(1.0);
+        let wa0 = tot * (w0_act / sum_w);
+        let wa1 = tot * (w1_act / sum_w);
+        let blend3 = |base: FastPair, a: FastPair, wa: f64, b: FastPair, wb: f64| -> FastPair {
+            let w_base = (1.0 - wa - wb).max(0.0);
+            FastPair {
+                raw_ttk: w_base * base.raw_ttk + wa * a.raw_ttk + wb * b.raw_ttk,
+                eff_ttk: w_base * base.eff_ttk + wa * a.eff_ttk + wb * b.eff_ttk,
+                net_dmg: w_base * base.net_dmg + wa * a.net_dmg + wb * b.net_dmg,
+                raw_dmg: w_base * base.raw_dmg + wa * a.raw_dmg + wb * b.raw_dmg,
+                max_norm_frac: w_base * base.max_norm_frac + wa * a.max_norm_frac + wb * b.max_norm_frac,
+                ohko_prob: w_base * base.ohko_prob + wa * a.ohko_prob + wb * b.ohko_prob,
+                boom_ko_prob: w_base * base.boom_ko_prob + wa * a.boom_ko_prob + wb * b.boom_ko_prob,
+                boom_dmg_frac: w_base * base.boom_dmg_frac + wa * a.boom_dmg_frac + wb * b.boom_dmg_frac,
+                heal_duty: w_base * base.heal_duty + wa * a.heal_duty + wb * b.heal_duty,
+                def_sustain: base.def_sustain || (wa >= 0.5 && a.def_sustain) || (wb >= 0.5 && b.def_sustain),
+                speed_cmp: if wa > wb && wa >= 0.5 {
+                    a.speed_cmp
+                } else if wb > wa && wb >= 0.5 {
+                    b.speed_cmp
+                } else {
+                    base.speed_cmp
+                },
+                perish_capped: base.perish_capped,
+                best_pp: base.best_pp,
             }
+        };
+        let orig01 = ttk[0][act0][act1];
+        let orig10 = ttk[1][act1][act0];
+        ttk[0][act0][act1] = blend3(orig01, u0_att[act1], wa0, u1_def[act0], wa1);
+        ttk[1][act1][act0] = blend3(orig10, u1_att[act0], wa1, u0_def[act1], wa0);
+    } else if w0_act > 0.0 {
+        let (ref u0_att, ref u0_def) = unb0.as_ref().unwrap();
+        ttk[0][act0][act1] = blend_fast_pair(ttk[0][act0][act1], u0_att[act1], w0_act);
+        ttk[1][act1][act0] = blend_fast_pair(ttk[1][act1][act0], u0_def[act1], w0_act);
+    } else if w1_act > 0.0 {
+        let (ref u1_att, ref u1_def) = unb1.as_ref().unwrap();
+        ttk[1][act1][act0] = blend_fast_pair(ttk[1][act1][act0], u1_att[act0], w1_act);
+        ttk[0][act0][act1] = blend_fast_pair(ttk[0][act0][act1], u1_def[act0], w1_act);
+    }
+    // Active-vs-bench cells: strictly disjoint across `s = 0` and `s = 1`, so symmetric regardless of order.
+    for s in 0..2usize {
+        let wb = blend_bench_s[s];
+        if wb <= 0.0 {
+            continue;
+        }
+        let unb_opt = if s == 0 { &unb0 } else { &unb1 };
+        let Some((ref unb_att, ref unb_def)) = *unb_opt else {
+            continue;
+        };
+        let opp = 1 - s;
+        let act = cb.sides[s].active_idx as usize;
+        let opp_act = cb.sides[opp].active_idx as usize;
+        for e in 0..3usize {
+            if e == opp_act || (cb.sides[opp].alive_mask & (1 << e)) == 0 {
+                continue;
+            }
+            ttk[s][act][e] = blend_fast_pair(ttk[s][act][e], unb_att[e], wb);
+            ttk[opp][e][act] = blend_fast_pair(ttk[opp][e][act], unb_def[e], wb);
         }
     }
 
@@ -5134,7 +5289,7 @@ pub fn evaluate_fast_golf(
     } else if g1 <= 0.0 {
         0.0
     } else {
-        // Empirically calibrated Brownian race variance per turn across 18k+ real NC2000 states:
+        // Empirically calibrated Brownian race variance per turn across real NC2000 states:
         // sharp in pure 1v1 races (`1.15/turn`), calmly increasing across multi-mon switch games
         // (`2.85..4.80/turn`) so DUCT MCTS exploration (`c = 0.4`) and Nash LP averaging are well calibrated.
         let var_per_turn = if is_1v1 {
@@ -5147,6 +5302,44 @@ pub fn evaluate_fast_golf(
         normal_cdf(adv / sigma)
     };
     FastGolfEval { g_turns: [g0, g1], turn_advantage: adv, win_prob: wp }
+}
+
+/// Strictly-antisymmetric Hybrid leaf evaluator combining:
+/// 1. `FastGolf` turn-economy (3×3 matchup matrix, walls, recovery duty cycle, team-depth spill),
+/// 2. `eval::compact_eval01_blindspot_norelay` (`linear.rs` exact 1v1 Schur-Bellman / Toeplitz
+///    stopping-time race, 2v1 `V_mat` saddle point, Perish trap, Swagger/Encore/Sub refund, and
+///    material/status balance sheet anchoring passive utility-mon leads), and
+/// 3. `relay::apply_relay_leaf_lift` (192-state Setup-Relay simultaneous-move Bellman subgame).
+#[inline]
+pub fn evaluate_hybrid_golf(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    cache: Option<&TempoMatchCache>,
+) -> f64 {
+    if let Some(v) = compact_turn_limit_outcome(cb, table) {
+        return v;
+    }
+    let w = EvalWeights::default();
+    let n0 = cb.sides[0].alive_mask.count_ones();
+    let n1 = cb.sides[1].alive_mask.count_ones();
+    let fg = evaluate_fast_golf(cb, table, cache);
+    let bs_nr = crate::eval::compact_eval01_blindspot_norelay(cb, table, &w);
+    let logit = |p: f64| -> f64 {
+        let q = p.clamp(0.000_5, 0.999_5);
+        (q / (1.0 - q)).ln()
+    };
+    // Cross-policy calibrated log-odds weights across 20,690 team-pool-v2 states
+    // (sum ~1.05-1.20 prevents over-confident LogLoss while preserving exact antisymmetry).
+    let (w_fg, w_bs) = match (n0.min(n1), n0.max(n1)) {
+        (1, 1) => (0.75, 0.35),
+        (1, 2) => (0.65, 0.45),
+        (2, 2) => (0.55, 0.50),
+        (3, 3) => (0.75, 0.48),
+        _ => (0.80, 0.30),
+    };
+    let z = w_fg * logit(fg.win_prob) + w_bs * logit(bs_nr);
+    let v_base = 1.0 / (1.0 + (-z).exp());
+    crate::relay::apply_relay_leaf_lift(cb, table, &w, v_base).clamp(0.000_1, 0.999_9)
 }
 
 /// Diagnostic breakdown of `evaluate_fast_golf` for offline calibration & autopsy (not used in hot path).
@@ -5222,7 +5415,7 @@ pub fn search_tempo_mcts(
     seed: u64,
 ) -> TempoMctsResult {
     let (table, base_cb) = CompactBattle::from_battle(battle, dex);
-    let fast_cache = if cfg.leaf == TempoLeafMode::FastGolf {
+    let fast_cache = if matches!(cfg.leaf, TempoLeafMode::FastGolf | TempoLeafMode::HybridGolf) {
         Some(TempoMatchCache::build(&base_cb, &table))
     } else {
         None
@@ -5496,6 +5689,7 @@ impl Agent for TempoMctsAgent {
             TempoLeafMode::TempoFull => "full",
             TempoLeafMode::TempoRaw => "raw",
             TempoLeafMode::FastGolf => "v2",
+            TempoLeafMode::HybridGolf => "hybrid",
             TempoLeafMode::EvalStatic => "eval",
             TempoLeafMode::EvalBlindspot => "blindspot",
         };
@@ -5527,7 +5721,7 @@ impl Agent for TempoMctsAgent {
                 side,
                 choices,
                 preview_variant,
-                self.cfg.leaf == TempoLeafMode::FastGolf,
+                matches!(self.cfg.leaf, TempoLeafMode::FastGolf | TempoLeafMode::HybridGolf),
             );
         }
 
@@ -5617,6 +5811,7 @@ impl Agent for SkuctGolfAgent {
     fn name(&self) -> String {
         let tag = match self.cfg.leaf {
             TempoLeafMode::FastGolf => "golf",
+            TempoLeafMode::HybridGolf => "hybrid",
             TempoLeafMode::EvalBlindspot => "bs",
             TempoLeafMode::EvalStatic => "eval",
             TempoLeafMode::TempoFull => "full",
@@ -5646,7 +5841,7 @@ impl Agent for SkuctGolfAgent {
                 side,
                 choices,
                 TempoVariant::Full,
-                self.cfg.leaf == TempoLeafMode::FastGolf,
+                matches!(self.cfg.leaf, TempoLeafMode::FastGolf | TempoLeafMode::HybridGolf),
             );
         }
 
@@ -5659,11 +5854,12 @@ impl Agent for SkuctGolfAgent {
         let roster_cache = RosterCompactCache::from_battle(battle, dex);
         let (root_table, root_cb) =
             CompactBattle::from_battle_with_roster_cache(battle, dex, Some(&roster_cache));
-        let fast_cache = if self.cfg.leaf == TempoLeafMode::FastGolf {
-            Some(TempoMatchCache::build(&root_cb, &root_table))
-        } else {
-            None
-        };
+        let fast_cache =
+            if matches!(self.cfg.leaf, TempoLeafMode::FastGolf | TempoLeafMode::HybridGolf) {
+                Some(TempoMatchCache::build(&root_cb, &root_table))
+            } else {
+                None
+            };
 
         let seed = self.rng.next();
         let mut search = SkuctSearch::new(battle, dex, rm_cfg, seed);
@@ -5705,20 +5901,77 @@ fn record_compact_sim_end(cb: &CompactBattle, table: &MatchTable, val: f64) {
 fn battle_world_sig(sim: &Battle) -> u64 {
     let mut h = 0x517C_C1B7_2722_0A95u64;
     for side in 0..2usize {
+        for &r in &sim.sides[side].party {
+            h = mix64(h, (side as u64) << 8 | r as u64);
+        }
         for p in &sim.sides[side].roster {
             let w0 = (p.species.0 as u64)
                 | ((p.level as u64) << 16)
                 | ((p.maxhp.max(0) as u64) << 24)
                 | ((p.hp_type.0 as u64) << 40)
                 | ((p.hp_power as u64) << 48)
-                | ((p.move_slots.len() as u64) << 56);
+                | ((p.happiness as u64) << 56);
             h = mix64(h, w0);
-            let mut mw = (p.stored_stats[0].max(0) as u64) | ((p.stored_stats[4].max(0) as u64) << 16);
-            for (mi, sl) in p.move_slots.iter().take(4).enumerate() {
-                mw ^= (sl.id.0 as u64).wrapping_shl((mi as u32) * 12);
+            let item_id = p.item.map_or(0xFFFFu64, |id| id.0 as u64);
+            let mut tmask = 0u64;
+            for (ti, t) in p.types.iter().take(2).enumerate() {
+                tmask |= (t.0 as u64) << (ti * 8);
             }
-            h = mix64(h, mw);
+            let w1 = (p.hp.max(0) as u64)
+                | (item_id << 16)
+                | (tmask << 32)
+                | ((p.move_slots.len() as u64) << 56);
+            h = mix64(h, w1);
+            let s0 = (p.stored_stats[0].max(0) as u64)
+                | ((p.stored_stats[1].max(0) as u64) << 16)
+                | ((p.stored_stats[2].max(0) as u64) << 32)
+                | ((p.stored_stats[3].max(0) as u64) << 48);
+            h = mix64(h, s0);
+            let mut m0 = (p.stored_stats[4].max(0) as u64) << 48;
+            for (mi, sl) in p.move_slots.iter().take(4).enumerate() {
+                m0 ^= (sl.id.0 as u64) << ((mi as u32) * 12);
+            }
+            h = mix64(h, m0);
         }
+    }
+    h = mix64(h, sim.queue.len() as u64);
+    h
+}
+
+/// Exact picked-3v3 `CompactWorld` signature: distinguishes every field affecting `CompactBattle`
+/// dynamics (items, exact HP, PP, status/volatiles/boosts, pending mid-turn BP flags, canonicalized
+/// party roster, `table.match_fingerprint`) while ignoring unpicked roster slots so identical 3v3
+/// worlds share one tree and `RootTypeStats`.
+#[inline]
+fn compact_world_sig(cb: &CompactBattle, table: &MatchTable) -> u64 {
+    let mut h = mix64(0x517C_C1B7_2722_0A95, table.match_fingerprint);
+    let side_hdr = (cb.sides[0].side_flags as u64)
+        | ((cb.sides[1].side_flags as u64) << 8)
+        | ((cb.bp_switch_flags as u64) << 16)
+        | ((cb.sides[0].party_roster[0] as u64) << 24)
+        | ((cb.sides[0].party_roster[1] as u64) << 28)
+        | ((cb.sides[0].party_roster[2] as u64) << 32)
+        | ((cb.sides[1].party_roster[0] as u64) << 36)
+        | ((cb.sides[1].party_roster[1] as u64) << 40)
+        | ((cb.sides[1].party_roster[2] as u64) << 44)
+        | ((cb.sides[0].request as u64) << 48)
+        | ((cb.sides[1].request as u64) << 52);
+    h = mix64(h, side_hdr);
+    for i in 0..6usize {
+        let m = &cb.mons[i];
+        let w0 = (m.hp().max(0) as u64)
+            | ((m.item as u64) << 16)
+            | ((m.status_packed as u64) << 24)
+            | ((m.vol_flags as u64) << 32)
+            | ((m.ext_flags as u64) << 48);
+        h = mix64(h, w0);
+        let w1 = (m.pp[0] as u64)
+            | ((m.pp[1] as u64) << 8)
+            | ((m.pp[2] as u64) << 16)
+            | ((m.pp[3] as u64) << 24)
+            | ((m.slot_refs as u64) << 32)
+            | ((m.rollout_rage as u64) << 40);
+        h = mix64(h, w1);
     }
     h
 }
@@ -5817,9 +6070,14 @@ impl BlindGolfAgent {
 }
 
 impl Agent for BlindGolfAgent {
+    fn requires_player_log(&self) -> bool {
+        true
+    }
+
     fn name(&self) -> String {
         let tag = match self.cfg.leaf {
             TempoLeafMode::FastGolf => "golf",
+            TempoLeafMode::HybridGolf => "hybrid",
             TempoLeafMode::EvalBlindspot => "bs",
             TempoLeafMode::EvalStatic => "eval",
             TempoLeafMode::TempoFull => "full",
@@ -5874,7 +6132,7 @@ impl Agent for BlindGolfAgent {
 
         let leaf_mode = self.cfg.leaf;
         let rollout_turns = self.cfg.rollout_turns;
-        let use_fast = leaf_mode == TempoLeafMode::FastGolf;
+        let use_fast = matches!(leaf_mode, TempoLeafMode::FastGolf | TempoLeafMode::HybridGolf);
         // Per-world static cache (`<= 24` determinized worlds per decision): zero cross-world bleed!
         let mut world_caches: FxHashMap<u64, (RosterCompactCache, Option<TempoMatchCache>)> =
             FxHashMap::default();
@@ -5985,11 +6243,107 @@ fn resample_compact_hidden_timers(
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum ReplyPoolKey {
+    Move(nc2000_engine::dex::MoveId),
+    SwitchSpecies(nc2000_engine::dex::SpeciesId),
+    Other(SearchChoice),
+}
+
+#[inline]
+fn reply_pool_key(sim: &Battle, opp: usize, choice: SearchChoice) -> ReplyPoolKey {
+    match choice {
+        SearchChoice::Move(id) => ReplyPoolKey::Move(id),
+        SearchChoice::Switch(pos) => sim.sides[opp]
+            .party
+            .get(pos.saturating_sub(1) as usize)
+            .and_then(|&slot| sim.sides[opp].roster.get(slot as usize))
+            .map_or(ReplyPoolKey::Other(choice), |p| ReplyPoolKey::SwitchSpecies(p.species)),
+        other => ReplyPoolKey::Other(other),
+    }
+}
+
+/// Deterministic forced-switch / mid-turn Baton Pass resolver for the 1-ply prior sweep.
+#[inline]
+fn resolve_compact_forced_switches(
+    cb: &mut CompactBattle,
+    table: &MatchTable,
+    weights: &EvalWeights,
+) {
+    for _ in 0..4usize {
+        if cb.outcome != 0
+            || (cb.sides[0].request != 2 && cb.sides[1].request != 2)
+            || compact_turn_limit_outcome(cb, table).is_some()
+        {
+            break;
+        }
+        let mut picks = [7u8; 2];
+        for s in 0..2usize {
+            if cb.sides[s].request != 2 {
+                continue;
+            }
+            let mut cs = [0u8; 7];
+            let n = cb.legal_actions(table, s, &mut cs);
+            if n == 0 {
+                continue;
+            }
+            if n == 1 {
+                picks[s] = cs[0];
+                continue;
+            }
+            let def_side = 1 - s;
+            let def_slot = cb.sides[def_side].active_idx as usize;
+            let foe_alive = (cb.sides[def_side].alive_mask & (1 << def_slot)) != 0
+                && cb.mons[def_side * 3 + def_slot].hp() > 0;
+            let att_slot = cb.sides[s].active_idx as usize;
+            let att_idx = s * 3 + att_slot;
+            let passing_alive = att_slot < 3
+                && cb.mons[att_idx].hp() > 0
+                && foe_alive
+                && (cb.mons[att_idx].boosts[0] > 0
+                    || cb.mons[att_idx].boosts[1] > 0
+                    || cb.mons[att_idx].boosts[2] > 0
+                    || cb.mons[att_idx].boosts[3] > 0
+                    || cb.mons[att_idx].boosts[4] > 0
+                    || cb.mons[att_idx].boosts[6] > 0
+                    || (cb.mons[att_idx].vol_flags & vol_bit::SUBSTITUTE) != 0);
+            if passing_alive {
+                if let Some(sw) = crate::relay::best_midturn_bp_switch(cb, table, weights, s, &cs[..n])
+                {
+                    picks[s] = sw;
+                    continue;
+                }
+            }
+            let mut best_sw = cs[0];
+            let mut best_sc = f64::NEG_INFINITY;
+            for &c in &cs[..n] {
+                if (4..7).contains(&c) {
+                    let sl = (c - 4) as usize;
+                    let sc = if foe_alive {
+                        cb.best_hit_fraction(table, s, sl, def_side, def_slot).min(1.5)
+                            - cb.best_hit_fraction(table, def_side, def_slot, s, sl).min(1.5)
+                    } else {
+                        (cb.mons[s * 3 + sl].hp() as f64)
+                            / (table.mons[s * 3 + sl].maxhp.max(1) as f64)
+                    };
+                    if sc > best_sc {
+                        best_sc = sc;
+                        best_sw = c;
+                    }
+                }
+            }
+            picks[s] = best_sw;
+        }
+        crate::mcts::apply_compact_actions_with_bp_target(cb, table, picks);
+    }
+}
+
 struct CompactWorld {
     table: MatchTable,
     cb: CompactBattle,
     cache: Option<TempoMatchCache>,
     world_sig: u64,
+    any_qc: bool,
     root_node_id: usize,
     type_index: usize,
 }
@@ -5998,9 +6352,104 @@ struct CompactRootTypeStats {
     samples: u32,
     late_samples: u32,
     replies: usize,
-    reply_acts: Vec<SearchChoice>,
+    reply_keys: Vec<ReplyPoolKey>,
     cells: Vec<(u32, f64)>,
     late_cells: Vec<(u32, f64)>,
+    col_visits: Vec<u32>,
+    rep_world_idx: usize,
+    world_count: u32,
+    prior_cells: Vec<f64>,
+    cal_prior_buf: Vec<f64>,
+    prior_valid: bool,
+    prior_delta: f64,
+    opp_eq_policy: Vec<f64>,
+    active_cols: Vec<usize>,
+    search_v: Vec<f64>,
+    type_eq_value: f64,
+}
+
+/// Direct policy-evaluated opponent root UCB for Stage 2A (`depth == 0`, `replies > 1`).
+#[inline]
+fn select_stage2_opp_reply(
+    stats: &CompactRootTypeStats,
+    p_eval_sparse: &[(usize, f64)],
+    c_ucb: f64,
+) -> usize {
+    let m = stats.replies;
+    if m <= 1 {
+        return 0;
+    }
+    // Untried pass: evaluate all unseen replies in descending 1-ply opponent payoff order.
+    let mut best_untried: Option<(usize, f64)> = None;
+    for j in 0..m {
+        if stats.col_visits[j] == 0 {
+            let mut v_opp = 0.5;
+            if stats.prior_valid && !p_eval_sparse.is_empty() {
+                let mut acc = 0.0;
+                let mut p_sum = 0.0;
+                for &(i, p_i) in p_eval_sparse {
+                    acc += p_i * (1.0 - stats.prior_cells[i * m + j]);
+                    p_sum += p_i;
+                }
+                if p_sum > 1e-9 {
+                    v_opp = acc / p_sum;
+                }
+            }
+            if best_untried.map_or(true, |(_, bv)| v_opp > bv) {
+                best_untried = Some((j, v_opp));
+            }
+        }
+    }
+    if let Some((j, _)) = best_untried {
+        return j;
+    }
+
+    let (src, n_t) = if stats.late_samples >= 64 {
+        (&stats.late_cells, stats.late_samples)
+    } else {
+        (&stats.cells, stats.samples)
+    };
+    let ln_nt = (f64::from(n_t) + 1.0).ln().max(0.0);
+    const KAPPA_REP: f64 = 4.0;
+    let use_cal = stats.prior_valid && stats.cal_prior_buf.len() == stats.cells.len();
+    let use_raw = stats.prior_valid && stats.prior_cells.len() == stats.cells.len();
+
+    let mut best_j = 0usize;
+    let mut best_u = f64::NEG_INFINITY;
+    for j in 0..m {
+        let mut v_opp = 0.0f64;
+        let mut inv_neff = 0.0f64;
+        let mut p_sum = 0.0f64;
+        for &(i, p_i) in p_eval_sparse {
+            let idx = i * m + j;
+            let (n_ij, w_ij) = src[idx];
+            let p_prior = if use_cal {
+                stats.cal_prior_buf[idx]
+            } else if use_raw {
+                stats.prior_cells[idx]
+            } else {
+                0.5
+            };
+            let mu_ij = (w_ij + KAPPA_REP * p_prior) / (f64::from(n_ij) + KAPPA_REP);
+            v_opp += p_i * (1.0 - mu_ij);
+            inv_neff += (p_i * p_i) / (f64::from(n_ij) + 1.0);
+            p_sum += p_i;
+        }
+        if p_sum > 1e-9 {
+            v_opp /= p_sum;
+            inv_neff /= p_sum * p_sum;
+        } else {
+            v_opp = 0.5;
+            inv_neff = 1.0;
+        }
+        let n_eff = 1.0 / inv_neff.max(1e-9);
+        let u = v_opp + c_ucb * (ln_nt / n_eff).sqrt();
+        if u > best_u {
+            best_u = u;
+            best_j = j;
+        }
+    }
+    best_j
 }
 
 #[derive(Clone, Debug)]
@@ -6013,6 +6462,14 @@ pub struct BlindCmctsConfig {
     pub max_worlds: usize,
     pub preview_iterations: u32,
     pub own_preview_triple: Option<[u8; 3]>,
+    /// Mirror shipped `AdaptiveBattleBudget`: check early stop every `adaptive_interval` iters.
+    pub adaptive: bool,
+    pub adaptive_interval: u32,
+    pub adaptive_min_gap: f64,
+    /// Enable Stage 2A equilibrium-targeted root architecture (1-ply prior sweep, direct
+    /// policy-evaluated opponent root UCB, gap-gated threat cross-sampling, semantic pooling,
+    /// and capped Stage-2 Bayesian LP).
+    pub stage2_root: bool,
 }
 
 impl Default for BlindCmctsConfig {
@@ -6020,12 +6477,16 @@ impl Default for BlindCmctsConfig {
         Self {
             iterations: 36_000,
             c: 0.4,
-            max_depth: 64,
+            max_depth: 128,
             leaf: TempoLeafMode::FastGolf,
             rollout_turns: 0,
             max_worlds: 24,
             preview_iterations: 27_000,
             own_preview_triple: None,
+            adaptive: false,
+            adaptive_interval: 13_500,
+            adaptive_min_gap: 0.01,
+            stage2_root: false,
         }
     }
 }
@@ -6039,6 +6500,8 @@ pub struct BlindCmctsAgent {
     pool: Arc<MetaPool>,
     rng: SplitMix64,
     game: Option<BlindGolfGameState>,
+    nodes_buf: Vec<DuctNode>,
+    index_buf: FxHashMap<u64, usize>,
 }
 
 impl BlindCmctsAgent {
@@ -6048,6 +6511,8 @@ impl BlindCmctsAgent {
             pool,
             rng: SplitMix64::new(seed),
             game: None,
+            nodes_buf: Vec::new(),
+            index_buf: FxHashMap::default(),
         }
     }
 
@@ -6090,15 +6555,22 @@ impl BlindCmctsAgent {
 }
 
 impl Agent for BlindCmctsAgent {
+    fn requires_player_log(&self) -> bool {
+        true
+    }
+
     fn name(&self) -> String {
         let tag = match self.cfg.leaf {
             TempoLeafMode::FastGolf => "golf",
+            TempoLeafMode::HybridGolf => "hybrid",
             TempoLeafMode::EvalBlindspot => "bs",
             TempoLeafMode::EvalStatic => "eval",
             TempoLeafMode::TempoFull => "full",
             TempoLeafMode::TempoRaw => "raw",
         };
-        format!("bcmcts-{tag}-{}r:{}", self.cfg.rollout_turns, self.cfg.iterations)
+        let eng = if self.cfg.stage2_root { "bcmcts2" } else { "bcmcts" };
+        let pfx = if self.cfg.adaptive { "a" } else { "" };
+        format!("{eng}-{tag}-{}r:{pfx}{}", self.cfg.rollout_turns, self.cfg.iterations)
     }
 
     fn choose(
@@ -6125,6 +6597,7 @@ impl Agent for BlindCmctsAgent {
                 .local
                 .position(dex, &mut g.belief, &g.observer, &mut self.rng)
                 .expect("preview position reconstruction failed");
+            let has_prior = g.belief.has_preview_prior(&g.observer);
             let rm_cfg = RmConfig {
                 iterations: self.cfg.preview_iterations,
                 c: self.cfg.c,
@@ -6133,6 +6606,9 @@ impl Agent for BlindCmctsAgent {
             };
             let mut bs = BlindSearch::from_observation(&pos, dex, rm_cfg, side, self.rng.0);
             bs.prune_preview_aliases(dex);
+            if has_prior {
+                bs.set_opponent_preview_prior(true);
+            }
             bs.step(dex, &g.belief, &g.observer, self.cfg.preview_iterations);
             let pick = bs.best().unwrap_or(choices[0]);
             self.rng = SplitMix64::new(bs.search_rng_state());
@@ -6171,6 +6647,7 @@ impl Agent for BlindCmctsAgent {
             return my_acts[only];
         }
 
+        let stage2_root = self.cfg.stage2_root;
         let decision_seed = self.rng.0 ^ 0xA24B_AED4_963E_E407;
         let mut timer_rng = SplitMix64::new(decision_seed ^ 0x714E_525F_726E_6701);
         let obs_rev = g.observer.revision();
@@ -6182,11 +6659,22 @@ impl Agent for BlindCmctsAgent {
         );
         let team_picks = g.belief.root_sampling_plan(target_k, &mut plan_rng);
 
-        let use_fast = self.cfg.leaf == TempoLeafMode::FastGolf;
-        let init_cap = (self.cfg.iterations as usize / 2).clamp(64, 131_072);
-        let mut nodes: Vec<DuctNode> = Vec::with_capacity(init_cap);
-        let mut index: FxHashMap<u64, usize> = FxHashMap::default();
-        index.reserve(init_cap);
+        let use_fast = matches!(self.cfg.leaf, TempoLeafMode::FastGolf | TempoLeafMode::HybridGolf);
+        let target_cap = if self.cfg.adaptive {
+            (self.cfg.adaptive_interval.saturating_mul(2) as usize).clamp(64, 32_768)
+        } else {
+            (self.cfg.iterations as usize / 2).clamp(64, 131_072)
+        };
+        let mut nodes = std::mem::take(&mut self.nodes_buf);
+        nodes.clear();
+        if nodes.capacity() < target_cap {
+            nodes.reserve(target_cap);
+        }
+        let mut index = std::mem::take(&mut self.index_buf);
+        index.clear();
+        if index.capacity() < target_cap {
+            index.reserve(target_cap);
+        }
 
         let mut worlds: Vec<CompactWorld> = Vec::with_capacity(target_k);
         let mut root_types: Vec<CompactRootTypeStats> = Vec::new();
@@ -6205,12 +6693,21 @@ impl Agent for BlindCmctsAgent {
                     }
                 }
             }
+            // Collapse redundant `[lead, A, B]` / `[lead, B, A]` unseen bench permutations (parity with `blind.rs`).
+            crate::blind::canonicalize_unseen_bench(dex, &mut sim, opp);
             let (table, cb) = CompactBattle::from_battle(&sim, dex);
-            let mut wsig = battle_world_sig(&sim);
-            for &r in &cb.sides[opp].party_roster {
-                wsig = mix64(wsig, r as u64);
-            }
+            let wsig = compact_world_sig(&cb, &table);
+            let any_qc = compact_world_has_qc(&cb, &table);
             let opp_choices = sim.legal_choices(dex, opp);
+
+            let mut encoded_opp: Vec<(SearchChoice, u8)> = Vec::with_capacity(opp_choices.len().min(7));
+            for &c in &opp_choices {
+                if encoded_opp.len() < 7 {
+                    if let Some(code) = encode_choice(&table, &cb, dex, opp, c) {
+                        encoded_opp.push((c, code));
+                    }
+                }
+            }
             let root_node_id = *world_root_index.entry(wsig).or_insert_with(|| {
                 let mut rnode = DuctNode::new(&cb, &table);
                 let mut own_codes = [0u8; 7];
@@ -6227,45 +6724,62 @@ impl Agent for BlindCmctsAgent {
                 rnode.n_acts[side] = n_own as u8;
                 rnode.acts[side] = own_codes;
 
-                let mut opp_codes = [0u8; 7];
-                let mut n_opp = 0usize;
-                for &c in &opp_choices {
-                    if n_opp < 7 {
-                        if let Some(code) = encode_choice(&table, &cb, dex, opp, c) {
-                            opp_codes[n_opp] = code;
-                            n_opp += 1;
-                        }
+                if !encoded_opp.is_empty() {
+                    let mut opp_codes = [0u8; 7];
+                    for (j, &(_, code)) in encoded_opp.iter().enumerate() {
+                        opp_codes[j] = code;
                     }
-                }
-                if n_opp > 0 {
-                    rnode.n_acts[opp] = n_opp as u8;
+                    rnode.n_acts[opp] = encoded_opp.len() as u8;
                     rnode.acts[opp] = opp_codes;
                 }
                 let nid = nodes.len();
                 nodes.push(rnode);
-                let rkey = compact_duct_key_seeded(&cb, &table, 0, wsig);
+                let rkey = compact_duct_key_seeded_qc(&cb, &table, wsig, 0);
                 index.insert(rkey, nid);
                 nid
             });
 
+            let rep_world_idx = worlds.len();
             let type_index = *root_type_index.entry(wsig).or_insert_with(|| {
                 let replies = if cb.sides[opp].request == 0 {
                     0
                 } else {
-                    opp_choices.len().min(7)
+                    encoded_opp.len()
                 };
-                let reply_acts = opp_choices.iter().copied().take(replies).collect();
+                let reply_keys: Vec<ReplyPoolKey> = encoded_opp
+                    .iter()
+                    .take(replies)
+                    .map(|&(c, _)| {
+                        if stage2_root {
+                            reply_pool_key(&sim, opp, c)
+                        } else {
+                            ReplyPoolKey::Other(c)
+                        }
+                    })
+                    .collect();
                 let ti = root_types.len();
                 root_types.push(CompactRootTypeStats {
                     samples: 0,
                     late_samples: 0,
                     replies,
-                    reply_acts,
+                    reply_keys,
                     cells: vec![(0, 0.0); n_my * replies],
                     late_cells: vec![(0, 0.0); n_my * replies],
+                    col_visits: vec![0; replies],
+                    rep_world_idx,
+                    world_count: 0,
+                    prior_cells: vec![0.5; n_my * replies.max(1)],
+                    cal_prior_buf: Vec::new(),
+                    prior_valid: false,
+                    prior_delta: 0.0,
+                    opp_eq_policy: vec![0.0; replies],
+                    active_cols: Vec::new(),
+                    search_v: vec![0.5; n_my * replies],
+                    type_eq_value: 0.5,
                 });
                 ti
             });
+            root_types[type_index].world_count += 1;
 
             let cache = if use_fast {
                 Some(TempoMatchCache::build(&cb, &table))
@@ -6277,6 +6791,7 @@ impl Agent for BlindCmctsAgent {
                 cb,
                 cache,
                 world_sig: wsig,
+                any_qc,
                 root_node_id,
                 type_index,
             });
@@ -6284,28 +6799,184 @@ impl Agent for BlindCmctsAgent {
 
         let mut my_n = vec![0u32; n_my];
         let mut my_w = vec![0.0f64; n_my];
-        let mut joint: Vec<(usize, SearchChoice, u32, f64)> = Vec::new();
-        let mut joint_index: FxHashMap<(usize, SearchChoice), usize> = FxHashMap::default();
+        let mut joint: Vec<(usize, ReplyPoolKey, u32, f64)> = Vec::new();
+        let mut joint_index: FxHashMap<(usize, ReplyPoolKey), usize> = FxHashMap::default();
         let mut endgame = EndgameRootStats::new(&base, dex, side, &my_acts);
         let mut bayesian_row_q: Option<Vec<f64>> = None;
 
-        let mut turn_cap = base.turn.saturating_add(self.cfg.max_depth as u16);
+        // Stage 2A state (strictly read-only prior sweep & smoothed search-guidance buffers).
+        let n_elig_usize = eligible_flags.iter().filter(|&&e| e).count().max(1);
+        let mut p_eval: Vec<f64> = eligible_flags
+            .iter()
+            .map(|&e| if e { 1.0 / (n_elig_usize as f64) } else { 0.0 })
+            .collect();
+        let mut p_eval_sparse: Vec<(usize, f64)> = p_eval
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &p)| (eligible_flags[i] && p >= 0.01).then_some((i, p)))
+            .collect();
+        let mut q0_prior = vec![0.5f64; n_my];
+        let mut has_stage2_prior = false;
+        let mut has_stage2_refresh = false;
+        let mut i_comp: Vec<usize> = (0..n_my).filter(|&i| eligible_flags[i]).collect();
+
+        let leaf_mode = self.cfg.leaf;
+        if stage2_root && self.cfg.iterations >= 128 && !root_types.is_empty() {
+            let total_prior_cells: usize = root_types
+                .iter()
+                .map(|t| n_elig_usize * t.replies.max(1))
+                .sum();
+            let k_draw: usize = if total_prior_cells <= 200 { 4 } else { 2 };
+            let mut sweep_rng = SplitMix64::new(decision_seed ^ 0x51A7_E109_C3B4_2D7F);
+            let eval_weights = EvalWeights::default();
+
+            for t in &mut root_types {
+                let w = &worlds[t.rep_world_idx];
+                let rnode = &nodes[w.root_node_id];
+                let n_own_node = rnode.n_acts[side] as usize;
+                let mut draws: Vec<(CompactBattle, u64)> = Vec::with_capacity(k_draw);
+                for _ in 0..k_draw {
+                    let mut cb_d = w.cb;
+                    let mut prng = nc2000_engine::prng::Prng::new(sweep_rng.next());
+                    let qc = Battle::roll_quick_claw_with(w.table.ruleset, &mut prng);
+                    cb_d.quick_claw_roll = (qc[0] as u8) | ((qc[1] as u8) << 1);
+                    let step_seed = sweep_rng.next();
+                    let t_seed = sweep_rng.next();
+                    if !hidden_timers.is_empty() {
+                        let mut trng = SplitMix64::new(t_seed);
+                        resample_compact_hidden_timers(&mut cb_d, &w.table, &hidden_timers, &mut trng);
+                    }
+                    draws.push((cb_d, step_seed));
+                }
+
+                if t.replies > 0 {
+                    let m = t.replies.min(rnode.n_acts[opp] as usize);
+                    for i in 0..n_my.min(n_own_node) {
+                        if !eligible_flags[i] {
+                            continue;
+                        }
+                        let a_my = rnode.acts[side][i];
+                        for j in 0..m {
+                            let a_opp = rnode.acts[opp][j];
+                            let actions = if side == 0 { [a_my, a_opp] } else { [a_opp, a_my] };
+                            let mut sum = 0.0f64;
+                            for &(cb_d, step_seed) in &draws {
+                                let mut cb = cb_d;
+                                cb.prng_seed = step_seed;
+                                cb.apply_actions(&w.table, actions);
+                                resolve_compact_forced_switches(&mut cb, &w.table, &eval_weights);
+                                let v0 = eval_duct_leaf(&cb, &w.table, leaf_mode, w.cache.as_ref());
+                                sum += if side == 0 { v0 } else { 1.0 - v0 };
+                            }
+                            t.prior_cells[i * t.replies + j] =
+                                (sum / (k_draw as f64)).clamp(0.001, 0.999);
+                        }
+                    }
+                    t.cal_prior_buf = t.prior_cells.clone();
+                    t.prior_valid = true;
+                } else {
+                    for i in 0..n_my.min(n_own_node) {
+                        if !eligible_flags[i] {
+                            continue;
+                        }
+                        let a_my = rnode.acts[side][i];
+                        let actions = if side == 0 { [a_my, 7] } else { [7, a_my] };
+                        let mut sum = 0.0f64;
+                        for &(cb_d, step_seed) in &draws {
+                            let mut cb = cb_d;
+                            cb.prng_seed = step_seed;
+                            cb.apply_actions(&w.table, actions);
+                            resolve_compact_forced_switches(&mut cb, &w.table, &eval_weights);
+                            let v0 = eval_duct_leaf(&cb, &w.table, leaf_mode, w.cache.as_ref());
+                            sum += if side == 0 { v0 } else { 1.0 - v0 };
+                        }
+                        t.prior_cells[i] = (sum / (k_draw as f64)).clamp(0.001, 0.999);
+                    }
+                    t.prior_valid = true;
+                }
+            }
+
+            let mut t_map: Vec<usize> = Vec::new();
+            let mut t_w: Vec<f64> = Vec::new();
+            let mut t_m: Vec<usize> = Vec::new();
+            let mut t_priors: Vec<&[f64]> = Vec::new();
+            for (ti, t) in root_types.iter().enumerate() {
+                if t.prior_valid && t.replies > 0 && t.world_count > 0 {
+                    t_map.push(ti);
+                    t_w.push(f64::from(t.world_count));
+                    t_m.push(t.replies);
+                    t_priors.push(&t.prior_cells);
+                }
+            }
+            if !t_map.is_empty() {
+                if let Some((p0, opp_pol, q0)) =
+                    solve_initial_bayesian_prior(&eligible_flags, &t_w, &t_m, &t_priors)
+                {
+                    p_eval = p0;
+                    p_eval_sparse.clear();
+                    for (i, &p) in p_eval.iter().enumerate() {
+                        if eligible_flags[i] && p >= 0.01 {
+                            p_eval_sparse.push((i, p));
+                        }
+                    }
+                    if p_eval_sparse.is_empty() {
+                        if let Some(best_i) = (0..n_my)
+                            .filter(|&i| eligible_flags[i])
+                            .max_by(|&a, &b| p_eval[a].total_cmp(&p_eval[b]))
+                        {
+                            p_eval_sparse.push((best_i, 1.0));
+                        }
+                    }
+                    for (k, &orig_t) in t_map.iter().enumerate() {
+                        root_types[orig_t].opp_eq_policy = opp_pol[k].clone();
+                    }
+                    q0_prior = q0;
+                    has_stage2_prior = true;
+                }
+            } else {
+                // Forced-switch root (`replies == 0` for all types): world-weighted 1-ply prior.
+                let mut total_wc = 0.0f64;
+                let mut acc = vec![0.0f64; n_my];
+                for t in &root_types {
+                    if t.prior_valid && t.world_count > 0 {
+                        let wc = f64::from(t.world_count);
+                        total_wc += wc;
+                        for i in 0..n_my {
+                            if eligible_flags[i] {
+                                acc[i] += wc * t.prior_cells[i];
+                            }
+                        }
+                    }
+                }
+                if total_wc > 0.0 {
+                    for i in 0..n_my {
+                        if eligible_flags[i] {
+                            q0_prior[i] = acc[i] / total_wc;
+                        }
+                    }
+                    has_stage2_prior = true;
+                }
+            }
+        }
+
+        // Match shipped `RmConfig::default()` (`horizon = 100` turns, clamped by ruleset turn limit).
+        let mut turn_cap = base.turn.saturating_add(100);
         if let Some(lim) = base.ruleset.turn_limit() {
             turn_cap = turn_cap.min(lim);
         }
 
-        let compute_bayesian_eq = |my_n: &[u32],
-                                   my_w: &[f64],
-                                   root_types: &[CompactRootTypeStats],
-                                   joint: &[(usize, SearchChoice, u32, f64)],
-                                   joint_index: &FxHashMap<(usize, SearchChoice), usize>|
-         -> Option<crate::root_policy::BayesianEquilibrium> {
+        let build_eq_inputs = |my_n: &[u32],
+                               my_w: &[f64],
+                               root_types: &[CompactRootTypeStats],
+                               joint: &[(usize, ReplyPoolKey, u32, f64)],
+                               joint_index: &FxHashMap<(usize, ReplyPoolKey), usize>|
+         -> Option<(Vec<RootType>, Vec<Vec<RootCell>>, Vec<f64>, Vec<usize>)> {
             if root_types.is_empty() {
                 return None;
             }
             let total_late: u64 = root_types.iter().map(|t| u64::from(t.late_samples)).sum();
             let use_late = total_late >= 512;
-            let mut pooled_late: FxHashMap<(usize, SearchChoice), (u32, f64)> = FxHashMap::default();
+            let mut pooled_late: FxHashMap<(usize, ReplyPoolKey), (u32, f64)> = FxHashMap::default();
             let mut late_row_n = vec![0u32; n_my];
             let mut late_row_w = vec![0.0f64; n_my];
             if use_late {
@@ -6319,8 +6990,8 @@ impl Agent for BlindCmctsAgent {
                         }
                         let own = i / t.replies;
                         let reply = i % t.replies;
-                        if let Some(&opp_act) = t.reply_acts.get(reply) {
-                            let entry = pooled_late.entry((own, opp_act)).or_insert((0, 0.0));
+                        if let Some(&rkey) = t.reply_keys.get(reply) {
+                            let entry = pooled_late.entry((own, rkey)).or_insert((0, 0.0));
                             entry.0 += n;
                             entry.1 += sum;
                         }
@@ -6333,7 +7004,8 @@ impl Agent for BlindCmctsAgent {
             }
             let mut types: Vec<RootType> = Vec::with_capacity(root_types.len());
             let mut pooled_priors: Vec<Vec<RootCell>> = Vec::with_capacity(root_types.len());
-            for t in root_types {
+            let mut type_map: Vec<usize> = Vec::with_capacity(root_types.len());
+            for (orig_t, t) in root_types.iter().enumerate() {
                 let (samples, src_cells) = if use_late && t.late_samples >= 16 {
                     (t.late_samples, &t.late_cells)
                 } else {
@@ -6358,9 +7030,9 @@ impl Agent for BlindCmctsAgent {
                     if !eligible_flags[own] {
                         continue;
                     }
-                    for (reply, &opp_act) in t.reply_acts.iter().enumerate() {
+                    for (reply, &rkey) in t.reply_keys.iter().enumerate() {
                         if let Some(&(ln, lw)) =
-                            pooled_late.get(&(own, opp_act)).filter(|&&(n, _)| n >= 8)
+                            pooled_late.get(&(own, rkey)).filter(|&&(n, _)| n >= 8)
                         {
                             priors.push(RootCell {
                                 own,
@@ -6368,7 +7040,7 @@ impl Agent for BlindCmctsAgent {
                                 samples: ln,
                                 mean: lw / f64::from(ln),
                             });
-                        } else if let Some(&idx) = joint_index.get(&(own, opp_act)) {
+                        } else if let Some(&idx) = joint_index.get(&(own, rkey)) {
                             let (_, _, jn, jw) = joint[idx];
                             if jn > 0 {
                                 priors.push(RootCell {
@@ -6383,12 +7055,13 @@ impl Agent for BlindCmctsAgent {
                 }
                 types.push(RootType { samples, replies: t.replies, cells });
                 pooled_priors.push(priors);
+                type_map.push(orig_t);
             }
             if types.is_empty() {
                 return None;
             }
             let mut means: Vec<f64> = (0..n_my)
-                .map(|i| if my_n[i] > 0 { my_w[i] / f64::from(my_n[i]) } else { 0.0 })
+                .map(|i| if my_n[i] > 0 { my_w[i] / f64::from(my_n[i]) } else { 0.5 })
                 .collect();
             if use_late {
                 for own in 0..n_my {
@@ -6397,101 +7070,512 @@ impl Agent for BlindCmctsAgent {
                     }
                 }
             }
-            solve_bayesian_equilibrium_with_priors(&eligible_flags, my_n, &means, &types, &pooled_priors)
+            Some((types, pooled_priors, means, type_map))
+        };
+
+        let compute_bayesian_eq = |my_n: &[u32],
+                                   my_w: &[f64],
+                                   root_types: &[CompactRootTypeStats],
+                                   joint: &[(usize, ReplyPoolKey, u32, f64)],
+                                   joint_index: &FxHashMap<(usize, ReplyPoolKey), usize>|
+         -> Option<crate::root_policy::BayesianEquilibrium> {
+            let (types, pooled_priors, means, _) =
+                build_eq_inputs(my_n, my_w, root_types, joint, joint_index)?;
+            solve_bayesian_equilibrium_with_priors(
+                &eligible_flags,
+                my_n,
+                &means,
+                &types,
+                &pooled_priors,
+            )
+        };
+
+        let compute_stage2_eq = |my_n: &[u32],
+                                 my_w: &[f64],
+                                 root_types: &[CompactRootTypeStats],
+                                 joint: &[(usize, ReplyPoolKey, u32, f64)],
+                                 joint_index: &FxHashMap<(usize, ReplyPoolKey), usize>,
+                                 use_cal_priors: bool|
+         -> Option<(Stage2BayesianEquilibrium, Vec<usize>)> {
+            let (types, pooled_priors, means, type_map) =
+                build_eq_inputs(my_n, my_w, root_types, joint, joint_index)?;
+            let cal_slices: Vec<&[f64]> = if use_cal_priors {
+                type_map
+                    .iter()
+                    .map(|&orig_t| {
+                        let t = &root_types[orig_t];
+                        if t.prior_valid && t.cal_prior_buf.len() == n_my * t.replies {
+                            t.cal_prior_buf.as_slice()
+                        } else {
+                            &[]
+                        }
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            let s2 = solve_bayesian_equilibrium_stage2(
+                &eligible_flags,
+                my_n,
+                &means,
+                &types,
+                &pooled_priors,
+                if use_cal_priors { Some(&cal_slices) } else { None },
+            )?;
+            Some((s2, type_map))
+        };
+
+        let select_root = |done: u32,
+                           endgame: &EndgameRootStats,
+                           my_n: &[u32],
+                           my_w: &[f64],
+                           root_types: &[CompactRootTypeStats],
+                           joint: &[(usize, ReplyPoolKey, u32, f64)],
+                           joint_index: &FxHashMap<(usize, ReplyPoolKey), usize>|
+         -> SearchChoice {
+            let reply_metrics = |own: usize, n_i: u32, mean_i: f64| -> (f64, f64) {
+                if n_i == 0 {
+                    return (0.0, mean_i);
+                }
+                let mut trap_risk = 0.0f64;
+                let mut mistake_weighted_sum = 0.0f64;
+                let mut mistake_weight_total = 0.0f64;
+                for t in root_types {
+                    if t.replies == 0 {
+                        continue;
+                    }
+                    let rs = own * t.replies;
+                    let re = rs + t.replies;
+                    let Some(row) = t.cells.get(rs..re) else {
+                        continue;
+                    };
+                    let type_n: u32 = row.iter().map(|&(n, _)| n).sum();
+                    if type_n == 0 {
+                        continue;
+                    }
+                    let type_w: f64 = row.iter().map(|&(_, w)| w).sum();
+                    let type_mean = type_w / f64::from(type_n);
+                    let (t_risk, t_mistake) =
+                        reply_risk_and_mistake_ev(type_n, type_mean, row.iter().copied());
+                    let w_t = f64::from(type_n);
+                    mistake_weighted_sum += w_t * t_mistake;
+                    mistake_weight_total += w_t;
+                    if type_n >= 4 {
+                        let type_shrink = (w_t / (w_t + 6.0)).clamp(0.0, 1.0);
+                        let type_drop =
+                            ((mean_i - type_mean).max(0.0) * type_shrink).clamp(0.0, 1.0);
+                        trap_risk = trap_risk.max(type_drop.max(t_risk * type_shrink));
+                    }
+                }
+                let mistake_ev = if mistake_weight_total > 0.0 {
+                    let unattributed = (f64::from(n_i) - mistake_weight_total).max(0.0);
+                    (mistake_weighted_sum + unattributed * mean_i)
+                        / (mistake_weight_total + unattributed)
+                } else {
+                    mean_i
+                };
+                (trap_risk, mistake_ev)
+            };
+
+            select_blind_root_choice(
+                endgame,
+                &my_acts,
+                my_n,
+                my_n,
+                my_w,
+                |i| eligible_flags[i],
+                reply_metrics,
+                |base_idx| {
+                    if done >= 64 {
+                        let eq_opt = if stage2_root {
+                            // Strictly prior-free readout LP!
+                            compute_stage2_eq(my_n, my_w, root_types, joint, joint_index, false)
+                                .map(|(s2, _)| s2.eq)
+                        } else {
+                            compute_bayesian_eq(my_n, my_w, root_types, joint, joint_index)
+                        };
+                        if let Some(eq) = eq_opt {
+                            if eq.override_value > eq.pure_guarantees[base_idx] + MIN_MIX_MARGIN {
+                                let draw =
+                                    SplitMix64::new(decision_seed ^ u64::from(done)).next_f64();
+                                return crate::blind::draw_policy(&my_acts, &eq.policy, draw);
+                            }
+                        }
+                    }
+                    None
+                },
+            )
+            .unwrap_or(my_acts[0])
         };
 
         let mut path: Vec<(usize, usize, usize)> = Vec::with_capacity(self.cfg.max_depth as usize + 2);
-        let n_elig = eligible_flags.iter().filter(|&&e| e).count().max(1) as u32;
+        let n_elig = n_elig_usize as u32;
         let world_warmup = (192 / root_types.len().max(2)).clamp(48, 96) as u32;
         let c_ucb = self.cfg.c;
-        let max_depth = self.cfg.max_depth;
-        let leaf_mode = self.cfg.leaf;
+        let max_depth = self.cfg.max_depth.min(250);
         let rollout_turns = self.cfg.rollout_turns;
         let n_worlds = worlds.len();
+        let adaptive = self.cfg.adaptive;
+        let adaptive_interval = self.cfg.adaptive_interval.max(1);
+        let adaptive_min_gap = self.cfg.adaptive_min_gap;
+        let mut prev_adaptive: Option<(u32, SearchChoice)> = None;
+        let mut done = 0u32;
 
         for iter in 0..self.cfg.iterations {
-            if iter >= 512 && iter % 256 == 0 {
+            if stage2_root {
+                if iter >= 256 && iter % 256 == 0 {
+                    // Refresh bias-corrected 1-ply calibrated priors per type.
+                    for t in &mut root_types {
+                        if !t.prior_valid || t.replies == 0 {
+                            continue;
+                        }
+                        let src = if t.late_samples >= 64 { &t.late_cells } else { &t.cells };
+                        let mut num = 0.0f64;
+                        let mut den = 0.0f64;
+                        for own in 0..n_my {
+                            if !eligible_flags[own] {
+                                continue;
+                            }
+                            for j in 0..t.replies {
+                                let idx = own * t.replies + j;
+                                let (n_ij, w_ij) = src[idx];
+                                if n_ij >= 8 {
+                                    let wt = f64::from(n_ij.min(32));
+                                    let mean_ij = w_ij / f64::from(n_ij);
+                                    num += wt * (mean_ij - t.prior_cells[idx]);
+                                    den += wt;
+                                }
+                            }
+                        }
+                        t.prior_delta = if den > 0.0 {
+                            (num / (den + 8.0)).clamp(-0.35, 0.35)
+                        } else {
+                            0.0
+                        };
+                        if t.cal_prior_buf.len() != n_my * t.replies {
+                            t.cal_prior_buf.resize(n_my * t.replies, 0.5);
+                        }
+                        for (dst, &p0) in t.cal_prior_buf.iter_mut().zip(t.prior_cells.iter()) {
+                            *dst = (p0 + t.prior_delta).clamp(0.02, 0.98);
+                        }
+                    }
+
+                    if let Some((mut s2, type_map)) =
+                        compute_stage2_eq(&my_n, &my_w, &root_types, &joint, &joint_index, true)
+                    {
+                        for (k, &orig_t) in type_map.iter().enumerate() {
+                            let t = &mut root_types[orig_t];
+                            t.opp_eq_policy = std::mem::take(&mut s2.opp_eq_policy[k]);
+                            t.active_cols = std::mem::take(&mut s2.active_cols[k]);
+                            t.search_v = std::mem::take(&mut s2.search_v[k]);
+                            let m = t.replies;
+                            let mut t_eq = 0.0f64;
+                            let mut p_sum_eq = 0.0f64;
+                            if t.search_v.len() == n_my * m && t.opp_eq_policy.len() == m {
+                                for i in 0..n_my {
+                                    let pi = s2.eq.policy[i];
+                                    if pi <= 0.0 {
+                                        continue;
+                                    }
+                                    p_sum_eq += pi;
+                                    let mut tv = 0.0f64;
+                                    for (j, &yj) in t.opp_eq_policy.iter().enumerate() {
+                                        if yj > 0.0 {
+                                            tv += yj * t.search_v[i * m + j];
+                                        }
+                                    }
+                                    t_eq += pi * tv;
+                                }
+                            }
+                            t.type_eq_value = if p_sum_eq > 1e-9 {
+                                t_eq / p_sum_eq
+                            } else {
+                                s2.eq.equilibrium_value
+                            };
+                        }
+                        i_comp.clear();
+                        for i in 0..n_my {
+                            if !eligible_flags[i] {
+                                continue;
+                            }
+                            if s2.eq.policy[i] >= 0.02 {
+                                i_comp.push(i);
+                                continue;
+                            }
+                            // Threat-weighted optimistic cell UCB anchored to equilibrium_value
+                            // prevents untested-threat starvation and 1-ply trap crowding.
+                            let mut ucb_threat = 0.0f64;
+                            let mut w_tot = 0.0f64;
+                            for (k, &orig_t) in type_map.iter().enumerate() {
+                                let wt = s2.type_weights[k];
+                                if wt <= 0.0 {
+                                    continue;
+                                }
+                                let t = &root_types[orig_t];
+                                let m = t.replies;
+                                if m == 0 || t.search_v.len() != n_my * m {
+                                    continue;
+                                }
+                                let (src, n_t) = if t.late_samples >= 64 {
+                                    (&t.late_cells, t.late_samples)
+                                } else {
+                                    (&t.cells, t.samples)
+                                };
+                                let ln_nt = (f64::from(n_t) + 1.0).ln().max(0.0);
+                                let mut tv = 0.0f64;
+                                for (j, &yj) in t.opp_eq_policy.iter().enumerate() {
+                                    if yj <= 0.0 {
+                                        continue;
+                                    }
+                                    let cn = src[i * m + j].0;
+                                    let bonus = 0.35 * (ln_nt / (f64::from(cn) + 1.0)).sqrt();
+                                    tv += yj * (t.search_v[i * m + j] + bonus).min(1.0);
+                                }
+                                ucb_threat += wt * tv;
+                                w_tot += wt;
+                            }
+                            let ucb_val = if w_tot > 1e-9 {
+                                ucb_threat / w_tot
+                            } else {
+                                s2.search_action_values[i]
+                            };
+                            if ucb_val >= s2.eq.equilibrium_value - 0.04 {
+                                i_comp.push(i);
+                            }
+                        }
+                        if i_comp.is_empty() {
+                            i_comp.push(s2.eq.best_pure_action);
+                        }
+
+                        let sum_elig: u32 = (0..n_my)
+                            .filter(|&i| eligible_flags[i])
+                            .map(|i| my_n[i])
+                            .sum();
+                        let sum_elig_f = f64::from(sum_elig.max(1));
+                        let mut p_tot = 0.0f64;
+                        for i in 0..n_my {
+                            if eligible_flags[i] {
+                                let p_emp = f64::from(my_n[i]) / sum_elig_f;
+                                let p_tgt = 0.7 * s2.eq.policy[i] + 0.3 * p_emp;
+                                p_eval[i] = 0.5 * p_eval[i] + 0.5 * p_tgt;
+                                p_tot += p_eval[i];
+                            } else {
+                                p_eval[i] = 0.0;
+                            }
+                        }
+                        if p_tot > 1e-9 {
+                            for p in &mut p_eval {
+                                *p /= p_tot;
+                            }
+                        }
+                        p_eval_sparse.clear();
+                        for (i, &p) in p_eval.iter().enumerate() {
+                            if eligible_flags[i] && p >= 0.01 {
+                                p_eval_sparse.push((i, p));
+                            }
+                        }
+                        if p_eval_sparse.is_empty() {
+                            if let Some(best_i) = (0..n_my)
+                                .filter(|&i| eligible_flags[i])
+                                .max_by(|&a, &b| p_eval[a].total_cmp(&p_eval[b]))
+                            {
+                                p_eval_sparse.push((best_i, 1.0));
+                            }
+                        }
+
+                        bayesian_row_q = Some(s2.search_action_values);
+                        has_stage2_refresh = true;
+                    }
+                }
+            } else if iter >= 512 && iter % 256 == 0 {
                 if let Some(eq) = compute_bayesian_eq(&my_n, &my_w, &root_types, &joint, &joint_index)
                 {
                     bayesian_row_q = Some(eq.action_values);
                 }
             }
+
             let w = &worlds[(iter as usize) % n_worlds];
             let type_index = w.type_index;
             let root_id = w.root_node_id;
 
-            // 1. Global own root selection (exact BlindSearch world-floor + Bayesian-Q UCB).
-            let min_floor_pick = if iter >= 512 && root_types[type_index].replies > 0 {
+            // 1. Global own root selection (+ optional Stage 2A gap-gated targeted threat cross-sample).
+            let mut forced_root_opp: Option<usize> = None;
+            let forced_threat_pair = if stage2_root
+                && has_stage2_refresh
+                && iter >= 256
+                && root_types[type_index].replies > 1
+                && root_types[type_index].samples % 16 == 0
+                && !i_comp.is_empty()
+            {
                 let stats = &root_types[type_index];
-                let replies = stats.replies;
-                let world_floor = (stats.samples / (3 * n_elig)).min(48);
-                (0..n_my)
-                    .filter(|&i| eligible_flags[i])
-                    .filter_map(|i| {
-                        let rs = i * replies;
-                        let w_n: u32 = stats
-                            .cells
-                            .get(rs..rs + replies)
-                            .map_or(0, |row| row.iter().map(|&(n, _)| n).sum());
-                        (w_n < world_floor).then_some((w_n, my_n[i], i))
-                    })
-                    .min_by_key(|&(w_n, g_n, _)| (w_n, g_n))
-                    .map(|(_, _, i)| i)
+                let m = stats.replies;
+                let src = if stats.late_samples >= 64 { &stats.late_cells } else { &stats.cells };
+                let n_threat = ((2.0 * f64::from(stats.samples).sqrt()).floor() as u32).clamp(12, 192);
+                let j_ucb = select_stage2_opp_reply(stats, &p_eval_sparse, c_ucb);
+                let bq = bayesian_row_q.as_deref();
+
+                // Tier 1: Active threats (`y* >= 0.05` or current `argmax UCB_opp`) for `i ∈ I_comp`.
+                let mut pick_pair: Option<(usize, usize, u32, f64, f64)> = None;
+                for &i in &i_comp {
+                    let qi = bq.and_then(|q| q.get(i).copied()).unwrap_or(0.5);
+                    for j in 0..m {
+                        let yj = stats.opp_eq_policy.get(j).copied().unwrap_or(0.0);
+                        if yj < 0.05 && j != j_ucb {
+                            continue;
+                        }
+                        let cn = src[i * m + j].0;
+                        if cn < n_threat {
+                            let better = pick_pair.map_or(true, |(_, _, bn, by, bq_v)| {
+                                cn < bn
+                                    || (cn == bn
+                                        && (yj > by + 1e-12
+                                            || ((yj - by).abs() <= 1e-12 && qi > bq_v)))
+                            });
+                            if better {
+                                pick_pair = Some((i, j, cn, yj, qi));
+                            }
+                        }
+                    }
+                }
+                // Tier 2: Refutation guard (`j_ref = argmin search_v[i, j] < eq_value - 0.03`).
+                if pick_pair.is_none() && stats.search_v.len() == n_my * m {
+                    let n_ref = n_threat.min(48);
+                    for &i in &i_comp {
+                        let mut best_ref_j = 0usize;
+                        let mut min_sv = f64::INFINITY;
+                        for j in 0..m {
+                            let sv = stats.search_v[i * m + j];
+                            if sv < min_sv {
+                                min_sv = sv;
+                                best_ref_j = j;
+                            }
+                        }
+                        if min_sv < stats.type_eq_value - 0.03 {
+                            let cn = src[i * m + best_ref_j].0;
+                            if cn < n_ref {
+                                let better = pick_pair.map_or(true, |(_, _, bn, _, _)| cn < bn);
+                                if better {
+                                    pick_pair = Some((i, best_ref_j, cn, 0.0, 0.0));
+                                }
+                            }
+                        }
+                    }
+                }
+                // Tier 3: Other active LP columns (`min(24, n_threat)`).
+                if pick_pair.is_none() && !stats.active_cols.is_empty() {
+                    let n_act = 24u32.min(n_threat);
+                    for &i in &i_comp {
+                        for &j in &stats.active_cols {
+                            let cn = src[i * m + j].0;
+                            if cn < n_act {
+                                let better = pick_pair.map_or(true, |(_, _, bn, _, _)| cn < bn);
+                                if better {
+                                    pick_pair = Some((i, j, cn, 0.0, 0.0));
+                                }
+                            }
+                        }
+                    }
+                }
+                pick_pair.map(|(i, j, _, _, _)| (i, j))
             } else {
                 None
             };
-            let my_pick = if let Some(a) = min_floor_pick {
-                my_n[a] += 1;
-                a
+
+            let my_pick = if let Some((ti, tj)) = forced_threat_pair {
+                forced_root_opp = Some(tj);
+                my_n[ti] += 1;
+                ti
             } else {
-                let mut n_untried = 0usize;
-                for a in 0..n_my {
-                    if eligible_flags[a] && my_n[a] == 0 {
-                        n_untried += 1;
-                    }
-                }
-                let pick = if n_untried > 0 {
-                    let mut target = self.rng.below(n_untried);
-                    let mut chosen = 0usize;
+                let min_floor_pick =
+                    if !stage2_root && iter >= 512 && root_types[type_index].replies > 0 {
+                        let stats = &root_types[type_index];
+                        let replies = stats.replies;
+                        let world_floor = (stats.samples / (3 * n_elig)).min(48);
+                        (0..n_my)
+                            .filter(|&i| eligible_flags[i])
+                            .filter_map(|i| {
+                                let rs = i * replies;
+                                let w_n: u32 = stats
+                                    .cells
+                                    .get(rs..rs + replies)
+                                    .map_or(0, |row| row.iter().map(|&(n, _)| n).sum());
+                                (w_n < world_floor).then_some((w_n, my_n[i], i))
+                            })
+                            .min_by_key(|&(w_n, g_n, _)| (w_n, g_n))
+                            .map(|(_, _, i)| i)
+                    } else {
+                        None
+                    };
+                if let Some(a) = min_floor_pick {
+                    my_n[a] += 1;
+                    a
+                } else {
+                    let mut n_untried = 0usize;
                     for a in 0..n_my {
                         if eligible_flags[a] && my_n[a] == 0 {
-                            if target == 0 {
-                                chosen = a;
-                                break;
+                            n_untried += 1;
+                        }
+                    }
+                    let pick = if n_untried > 0 {
+                        if stage2_root && has_stage2_prior {
+                            let mut best_a = 0usize;
+                            let mut best_q = f64::NEG_INFINITY;
+                            for a in 0..n_my {
+                                if eligible_flags[a] && my_n[a] == 0 && q0_prior[a] > best_q {
+                                    best_q = q0_prior[a];
+                                    best_a = a;
+                                }
                             }
-                            target -= 1;
+                            best_a
+                        } else {
+                            let mut target = self.rng.below(n_untried);
+                            let mut chosen = 0usize;
+                            for a in 0..n_my {
+                                if eligible_flags[a] && my_n[a] == 0 {
+                                    if target == 0 {
+                                        chosen = a;
+                                        break;
+                                    }
+                                    target -= 1;
+                                }
+                            }
+                            chosen
                         }
-                    }
-                    chosen
-                } else {
-                    let total: u32 = my_n.iter().sum();
-                    let ln_total = (total.max(1) as f64).ln();
-                    let mut best_a = eligible_flags.iter().position(|&e| e).unwrap_or(0);
-                    let mut best_v = f64::NEG_INFINITY;
-                    let bq = bayesian_row_q.as_deref();
-                    for a in 0..n_my {
-                        if !eligible_flags[a] {
-                            continue;
+                    } else {
+                        let total: u32 = my_n.iter().sum();
+                        let ln_total = (total.max(1) as f64).ln();
+                        let mut best_a = eligible_flags.iter().position(|&e| e).unwrap_or(0);
+                        let mut best_v = f64::NEG_INFINITY;
+                        let bq = bayesian_row_q.as_deref();
+                        let use_cold_prior = stage2_root && has_stage2_prior && (iter < 256 || bq.is_none());
+                        for a in 0..n_my {
+                            if !eligible_flags[a] {
+                                continue;
+                            }
+                            let na = my_n[a] as f64;
+                            let mean_a = if use_cold_prior {
+                                (my_w[a] + 4.0 * q0_prior[a]) / (na + 4.0)
+                            } else {
+                                bq.and_then(|q| q.get(a).copied())
+                                    .unwrap_or_else(|| my_w[a] / na)
+                            };
+                            let v = mean_a + c_ucb * (ln_total / na).sqrt();
+                            if v > best_v {
+                                best_v = v;
+                                best_a = a;
+                            }
                         }
-                        let na = my_n[a] as f64;
-                        let mean_a = bq
-                            .and_then(|q| q.get(a).copied())
-                            .unwrap_or_else(|| my_w[a] / na);
-                        let v = mean_a + c_ucb * (ln_total / na).sqrt();
-                        if v > best_v {
-                            best_v = v;
-                            best_a = a;
-                        }
-                    }
-                    best_a
-                };
-                my_n[pick] += 1;
-                pick
+                        best_a
+                    };
+                    my_n[pick] += 1;
+                    pick
+                }
             };
 
             // 2. Prepare 256-byte CompactBattle for this iteration (~20 ns total!).
+            // Always resample Quick Claw per iteration (matching `blind.rs:1496-1500`).
             let mut cb = w.cb;
-            if base_idle {
+            {
                 let mut prng = nc2000_engine::prng::Prng::new(self.rng.next());
                 let qc = Battle::roll_quick_claw_with(w.table.ruleset, &mut prng);
                 cb.quick_claw_roll = (qc[0] as u8) | ((qc[1] as u8) << 1);
@@ -6511,7 +7595,13 @@ impl Agent for BlindCmctsAgent {
                 let n0_cur = node.n_acts[0] as usize;
                 let n1_cur = node.n_acts[1] as usize;
                 let (i0, i1) = if depth == 0 {
-                    let i_opp = node.select_ucb(opp, c_ucb, &mut self.rng, true);
+                    let i_opp = if let Some(fj) = forced_root_opp {
+                        fj
+                    } else if stage2_root && root_types[type_index].replies > 1 {
+                        select_stage2_opp_reply(&root_types[type_index], &p_eval_sparse, c_ucb)
+                    } else {
+                        node.select_ucb(opp, c_ucb, &mut self.rng, true)
+                    };
                     root_opp_idx = i_opp;
                     if side == 0 { (my_pick, i_opp) } else { (i_opp, my_pick) }
                 } else {
@@ -6522,11 +7612,14 @@ impl Agent for BlindCmctsAgent {
                 };
                 let a0 = if n0_cur > 0 { node.acts[0][i0] } else { 7 };
                 let a1 = if n1_cur > 0 { node.acts[1][i1] } else { 7 };
-                path.push((cur_id, i0, i1));
+                // Skip pushing 1x1 forced-action interior nodes so `backed_up_value` never dampens forced lines.
+                if depth == 0 || n0_cur > 1 || n1_cur > 1 {
+                    path.push((cur_id, i0, i1));
+                }
 
                 cb.prng_seed = self.rng.next();
                 cb.apply_actions(&w.table, [a0, a1]);
-                depth += 1;
+                depth = depth.saturating_add(1);
 
                 if cb.outcome != 0 {
                     let v = eval_duct_leaf(&cb, &w.table, leaf_mode, w.cache.as_ref());
@@ -6540,7 +7633,8 @@ impl Agent for BlindCmctsAgent {
                     break (v, compact_sim_end(&cb, &w.table, v));
                 }
 
-                let next_key = compact_duct_key_seeded(&cb, &w.table, depth, w.world_sig);
+                let qc_bits = compact_observable_qc_bits(&cb, &w.table, w.any_qc);
+                let next_key = compact_duct_key_seeded_qc(&cb, &w.table, w.world_sig, qc_bits);
                 if let Some(&next_id) = index.get(&next_key) {
                     cur_id = next_id;
                 } else {
@@ -6584,6 +7678,7 @@ impl Agent for BlindCmctsAgent {
             let stats = &mut root_types[type_index];
             stats.samples += 1;
             if root_opp_idx < stats.replies {
+                stats.col_visits[root_opp_idx] += 1;
                 let ci = my_pick * stats.replies + root_opp_idx;
                 stats.cells[ci].0 += 1;
                 stats.cells[ci].1 += mine;
@@ -6592,93 +7687,68 @@ impl Agent for BlindCmctsAgent {
                     stats.late_cells[ci].0 += 1;
                     stats.late_cells[ci].1 += mine;
                 }
-                if let Some(&opp_act) = stats.reply_acts.get(root_opp_idx) {
-                    let j_idx = *joint_index.entry((my_pick, opp_act)).or_insert_with(|| {
+                if let Some(&rkey) = stats.reply_keys.get(root_opp_idx) {
+                    let j_idx = *joint_index.entry((my_pick, rkey)).or_insert_with(|| {
                         let k = joint.len();
-                        joint.push((my_pick, opp_act, 0, 0.0));
+                        joint.push((my_pick, rkey, 0, 0.0));
                         k
                     });
                     joint[j_idx].2 += 1;
                     joint[j_idx].3 += mine;
                 }
             }
-        }
 
-        // 6. Production root readout (`select_blind_root_choice` + Bayesian LP override).
-        let reply_metrics = |own: usize, n_i: u32, mean_i: f64| -> (f64, f64) {
-            if n_i == 0 {
-                return (0.0, mean_i);
-            }
-            let mut trap_risk = 0.0f64;
-            let mut mistake_weighted_sum = 0.0f64;
-            let mut mistake_weight_total = 0.0f64;
-            for t in &root_types {
-                if t.replies == 0 {
-                    continue;
-                }
-                let rs = own * t.replies;
-                let re = rs + t.replies;
-                let Some(row) = t.cells.get(rs..re) else {
-                    continue;
-                };
-                let type_n: u32 = row.iter().map(|&(n, _)| n).sum();
-                if type_n == 0 {
-                    continue;
-                }
-                let type_w: f64 = row.iter().map(|&(_, w)| w).sum();
-                let type_mean = type_w / f64::from(type_n);
-                let (t_risk, t_mistake) =
-                    reply_risk_and_mistake_ev(type_n, type_mean, row.iter().copied());
-                let w_t = f64::from(type_n);
-                mistake_weighted_sum += w_t * t_mistake;
-                mistake_weight_total += w_t;
-                if type_n >= 4 {
-                    let type_shrink = (w_t / (w_t + 6.0)).clamp(0.0, 1.0);
-                    let type_drop = ((mean_i - type_mean).max(0.0) * type_shrink).clamp(0.0, 1.0);
-                    trap_risk = trap_risk.max(type_drop.max(t_risk * type_shrink));
-                }
-            }
-            let mistake_ev = if mistake_weight_total > 0.0 {
-                let unattributed = (f64::from(n_i) - mistake_weight_total).max(0.0);
-                (mistake_weighted_sum + unattributed * mean_i)
-                    / (mistake_weight_total + unattributed)
-            } else {
-                mean_i
-            };
-            (trap_risk, mistake_ev)
-        };
-
-        let done = self.cfg.iterations;
-        select_blind_root_choice(
-            &endgame,
-            &my_acts,
-            &my_n,
-            &my_n,
-            &my_w,
-            |i| eligible_flags[i],
-            reply_metrics,
-            |base_idx| {
-                if done >= 64 {
-                    if let Some(eq) =
-                        compute_bayesian_eq(&my_n, &my_w, &root_types, &joint, &joint_index)
-                    {
-                        if eq.override_value > eq.pure_guarantees[base_idx] + MIN_MIX_MARGIN {
-                            let mut draw =
-                                SplitMix64::new(decision_seed ^ u64::from(done)).next_f64();
-                            for (i, &p) in eq.policy.iter().enumerate() {
-                                draw -= p;
-                                if draw <= 0.0 {
-                                    return Some(my_acts[i]);
+            done = iter + 1;
+            // 6. Optional `AdaptiveBattleBudget`-compatible early-stop checkpoint.
+            if adaptive && done < self.cfg.iterations && done % adaptive_interval == 0 {
+                let leader_opt = (0..n_my)
+                    .filter(|&i| eligible_flags[i])
+                    .max_by_key(|&i| my_n[i]);
+                let candidate = leader_opt.and_then(|leader| {
+                    let cutoff = crate::root_policy::min_equilibrium_visits(my_n[leader]);
+                    let mean_l = if my_n[leader] > 0 {
+                        my_w[leader] / f64::from(my_n[leader])
+                    } else {
+                        0.5
+                    };
+                    let bq = if stage2_root { bayesian_row_q.as_deref() } else { None };
+                    for i in 0..n_my {
+                        if i != leader && eligible_flags[i] {
+                            let mean_i = if my_n[i] > 0 {
+                                my_w[i] / f64::from(my_n[i])
+                            } else {
+                                0.5
+                            };
+                            if my_n[i] == 0
+                                || my_n[i] >= cutoff
+                                || mean_l - mean_i < adaptive_min_gap
+                            {
+                                return None;
+                            }
+                            if let Some(q) = bq {
+                                if q[leader] - q[i] < adaptive_min_gap {
+                                    return None;
                                 }
                             }
-                            return my_acts.last().copied();
                         }
                     }
+                    let pick =
+                        select_root(done, &endgame, &my_n, &my_w, &root_types, &joint, &joint_index);
+                    (pick == my_acts[leader]).then_some(pick)
+                });
+                if candidate.is_some()
+                    && prev_adaptive == candidate.map(|c| (done - adaptive_interval, c))
+                {
+                    break;
                 }
-                None
-            },
-        )
-        .unwrap_or(my_acts[0])
+                prev_adaptive = candidate.map(|c| (done, c));
+            }
+        }
+
+        let chosen = select_root(done, &endgame, &my_n, &my_w, &root_types, &joint, &joint_index);
+        self.nodes_buf = nodes;
+        self.index_buf = index;
+        chosen
     }
 }
 
@@ -7244,16 +8314,22 @@ mod tests {
             BlindCmctsConfig {
                 iterations: 600,
                 c: 0.4,
-                max_depth: 64,
-                leaf: TempoLeafMode::FastGolf,
+                max_depth: 128,
+                leaf: TempoLeafMode::HybridGolf,
                 rollout_turns: 0,
                 max_worlds: 12,
                 preview_iterations: 200,
                 own_preview_triple: Some([1, 2, 3]),
+                adaptive: true,
+                adaptive_interval: 200,
+                adaptive_min_gap: 0.01,
+                stage2_root: false,
             },
             pool.clone(),
             42,
         );
+        assert!(bc1.requires_player_log());
+        assert!(p1.requires_player_log());
         let mut bc2 = crate::blind::BlindAgent::new(
             RmConfig { iterations: 200, c: 0.4, rule: SelRule::Ucb, ..RmConfig::default() },
             pool.clone(),
@@ -7267,6 +8343,166 @@ mod tests {
                 crate::runner::GameResult::Outcome(_) | crate::runner::GameResult::TurnCapped
             ),
             "BlindCmctsAgent vs BlindAgent must complete cleanly: {res2:?}"
+        );
+
+        // Stage 2A smoke & determinism check (same seed -> identical pick; full game completes).
+        let mut battle3 = Battle::from_fixture(&dex, "5,6,7,8", t0, t1).unwrap();
+        battle3.set_log_enabled(true);
+        let s2_cfg = BlindCmctsConfig {
+            iterations: 800,
+            c: 0.4,
+            max_depth: 128,
+            leaf: TempoLeafMode::HybridGolf,
+            rollout_turns: 0,
+            max_worlds: 12,
+            preview_iterations: 200,
+            own_preview_triple: Some([1, 2, 3]),
+            adaptive: true,
+            adaptive_interval: 256,
+            adaptive_min_gap: 0.01,
+            stage2_root: true,
+        };
+        let mut s2_a = BlindCmctsAgent::new(s2_cfg.clone(), pool.clone(), 777);
+        let mut s2_b = BlindCmctsAgent::new(s2_cfg.clone(), pool.clone(), 777);
+        battle3.choose(&dex, 0, "team 1,2,3").unwrap();
+        battle3.choose(&dex, 1, "team 1,2,3").unwrap();
+        let cs0 = battle3.legal_choices(&dex, 0);
+        let pick_a = s2_a.choose(&battle3, &dex, 0, &cs0);
+        let pick_b = s2_b.choose(&battle3, &dex, 0, &cs0);
+        assert_eq!(pick_a, pick_b, "Stage 2A BlindCmctsAgent must be deterministic given seed");
+
+        let mut battle4 = Battle::from_fixture(&dex, "9,10,11,12", t0, t1).unwrap();
+        battle4.set_log_enabled(true);
+        let mut s2_play = BlindCmctsAgent::new(s2_cfg, pool.clone(), 123);
+        let mut opp_play = crate::blind::BlindAgent::new(
+            RmConfig { iterations: 200, c: 0.4, rule: SelRule::Ucb, ..RmConfig::default() },
+            pool.clone(),
+            None,
+            456,
+        );
+        let res3 =
+            crate::runner::play_game(&dex, &mut battle4, &mut [&mut s2_play, &mut opp_play], 120)
+                .unwrap();
+        assert!(
+            matches!(
+                res3,
+                crate::runner::GameResult::Outcome(_) | crate::runner::GameResult::TurnCapped
+            ),
+            "Stage 2A BlindCmctsAgent vs BlindAgent must complete cleanly: {res3:?}"
+        );
+    }
+
+    #[test]
+    fn stage1_parity_antisymmetry_and_cache_edge_cases() {
+        let dex = test_dex();
+
+        // 1. Exact side-swap antisymmetry on dual-boosted + dual-Phazer state for both FastGolf and HybridGolf.
+        let p1 = vec![
+            mk("Snorlax", 55, "Leftovers", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+            mk("Skarmory", 50, "Leftovers", &["Drill Peck", "Whirlwind", "Rest", "Curse"]),
+            mk("Zapdos", 50, "Leftovers", &["Thunderbolt", "Hidden Power Ice", "Rest", "Sleep Talk"]),
+        ];
+        let p2 = vec![
+            mk("Suicune", 50, "Leftovers", &["Surf", "Ice Beam", "Roar", "Rest"]),
+            mk("Marowak", 50, "Thick Club", &["Earthquake", "Rock Slide", "Swords Dance", "Rest"]),
+            mk("Scizor", 50, "Leftovers", &["Swords Dance", "Baton Pass", "Agility", "Steel Wing"]),
+        ];
+        let mut b_ab = start(&dex, &p1, &p2);
+        let mut b_ba = start(&dex, &p2, &p1);
+        for b in [&mut b_ab, &mut b_ba] {
+            if let Some(a0) = b.active_id(0) {
+                b.poke_mut(a0).boosts[0] = 2;
+                b.poke_mut(a0).boosts[1] = 2;
+            }
+            if let Some(a1) = b.active_id(1) {
+                b.poke_mut(a1).boosts[2] = 1;
+                b.poke_mut(a1).boosts[3] = 2;
+            }
+        }
+        // Swap boosts symmetrically on `b_ba`.
+        if let Some(a0) = b_ba.active_id(0) {
+            b_ba.poke_mut(a0).boosts = [0, 0, 1, 2, 0, 0, 0];
+        }
+        if let Some(a1) = b_ba.active_id(1) {
+            b_ba.poke_mut(a1).boosts = [2, 2, 0, 0, 0, 0, 0];
+        }
+        let (t_ab, cb_ab) = CompactBattle::from_battle(&b_ab, &dex);
+        let (t_ba, cb_ba) = CompactBattle::from_battle(&b_ba, &dex);
+        let c_ab = TempoMatchCache::build(&cb_ab, &t_ab);
+        let c_ba = TempoMatchCache::build(&cb_ba, &t_ba);
+        let fg_ab = evaluate_fast_golf(&cb_ab, &t_ab, Some(&c_ab)).win_prob;
+        let fg_ba = evaluate_fast_golf(&cb_ba, &t_ba, Some(&c_ba)).win_prob;
+        assert!(
+            (fg_ab + fg_ba - 1.0).abs() < 1e-11,
+            "FastGolf dual-boosted dual-phazer antisymmetry failed: ab={fg_ab} ba={fg_ba}"
+        );
+        let hy_ab = evaluate_hybrid_golf(&cb_ab, &t_ab, Some(&c_ab));
+        let hy_ba = evaluate_hybrid_golf(&cb_ba, &t_ba, Some(&c_ba));
+        assert!(
+            (hy_ab + hy_ba - 1.0).abs() < 1e-11,
+            "HybridGolf antisymmetry failed: ab={hy_ab} ba={hy_ba}"
+        );
+
+        // 2. TempoMatchCache Drain-vs-Substitute invalidation: Giga Drain deals 0 vs active Sub!
+        let p_drain = vec![mk("Exeggutor", 50, "Leftovers", &["Giga Drain"])];
+        let p_sub = vec![mk("Vaporeon", 50, "Leftovers", &["Surf", "Substitute"])];
+        let b_ds = start(&dex, &p_drain, &p_sub);
+        let (t_ds, mut cb_ds) = CompactBattle::from_battle(&b_ds, &dex);
+        let c_ds = TempoMatchCache::build(&cb_ds, &t_ds);
+        cb_ds.mons[3].hp_pool[1] = 50; // active Substitute
+        cb_ds.mons[3].vol_flags |= vol_bit::SUBSTITUTE;
+        let fg_cached = evaluate_fast_golf(&cb_ds, &t_ds, Some(&c_ds));
+        let fg_uncached = evaluate_fast_golf(&cb_ds, &t_ds, None);
+        assert!(
+            (fg_cached.win_prob - fg_uncached.win_prob).abs() < 1e-9,
+            "Drain vs Sub cache must match uncached exact kernel: cached={} uncached={}",
+            fg_cached.win_prob,
+            fg_uncached.win_prob
+        );
+
+        // 3. `compact_world_sig` must separate worlds differing only in held item.
+        let p_left = vec![mk("Snorlax", 55, "Leftovers", &["Body Slam", "Rest"])];
+        let p_mint = vec![mk("Snorlax", 55, "Mint Berry", &["Body Slam", "Rest"])];
+        let (tl, cbl) = CompactBattle::from_battle(&start(&dex, &p_left, &p_left), &dex);
+        let (tm, cbm) = CompactBattle::from_battle(&start(&dex, &p_left, &p_mint), &dex);
+        assert_ne!(
+            compact_world_sig(&cbl, &tl),
+            compact_world_sig(&cbm, &tm),
+            "compact_world_sig must separate worlds differing only in item"
+        );
+
+        // 4. `compact_duct_key_seeded_qc` must distinguish Quick Claw roll when QC holder is alive
+        //    AND never mask `two_turn_locked` with `mon.item` bits!
+        let p_qc = vec![mk("Snorlax", 55, "Quick Claw", &["Body Slam", "Rest"])];
+        let (tqc, mut cbqc0) = CompactBattle::from_battle(&start(&dex, &p_qc, &p_left), &dex);
+        let has_qc = compact_world_has_qc(&cbqc0, &tqc);
+        assert!(has_qc);
+        cbqc0.quick_claw_roll = 0;
+        let mut cbqc1 = cbqc0;
+        cbqc1.quick_claw_roll = 1;
+        let k0 = compact_duct_key_seeded_qc(
+            &cbqc0,
+            &tqc,
+            42,
+            compact_observable_qc_bits(&cbqc0, &tqc, has_qc),
+        );
+        let k1 = compact_duct_key_seeded_qc(
+            &cbqc1,
+            &tqc,
+            42,
+            compact_observable_qc_bits(&cbqc1, &tqc, has_qc),
+        );
+        assert_ne!(k0, k1, "Internal key must separate observable Quick Claw roll");
+
+        let mut cb_tt0 = cbqc0;
+        cb_tt0.mons[0].item = 0xFF; // all item bits set
+        cb_tt0.mons[0].set_two_turn_locked(false);
+        let mut cb_tt1 = cb_tt0;
+        cb_tt1.mons[0].set_two_turn_locked(true);
+        assert_ne!(
+            compact_duct_key_seeded_qc(&cb_tt0, &tqc, 42, 0),
+            compact_duct_key_seeded_qc(&cb_tt1, &tqc, 42, 0),
+            "mon.item bits must never mask two_turn_locked"
         );
     }
 }

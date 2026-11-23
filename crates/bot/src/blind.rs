@@ -754,7 +754,7 @@ pub(crate) fn open_preview_pick_sets(
     Some(SearchChoice::Team(tables.actions()[sample_mixed(p, rng)]))
 }
 
-fn draw_policy(actions: &[SearchChoice], policy: &[f64], draw: f64) -> Option<SearchChoice> {
+pub(crate) fn draw_policy(actions: &[SearchChoice], policy: &[f64], draw: f64) -> Option<SearchChoice> {
     let mut total = 0.;
     let mut last = None;
     for (&action, &mass) in actions.iter().zip(policy) {
@@ -853,7 +853,7 @@ fn party_order_matters(dex: &Dex, roster: &[Pokemon]) -> bool {
     })
 }
 
-fn canonicalize_unseen_bench(dex: &Dex, sim: &mut Battle, opponent: usize) {
+pub(crate) fn canonicalize_unseen_bench(dex: &Dex, sim: &mut Battle, opponent: usize) {
     if sim.request_state == nc2000_engine::state::RequestState::TeamPreview
         || sim.mid_turn || !sim.queue.is_empty()
     {
