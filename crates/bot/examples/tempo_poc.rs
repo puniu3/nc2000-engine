@@ -10,18 +10,25 @@
 use conformance::fixture::repo_root;
 use conformance::load_dex;
 use nc2000_bot::duel::{run_duel, DuelSpec};
-use nc2000_bot::preview::load_meta_pool;
+use nc2000_bot::preview::{action_index, load_meta_pool, preview_actions, MetaPool};
+use nc2000_bot::runner::{play_game, GameResult};
 use nc2000_bot::smmcts::{RmAgent, RmConfig, SelRule};
 use nc2000_bot::tempo::{
     analyze_turn_matrix, analyze_turn_matrix_variant, evaluate_tempo, format_tempo_explanation,
-    search_tempo_mcts, SkuctGolfAgent, SkuctGolfConfig, TempoAgent, TempoLeafMode, TempoMctsAgent,
-    TempoMctsConfig, TempoVariant,
+    search_tempo_mcts, BlindGolfAgent, BlindGolfConfig, SkuctGolfAgent, SkuctGolfConfig,
+    TempoAgent, TempoLeafMode, TempoMctsAgent, TempoMctsConfig, TempoVariant,
 };
-use nc2000_bot::{Agent, MaxDamageAgent};
-use nc2000_engine::battle::PokemonSet;
+use nc2000_bot::{Agent, BlindAgent, MaxDamageAgent, SplitMix64};
+use nc2000_engine::battle::{Outcome, PokemonSet, SearchChoice};
 use nc2000_engine::dex::Dex;
 use nc2000_engine::state::{Battle, EffectState, Status, DK};
-use serde_json::json;
+use serde::Deserialize;
+use serde_json::{json, Value};
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::time::Instant;
 
 fn mk(species: &str, level: u8, item: &str, moves: &[&str]) -> PokemonSet {
     serde_json::from_value(json!({
@@ -1424,11 +1431,490 @@ fn run_rollout_bench(dex: &Dex, args: &[String]) {
     );
 }
 
+#[derive(Clone, Deserialize)]
+struct WeightedCatalog {
+    teams: Vec<WeightedTeam>,
+}
+
+#[derive(Clone, Deserialize)]
+struct WeightedTeam {
+    #[allow(dead_code)]
+    id: String,
+    sets: Vec<PokemonSet>,
+    #[serde(rename = "drawWeight")]
+    draw_weight: Option<f64>,
+}
+
+struct TimedAgentWrap {
+    inner: Box<dyn Agent>,
+    searched_battle_ns: Vec<u64>,
+}
+
+impl TimedAgentWrap {
+    fn new(inner: Box<dyn Agent>) -> Self {
+        Self { inner, searched_battle_ns: Vec::new() }
+    }
+}
+
+impl Agent for TimedAgentWrap {
+    fn name(&self) -> String {
+        self.inner.name()
+    }
+
+    fn choose(
+        &mut self,
+        battle: &Battle,
+        dex: &Dex,
+        side: usize,
+        choices: &[SearchChoice],
+    ) -> SearchChoice {
+        let record = choices.len() > 1 && !matches!(choices[0], SearchChoice::Team(_));
+        let t0 = if record { Some(Instant::now()) } else { None };
+        let pick = self.inner.choose(battle, dex, side, choices);
+        if let Some(t) = t0 {
+            self.searched_battle_ns.push(t.elapsed().as_nanos().min(u64::MAX as u128) as u64);
+        }
+        pick
+    }
+}
+
+fn one_hot_preview_policy(triple: [u8; 3]) -> Vec<f64> {
+    let acts = preview_actions();
+    let idx = action_index(&acts, triple).expect("canonical preview action");
+    let mut pol = vec![0.0; acts.len()];
+    pol[idx] = 1.0;
+    pol
+}
+
+fn build_blind_arm(
+    spec: &str,
+    pool: Arc<MetaPool>,
+    seed: u64,
+    preview_triple: [u8; 3],
+) -> Box<dyn Agent> {
+    if let Some(rest) = spec.strip_prefix("blind-shipped:") {
+        let iters: u32 = rest.parse().unwrap_or_else(|_| panic!("bad spec: {spec}"));
+        let cfg = RmConfig { iterations: iters, rule: SelRule::Ucb, c: 0.4, ..Default::default() };
+        Box::new(
+            BlindAgent::new(cfg, pool, None, seed)
+                .with_own_preview_policy(one_hot_preview_policy(preview_triple)),
+        )
+    } else if let Some(rest) = spec.strip_prefix("blind-") {
+        let (leaf, rollout_turns, iterations) =
+            parse_leaf_rollout(rest).unwrap_or_else(|| panic!("bad blind spec: {spec}"));
+        Box::new(
+            BlindGolfAgent::new(
+                BlindGolfConfig {
+                    iterations,
+                    c: 0.4,
+                    leaf,
+                    rollout_turns,
+                    preview_iterations: 27_000,
+                    own_preview_triple: Some(preview_triple),
+                },
+                pool,
+                seed,
+            ),
+        )
+    } else {
+        panic!("unknown blind arm spec: {spec} (expected blind-shipped:N or blind-golf-Xr:N)")
+    }
+}
+
+fn bootstrap_ci(vals: &[f64], seed: u64) -> (f64, f64, f64) {
+    let n = vals.len();
+    if n == 0 {
+        return (0.5, 0.0, 1.0);
+    }
+    let mean = vals.iter().sum::<f64>() / (n as f64);
+    let mut rng = SplitMix64::new(seed ^ 0xA5A5_5A5A_F0F0_0F0F);
+    const B: usize = 2000;
+    let mut boot = Vec::with_capacity(B);
+    for _ in 0..B {
+        let mut s = 0.0;
+        for _ in 0..n {
+            s += vals[rng.below(n)];
+        }
+        boot.push(s / (n as f64));
+    }
+    boot.sort_by(|a, b| a.total_cmp(b));
+    (mean, boot[B * 25 / 1000], boot[B * 975 / 1000])
+}
+
+fn percentile_ms(ns: &[u64], pct: usize) -> f64 {
+    if ns.is_empty() {
+        return 0.0;
+    }
+    let mut v = ns.to_vec();
+    v.sort_unstable();
+    let idx = ((v.len() - 1) * pct) / 100;
+    (v[idx] as f64) / 1e6
+}
+
+fn elo_diff(score: f64) -> f64 {
+    let p = score.clamp(1e-4, 1.0 - 1e-4);
+    -400.0 * ((1.0 / p) - 1.0).log10()
+}
+
+/// Production-protocol imperfect-information H2H (`team-pool-v2` drawWeight + `belief-pool-v3` +
+/// shared `preview_iters` blind preview + seat-swapped paired schedules).
+fn run_blind_duel(dex: &Dex, args: &[String]) {
+    let flag = |name: &str| -> Option<String> {
+        args.iter()
+            .position(|a| a == name)
+            .and_then(|i| args.get(i + 1).cloned())
+    };
+    let arm_a = flag("--arm-a").unwrap_or_else(|| "blind-golf-2r:9000".to_string());
+    let arm_b = flag("--arm-b").unwrap_or_else(|| "blind-shipped:9000".to_string());
+    let pairs: usize = flag("--pairs").map_or(128, |v| v.parse().unwrap());
+    let pair_start: usize = flag("--pair-start").map_or(0, |v| v.parse().unwrap());
+    let preview_iters: u32 = flag("--preview-iters").map_or(27_000, |v| v.parse().unwrap());
+    let seed: u64 = flag("--seed").map_or(20261017003, |v| v.parse().unwrap());
+    let threads: usize = flag("--threads").map_or(10, |v| v.parse().unwrap());
+    let preview_cache = flag("--preview-cache").map(PathBuf::from);
+    let out_path = flag("--out").map(PathBuf::from);
+    let max_turns: u16 = flag("--max-turns").map_or(500, |v| v.parse().unwrap());
+    let total_pairs_needed = pair_start + pairs;
+
+    let root = repo_root();
+    let cat_txt = std::fs::read_to_string(root.join("data/team-pool-v2/team-pool.json"))
+        .expect("read team-pool-v2");
+    let catalog: WeightedCatalog = serde_json::from_str(&cat_txt).expect("parse team-pool-v2");
+    let pool = Arc::new(load_meta_pool(&root.join("data/belief-pool-v3/belief-pool.json")));
+
+    let weights: Vec<f64> = catalog
+        .teams
+        .iter()
+        .map(|t| t.draw_weight.unwrap_or(1.0))
+        .collect();
+    let total_w: f64 = weights.iter().sum();
+    let sample_w = |rng: &mut SplitMix64| -> usize {
+        let mut r = rng.next_f64() * total_w;
+        for (i, &w) in weights.iter().enumerate() {
+            if r < w {
+                return i;
+            }
+            r -= w;
+        }
+        weights.len() - 1
+    };
+
+    #[derive(Clone)]
+    struct PairSched {
+        pair_idx: usize,
+        ta: usize,
+        tb: usize,
+        bseed: String,
+        pseed_a: u64,
+        pseed_b: u64,
+        sseed_p1: u64,
+        sseed_p2: u64,
+        prev_a: [u8; 3],
+        prev_b: [u8; 3],
+    }
+
+    let mut rng = SplitMix64::new(seed);
+    let mut scheds: Vec<PairSched> = Vec::with_capacity(total_pairs_needed);
+    for pair_idx in 0..total_pairs_needed {
+        let ta = sample_w(&mut rng);
+        let tb = sample_w(&mut rng);
+        let bseed = rng.battle_seed();
+        let pseed_a = rng.next();
+        let pseed_b = rng.next();
+        let sseed_p1 = rng.next();
+        let sseed_p2 = rng.next();
+        scheds.push(PairSched {
+            pair_idx,
+            ta,
+            tb,
+            bseed,
+            pseed_a,
+            pseed_b,
+            sseed_p1,
+            sseed_p2,
+            prev_a: [0; 3],
+            prev_b: [0; 3],
+        });
+    }
+
+    // Load or compute shared blind Team Preview picks (identical across arms and seat swaps!).
+    let mut cached_prev: HashMap<usize, ([u8; 3], [u8; 3])> = HashMap::new();
+    if let Some(ref p) = preview_cache {
+        if p.exists() {
+            if let Ok(txt) = std::fs::read_to_string(p) {
+                if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+                    if v["seed"].as_u64() == Some(seed)
+                        && v["preview_iters"].as_u64() == Some(u64::from(preview_iters))
+                    {
+                        if let Some(arr) = v["entries"].as_array() {
+                            for e in arr {
+                                if let (Some(idx), Some(pa), Some(pb)) = (
+                                    e["pair_idx"].as_u64(),
+                                    e["prev_a"].as_array(),
+                                    e["prev_b"].as_array(),
+                                ) {
+                                    if pa.len() == 3 && pb.len() == 3 {
+                                        cached_prev.insert(
+                                            idx as usize,
+                                            (
+                                                [
+                                                    pa[0].as_u64().unwrap() as u8,
+                                                    pa[1].as_u64().unwrap() as u8,
+                                                    pa[2].as_u64().unwrap() as u8,
+                                                ],
+                                                [
+                                                    pb[0].as_u64().unwrap() as u8,
+                                                    pb[1].as_u64().unwrap() as u8,
+                                                    pb[2].as_u64().unwrap() as u8,
+                                                ],
+                                            ),
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let missing: Vec<usize> = (pair_start..total_pairs_needed)
+        .filter(|i| !cached_prev.contains_key(i))
+        .collect();
+    if !missing.is_empty() {
+        let cursor = AtomicUsize::new(0);
+        let computed: Vec<(usize, [u8; 3], [u8; 3])> = std::thread::scope(|s| {
+            let mut hs = Vec::new();
+            for _ in 0..threads.min(missing.len()).max(1) {
+                let (cat_r, pool_r, sched_r, miss_r, cur_r) =
+                    (&catalog, &pool, &scheds, &missing, &cursor);
+                hs.push(s.spawn(move || {
+                    let mut out = Vec::new();
+                    loop {
+                        let k = cur_r.fetch_add(1, Ordering::Relaxed);
+                        if k >= miss_r.len() {
+                            break;
+                        }
+                        let pi = miss_r[k];
+                        let sc = &sched_r[pi];
+                        let pick_side = |side: usize, pseed: u64| -> [u8; 3] {
+                            let mut b = Battle::from_fixture(
+                                dex,
+                                &sc.bseed,
+                                &cat_r.teams[sc.ta].sets,
+                                &cat_r.teams[sc.tb].sets,
+                            )
+                            .unwrap();
+                            b.set_log_enabled(true);
+                            let cs = b.legal_choices(dex, side);
+                            let cfg = RmConfig {
+                                iterations: preview_iters,
+                                rule: SelRule::Ucb,
+                                c: 0.4,
+                                ..Default::default()
+                            };
+                            let mut ag = BlindAgent::new(cfg, pool_r.clone(), None, pseed);
+                            match ag.choose(&b, dex, side, &cs) {
+                                SearchChoice::Team(t) => t,
+                                other => panic!("expected team choice, got {other:?}"),
+                            }
+                        };
+                        let pa = pick_side(0, sc.pseed_a);
+                        let pb = pick_side(1, sc.pseed_b);
+                        out.push((pi, pa, pb));
+                    }
+                    out
+                }));
+            }
+            let mut all = Vec::new();
+            for h in hs {
+                all.extend(h.join().unwrap());
+            }
+            all
+        });
+        for (pi, pa, pb) in computed {
+            cached_prev.insert(pi, (pa, pb));
+        }
+        if let Some(ref p) = preview_cache {
+            let mut entries: Vec<Value> = cached_prev
+                .iter()
+                .map(|(&idx, &(pa, pb))| json!({"pair_idx": idx, "prev_a": pa, "prev_b": pb}))
+                .collect();
+            entries.sort_by_key(|e| e["pair_idx"].as_u64().unwrap());
+            let doc = json!({"seed": seed, "preview_iters": preview_iters, "entries": entries});
+            std::fs::write(p, serde_json::to_string(&doc).unwrap()).unwrap();
+        }
+    }
+    for sc in &mut scheds[pair_start..total_pairs_needed] {
+        let (pa, pb) = cached_prev[&sc.pair_idx];
+        sc.prev_a = pa;
+        sc.prev_b = pb;
+    }
+
+    let t0 = Instant::now();
+    let total_games = pairs * 2;
+    let cursor = AtomicUsize::new(0);
+    struct GameOut {
+        game_idx: usize,
+        pair_idx: usize,
+        a_is_p1: bool,
+        a_score: f64,
+        turns: u16,
+        turn_cap: bool,
+        a_ns: Vec<u64>,
+        b_ns: Vec<u64>,
+    }
+    let results: Vec<GameOut> = std::thread::scope(|s| {
+        let mut hs = Vec::new();
+        for _ in 0..threads.min(total_games).max(1) {
+            let (cat_r, pool_r, sched_r, cur_r, aa, ab) =
+                (&catalog, &pool, &scheds, &cursor, &arm_a, &arm_b);
+            hs.push(s.spawn(move || {
+                let mut local = Vec::new();
+                loop {
+                    let local_gi = cur_r.fetch_add(1, Ordering::Relaxed);
+                    if local_gi >= total_games {
+                        break;
+                    }
+                    let pi = pair_start + local_gi / 2;
+                    let gi = pi * 2 + (local_gi % 2);
+                    let a_is_p1 = gi % 2 == 0;
+                    let sc = &sched_r[pi];
+                    let (spec1, spec2) = if a_is_p1 { (aa.as_str(), ab.as_str()) } else { (ab.as_str(), aa.as_str()) };
+                    let mut p1 = TimedAgentWrap::new(build_blind_arm(spec1, pool_r.clone(), sc.sseed_p1, sc.prev_a));
+                    let mut p2 = TimedAgentWrap::new(build_blind_arm(spec2, pool_r.clone(), sc.sseed_p2, sc.prev_b));
+                    let mut b = Battle::from_fixture(
+                        dex,
+                        &sc.bseed,
+                        &cat_r.teams[sc.ta].sets,
+                        &cat_r.teams[sc.tb].sets,
+                    )
+                    .unwrap();
+                    b.set_log_enabled(true);
+                    let res = play_game(dex, &mut b, &mut [&mut p1, &mut p2], max_turns).unwrap();
+                    let p1_score = match res {
+                        GameResult::Outcome(Outcome::P1Win) => 1.0,
+                        GameResult::Outcome(Outcome::P2Win) => 0.0,
+                        _ => 0.5,
+                    };
+                    let a_score = if a_is_p1 { p1_score } else { 1.0 - p1_score };
+                    let (a_ns, b_ns) = if a_is_p1 {
+                        (p1.searched_battle_ns, p2.searched_battle_ns)
+                    } else {
+                        (p2.searched_battle_ns, p1.searched_battle_ns)
+                    };
+                    local.push(GameOut {
+                        game_idx: gi,
+                        pair_idx: pi,
+                        a_is_p1,
+                        a_score,
+                        turns: b.turn,
+                        turn_cap: matches!(res, GameResult::TurnCapped),
+                        a_ns,
+                        b_ns,
+                    });
+                }
+                local
+            }));
+        }
+        let mut merged = Vec::with_capacity(total_games);
+        for h in hs {
+            merged.extend(h.join().unwrap());
+        }
+        merged
+    });
+
+    let by_idx: HashMap<usize, GameOut> =
+        results.into_iter().map(|r| (r.game_idx, r)).collect();
+    if let Some(ref op) = out_path {
+        use std::io::Write;
+        if let Some(parent) = op.parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent).unwrap();
+            }
+        }
+        let mut f = std::io::BufWriter::new(std::fs::File::create(op).unwrap());
+        for pi in pair_start..total_pairs_needed {
+            for gi in [pi * 2, pi * 2 + 1] {
+                let g = &by_idx[&gi];
+                let row = json!({
+                    "game_idx": g.game_idx,
+                    "pair_idx": g.pair_idx,
+                    "a_is_p1": g.a_is_p1,
+                    "a_score": g.a_score,
+                    "turns": g.turns,
+                    "turn_cap": g.turn_cap,
+                    "a_ns": g.a_ns,
+                    "b_ns": g.b_ns,
+                });
+                serde_json::to_writer(&mut f, &row).unwrap();
+                writeln!(f).unwrap();
+            }
+        }
+        f.flush().unwrap();
+    }
+    let mut pair_scores = Vec::with_capacity(pairs);
+    let (mut wins, mut losses, mut ties, mut turn_caps, mut turns_sum) = (0usize, 0usize, 0usize, 0usize, 0u64);
+    let mut a_ns_all = Vec::new();
+    let mut b_ns_all = Vec::new();
+    for pi in pair_start..total_pairs_needed {
+        let g0 = &by_idx[&(pi * 2)];
+        let g1 = &by_idx[&(pi * 2 + 1)];
+        pair_scores.push(0.5 * (g0.a_score + g1.a_score));
+        for g in [g0, g1] {
+            if g.a_score == 1.0 {
+                wins += 1;
+            } else if g.a_score == 0.0 {
+                losses += 1;
+            } else {
+                ties += 1;
+            }
+            if g.turn_cap {
+                turn_caps += 1;
+            }
+            turns_sum += g.turns as u64;
+            a_ns_all.extend_from_slice(&g.a_ns);
+            b_ns_all.extend_from_slice(&g.b_ns);
+        }
+    }
+    let split_pairs = pair_scores.iter().filter(|&&s| s != 0.5).count();
+    let (mean, ci_lo, ci_hi) = bootstrap_ci(&pair_scores, seed);
+    let med_a = percentile_ms(&a_ns_all, 50);
+    let med_b = percentile_ms(&b_ns_all, 50);
+    println!(
+        "{}",
+        json!({
+            "cmd": "blind-duel",
+            "arm_a": arm_a,
+            "arm_b": arm_b,
+            "pairs": pairs,
+            "games": total_games,
+            "wins": wins,
+            "losses": losses,
+            "ties": ties,
+            "turn_caps": turn_caps,
+            "split_pairs": split_pairs,
+            "score": (mean * 10000.0).round() / 10000.0,
+            "ci95": [(ci_lo * 10000.0).round() / 10000.0, (ci_hi * 10000.0).round() / 10000.0],
+            "elo_diff": (elo_diff(mean) * 10.0).round() / 10.0,
+            "avg_turns": (turns_sum as f64 / total_games as f64 * 10.0).round() / 10.0,
+            "a_median_ms": (med_a * 100.0).round() / 100.0,
+            "b_median_ms": (med_b * 100.0).round() / 100.0,
+            "time_ratio": ((med_a / med_b.max(1e-9)) * 1000.0).round() / 1000.0,
+            "a_p95_ms": (percentile_ms(&a_ns_all, 95) * 100.0).round() / 100.0,
+            "b_p95_ms": (percentile_ms(&b_ns_all, 95) * 100.0).round() / 100.0,
+            "wall_s": (t0.elapsed().as_secs_f64() * 100.0).round() / 100.0,
+        })
+    );
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let dex = load_dex();
     match args.first().map(String::as_str) {
         Some("duel") => run_duel_bench(&dex, &args[1..]),
+        Some("blind-duel") => run_blind_duel(&dex, &args[1..]),
         Some("scale") => run_scale_suite(&dex, &args[1..]),
         Some("v2bench") => run_v2_bench(&dex, &args[1..]),
         Some("rolloutbench") => run_rollout_bench(&dex, &args[1..]),

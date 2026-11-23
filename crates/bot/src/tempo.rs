@@ -19,13 +19,21 @@ use nc2000_engine::fxhash::FxHashMap;
 use nc2000_engine::rules::Ruleset;
 use nc2000_engine::state::{stat_idx, Battle, Status};
 
+use std::sync::Arc;
+
 use crate::agent::Agent;
+use crate::belief::{Belief, FallbackPolicy};
+use crate::blind::BlindSearch;
 use crate::eval::{
     compact_eval01, compact_eval_leaf_blindspot, compact_turn_limit_outcome, EvalWeights,
 };
 use crate::exact::solve_matrix_full;
 use crate::linear::DmgKernel1D;
 use crate::mask::dominated_reason;
+use crate::mcts::{set_last_sim_end, SimEndInfo};
+use crate::observe::Observer;
+use crate::player_state::{submitted_team, LocalPlayer};
+use crate::preview::MetaPool;
 use crate::rng::SplitMix64;
 use crate::smmcts::{RmConfig, SelRule, SkuctSearch};
 
@@ -5654,9 +5662,227 @@ impl Agent for SkuctGolfAgent {
             let (tbl, mut cb) =
                 CompactBattle::from_battle_with_roster_cache(sim, dex, Some(&roster_cache));
             let turns = if do_rollout { rollout_turns } else { 0 };
-            eval_duct_leaf_with_rollout(&mut cb, &tbl, leaf_mode, turns, fast_cache.as_ref(), rng)
+            let v = eval_duct_leaf_with_rollout(&mut cb, &tbl, leaf_mode, turns, fast_cache.as_ref(), rng);
+            record_compact_sim_end(&cb, &tbl, v);
+            v
         });
         search.best(side).unwrap_or(choices[0])
+    }
+}
+
+#[inline]
+fn record_compact_sim_end(cb: &CompactBattle, table: &MatchTable, val: f64) {
+    let mut info = SimEndInfo::from_compact(cb);
+    if info.outcome == 0 && compact_turn_limit_outcome(cb, table).is_some() {
+        info.outcome = if (val - 1.0).abs() < 1e-9 {
+            1
+        } else if val.abs() < 1e-9 {
+            2
+        } else {
+            3
+        };
+    }
+    set_last_sim_end(info);
+}
+
+#[inline]
+fn battle_world_sig(sim: &Battle) -> u64 {
+    let mut h = 0x517C_C1B7_2722_0A95u64;
+    for side in 0..2usize {
+        for p in &sim.sides[side].roster {
+            let w0 = (p.species.0 as u64)
+                | ((p.level as u64) << 16)
+                | ((p.maxhp.max(0) as u64) << 24)
+                | ((p.hp_type.0 as u64) << 40)
+                | ((p.hp_power as u64) << 48)
+                | ((p.move_slots.len() as u64) << 56);
+            h = mix64(h, w0);
+            let mut mw = (p.stored_stats[0].max(0) as u64) | ((p.stored_stats[4].max(0) as u64) << 16);
+            for (mi, sl) in p.move_slots.iter().take(4).enumerate() {
+                mw ^= (sl.id.0 as u64).wrapping_shl((mi as u32) * 12);
+            }
+            h = mix64(h, mw);
+        }
+    }
+    h
+}
+
+// =========================================================================
+// Production Imperfect-Info Wrapper (`BlindGolfAgent`) via `BlindSearch::step_with_leaf`
+// =========================================================================
+
+#[derive(Clone, Debug)]
+pub struct BlindGolfConfig {
+    pub iterations: u32,
+    pub c: f64,
+    pub leaf: TempoLeafMode,
+    pub rollout_turns: u16,
+    pub preview_iterations: u32,
+    pub own_preview_triple: Option<[u8; 3]>,
+}
+
+impl Default for BlindGolfConfig {
+    fn default() -> Self {
+        Self {
+            iterations: 9_000,
+            c: 0.4,
+            leaf: TempoLeafMode::FastGolf,
+            rollout_turns: 2,
+            preview_iterations: 27_000,
+            own_preview_triple: None,
+        }
+    }
+}
+
+struct BlindGolfGameState {
+    side: usize,
+    last_turn: u16,
+    local: LocalPlayer,
+    observer: Observer,
+    belief: Belief,
+}
+
+/// Runs the exact shipped `BlindSearch` stack (`LocalPlayer`/`Observer`/`Belief`, 24-world
+/// subsampling, `mask.rs` public root pruning, `root_policy.rs` Bayesian LP, `endgame_root.rs`)
+/// via `BlindSearch::step_with_leaf`, swapping ONLY the leaf evaluator (`FastGolf` + `0r/2r`).
+pub struct BlindGolfAgent {
+    pub cfg: BlindGolfConfig,
+    pool: Arc<MetaPool>,
+    rng: SplitMix64,
+    game: Option<BlindGolfGameState>,
+}
+
+impl BlindGolfAgent {
+    pub fn new(cfg: BlindGolfConfig, pool: Arc<MetaPool>, seed: u64) -> Self {
+        Self {
+            cfg,
+            pool,
+            rng: SplitMix64::new(seed),
+            game: None,
+        }
+    }
+
+    pub fn with_own_preview_triple(mut self, triple: [u8; 3]) -> Self {
+        self.cfg.own_preview_triple = Some(triple);
+        self
+    }
+
+    fn sync_game(&mut self, battle: &Battle, dex: &Dex, side: usize, is_preview: bool) {
+        let stale = match &self.game {
+            None => true,
+            Some(g) => {
+                g.side != side
+                    || is_preview
+                    || battle.turn < g.last_turn
+                    || !g.local.is_compatible(battle)
+            }
+        };
+        if stale {
+            let own_sets = submitted_team(battle, dex, side);
+            let (local, observer) =
+                LocalPlayer::new_with_own_sets(battle, dex, side, own_sets).expect("local player");
+            let belief =
+                Belief::with_fallback_policy(dex, &self.pool, &observer, FallbackPolicy::default());
+            self.game = Some(BlindGolfGameState {
+                side,
+                last_turn: battle.turn,
+                local,
+                observer,
+                belief,
+            });
+        }
+        let g = self.game.as_mut().unwrap();
+        g.local
+            .observe(battle, dex, &mut g.observer)
+            .expect("blind golf observe failed");
+        g.belief.sync(dex, &g.observer);
+        g.last_turn = battle.turn;
+    }
+}
+
+impl Agent for BlindGolfAgent {
+    fn name(&self) -> String {
+        let tag = match self.cfg.leaf {
+            TempoLeafMode::FastGolf => "golf",
+            TempoLeafMode::EvalBlindspot => "bs",
+            TempoLeafMode::EvalStatic => "eval",
+            TempoLeafMode::TempoFull => "full",
+            TempoLeafMode::TempoRaw => "raw",
+        };
+        format!("blind-{tag}-{}r:{}", self.cfg.rollout_turns, self.cfg.iterations)
+    }
+
+    fn choose(
+        &mut self,
+        battle: &Battle,
+        dex: &Dex,
+        side: usize,
+        choices: &[SearchChoice],
+    ) -> SearchChoice {
+        let is_preview = matches!(choices.first(), Some(SearchChoice::Team(_)));
+        self.sync_game(battle, dex, side, is_preview);
+        if choices.len() == 1 {
+            return choices[0];
+        }
+        if is_preview {
+            if let Some(triple) = self.cfg.own_preview_triple {
+                let _ = self.rng.next_f64();
+                let pick = SearchChoice::Team(triple);
+                return if choices.contains(&pick) { pick } else { choices[0] };
+            }
+        }
+
+        let g = self.game.as_mut().unwrap();
+        let pos = g
+            .local
+            .position(dex, &mut g.belief, &g.observer, &mut self.rng)
+            .expect("blind golf position reconstruction failed");
+        let has_prior = g.belief.has_preview_prior(&g.observer);
+        let iters = if is_preview {
+            self.cfg.preview_iterations
+        } else {
+            self.cfg.iterations
+        };
+        let rm_cfg = RmConfig {
+            iterations: iters,
+            c: self.cfg.c,
+            rule: SelRule::Ucb,
+            ..RmConfig::default()
+        };
+        let mut bs = BlindSearch::from_observation(&pos, dex, rm_cfg, side, self.rng.0);
+        bs.prune_preview_aliases(dex);
+        if has_prior {
+            bs.set_opponent_preview_prior(true);
+        }
+        debug_assert_eq!(bs.actions(), choices);
+
+        let leaf_mode = self.cfg.leaf;
+        let rollout_turns = self.cfg.rollout_turns;
+        let use_fast = leaf_mode == TempoLeafMode::FastGolf;
+        // Per-world static cache (`<= 24` determinized worlds per decision): zero cross-world bleed!
+        let mut world_caches: FxHashMap<u64, (RosterCompactCache, Option<TempoMatchCache>)> =
+            FxHashMap::default();
+        bs.step_with_leaf(dex, &g.belief, &g.observer, iters, &mut |sim, rng, do_rollout| {
+            let sig = battle_world_sig(sim);
+            let (rc, tc_opt) = world_caches.entry(sig).or_insert_with(|| {
+                let rc = RosterCompactCache::from_battle(sim, dex);
+                let tc = if use_fast {
+                    let (t0, cb0) = CompactBattle::from_battle_with_roster_cache(sim, dex, Some(&rc));
+                    Some(TempoMatchCache::build(&cb0, &t0))
+                } else {
+                    None
+                };
+                (rc, tc)
+            });
+            let (tbl, mut cb) = CompactBattle::from_battle_with_roster_cache(sim, dex, Some(rc));
+            let turns = if do_rollout { rollout_turns } else { 0 };
+            let v = eval_duct_leaf_with_rollout(&mut cb, &tbl, leaf_mode, turns, tc_opt.as_ref(), rng);
+            record_compact_sim_end(&cb, &tbl, v);
+            v
+        });
+        let pick = bs.best().unwrap_or(choices[0]);
+        self.rng = SplitMix64::new(bs.search_rng_state());
+        pick
     }
 }
 
@@ -6175,6 +6401,45 @@ mod tests {
             "TempoMatchCache must match uncached FastGolf exactly after Battle party permutation: cached={:.6} uncached={:.6}",
             fg_cached_sw.win_prob,
             fg_uncached_sw.win_prob
+        );
+    }
+
+    #[test]
+    fn blind_golf_agent_production_stack_smoke() {
+        let dex = test_dex();
+        let root = conformance::fixture::repo_root();
+        let pool = Arc::new(crate::preview::load_meta_pool(
+            &root.join("data/belief-pool-v3/belief-pool.json"),
+        ));
+        let t0 = &pool.teams[0].sets;
+        let t1 = &pool.teams[1].sets;
+        let mut battle = Battle::from_fixture(&dex, "1,2,3,4", t0, t1).unwrap();
+        battle.set_log_enabled(true);
+        let mut p1 = BlindGolfAgent::new(
+            BlindGolfConfig {
+                iterations: 200,
+                c: 0.4,
+                leaf: TempoLeafMode::FastGolf,
+                rollout_turns: 2,
+                preview_iterations: 200,
+                own_preview_triple: Some([1, 2, 3]),
+            },
+            pool.clone(),
+            42,
+        );
+        let mut p2 = crate::blind::BlindAgent::new(
+            RmConfig { iterations: 200, c: 0.4, rule: SelRule::Ucb, ..RmConfig::default() },
+            pool,
+            None,
+            99,
+        );
+        let res = crate::runner::play_game(&dex, &mut battle, &mut [&mut p1, &mut p2], 120).unwrap();
+        assert!(
+            matches!(
+                res,
+                crate::runner::GameResult::Outcome(_) | crate::runner::GameResult::TurnCapped
+            ),
+            "BlindGolfAgent vs BlindAgent must complete cleanly: {res:?}"
         );
     }
 }
