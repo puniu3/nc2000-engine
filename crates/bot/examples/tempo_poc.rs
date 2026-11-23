@@ -15,8 +15,9 @@ use nc2000_bot::runner::{play_game, GameResult};
 use nc2000_bot::smmcts::{RmAgent, RmConfig, SelRule};
 use nc2000_bot::tempo::{
     analyze_turn_matrix, analyze_turn_matrix_variant, evaluate_tempo, format_tempo_explanation,
-    search_tempo_mcts, BlindGolfAgent, BlindGolfConfig, SkuctGolfAgent, SkuctGolfConfig,
-    TempoAgent, TempoLeafMode, TempoMctsAgent, TempoMctsConfig, TempoVariant,
+    search_tempo_mcts, BlindCmctsAgent, BlindCmctsConfig, BlindGolfAgent, BlindGolfConfig,
+    SkuctGolfAgent, SkuctGolfConfig, TempoAgent, TempoLeafMode, TempoMctsAgent, TempoMctsConfig,
+    TempoVariant,
 };
 use nc2000_bot::{Agent, BlindAgent, MaxDamageAgent, SplitMix64};
 use nc2000_engine::battle::{Outcome, PokemonSet, SearchChoice};
@@ -1499,6 +1500,23 @@ fn build_blind_arm(
             BlindAgent::new(cfg, pool, None, seed)
                 .with_own_preview_policy(one_hot_preview_policy(preview_triple)),
         )
+    } else if let Some(rest) = spec.strip_prefix("bcmcts-") {
+        let (leaf, rollout_turns, iterations) =
+            parse_leaf_rollout(rest).unwrap_or_else(|| panic!("bad bcmcts spec: {spec}"));
+        Box::new(BlindCmctsAgent::new(
+            BlindCmctsConfig {
+                iterations,
+                c: 0.4,
+                max_depth: 64,
+                leaf,
+                rollout_turns,
+                max_worlds: 24,
+                preview_iterations: 27_000,
+                own_preview_triple: Some(preview_triple),
+            },
+            pool,
+            seed,
+        ))
     } else if let Some(rest) = spec.strip_prefix("blind-") {
         let (leaf, rollout_turns, iterations) =
             parse_leaf_rollout(rest).unwrap_or_else(|| panic!("bad blind spec: {spec}"));
