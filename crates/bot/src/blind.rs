@@ -844,7 +844,7 @@ pub(crate) fn root_search_key_cached(
     key
 }
 
-fn party_order_matters(dex: &Dex, roster: &[Pokemon]) -> bool {
+pub(crate) fn party_order_matters(dex: &Dex, roster: &[Pokemon]) -> bool {
     roster.iter().any(|mon| {
         mon.base_move_slots.iter().chain(&mon.move_slots).any(|slot| {
             matches!(dex.moves.key(slot.id),

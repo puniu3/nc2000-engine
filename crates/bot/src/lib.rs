@@ -58,6 +58,7 @@ pub mod player;
 pub mod player_state;
 pub mod pick_prior;
 pub mod preview;
+pub mod preview_search;
 pub mod prior;
 pub mod relay;
 pub mod rng;

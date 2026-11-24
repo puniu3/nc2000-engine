@@ -1514,12 +1514,17 @@ struct WeightedTeam {
 
 struct TimedAgentWrap {
     inner: Box<dyn Agent>,
+    preview_override: Option<[u8; 3]>,
     searched_battle_ns: Vec<u64>,
 }
 
 impl TimedAgentWrap {
     fn new(inner: Box<dyn Agent>) -> Self {
-        Self { inner, searched_battle_ns: Vec::new() }
+        Self { inner, preview_override: None, searched_battle_ns: Vec::new() }
+    }
+
+    fn with_preview_override(inner: Box<dyn Agent>, triple: [u8; 3]) -> Self {
+        Self { inner, preview_override: Some(triple), searched_battle_ns: Vec::new() }
     }
 }
 
@@ -1539,22 +1544,34 @@ impl Agent for TimedAgentWrap {
         side: usize,
         choices: &[SearchChoice],
     ) -> SearchChoice {
-        let record = choices.len() > 1 && !matches!(choices[0], SearchChoice::Team(_));
+        let is_preview = !choices.is_empty() && matches!(choices[0], SearchChoice::Team(_));
+        let record = choices.len() > 1 && !is_preview;
         let t0 = if record { Some(Instant::now()) } else { None };
         let pick = self.inner.choose(battle, dex, side, choices);
         if let Some(t) = t0 {
             self.searched_battle_ns.push(t.elapsed().as_nanos().min(u64::MAX as u128) as u64);
         }
+        if is_preview {
+            if let Some(ov) = self.preview_override {
+                let sc = SearchChoice::Team(ov);
+                if choices.contains(&sc) {
+                    return sc;
+                }
+            }
+        }
         pick
     }
 }
 
-fn one_hot_preview_policy(triple: [u8; 3]) -> Vec<f64> {
+fn one_hot_preview_policy(triple: [u8; 3]) -> Option<Vec<f64>> {
+    if triple[2] == 0 {
+        return None;
+    }
     let acts = preview_actions();
-    let idx = action_index(&acts, triple).expect("canonical preview action");
+    let idx = action_index(&acts, triple)?;
     let mut pol = vec![0.0; acts.len()];
     pol[idx] = 1.0;
-    pol
+    Some(pol)
 }
 
 fn build_blind_arm(
@@ -1571,18 +1588,23 @@ fn build_blind_arm(
                 c: 0.4,
                 ..Default::default()
             };
-            Box::new(
-                BlindAgent::new(cfg, pool, None, seed)
-                    .with_adaptive_battle_budget()
-                    .with_own_preview_policy(one_hot_preview_policy(preview_triple)),
-            )
+            let mut ag = BlindAgent::new(cfg, pool, None, seed).with_adaptive_battle_budget();
+            if let Some(pol) = one_hot_preview_policy(preview_triple) {
+                ag = ag.with_own_preview_policy(pol);
+            } else {
+                ag = ag.with_preview_iterations(1);
+            }
+            Box::new(ag)
         } else {
             let iters: u32 = rest.parse().unwrap_or_else(|_| panic!("bad spec: {spec}"));
             let cfg = RmConfig { iterations: iters, rule: SelRule::Ucb, c: 0.4, ..Default::default() };
-            Box::new(
-                BlindAgent::new(cfg, pool, None, seed)
-                    .with_own_preview_policy(one_hot_preview_policy(preview_triple)),
-            )
+            let mut ag = BlindAgent::new(cfg, pool, None, seed);
+            if let Some(pol) = one_hot_preview_policy(preview_triple) {
+                ag = ag.with_own_preview_policy(pol);
+            } else {
+                ag = ag.with_preview_iterations(1);
+            }
+            Box::new(ag)
         }
     } else if let Some(rest) = spec.strip_prefix("bcmcts2-") {
         let mut parts = rest.split('@');
@@ -3424,6 +3446,1262 @@ fn run_collect_cf(dex: &Dex, args: &[String]) {
     );
 }
 
+fn parse_preview_spec(spec: &str) -> Result<Result<u32, nc2000_bot::preview_search::PreviewSearchConfig>, String> {
+    use nc2000_bot::preview_search::{PreviewCellReadout, PreviewPolicyMode, PreviewSearchConfig};
+    if let Some(rest) = spec.strip_prefix("shipped:") {
+        let iters: u32 = rest.parse().map_err(|e| format!("bad shipped iters {spec}: {e}"))?;
+        return Ok(Ok(iters));
+    }
+    if let Some(rest) = spec.strip_prefix("cfprev:") {
+        let mut parts = rest.split('@');
+        let iters_s = parts.next().unwrap_or("120000");
+        let total_iters: u32 = if let Some(k) = iters_s.strip_suffix('k') {
+            k.parse::<u32>().map_err(|e| format!("bad iters {spec}: {e}"))? * 1000
+        } else {
+            iters_s.parse::<u32>().map_err(|e| format!("bad iters {spec}: {e}"))?
+        };
+        let mut cfg = PreviewSearchConfig {
+            total_iters,
+            ..PreviewSearchConfig::default()
+        };
+        let mut dust_ratio = 0.08f64;
+        let mut min_mix_margin = 0.015f64;
+        let mut lcb_z = 1.0f64;
+        let mut mode_tag = "lcb";
+        for m in parts {
+            if m == "stage1" { mode_tag = "stage1"; }
+            else if m == "pure" { mode_tag = "pure"; }
+            else if m == "mix" { mode_tag = "mix"; }
+            else if m == "lcb" { mode_tag = "lcb"; }
+            else if m == "raw" { cfg.cell_readout = PreviewCellReadout::RawMean; }
+            else if m == "late" { cfg.cell_readout = PreviewCellReadout::LateWindowMean; }
+            else if m == "t1mm" { cfg.cell_readout = PreviewCellReadout::Turn1Minimax; }
+            else if m == "cfp" { cfg.use_cf_policy = true; }
+            else if let Some(v) = m.strip_prefix("do") { cfg.do_rounds = v.parse().unwrap(); }
+            else if let Some(v) = m.strip_prefix("di") { cfg.do_iters = v.parse().unwrap(); }
+            else if let Some(v) = m.strip_prefix("dm") { cfg.do_margin = v.parse().unwrap(); }
+            else if let Some(v) = m.strip_prefix("cp") { cfg.c_puct = v.parse().unwrap(); }
+            else if let Some(v) = m.strip_prefix("fpu") { cfg.fpu_red = v.parse().unwrap(); }
+            else if let Some(v) = m.strip_prefix("mm") { min_mix_margin = v.parse().unwrap(); }
+            else if let Some(v) = m.strip_prefix("dr") { dust_ratio = v.parse().unwrap(); }
+            else if let Some(v) = m.strip_prefix("lz") { lcb_z = v.parse().unwrap(); }
+            else if let Some(v) = m.strip_prefix("pg") { cfg.polish_gap = v.parse().unwrap(); }
+            else if let Some(v) = m.strip_prefix('k') { cfg.support_k = v.parse().unwrap(); }
+            else if let Some(v) = m.strip_prefix('c') { cfg.coarse_iters = v.parse().unwrap(); }
+            else { return Err(format!("unknown cfprev modifier @{m} in {spec}")); }
+        }
+        cfg.policy_mode = match mode_tag {
+            "stage1" => PreviewPolicyMode::Stage1Only,
+            "pure" => PreviewPolicyMode::PureMaximin,
+            "mix" => PreviewPolicyMode::MixedNash { dust_ratio },
+            _ => PreviewPolicyMode::LcbGatedMixed {
+                min_mix_margin,
+                dust_ratio,
+                lcb_z,
+            },
+        };
+        return Ok(Err(cfg));
+    }
+    Err(format!("unknown preview spec: {spec} (expected shipped:N or cfprev:N[@...])"))
+}
+
+fn run_single_live_preview(
+    dex: &Dex,
+    battle: &Battle,
+    side: usize,
+    own_sets: &[PokemonSet],
+    pool: &Arc<MetaPool>,
+    spec: &str,
+    seed: u64,
+) -> ([u8; 3], u64, bool, usize) {
+    let parsed = parse_preview_spec(spec).unwrap_or_else(|e| panic!("{e}"));
+    let (mut lp, mut obs) =
+        nc2000_bot::player_state::LocalPlayer::new_with_own_sets(battle, dex, side, own_sets.to_vec())
+            .expect("LocalPlayer::new_with_own_sets");
+    lp.observe(battle, dex, &mut obs).expect("observe turn 0");
+    let mut belief = nc2000_bot::belief::Belief::new(dex, pool, &obs);
+    belief.sync(dex, &obs);
+    let mut rng = SplitMix64::new(seed);
+    let pos = lp.position(dex, &mut belief, &obs, &mut rng).expect("position turn 0");
+    let t0 = Instant::now();
+    match parsed {
+        Ok(iters) => {
+            let ch = nc2000_bot::preview_search::solve_shipped_preview(
+                &pos, dex, &belief, &obs, side, iters, rng,
+            );
+            let ns = t0.elapsed().as_nanos() as u64;
+            let SearchChoice::Team(tr) = ch else { panic!("expected Team choice") };
+            (tr, ns, false, 0)
+        }
+        Err(cfg) => {
+            let res = nc2000_bot::preview_search::solve_cf_preview(
+                &pos, dex, &belief, &obs, side, &cfg, &mut rng,
+            );
+            let ns = t0.elapsed().as_nanos() as u64;
+            let SearchChoice::Team(tr) = res.choice else { panic!("expected Team choice") };
+            (tr, ns, res.used_mix, res.do_admitted_me + res.do_admitted_opp)
+        }
+    }
+}
+
+/// Turn-1 `CF-V_net` v2 diagnostic on strictly unseen `belief-pool-v3` (`hash % 5 == 0`) 6v6 matchups:
+/// measures Stage-1 speed, correlation/RMSE vs `cfv-0r` ground truth, Recall@K of ground-truth top
+/// picks inside `S_me`, and lead-archetype residuals.
+fn run_preview_diag(dex: &Dex, args: &[String]) {
+    let flag = |name: &str| -> Option<String> {
+        args.iter()
+            .position(|a| a == name)
+            .and_then(|i| args.get(i + 1).cloned())
+    };
+    let pairs: usize = flag("--pairs").map_or(24, |v| v.parse().unwrap());
+    let gt_iters: u32 = flag("--gt-iters").map_or(512, |v| v.parse().unwrap());
+    let sample_cells: usize = flag("--cells").map_or(24, |v| v.parse().unwrap());
+    let seed: u64 = flag("--seed").map_or(2026113001, |v| v.parse().unwrap());
+    let threads: usize = flag("--threads").map_or(10, |v| v.parse().unwrap());
+
+    let root = repo_root();
+    let pool_path = root.join("data/belief-pool-v3/belief-pool.json");
+    let pool = Arc::new(load_meta_pool(&pool_path));
+    let mut unseen: Vec<usize> = (0..pool.teams.len())
+        .filter(|&i| (canonical_team_hash(&pool.teams[i].sets) % 5) == 0)
+        .collect();
+    let mut rng = SplitMix64::new(seed);
+    let mut matchups = Vec::with_capacity(pairs);
+    for p in 0..pairs {
+        let a = unseen[rng.below(unseen.len())];
+        let mut b = unseen[rng.below(unseen.len())];
+        if b == a && unseen.len() > 1 {
+            b = unseen[(a + 1) % unseen.len()];
+        }
+        matchups.push((p, a, b, rng.next()));
+    }
+    unseen.shrink_to_fit();
+
+    let cursor = AtomicUsize::new(0);
+    #[derive(Default)]
+    struct DiagAcc {
+        v0: Vec<f64>,
+        vgt: Vec<f64>,
+        arch_res: [Vec<f64>; 6], // 0=normal, 1=sleep, 2=spikes, 3=bp, 4=boom, 5=pursuit
+        s1_ms: Vec<f64>,
+        s2_ms: Vec<f64>,
+        do_adm: usize,
+        mix_cnt: usize,
+        top1_in_sme: usize,
+        top3_hits: usize,
+        top3_tot: usize,
+    }
+
+    let t0 = Instant::now();
+    let parts: Vec<DiagAcc> = std::thread::scope(|s| {
+        let mut hs = Vec::new();
+        for _ in 0..threads.min(pairs).max(1) {
+            let (pool_r, m_r, cur_r) = (&pool, &matchups, &cursor);
+            hs.push(s.spawn(move || {
+                let mut acc = DiagAcc::default();
+                let cfg_s2 = nc2000_bot::preview_search::PreviewSearchConfig {
+                    total_iters: 120_000,
+                    ..Default::default()
+                };
+                loop {
+                    let idx = cur_r.fetch_add(1, Ordering::Relaxed);
+                    if idx >= m_r.len() {
+                        break;
+                    }
+                    let (_, ia, ib, mseed) = m_r[idx];
+                    let ta = &pool_r.teams[ia].sets;
+                    let tb = &pool_r.teams[ib].sets;
+                    let mut b = Battle::from_fixture(dex, "1,2,3,4", ta, tb).unwrap();
+                    if !nc2000_engine::compact::is_compact_preview_supported(&b, dex) {
+                        continue;
+                    }
+                    let (mut lp, mut obs) =
+                        nc2000_bot::player_state::LocalPlayer::new_with_own_sets(&b, dex, 0, ta.clone()).unwrap();
+                    lp.observe(&b, dex, &mut obs).unwrap();
+                    let mut belief = nc2000_bot::belief::Belief::new(dex, pool_r, &obs);
+                    belief.sync(dex, &obs);
+                    let mut lrng = SplitMix64::new(mseed);
+                    let pos = lp.position(dex, &mut belief, &obs, &mut lrng).unwrap();
+                    let res = nc2000_bot::preview_search::solve_cf_preview(
+                        &pos, dex, &belief, &obs, 0, &cfg_s2, &mut lrng,
+                    );
+                    acc.s1_ms.push(res.stage1_ms);
+                    acc.s2_ms.push(res.total_ms);
+                    acc.do_adm += res.do_admitted_me + res.do_admitted_opp;
+                    if res.used_mix {
+                        acc.mix_cnt += 1;
+                    }
+
+                    // Sample `sample_cells` legal (own, opp) Turn-1 picks and compare 0-ply `CF-V_net` vs `gt_iters` `cfv-0r`.
+                    let roster = nc2000_engine::compact::CompactPreviewRoster::from_battle(&b, dex, None);
+                    let pcache = nc2000_bot::tempo::PreviewTempoCache::build_for_preview_roster(
+                        &roster,
+                        [b.sides[0].party.len(), b.sides[1].party.len()],
+                    );
+                    let legal0 = b.legal_choices(dex, 0);
+                    let legal1 = b.legal_choices(dex, 1);
+                    let mut c0 = Vec::new();
+                    for ch in &legal0 {
+                        if let SearchChoice::Team(t) = *ch {
+                            if t[2] == 0 || t[1] < t[2] { c0.push(t); }
+                        }
+                    }
+                    let mut c1 = Vec::new();
+                    for ch in &legal1 {
+                        if let SearchChoice::Team(t) = *ch {
+                            if t[2] == 0 || t[1] < t[2] { c1.push(t); }
+                        }
+                    }
+                    if c0.is_empty() || c1.is_empty() {
+                        continue;
+                    }
+                    // Evaluate `sample_cells` random pairs for V_0 vs V_gt + archetype residuals.
+                    for ci in 0..sample_cells {
+                        let p0 = c0[lrng.below(c0.len())];
+                        let p1 = c1[lrng.below(c1.len())];
+                        let (tbl, mut cb) = roster.build_turn1([p0, p1], 0);
+                        cb.quick_claw_roll = 0;
+                        let slc = pcache.slice_for(&cb);
+                        let v0 = nc2000_bot::compact_az::evaluate_cf_value(&cb, &tbl, Some(&slc), 1.0);
+                        let gt = nc2000_bot::compact_az::search_compact_cfv_puct(
+                            &cb, &tbl, &slc, gt_iters, mseed ^ (ci as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15),
+                        );
+                        acc.v0.push(v0);
+                        acc.vgt.push(gt.v_root0);
+                        // Classify p0 lead archetype.
+                        let lead_r = b.sides[0].party[(p0[0] as usize) - 1] as usize;
+                        let lead_m = &b.sides[0].roster[lead_r];
+                        let mut bucket = 0usize;
+                        for sl in &lead_m.base_move_slots {
+                            match dex.moves.key(sl.id) {
+                                "spore" | "sleeppowder" | "lovelykiss" | "hypnosis" | "sing" => { bucket = 1; break; }
+                                "spikes" => { bucket = 2; break; }
+                                "batonpass" => { bucket = 3; break; }
+                                "explosion" | "selfdestruct" => { bucket = 4; break; }
+                                "pursuit" | "counter" | "mirrorcoat" => { bucket = 5; break; }
+                                _ => {}
+                            }
+                        }
+                        acc.arch_res[bucket].push(gt.v_root0 - v0);
+                    }
+                    // Also check Recall@12: evaluate 12 random own picks against one fixed opponent pick under V_gt.
+                    let opp_pick = c1[lrng.below(c1.len())];
+                    let mut scored0: Vec<(usize, f64)> = (0..c0.len())
+                        .map(|i| {
+                            let (tbl, mut cb) = roster.build_turn1([c0[i], opp_pick], 0);
+                            cb.quick_claw_roll = 0;
+                            let slc = pcache.slice_for(&cb);
+                            (i, nc2000_bot::compact_az::evaluate_cf_value(&cb, &tbl, Some(&slc), 1.0))
+                        })
+                        .collect();
+                    scored0.sort_by(|a, b| b.1.total_cmp(&a.1));
+                    let top12: Vec<usize> = scored0.iter().take(12).map(|&(i, _)| i).collect();
+                    let mut gt_scores: Vec<(usize, f64)> = (0..c0.len())
+                        .step_by((c0.len() / 15).max(1))
+                        .map(|i| {
+                            let (tbl, mut cb) = roster.build_turn1([c0[i], opp_pick], 0);
+                            cb.quick_claw_roll = 0;
+                            let slc = pcache.slice_for(&cb);
+                            let r = nc2000_bot::compact_az::search_compact_cfv_puct(
+                                &cb, &tbl, &slc, 192, mseed ^ ((i as u64) + 1000),
+                            );
+                            (i, r.v_root0)
+                        })
+                        .collect();
+                    gt_scores.sort_by(|a, b| b.1.total_cmp(&a.1));
+                    if let Some(&(best_i, _)) = gt_scores.first() {
+                        if top12.contains(&best_i) {
+                            acc.top1_in_sme += 1;
+                        }
+                    }
+                    for &(gi, _) in gt_scores.iter().take(3) {
+                        acc.top3_tot += 1;
+                        if top12.contains(&gi) {
+                            acc.top3_hits += 1;
+                        }
+                    }
+                }
+                acc
+            }));
+        }
+        hs.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+
+    let mut all_v0 = Vec::new();
+    let mut all_vgt = Vec::new();
+    let mut arch: [Vec<f64>; 6] = Default::default();
+    let mut s1_ms = Vec::new();
+    let mut s2_ms = Vec::new();
+    let mut do_adm = 0usize;
+    let mut mix_cnt = 0usize;
+    let mut top1_in = 0usize;
+    let mut top3_h = 0usize;
+    let mut top3_t = 0usize;
+    for p in parts {
+        all_v0.extend(p.v0);
+        all_vgt.extend(p.vgt);
+        for k in 0..6 { arch[k].extend(p.arch_res[k].iter().copied()); }
+        s1_ms.extend(p.s1_ms);
+        s2_ms.extend(p.s2_ms);
+        do_adm += p.do_adm;
+        mix_cnt += p.mix_cnt;
+        top1_in += p.top1_in_sme;
+        top3_h += p.top3_hits;
+        top3_t += p.top3_tot;
+    }
+    let n = all_v0.len().max(1) as f64;
+    let m0 = all_v0.iter().sum::<f64>() / n;
+    let mg = all_vgt.iter().sum::<f64>() / n;
+    let mut cov = 0.0;
+    let mut var0 = 0.0;
+    let mut varg = 0.0;
+    let mut mse = 0.0;
+    for (&a, &b) in all_v0.iter().zip(&all_vgt) {
+        cov += (a - m0) * (b - mg);
+        var0 += (a - m0).powi(2);
+        varg += (b - mg).powi(2);
+        mse += (a - b).powi(2);
+    }
+    let r = cov / (var0.sqrt() * varg.sqrt()).max(1e-12);
+    let rmse = (mse / n).sqrt();
+    s1_ms.sort_by(|a, b| a.total_cmp(b));
+    s2_ms.sort_by(|a, b| a.total_cmp(b));
+    let med = |v: &[f64]| if v.is_empty() { 0.0 } else { v[v.len() / 2] };
+    let p95 = |v: &[f64]| if v.is_empty() { 0.0 } else { v[(v.len() - 1) * 95 / 100] };
+    let arch_names = ["normal", "sleep", "spikes", "bp", "boom", "pursuit"];
+    let mut arch_json = serde_json::Map::new();
+    for k in 0..6 {
+        let cnt = arch[k].len();
+        let mean_r = if cnt > 0 { arch[k].iter().sum::<f64>() / (cnt as f64) } else { 0.0 };
+        arch_json.insert(
+            arch_names[k].into(),
+            json!({"n": cnt, "mean_gt_minus_v0": (mean_r * 10000.0).round() / 10000.0}),
+        );
+    }
+    println!(
+        "{}",
+        json!({
+            "cmd": "preview-diag",
+            "matchups": s1_ms.len(),
+            "cells": all_v0.len(),
+            "gt_iters": gt_iters,
+            "r_v0_vs_gt": (r * 10000.0).round() / 10000.0,
+            "rmse": (rmse * 10000.0).round() / 10000.0,
+            "recall12_top1": format!("{}/{}", top1_in, s1_ms.len()),
+            "recall12_top3": format!("{}/{}", top3_h, top3_t),
+            "stage1_med_ms": (med(&s1_ms) * 100.0).round() / 100.0,
+            "stage2_120k_med_ms": (med(&s2_ms) * 100.0).round() / 100.0,
+            "stage2_120k_p95_ms": (p95(&s2_ms) * 100.0).round() / 100.0,
+            "mix_rate": (mix_cnt as f64 / s1_ms.len().max(1) as f64 * 1000.0).round() / 1000.0,
+            "do_admitted_total": do_adm,
+            "arch_residuals": arch_json,
+            "wall_s": (t0.elapsed().as_secs_f64() * 100.0).round() / 100.0,
+        })
+    );
+}
+
+/// Strictly NO-CACHE live Team Preview H2H duel (`preview-duel`).
+/// Isolates Team Preview strength by giving both seats identical in-battle engines (or tests
+/// end-to-end when `--battle-a` != `--battle-b`), with fresh live preview search on EVERY game.
+fn run_preview_duel(dex: &Dex, args: &[String]) {
+    let flag = |name: &str| -> Option<String> {
+        args.iter()
+            .position(|a| a == name)
+            .and_then(|i| args.get(i + 1).cloned())
+    };
+    let preview_a = flag("--preview-a").unwrap_or_else(|| "cfprev:120k@lcb".to_string());
+    let preview_b = flag("--preview-b").unwrap_or_else(|| "shipped:729000".to_string());
+    let battle_shared = flag("--battle");
+    let battle_a = flag("--battle-a")
+        .or_else(|| battle_shared.clone())
+        .unwrap_or_else(|| "bcmcts-cfv-0r:27000@puct@lam0".to_string());
+    let battle_b = flag("--battle-b")
+        .or(battle_shared)
+        .unwrap_or_else(|| "bcmcts-cfv-0r:27000@puct@lam0".to_string());
+    let pairs: usize = flag("--pairs").map_or(32, |v| v.parse().unwrap());
+    let pair_start: usize = flag("--pair-start").map_or(0, |v| v.parse().unwrap());
+    let seed: u64 = flag("--seed").map_or(2026113001, |v| v.parse().unwrap());
+    let threads: usize = flag("--threads").map_or(10, |v| v.parse().unwrap());
+    let out_path = flag("--out").map(PathBuf::from);
+    let max_turns: u16 = flag("--max-turns").map_or(500, |v| v.parse().unwrap());
+    let catalog_path = flag("--catalog").unwrap_or_else(|| "data/team-pool-v2/team-pool.json".to_string());
+    let unseen_only = args.iter().any(|a| a == "--unseen-only");
+    let offpool = args.iter().any(|a| a == "--offpool");
+    let total_pairs_needed = pair_start + pairs;
+
+    let root = repo_root();
+    let cat_txt = std::fs::read_to_string(root.join(&catalog_path))
+        .unwrap_or_else(|e| panic!("read catalog {catalog_path}: {e}"));
+    let mut catalog: WeightedCatalog = serde_json::from_str(&cat_txt)
+        .unwrap_or_else(|e| panic!("parse catalog {catalog_path}: {e}"));
+    if unseen_only {
+        catalog.teams.retain(|t| (canonical_team_hash(&t.sets) % 5) == 0);
+        assert!(!catalog.teams.is_empty());
+    }
+    let pool = Arc::new(load_meta_pool(&root.join("data/belief-pool-v3/belief-pool.json")));
+    let public_shell = |sets: &[PokemonSet]| -> Vec<(String, u8)> {
+        let mut v: Vec<(String, u8)> = sets
+            .iter()
+            .map(|s| (s.species.to_ascii_lowercase(), s.level))
+            .collect();
+        v.sort_unstable();
+        v
+    };
+    let pool_shells: Vec<Vec<(String, u8)>> = pool.teams.iter().map(|t| public_shell(&t.sets)).collect();
+
+    let weights: Vec<f64> = catalog.teams.iter().map(|t| t.draw_weight.unwrap_or(1.0)).collect();
+    let w_sum: f64 = weights.iter().sum();
+    let mut draw_rng = SplitMix64::new(seed);
+    let draw_team = |rng: &mut SplitMix64| -> usize {
+        let mut r = rng.next_f64() * w_sum;
+        for (i, &w) in weights.iter().enumerate() {
+            r -= w;
+            if r <= 0.0 {
+                return i;
+            }
+        }
+        weights.len() - 1
+    };
+
+    struct PSchedule {
+        pair_idx: usize,
+        ta: usize,
+        tb: usize,
+        bseed: String,
+        pseed_p1_g0: u64,
+        pseed_p2_g0: u64,
+        pseed_p1_g1: u64,
+        pseed_p2_g1: u64,
+        sseed_p1: u64,
+        sseed_p2: u64,
+    }
+    let mut scheds = Vec::with_capacity(total_pairs_needed);
+    for pair_idx in 0..total_pairs_needed {
+        let ta = draw_team(&mut draw_rng);
+        let mut tb = draw_team(&mut draw_rng);
+        if tb == ta && catalog.teams.len() > 1 {
+            tb = (ta + 1) % catalog.teams.len();
+        }
+        let s1 = (draw_rng.next() & 0xFFFF) as u16;
+        let s2 = (draw_rng.next() & 0xFFFF) as u16;
+        let s3 = (draw_rng.next() & 0xFFFF) as u16;
+        let s4 = (draw_rng.next() & 0xFFFF) as u16;
+        scheds.push(PSchedule {
+            pair_idx,
+            ta,
+            tb,
+            bseed: format!("{s1},{s2},{s3},{s4}"),
+            pseed_p1_g0: draw_rng.next(),
+            pseed_p2_g0: draw_rng.next(),
+            pseed_p1_g1: draw_rng.next(),
+            pseed_p2_g1: draw_rng.next(),
+            sseed_p1: draw_rng.next(),
+            sseed_p2: draw_rng.next(),
+        });
+    }
+
+    let t0 = Instant::now();
+    let total_games = pairs * 2;
+    let cursor = AtomicUsize::new(0);
+    struct PGameOut {
+        game_idx: usize,
+        pair_idx: usize,
+        a_is_p1: bool,
+        a_score: f64,
+        turns: u16,
+        turn_cap: bool,
+        a_prev_ns: u64,
+        b_prev_ns: u64,
+        a_pick: [u8; 3],
+        b_pick: [u8; 3],
+        a_used_mix: bool,
+        a_do_adm: usize,
+        a_ns: Vec<u64>,
+        b_ns: Vec<u64>,
+    }
+
+    let results: Vec<PGameOut> = std::thread::scope(|s| {
+        let mut hs = Vec::new();
+        for _ in 0..threads.min(total_games).max(1) {
+            let (cat_r, pool_r, ps_r, sched_r, cur_r, pa, pb, ba, bb) = (
+                &catalog, &pool, &pool_shells, &scheds, &cursor, &preview_a, &preview_b, &battle_a, &battle_b,
+            );
+            hs.push(s.spawn(move || {
+                let mut local = Vec::new();
+                loop {
+                    let local_gi = cur_r.fetch_add(1, Ordering::Relaxed);
+                    if local_gi >= total_games {
+                        break;
+                    }
+                    let pi = pair_start + local_gi / 2;
+                    let gi = pi * 2 + (local_gi % 2);
+                    let a_is_p1 = gi % 2 == 0;
+                    let sc = &sched_r[pi];
+                    let sets1 = &cat_r.teams[sc.ta].sets;
+                    let sets2 = &cat_r.teams[sc.tb].sets;
+                    let (pspec1, pspec2) = if a_is_p1 { (pa.as_str(), pb.as_str()) } else { (pb.as_str(), pa.as_str()) };
+                    let (bspec1, bspec2) = if a_is_p1 { (ba.as_str(), bb.as_str()) } else { (bb.as_str(), ba.as_str()) };
+                    let (pseed1, pseed2) = if a_is_p1 {
+                        (sc.pseed_p1_g0, sc.pseed_p2_g0)
+                    } else {
+                        (sc.pseed_p1_g1, sc.pseed_p2_g1)
+                    };
+
+                    // Optional `--offpool`: strip all pool teams matching opponent's public
+                    // `(species, level)` shell so Turn-0 `Belief::is_fallback() == true`.
+                    let make_pool = |opp_sets: &[PokemonSet]| -> Arc<MetaPool> {
+                        if !offpool {
+                            return pool_r.clone();
+                        }
+                        let mut sh: Vec<(String, u8)> = opp_sets
+                            .iter()
+                            .map(|s| (s.species.to_ascii_lowercase(), s.level))
+                            .collect();
+                        sh.sort_unstable();
+                        let filtered = pool_r
+                            .teams
+                            .iter()
+                            .enumerate()
+                            .filter(|&(idx, _)| ps_r[idx] != sh)
+                            .map(|(_, t)| t.clone())
+                            .collect();
+                        Arc::new(MetaPool { teams: filtered })
+                    };
+                    let pool1 = make_pool(sets2);
+                    let pool2 = make_pool(sets1);
+
+                    let mut b = Battle::from_fixture(dex, &sc.bseed, sets1, sets2).unwrap();
+                    b.set_log_enabled(true);
+                    let (tr1, pns1, mix1, adm1) =
+                        run_single_live_preview(dex, &b, 0, sets1, &pool1, pspec1, pseed1);
+                    let (tr2, pns2, mix2, adm2) =
+                        run_single_live_preview(dex, &b, 1, sets2, &pool2, pspec2, pseed2);
+
+                    let mut p1 = TimedAgentWrap::with_preview_override(
+                        build_blind_arm(bspec1, pool1, sc.sseed_p1, tr1),
+                        tr1,
+                    );
+                    let mut p2 = TimedAgentWrap::with_preview_override(
+                        build_blind_arm(bspec2, pool2, sc.sseed_p2, tr2),
+                        tr2,
+                    );
+                    let res = play_game(dex, &mut b, &mut [&mut p1, &mut p2], max_turns).unwrap();
+                    let p1_score = match res {
+                        GameResult::Outcome(Outcome::P1Win) => 1.0,
+                        GameResult::Outcome(Outcome::P2Win) => 0.0,
+                        _ => 0.5,
+                    };
+                    let a_score = if a_is_p1 { p1_score } else { 1.0 - p1_score };
+                    let (a_prev_ns, b_prev_ns, a_pick, b_pick, a_used_mix, a_do_adm, a_ns, b_ns) =
+                        if a_is_p1 {
+                            (pns1, pns2, tr1, tr2, mix1, adm1, p1.searched_battle_ns, p2.searched_battle_ns)
+                        } else {
+                            (pns2, pns1, tr2, tr1, mix2, adm2, p2.searched_battle_ns, p1.searched_battle_ns)
+                        };
+                    local.push(PGameOut {
+                        game_idx: gi,
+                        pair_idx: pi,
+                        a_is_p1,
+                        a_score,
+                        turns: b.turn,
+                        turn_cap: matches!(res, GameResult::TurnCapped),
+                        a_prev_ns,
+                        b_prev_ns,
+                        a_pick,
+                        b_pick,
+                        a_used_mix,
+                        a_do_adm,
+                        a_ns,
+                        b_ns,
+                    });
+                }
+                local
+            }));
+        }
+        let mut merged = Vec::with_capacity(total_games);
+        for h in hs {
+            merged.extend(h.join().unwrap());
+        }
+        merged
+    });
+
+    let by_idx: HashMap<usize, PGameOut> = results.into_iter().map(|r| (r.game_idx, r)).collect();
+    if let Some(ref op) = out_path {
+        use std::io::Write;
+        if let Some(parent) = op.parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent).unwrap();
+            }
+        }
+        let mut f = std::io::BufWriter::new(std::fs::File::create(op).unwrap());
+        for pi in pair_start..total_pairs_needed {
+            for gi in [pi * 2, pi * 2 + 1] {
+                let g = &by_idx[&gi];
+                let row = json!({
+                    "game_idx": g.game_idx,
+                    "pair_idx": g.pair_idx,
+                    "a_is_p1": g.a_is_p1,
+                    "a_score": g.a_score,
+                    "turns": g.turns,
+                    "turn_cap": g.turn_cap,
+                    "a_prev_ns": g.a_prev_ns,
+                    "b_prev_ns": g.b_prev_ns,
+                    "a_pick": g.a_pick,
+                    "b_pick": g.b_pick,
+                    "a_used_mix": g.a_used_mix,
+                    "a_do_adm": g.a_do_adm,
+                    "a_ns": g.a_ns,
+                    "b_ns": g.b_ns,
+                });
+                serde_json::to_writer(&mut f, &row).unwrap();
+                writeln!(f).unwrap();
+            }
+        }
+        f.flush().unwrap();
+    }
+
+    let mut pair_scores = Vec::with_capacity(pairs);
+    let (mut wins, mut losses, mut ties, mut turn_caps, mut turns_sum) = (0usize, 0usize, 0usize, 0usize, 0u64);
+    let mut a_prev_all = Vec::new();
+    let mut b_prev_all = Vec::new();
+    let mut mix_cnt = 0usize;
+    let mut pick_diffs = 0usize;
+    for pi in pair_start..total_pairs_needed {
+        let g0 = &by_idx[&(pi * 2)];
+        let g1 = &by_idx[&(pi * 2 + 1)];
+        pair_scores.push(0.5 * (g0.a_score + g1.a_score));
+        // Compare A's P1 pick (g0.a_pick) vs B's P1 pick (g1.b_pick) on identical roster!
+        if g0.a_pick != g1.b_pick { pick_diffs += 1; }
+        if g1.a_pick != g0.b_pick { pick_diffs += 1; }
+        for g in [g0, g1] {
+            if g.a_score == 1.0 { wins += 1; }
+            else if g.a_score == 0.0 { losses += 1; }
+            else { ties += 1; }
+            if g.turn_cap { turn_caps += 1; }
+            turns_sum += u64::from(g.turns);
+            a_prev_all.push(g.a_prev_ns);
+            b_prev_all.push(g.b_prev_ns);
+            if g.a_used_mix { mix_cnt += 1; }
+        }
+    }
+    let (mean, ci_lo, ci_hi) = bootstrap_ci(&pair_scores, seed);
+    let med_ap = percentile_ms(&a_prev_all, 50);
+    let med_bp = percentile_ms(&b_prev_all, 50);
+    let p95_ap = percentile_ms(&a_prev_all, 95);
+    let p95_bp = percentile_ms(&b_prev_all, 95);
+    println!(
+        "{}",
+        json!({
+            "cmd": "preview-duel",
+            "preview_a": preview_a,
+            "preview_b": preview_b,
+            "battle_a": battle_a,
+            "battle_b": battle_b,
+            "offpool": offpool,
+            "pairs": pairs,
+            "games": total_games,
+            "wins": wins,
+            "losses": losses,
+            "ties": ties,
+            "turn_caps": turn_caps,
+            "score": (mean * 10000.0).round() / 10000.0,
+            "ci95": [(ci_lo * 10000.0).round() / 10000.0, (ci_hi * 10000.0).round() / 10000.0],
+            "elo_diff": (elo_diff(mean) * 10.0).round() / 10.0,
+            "avg_turns": (turns_sum as f64 / total_games.max(1) as f64 * 10.0).round() / 10.0,
+            "a_prev_med_ms": (med_ap * 100.0).round() / 100.0,
+            "b_prev_med_ms": (med_bp * 100.0).round() / 100.0,
+            "prev_time_ratio": (med_ap / med_bp.max(1e-9) * 1000.0).round() / 1000.0,
+            "a_prev_p95_ms": (p95_ap * 100.0).round() / 100.0,
+            "b_prev_p95_ms": (p95_bp * 100.0).round() / 100.0,
+            "a_mix_rate": (mix_cnt as f64 / total_games.max(1) as f64 * 1000.0).round() / 1000.0,
+            "pick_diff_rate": (pick_diffs as f64 / total_games.max(1) as f64 * 1000.0).round() / 1000.0,
+            "wall_s": (t0.elapsed().as_secs_f64() * 100.0).round() / 100.0,
+        })
+    );
+}
+
+/// Counter-Pick Exploitability Audit (`preview-exploit`):
+/// Evaluates the root preview policy distribution `p` of multiple preview strategies
+/// against a double-estimator (zero winner's-curse) full-information opponent counter-pick oracle:
+/// 1. Candidate opponent counters are screened with BOTH `CF-V_net` v2 AND independent `linear.rs`
+///    `compact_eval_leaf_blindspot` PLUS 1 candidate per distinct opponent lead (de-biasing screen).
+/// 2. `j_BR = argmin_{p1} E_{p0 ~ p}[V_select(p0, p1)]` is chosen using seed 1 (`oracle_iters / 2`).
+/// 3. Unbiased worst-case value `E_{p0 ~ p}[V_eval(p0, j_BR)]` is evaluated on an INDEPENDENT seed 2
+///    (`oracle_iters`, with proper Berserk Gene confusion resampling).
+/// Use `shipped:N` for a single live pick (apples-to-apples deterministic worst-case) or `shipped5:N`
+/// for a 5-seed empirical randomized distribution.
+fn run_preview_exploit(dex: &Dex, args: &[String]) {
+    let flag = |name: &str| -> Option<String> {
+        args.iter()
+            .position(|a| a == name)
+            .and_then(|i| args.get(i + 1).cloned())
+    };
+    let arms_str = flag("--arms").unwrap_or_else(|| {
+        "cfprev:120k@lcb@t1mm,cfprev:120k@mix@t1mm,cfprev:120k@pure@t1mm,cfprev:0@stage1,shipped:729000,shipped5:729000".to_string()
+    });
+    let arms: Vec<String> = arms_str.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+    let pairs: usize = flag("--pairs").map_or(32, |v| v.parse().unwrap());
+    let oracle_iters: u32 = flag("--oracle-iters").map_or(768, |v| v.parse().unwrap());
+    let opp_cands_k: usize = flag("--opp-cands").map_or(16, |v| v.parse().unwrap());
+    let seed: u64 = flag("--seed").map_or(2026120201, |v| v.parse().unwrap());
+    let threads: usize = flag("--threads").map_or(10, |v| v.parse().unwrap());
+    let catalog_path = flag("--catalog").unwrap_or_else(|| "data/team-pool-v2/team-pool.json".to_string());
+    let unseen_only = args.iter().any(|a| a == "--unseen-only");
+
+    let root = repo_root();
+    let cat_txt = std::fs::read_to_string(root.join(&catalog_path)).unwrap();
+    let mut catalog: WeightedCatalog = serde_json::from_str(&cat_txt).unwrap();
+    if unseen_only {
+        catalog.teams.retain(|t| (canonical_team_hash(&t.sets) % 5) == 0);
+        assert!(!catalog.teams.is_empty());
+    }
+    let pool = Arc::new(load_meta_pool(&root.join("data/belief-pool-v3/belief-pool.json")));
+    let weights: Vec<f64> = catalog.teams.iter().map(|t| t.draw_weight.unwrap_or(1.0)).collect();
+    let w_sum: f64 = weights.iter().sum();
+    let mut rng = SplitMix64::new(seed);
+    let mut matchups = Vec::with_capacity(pairs);
+    for pi in 0..pairs {
+        let mut draw_t = |r: &mut SplitMix64| -> usize {
+            let mut x = r.next_f64() * w_sum;
+            for (i, &w) in weights.iter().enumerate() {
+                x -= w;
+                if x <= 0.0 { return i; }
+            }
+            weights.len() - 1
+        };
+        let ta = draw_t(&mut rng);
+        let mut tb = draw_t(&mut rng);
+        if tb == ta && catalog.teams.len() > 1 { tb = (ta + 1) % catalog.teams.len(); }
+        matchups.push((pi, ta, tb, rng.next()));
+    }
+
+    let n_arms = arms.len();
+    let cursor = AtomicUsize::new(0);
+    #[derive(Clone, Default)]
+    struct ArmAcc {
+        worst_ev: Vec<f64>,
+        supp_sizes: Vec<f64>,
+        mix_cnt: usize,
+        ms: Vec<f64>,
+    }
+
+    let t0 = Instant::now();
+    let parts: Vec<Vec<ArmAcc>> = std::thread::scope(|s| {
+        let mut hs = Vec::new();
+        for _ in 0..threads.min(pairs).max(1) {
+            let (cat_r, pool_r, m_r, cur_r, arms_r) = (&catalog, &pool, &matchups, &cursor, &arms);
+            hs.push(s.spawn(move || {
+                let mut acc = vec![ArmAcc::default(); arms_r.len()];
+                let lin_w = nc2000_bot::eval::EvalWeights::default();
+                let select_iters = (oracle_iters / 2).max(192);
+                loop {
+                    let idx = cur_r.fetch_add(1, Ordering::Relaxed);
+                    if idx >= m_r.len() { break; }
+                    let (_, ia, ib, mseed) = m_r[idx];
+                    let ta = &cat_r.teams[ia].sets;
+                    let tb = &cat_r.teams[ib].sets;
+                    let mut b = Battle::from_fixture(dex, "1,2,3,4", ta, tb).unwrap();
+                    if !nc2000_engine::compact::is_compact_preview_supported(&b, dex) {
+                        continue;
+                    }
+                    b.set_log_enabled(true);
+                    let legal0 = b.legal_choices(dex, 0);
+                    let opp_cands_all = nc2000_bot::preview_search::canonical_preview_triples(dex, &mut b, 1);
+                    if opp_cands_all.is_empty() { continue; }
+
+                    let (mut lp, mut obs) =
+                        nc2000_bot::player_state::LocalPlayer::new_with_own_sets(&b, dex, 0, ta.clone()).unwrap();
+                    lp.observe(&b, dex, &mut obs).unwrap();
+                    let mut belief = nc2000_bot::belief::Belief::new(dex, pool_r, &obs);
+                    belief.sync(dex, &obs);
+
+                    let mut arm_dists: Vec<Vec<([u8; 3], f64)>> = Vec::with_capacity(arms_r.len());
+                    for (ai, spec) in arms_r.iter().enumerate() {
+                        let (eff_spec, n_seeds) = if let Some(rest) = spec.strip_prefix("shipped5:") {
+                            (format!("shipped:{rest}"), 5usize)
+                        } else {
+                            (spec.clone(), 1usize)
+                        };
+                        let parsed = parse_preview_spec(&eff_spec).unwrap_or_else(|e| panic!("{e}"));
+                        match parsed {
+                            Ok(iters) => {
+                                let mut counts: HashMap<[u8; 3], usize> = HashMap::new();
+                                let mut dt_ms = 0.0;
+                                for sk in 0..n_seeds {
+                                    let mut lrng = SplitMix64::new(mseed ^ ((ai as u64 + 1) * 0x9E37_79B9) ^ (sk as u64 * 0x517C_C1B7));
+                                    let pos = lp.position(dex, &mut belief, &obs, &mut lrng).unwrap();
+                                    let ts = Instant::now();
+                                    let ch = nc2000_bot::preview_search::solve_shipped_preview(
+                                        &pos, dex, &belief, &obs, 0, iters, lrng,
+                                    );
+                                    dt_ms += ts.elapsed().as_secs_f64() * 1000.0;
+                                    if let SearchChoice::Team(tr) = ch {
+                                        *counts.entry(tr).or_insert(0) += 1;
+                                    }
+                                }
+                                acc[ai].ms.push(dt_ms / (n_seeds as f64));
+                                let tot = n_seeds.max(1) as f64;
+                                let dist: Vec<([u8; 3], f64)> = counts.into_iter().map(|(t, c)| (t, c as f64 / tot)).collect();
+                                if dist.len() > 1 { acc[ai].mix_cnt += 1; }
+                                acc[ai].supp_sizes.push(dist.len() as f64);
+                                arm_dists.push(dist);
+                            }
+                            Err(cfg) => {
+                                let mut lrng = SplitMix64::new(mseed ^ ((ai as u64 + 1) * 0x9E37_79B9));
+                                let pos = lp.position(dex, &mut belief, &obs, &mut lrng).unwrap();
+                                let ts = Instant::now();
+                                let res = nc2000_bot::preview_search::solve_cf_preview(
+                                    &pos, dex, &belief, &obs, 0, &cfg, &mut lrng,
+                                );
+                                acc[ai].ms.push(ts.elapsed().as_secs_f64() * 1000.0);
+                                let mut dist: Vec<([u8; 3], f64)> = Vec::new();
+                                for (li, &p) in res.policy_full.iter().enumerate() {
+                                    if p > 1e-6 {
+                                        if let Some(SearchChoice::Team(tr)) = legal0.get(li) {
+                                            dist.push((*tr, p));
+                                        }
+                                    }
+                                }
+                                if dist.is_empty() {
+                                    if let SearchChoice::Team(tr) = res.choice { dist.push((tr, 1.0)); }
+                                }
+                                let s: f64 = dist.iter().map(|x| x.1).sum();
+                                for x in &mut dist { x.1 /= s.max(1e-12); }
+                                if dist.len() > 1 { acc[ai].mix_cnt += 1; }
+                                acc[ai].supp_sizes.push(dist.len() as f64);
+                                arm_dists.push(dist);
+                            }
+                        }
+                    }
+
+                    // De-biased counter-pick candidate screening: combine `CF-V_net` v2, independent
+                    // `linear.rs` (`compact_eval_leaf_blindspot`), and 1 best counter per opponent lead.
+                    let roster = nc2000_engine::compact::CompactPreviewRoster::from_battle(&b, dex, None);
+                    let pcache = nc2000_bot::tempo::PreviewTempoCache::build_for_preview_roster(
+                        &roster,
+                        [b.sides[0].party.len(), b.sides[1].party.len()],
+                    );
+                    let mut own_union: Vec<[u8; 3]> = Vec::new();
+                    for dist in &arm_dists {
+                        for &(tr, _) in dist {
+                            if !own_union.contains(&tr) { own_union.push(tr); }
+                        }
+                    }
+                    let mut v0_cache: HashMap<([u8; 3], [u8; 3]), (f64, f64)> = HashMap::new();
+                    for &p0 in &own_union {
+                        for &p1 in &opp_cands_all {
+                            let (tbl, mut cb) = roster.build_turn1([p0, p1], 0);
+                            cb.quick_claw_roll = 0;
+                            let slc = pcache.slice_for(&cb);
+                            let v_cf = nc2000_bot::compact_az::evaluate_cf_value(&cb, &tbl, Some(&slc), 1.0);
+                            let v_lin = nc2000_bot::eval::compact_eval_leaf_blindspot(&cb, &tbl, &lin_w);
+                            v0_cache.insert((p0, p1), (v_cf, v_lin));
+                        }
+                    }
+                    let half_k = (opp_cands_k / 2).max(4);
+                    let mut opp_eval_set: Vec<[u8; 3]> = Vec::new();
+                    for dist in &arm_dists {
+                        let mut by_cf: Vec<([u8; 3], f64)> = opp_cands_all
+                            .iter()
+                            .map(|&p1| (p1, dist.iter().map(|&(p0, pr)| pr * v0_cache[&(p0, p1)].0).sum()))
+                            .collect();
+                        by_cf.sort_by(|a, b| a.1.total_cmp(&b.1));
+                        for &(p1, _) in by_cf.iter().take(half_k) {
+                            if !opp_eval_set.contains(&p1) { opp_eval_set.push(p1); }
+                        }
+                        let mut by_lin: Vec<([u8; 3], f64)> = opp_cands_all
+                            .iter()
+                            .map(|&p1| (p1, dist.iter().map(|&(p0, pr)| pr * v0_cache[&(p0, p1)].1).sum()))
+                            .collect();
+                        by_lin.sort_by(|a, b| a.1.total_cmp(&b.1));
+                        for &(p1, _) in by_lin.iter().take(half_k) {
+                            if !opp_eval_set.contains(&p1) { opp_eval_set.push(p1); }
+                        }
+                        // Ensure >= 1 strongest counter per opponent lead (from both CF and linear screens).
+                        for ld in 1u8..=6 {
+                            if let Some(&(best_p1, _)) = by_cf.iter().find(|&&(p1, _)| p1[0] == ld) {
+                                if !opp_eval_set.contains(&best_p1) { opp_eval_set.push(best_p1); }
+                            }
+                            if let Some(&(best_p1, _)) = by_lin.iter().find(|&&(p1, _)| p1[0] == ld) {
+                                if !opp_eval_set.contains(&best_p1) { opp_eval_set.push(best_p1); }
+                            }
+                        }
+                    }
+
+                    // Stage A (Selection seed 1): evaluate `own_union × opp_eval_set` to identify `j_BR`.
+                    let mut sel_v: HashMap<([u8; 3], [u8; 3]), f64> = HashMap::new();
+                    for (oi, &p0) in own_union.iter().enumerate() {
+                        for (oj, &p1) in opp_eval_set.iter().enumerate() {
+                            let oseed = mseed ^ 0xD1B5_4A32_D192_ED03 ^ ((oi as u64) << 16) ^ (oj as u64);
+                            let v = nc2000_bot::preview_search::eval_turn1_oracle_cell(
+                                &roster, &pcache, [p0, p1], select_iters, oseed,
+                            );
+                            sel_v.insert((p0, p1), v);
+                        }
+                    }
+
+                    // Stage B (Unbiased Evaluation seed 2): evaluate ONLY each arm's chosen `j_BR` on a fresh seed.
+                    let mut eval_cache: HashMap<([u8; 3], [u8; 3]), f64> = HashMap::new();
+                    for (ai, dist) in arm_dists.iter().enumerate() {
+                        let mut best_j = opp_eval_set[0];
+                        let mut best_sel = f64::INFINITY;
+                        for &p1 in &opp_eval_set {
+                            let ev: f64 = dist.iter().map(|&(p0, pr)| pr * sel_v[&(p0, p1)]).sum();
+                            if ev < best_sel {
+                                best_sel = ev;
+                                best_j = p1;
+                            }
+                        }
+                        let mut unbiased_ev = 0.0;
+                        for &(p0, pr) in dist {
+                            let v2 = *eval_cache.entry((p0, best_j)).or_insert_with(|| {
+                                let k_hash = (p0[0] as u64)
+                                    | ((p0[1] as u64) << 4)
+                                    | ((p0[2] as u64) << 8)
+                                    | ((best_j[0] as u64) << 12)
+                                    | ((best_j[1] as u64) << 16)
+                                    | ((best_j[2] as u64) << 20);
+                                let eseed = mseed ^ 0x94D0_49BB_1331_11EB ^ k_hash.wrapping_mul(0xBF58_476D_1CE4_E5B9);
+                                nc2000_bot::preview_search::eval_turn1_oracle_cell(
+                                    &roster, &pcache, [p0, best_j], oracle_iters, eseed,
+                                )
+                            });
+                            unbiased_ev += pr * v2;
+                        }
+                        acc[ai].worst_ev.push(unbiased_ev);
+                    }
+                }
+                acc
+            }));
+        }
+        hs.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+
+    let mut merged = vec![ArmAcc::default(); n_arms];
+    for p in parts {
+        for ai in 0..n_arms {
+            merged[ai].worst_ev.extend_from_slice(&p[ai].worst_ev);
+            merged[ai].supp_sizes.extend_from_slice(&p[ai].supp_sizes);
+            merged[ai].mix_cnt += p[ai].mix_cnt;
+            merged[ai].ms.extend_from_slice(&p[ai].ms);
+        }
+    }
+    let mut rows = Vec::new();
+    for ai in 0..n_arms {
+        let n = merged[ai].worst_ev.len().max(1) as f64;
+        let w_mean = merged[ai].worst_ev.iter().sum::<f64>() / n;
+        let s_mean = merged[ai].supp_sizes.iter().sum::<f64>() / n;
+        let mut ms_s = merged[ai].ms.clone();
+        ms_s.sort_by(|a, b| a.total_cmp(b));
+        let med_ms = if ms_s.is_empty() { 0.0 } else { ms_s[ms_s.len() / 2] };
+        rows.push(json!({
+            "arm": arms[ai],
+            "matchups": merged[ai].worst_ev.len(),
+            "worst_case_ev": (w_mean * 10000.0).round() / 10000.0,
+            "avg_support": (s_mean * 100.0).round() / 100.0,
+            "mix_rate": (merged[ai].mix_cnt as f64 / n * 1000.0).round() / 1000.0,
+            "med_ms": (med_ms * 100.0).round() / 100.0,
+        }));
+    }
+    println!(
+        "{}",
+        json!({
+            "cmd": "preview-exploit",
+            "oracle_iters": oracle_iters,
+            "opp_cands": opp_cands_k,
+            "arms": rows,
+            "wall_s": (t0.elapsed().as_secs_f64() * 100.0).round() / 100.0,
+        })
+    );
+}
+
+/// Oracle Ceiling & Calibration Diagnostic (`preview-ceiling`):
+/// For `pairs` matchups, evaluates the full union subgame (`top-20` Stage-1 + all tested arms' picks)
+/// with an independent `cfv-0r` oracle, computes exact Nash `(p*, q*)`, and measures:
+/// 1. Theoretical H2H ceiling of exact Nash `p*` vs `shipped:729000`
+/// 2. Actual H2H of `cfprev` arms vs `shipped:729000` AND vs exact Nash `p*`
+/// 3. Exploitability gap `V* - min_j V(p, j)` for every arm vs exact Nash `V*`
+/// 4. Support recall of exact Nash support inside `select_diverse_support(k=12)`
+/// 5. Fraction of matchups where `shipped:729000` is within `0.02` of `V*` (Nash indifference ceiling).
+fn run_preview_ceiling(dex: &Dex, args: &[String]) {
+    let flag = |name: &str| -> Option<String> {
+        args.iter()
+            .position(|a| a == name)
+            .and_then(|i| args.get(i + 1).cloned())
+    };
+    let pairs: usize = flag("--pairs").map_or(24, |v| v.parse().unwrap());
+    let oracle_iters: u32 = flag("--oracle-iters").map_or(384, |v| v.parse().unwrap());
+    let seed: u64 = flag("--seed").map_or(2026120101, |v| v.parse().unwrap());
+    let threads: usize = flag("--threads").map_or(10, |v| v.parse().unwrap());
+    let catalog_path = flag("--catalog").unwrap_or_else(|| "data/team-pool-v2/team-pool.json".to_string());
+    let unseen_only = args.iter().any(|a| a == "--unseen-only");
+
+    let root = repo_root();
+    let cat_txt = std::fs::read_to_string(root.join(&catalog_path)).unwrap();
+    let mut catalog: WeightedCatalog = serde_json::from_str(&cat_txt).unwrap();
+    if unseen_only {
+        catalog.teams.retain(|t| (canonical_team_hash(&t.sets) % 5) == 0);
+    }
+    let pool = Arc::new(load_meta_pool(&root.join("data/belief-pool-v3/belief-pool.json")));
+    let weights: Vec<f64> = catalog.teams.iter().map(|t| t.draw_weight.unwrap_or(1.0)).collect();
+    let w_sum: f64 = weights.iter().sum();
+    let mut rng = SplitMix64::new(seed);
+    let mut matchups = Vec::with_capacity(pairs);
+    for pi in 0..pairs {
+        let mut draw_t = |r: &mut SplitMix64| -> usize {
+            let mut x = r.next_f64() * w_sum;
+            for (i, &w) in weights.iter().enumerate() {
+                x -= w;
+                if x <= 0.0 { return i; }
+            }
+            weights.len() - 1
+        };
+        let ta = draw_t(&mut rng);
+        let mut tb = draw_t(&mut rng);
+        if tb == ta && catalog.teams.len() > 1 { tb = (ta + 1) % catalog.teams.len(); }
+        matchups.push((pi, ta, tb, rng.next()));
+    }
+
+    let arm_specs = [
+        "cfprev:0@stage1",
+        "cfprev:120k@lcb@late",
+        "cfprev:180k@lcb@t1mm",
+        "cfprev:240k@lcb@t1mm",
+        "cfprev:240k@lcb@late",
+        "cfprev:240k@lcb@t1mm@k14",
+        "cfprev:360k@lcb@t1mm@k14",
+        "shipped:729000",
+    ];
+    let n_arms = arm_specs.len();
+    let cursor = AtomicUsize::new(0);
+    let t0 = Instant::now();
+
+    #[derive(Default)]
+    struct RowAcc {
+        n: usize,
+        nash_vs_ship: f64,
+        ship_near_nash: usize,
+        arm_vs_ship: Vec<f64>,
+        arm_vs_nash: Vec<f64>,
+        arm_regret_to_vstar: Vec<f64>,
+        arm_worst_gap_to_vstar: Vec<f64>,
+        s1_top12_mass_of_nash: f64,
+    }
+
+    let parts: Vec<RowAcc> = std::thread::scope(|s| {
+        let mut hs = Vec::new();
+        for _ in 0..threads.min(pairs).max(1) {
+            let (cat_r, pool_r, m_r, cur_r) = (&catalog, &pool, &matchups, &cursor);
+            hs.push(s.spawn(move || {
+                let mut acc = RowAcc {
+                    arm_vs_ship: vec![0.0; n_arms],
+                    arm_vs_nash: vec![0.0; n_arms],
+                    arm_regret_to_vstar: vec![0.0; n_arms],
+                    arm_worst_gap_to_vstar: vec![0.0; n_arms],
+                    ..Default::default()
+                };
+                loop {
+                    let idx = cur_r.fetch_add(1, Ordering::Relaxed);
+                    if idx >= m_r.len() { break; }
+                    let (_, ia, ib, mseed) = m_r[idx];
+                    let ta = &cat_r.teams[ia].sets;
+                    let tb = &cat_r.teams[ib].sets;
+                    let mut b = Battle::from_fixture(dex, "1,2,3,4", ta, tb).unwrap();
+                    if !nc2000_engine::compact::is_compact_preview_supported(&b, dex) { continue; }
+                    b.set_log_enabled(true);
+                    let legal0 = b.legal_choices(dex, 0);
+                    let legal1 = b.legal_choices(dex, 1);
+                    let c0 = nc2000_bot::preview_search::canonical_preview_triples(dex, &mut b, 0);
+                    let c1 = nc2000_bot::preview_search::canonical_preview_triples(dex, &mut b, 1);
+                    if c0.is_empty() || c1.is_empty() { continue; }
+
+                    let get_dist = |side: usize, sets: &[PokemonSet], legal: &[SearchChoice], spec: &str, s_seed: u64| -> Vec<([u8; 3], f64)> {
+                        let (mut lp, mut obs) =
+                            nc2000_bot::player_state::LocalPlayer::new_with_own_sets(&b, dex, side, sets.to_vec()).unwrap();
+                        lp.observe(&b, dex, &mut obs).unwrap();
+                        let mut belief = nc2000_bot::belief::Belief::new(dex, pool_r, &obs);
+                        belief.sync(dex, &obs);
+                        let mut lrng = SplitMix64::new(s_seed);
+                        let pos = lp.position(dex, &mut belief, &obs, &mut lrng).unwrap();
+                        match parse_preview_spec(spec).unwrap() {
+                            Ok(iters) => {
+                                let ch = nc2000_bot::preview_search::solve_shipped_preview(
+                                    &pos, dex, &belief, &obs, side, iters, lrng,
+                                );
+                                if let SearchChoice::Team(t) = ch { vec![(t, 1.0)] } else { vec![] }
+                            }
+                            Err(cfg) => {
+                                let res = nc2000_bot::preview_search::solve_cf_preview(
+                                    &pos, dex, &belief, &obs, side, &cfg, &mut lrng,
+                                );
+                                let mut d = Vec::new();
+                                for (li, &p) in res.policy_full.iter().enumerate() {
+                                    if p > 1e-6 {
+                                        if let Some(SearchChoice::Team(t)) = legal.get(li) {
+                                            d.push((*t, p));
+                                        }
+                                    }
+                                }
+                                if d.is_empty() {
+                                    if let SearchChoice::Team(t) = res.choice { d.push((t, 1.0)); }
+                                }
+                                let sm: f64 = d.iter().map(|x| x.1).sum();
+                                for x in &mut d { x.1 /= sm.max(1e-12); }
+                                d
+                            }
+                        }
+                    };
+
+                    let mut dists0 = Vec::with_capacity(n_arms);
+                    let mut dists1 = Vec::with_capacity(n_arms);
+                    for (ai, &sp) in arm_specs.iter().enumerate() {
+                        dists0.push(get_dist(0, ta, &legal0, sp, mseed ^ ((ai as u64 + 1) * 0x9E37_79B9)));
+                        dists1.push(get_dist(1, tb, &legal1, sp, mseed ^ ((ai as u64 + 101) * 0x9E37_79B9)));
+                    }
+
+                    // Build Stage-1 full matrix to pick top-20 rows & cols + union with all arms' support.
+                    let roster = nc2000_engine::compact::CompactPreviewRoster::from_battle(&b, dex, None);
+                    let pcache = nc2000_bot::tempo::PreviewTempoCache::build_for_preview_roster(
+                        &roster,
+                        [b.sides[0].party.len(), b.sides[1].party.len()],
+                    );
+                    let mut v0_mat = vec![0.5f64; c0.len() * c1.len()];
+                    for (i, &p0) in c0.iter().enumerate() {
+                        for (j, &p1) in c1.iter().enumerate() {
+                            let (tbl, mut cb) = roster.build_turn1([p0, p1], 0);
+                            cb.quick_claw_roll = 0;
+                            let slc = pcache.slice_for(&cb);
+                            v0_mat[i * c1.len() + j] = nc2000_bot::compact_az::evaluate_cf_value(&cb, &tbl, Some(&slc), 1.0);
+                        }
+                    }
+                    let s1_sol = nc2000_bot::preview_search::solve_bayesian_rm_plus(
+                        c0.len(),
+                        &[(1.0, c1.len(), &v0_mat)],
+                        1000,
+                    );
+                    let mut ord0: Vec<usize> = (0..c0.len()).collect();
+                    ord0.sort_by(|&a, &b| s1_sol.row_vs_q[b].total_cmp(&s1_sol.row_vs_q[a]));
+                    let top12_s1: Vec<[u8; 3]> = ord0.iter().take(12).map(|&i| c0[i]).collect();
+
+                    let mut ord1: Vec<usize> = (0..c1.len()).collect();
+                    ord1.sort_by(|&a, &b| s1_sol.col_vs_p[0][a].total_cmp(&s1_sol.col_vs_p[0][b]));
+
+                    let mut rows_u: Vec<[u8; 3]> = ord0.iter().take(18).map(|&i| c0[i]).collect();
+                    let mut cols_u: Vec<[u8; 3]> = ord1.iter().take(18).map(|&j| c1[j]).collect();
+                    for d in &dists0 { for &(t, _) in d { if !rows_u.contains(&t) { rows_u.push(t); } } }
+                    for d in &dists1 { for &(t, _) in d { if !cols_u.contains(&t) { cols_u.push(t); } } }
+
+                    // Evaluate full `rows_u × cols_u` with `oracle_iters` `cfv-0r`.
+                    let nr = rows_u.len();
+                    let nc = cols_u.len();
+                    let mut omat = vec![0.5f64; nr * nc];
+                    for r in 0..nr {
+                        for c in 0..nc {
+                            let oseed = mseed ^ 0xA5A5_1234_5678_9ABC ^ ((r as u64) << 16) ^ (c as u64);
+                            omat[r * nc + c] = nc2000_bot::preview_search::eval_turn1_oracle_cell(
+                                &roster, &pcache, [rows_u[r], cols_u[c]], oracle_iters, oseed,
+                            );
+                        }
+                    }
+                    let osol = nc2000_bot::preview_search::solve_bayesian_rm_plus(
+                        nr,
+                        &[(1.0, nc, &omat)],
+                        2000,
+                    );
+                    let eval_pair = |d0: &[([u8; 3], f64)], d1: &[([u8; 3], f64)]| -> f64 {
+                        let mut s = 0.0;
+                        for &(t0, p0) in d0 {
+                            let r = rows_u.iter().position(|&x| x == t0).unwrap();
+                            for &(t1, p1) in d1 {
+                                let c = cols_u.iter().position(|&x| x == t1).unwrap();
+                                s += p0 * p1 * omat[r * nc + c];
+                            }
+                        }
+                        s
+                    };
+                    let nash0: Vec<([u8; 3], f64)> = rows_u.iter().enumerate().filter(|&(r, _)| osol.own_policy[r] > 1e-6).map(|(r, &t)| (t, osol.own_policy[r])).collect();
+                    let nash1: Vec<([u8; 3], f64)> = cols_u.iter().enumerate().filter(|&(c, _)| osol.opp_policies[0][c] > 1e-6).map(|(c, &t)| (t, osol.opp_policies[0][c])).collect();
+
+                    let ship_idx = n_arms - 1;
+                    let v_n_vs_s = 0.5 * (eval_pair(&nash0, &dists1[ship_idx]) + (1.0 - eval_pair(&dists0[ship_idx], &nash1)));
+                    acc.nash_vs_ship += v_n_vs_s;
+                    if (v_n_vs_s - 0.5).abs() < 0.02 { acc.ship_near_nash += 1; }
+                    let mass12: f64 = nash0.iter().filter(|&&(t, _)| top12_s1.contains(&t)).map(|&(_, p)| p).sum();
+                    acc.s1_top12_mass_of_nash += mass12;
+
+                    for ai in 0..n_arms {
+                        let vs_s = 0.5 * (eval_pair(&dists0[ai], &dists1[ship_idx]) + (1.0 - eval_pair(&dists0[ship_idx], &dists1[ai])));
+                        let vs_n = 0.5 * (eval_pair(&dists0[ai], &nash1) + (1.0 - eval_pair(&nash0, &dists1[ai])));
+                        // Side 0 worst-case gap to V*
+                        let mut w0 = f64::INFINITY;
+                        for c in 0..nc {
+                            let ev: f64 = dists0[ai].iter().map(|&(t0, p0)| {
+                                let r = rows_u.iter().position(|&x| x == t0).unwrap();
+                                p0 * omat[r * nc + c]
+                            }).sum();
+                            if ev < w0 { w0 = ev; }
+                        }
+                        let mut w1 = f64::INFINITY;
+                        for r in 0..nr {
+                            let ev: f64 = dists1[ai].iter().map(|&(t1, p1)| {
+                                let c = cols_u.iter().position(|&x| x == t1).unwrap();
+                                p1 * (1.0 - omat[r * nc + c])
+                            }).sum();
+                            if ev < w1 { w1 = ev; }
+                        }
+                        let avg_wgap = 0.5 * ((osol.value - w0) + ((1.0 - osol.value) - w1));
+                        acc.arm_vs_ship[ai] += vs_s;
+                        acc.arm_vs_nash[ai] += vs_n;
+                        acc.arm_regret_to_vstar[ai] += 0.5 - vs_n;
+                        acc.arm_worst_gap_to_vstar[ai] += avg_wgap;
+                    }
+                    acc.n += 1;
+                }
+                acc
+            }));
+        }
+        hs.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+
+    let mut tot_n = 0usize;
+    let mut nash_vs_ship = 0.0;
+    let mut ship_near = 0usize;
+    let mut mass12 = 0.0;
+    let mut avs = vec![0.0; n_arms];
+    let mut avn = vec![0.0; n_arms];
+    let mut awg = vec![0.0; n_arms];
+    for p in parts {
+        tot_n += p.n;
+        nash_vs_ship += p.nash_vs_ship;
+        ship_near += p.ship_near_nash;
+        mass12 += p.s1_top12_mass_of_nash;
+        for ai in 0..n_arms {
+            avs[ai] += p.arm_vs_ship[ai];
+            avn[ai] += p.arm_vs_nash[ai];
+            awg[ai] += p.arm_worst_gap_to_vstar[ai];
+        }
+    }
+    let nf = tot_n.max(1) as f64;
+    let rows: Vec<Value> = (0..n_arms).map(|ai| json!({
+        "arm": arm_specs[ai],
+        "vs_shipped_ev": (avs[ai] / nf * 10000.0).round() / 10000.0,
+        "vs_shipped_elo": (elo_diff(avs[ai] / nf) * 10.0).round() / 10.0,
+        "vs_exact_nash_ev": (avn[ai] / nf * 10000.0).round() / 10000.0,
+        "exploit_gap_to_vstar": (awg[ai] / nf * 10000.0).round() / 10000.0,
+    })).collect();
+    println!("{}", json!({
+        "cmd": "preview-ceiling",
+        "matchups": tot_n,
+        "oracle_iters": oracle_iters,
+        "exact_nash_vs_shipped_ev": (nash_vs_ship / nf * 10000.0).round() / 10000.0,
+        "exact_nash_vs_shipped_elo": (elo_diff(nash_vs_ship / nf) * 10.0).round() / 10.0,
+        "shipped_within_2pp_of_nash": (ship_near as f64 / nf * 1000.0).round() / 1000.0,
+        "s1_top12_nash_mass_recall": (mass12 / nf * 1000.0).round() / 1000.0,
+        "arms": rows,
+        "wall_s": (t0.elapsed().as_secs_f64() * 100.0).round() / 100.0,
+    }));
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let dex = load_dex();
@@ -3434,6 +4712,10 @@ fn main() {
         Some("collect-az") => run_collect_az(&dex, &args[1..]),
         Some("collect-cf") => run_collect_cf(&dex, &args[1..]),
         Some("cf-probe") => run_cf_probe(&dex, &args[1..]),
+        Some("preview-diag") => run_preview_diag(&dex, &args[1..]),
+        Some("preview-duel") => run_preview_duel(&dex, &args[1..]),
+        Some("preview-exploit") => run_preview_exploit(&dex, &args[1..]),
+        Some("preview-ceiling") => run_preview_ceiling(&dex, &args[1..]),
         Some("scale") => run_scale_suite(&dex, &args[1..]),
         Some("v2bench") => run_v2_bench(&dex, &args[1..]),
         Some("rolloutbench") => run_rollout_bench(&dex, &args[1..]),

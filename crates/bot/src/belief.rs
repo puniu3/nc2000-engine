@@ -1374,6 +1374,87 @@ impl Belief {
         vec![TeamPlanPick::FallbackDefault; k]
     }
 
+    /// Exact normalized Turn-0 posterior distribution over distinct opponent world picks
+    /// `(TeamPlanPick, weight)` for Bayesian Team Preview (zero hidden-info leakage).
+    pub(crate) fn preview_world_distribution(
+        &self,
+        max_worlds: usize,
+        rng: &mut SplitMix64,
+    ) -> Vec<(TeamPlanPick, f64)> {
+        let cap = max_worlds.max(1);
+        if !self.alive.is_empty() {
+            let mut items: Vec<(TeamPlanPick, f64)> = self
+                .alive
+                .iter()
+                .map(|&i| (TeamPlanPick::Pool(i), self.cands[i].weight.unwrap_or(1.0).max(0.0)))
+                .collect();
+            let sum: f64 = items.iter().map(|&(_, w)| w).sum();
+            if sum <= 0.0 {
+                let u = 1.0 / (items.len() as f64);
+                for (_, w) in &mut items {
+                    *w = u;
+                }
+            } else {
+                for (_, w) in &mut items {
+                    *w /= sum;
+                }
+            }
+            if items.len() <= cap {
+                return items;
+            }
+            // Systematic stratified resampling down to `cap` worlds, merging duplicate picks.
+            let plan = self.root_sampling_plan(cap, rng);
+            let mut merged: Vec<(TeamPlanPick, f64)> = Vec::with_capacity(cap);
+            let step = 1.0 / (plan.len() as f64);
+            for p in plan {
+                if let Some((_, w)) = merged.iter_mut().find(|(k, _)| *k == p) {
+                    *w += step;
+                } else {
+                    merged.push((p, step));
+                }
+            }
+            return merged;
+        }
+        if !self.pinned {
+            if let Some(pool) = &self.fallback_cands {
+                if !pool.entries.is_empty() {
+                    let mut items: Vec<(TeamPlanPick, f64)> = pool
+                        .entries
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, &(_, w))| (TeamPlanPick::FallbackCand(idx), w.max(0.0)))
+                        .collect();
+                    let sum: f64 = items.iter().map(|&(_, w)| w).sum();
+                    if sum <= 0.0 {
+                        let u = 1.0 / (items.len() as f64);
+                        for (_, w) in &mut items {
+                            *w = u;
+                        }
+                    } else {
+                        for (_, w) in &mut items {
+                            *w /= sum;
+                        }
+                    }
+                    if items.len() <= cap {
+                        return items;
+                    }
+                    let plan = self.root_sampling_plan(cap, rng);
+                    let mut merged: Vec<(TeamPlanPick, f64)> = Vec::with_capacity(cap);
+                    let step = 1.0 / (plan.len() as f64);
+                    for p in plan {
+                        if let Some((_, w)) = merged.iter_mut().find(|(k, _)| *k == p) {
+                            *w += step;
+                        } else {
+                            merged.push((p, step));
+                        }
+                    }
+                    return merged;
+                }
+            }
+        }
+        vec![(TeamPlanPick::FallbackDefault, 1.0)]
+    }
+
     fn is_weighted_prior(&self) -> bool {
         self.cands.iter().any(|c| c.weight.is_some())
     }

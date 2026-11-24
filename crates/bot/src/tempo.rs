@@ -3658,6 +3658,103 @@ impl TempoMatchCache {
     }
 }
 
+/// Per-world 6×6 precomputed static damage & trait table for Team Preview.
+/// Built once per opponent candidate world (~8 μs via <= 4 synthetic 3v3 blocks) and
+/// sliced O(1) (~40 ns) into a 3×3 `TempoMatchCache` for every `(pick0, pick1)` pair
+/// across both Stage-1 screening (up to 3,600 cells) and Stage-2 persistent PUCT trees.
+#[derive(Clone)]
+pub struct PreviewTempoCache {
+    mons: [[StaticMonCache; 6]; 2],
+    entries: [[[CachedPairEntry; 6]; 6]; 2],
+}
+
+impl PreviewTempoCache {
+    pub fn build_for_preview_roster(
+        roster: &nc2000_engine::compact::CompactPreviewRoster,
+        party_lens: [usize; 2],
+    ) -> Self {
+        let mut mons = [[StaticMonCache::default(); 6]; 2];
+        let mut entries = [[[CachedPairEntry::default(); 6]; 6]; 2];
+
+        let make_blocks = |plen: usize| -> ([[u8; 3]; 2], usize) {
+            let p = plen.clamp(1, 6) as u8;
+            let b0 = [1, if p >= 2 { 2 } else { 0 }, if p >= 3 { 3 } else { 0 }];
+            if p <= 3 {
+                ([b0, b0], 1)
+            } else {
+                let b1 = [
+                    4,
+                    if p >= 5 { 5 } else { 1 },
+                    if p >= 6 { 6 } else if p == 5 { 1 } else { 2 },
+                ];
+                ([b0, b1], 2)
+            }
+        };
+
+        let (blk0, n0) = make_blocks(party_lens[0]);
+        let (blk1, n1) = make_blocks(party_lens[1]);
+        let picked0 = party_lens[0].min(3);
+        let picked1 = party_lens[1].min(3);
+
+        for b0 in 0..n0 {
+            for b1 in 0..n1 {
+                let (table, cb) = roster.build_turn1([blk0[b0], blk1[b1]], 0);
+                let sub = TempoMatchCache::build(&cb, &table);
+                let r0 = cb.sides[0].party_roster;
+                let r1 = cb.sides[1].party_roster;
+                for a in 0..picked0 {
+                    let ra = (r0[a] as usize).min(5);
+                    mons[0][ra] = sub.mons[a];
+                    for d in 0..picked1 {
+                        let rd = (r1[d] as usize).min(5);
+                        entries[0][ra][rd] = sub.entries[0][a][d];
+                    }
+                }
+                for a in 0..picked1 {
+                    let ra = (r1[a] as usize).min(5);
+                    mons[1][ra] = sub.mons[3 + a];
+                    for d in 0..picked0 {
+                        let rd = (r0[d] as usize).min(5);
+                        entries[1][ra][rd] = sub.entries[1][a][d];
+                    }
+                }
+            }
+        }
+        Self { mons, entries }
+    }
+
+    /// O(1) slice into a 3×3 `TempoMatchCache` matching `cb.sides[*].party_roster`
+    /// (bit-for-bit identical to `TempoMatchCache::build(&cb, &table)`).
+    #[inline]
+    pub fn slice_for(&self, cb: &CompactBattle) -> TempoMatchCache {
+        let mut mons = [StaticMonCache::default(); 6];
+        let mut entries = [[[CachedPairEntry::default(); 3]; 3]; 2];
+        let r0 = cb.sides[0].party_roster;
+        let r1 = cb.sides[1].party_roster;
+        for a in 0..3usize {
+            let ra = (r0[a] as usize).min(5);
+            mons[a] = self.mons[0][ra];
+            for d in 0..3usize {
+                let rd = (r1[d] as usize).min(5);
+                entries[0][a][d] = self.entries[0][ra][rd];
+            }
+        }
+        for a in 0..3usize {
+            let ra = (r1[a] as usize).min(5);
+            mons[3 + a] = self.mons[1][ra];
+            for d in 0..3usize {
+                let rd = (r0[d] as usize).min(5);
+                entries[1][a][d] = self.entries[1][ra][rd];
+            }
+        }
+        TempoMatchCache {
+            party_roster: [r0, r1],
+            mons,
+            entries,
+        }
+    }
+}
+
 #[inline]
 fn summarize_kernel(kern: &DmgKernel1D, ms: &CompactMoveSpec) -> CachedMoveDmg {
     let mut p_hit = 0.0f32;
