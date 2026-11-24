@@ -26,6 +26,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
+use nc2000_bot::compiled_preview::POLICY_EPOCH;
 use nc2000_bot::decision::{DecisionPolicy, DecisionSampler, PolicyMode};
 use nc2000_bot::player::PlayerChannel;
 use nc2000_bot::preview::{MetaPool, MetaTeam};
@@ -282,6 +283,8 @@ fn preview_dist_key(
 ) -> [u8; 32] {
     let mut h = Sha256::new();
     h.update(b"nc2000-preview-dist-v1\0");
+    h.update((POLICY_EPOCH.len() as u64).to_le_bytes());
+    h.update(POLICY_EPOCH.as_bytes());
     h.update([side as u8]);
     h.update(preview_iters.to_le_bytes());
     h.update(blind_c.to_bits().to_le_bytes());
@@ -392,6 +395,7 @@ fn preview_cache_key(
     seed: u32,
     preview_iters: u32,
     blind_c: f64,
+    policy_name: &str,
     own_sets_json: &str,
     frame_lines: &[String],
     req_json: &str,
@@ -400,10 +404,14 @@ fn preview_cache_key(
     team_json_map: &HashMap<String, String>,
 ) -> [u8; 32] {
     let mut h = Sha256::new();
+    h.update((POLICY_EPOCH.len() as u64).to_le_bytes());
+    h.update(POLICY_EPOCH.as_bytes());
     h.update([side as u8]);
     h.update(seed.to_le_bytes());
     h.update(preview_iters.to_le_bytes());
     h.update(blind_c.to_bits().to_le_bytes());
+    h.update((policy_name.len() as u64).to_le_bytes());
+    h.update(policy_name.as_bytes());
     h.update((own_sets_json.len() as u64).to_le_bytes());
     h.update(own_sets_json.as_bytes());
     h.update((frame_lines.len() as u64).to_le_bytes());
@@ -686,6 +694,7 @@ fn run_game(shared: &SharedState, index: usize, task: &Task) -> Value {
                             preview_seed,
                             shared.preview_iters,
                             shared.blind_c,
+                            &policies[side],
                             own_json,
                             &frame.lines,
                             &req_json,
@@ -1392,6 +1401,7 @@ fn main() {
     }
     manifest.insert("tasks".into(), json!(sha256_hex(&task_bytes)));
     manifest.insert("runner".into(), json!("native-rust"));
+    manifest.insert("policyEpoch".into(), json!(POLICY_EPOCH));
     manifest.insert("nativeBinary".into(), json!(sha256_hex(&exe_bytes)));
     if is_custom_budget {
         manifest.insert(

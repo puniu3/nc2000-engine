@@ -27,6 +27,9 @@ ROOT = Path(__file__).resolve().parent.parent
 WORK = ROOT / "target/nash-work/okimono-v1"
 DEFAULT_BIN = ROOT / "target/native-pgo/release/examples/nash_refresh"
 TEAM_POOL_V3 = ROOT / "data/team-pool-v3/team-pool.json"
+LIVE_SEARCH_CFG = json.loads((ROOT / "data/live-search.json").read_text())
+DEFAULT_PREVIEW_ITERS = int(LIVE_SEARCH_CFG.get("unknownPreview", 240000))
+DEFAULT_BATTLE_ITERS = int(LIVE_SEARCH_CFG.get("battle", {}).get("adaptive", 243000))
 
 
 def _load_mod(name: str, path: Path) -> Any:
@@ -159,7 +162,7 @@ def run_preview_dist_chunks(
     *,
     k: int = 4,
     rows_per_chunk: int = 10,
-    preview_iters: int = 729000,
+    preview_iters: int = DEFAULT_PREVIEW_ITERS,
     preloaded_cache: Path | None = None,
     local_only: bool = False,
 ) -> Path:
@@ -371,7 +374,7 @@ def cmd_census_analyze(args: argparse.Namespace) -> None:
     rep.sort(key=lambda r: (r["min_pick_pct"], -r["n_lt10"], -r["n_lt15"]))
     out_json = WORK / args.name / "census-report.json"
     out_json.write_text(json.dumps(rep, indent=2))
-    print(f"=== 729k EXACT PREVIEW OKIMONO CENSUS ({len(rep)} teams) ===")
+    print(f"=== EXACT PREVIEW OKIMONO CENSUS ({len(rep)} teams, {WORK.name}/{args.name}) ===")
     print(f"{'Team':31s} | {'Opps':>4s} | {'s1':>5s} {'s2':>5s} {'s3':>5s} {'s4':>5s} {'s5':>5s} {'s6':>5s} | {'Min%':>5s} {'<5':>2s} {'<10':>3s} | Okimono Slot(s)")
     print("-" * 126)
     for r in rep:
@@ -438,7 +441,7 @@ def cmd_preview_screen(args: argparse.Namespace) -> None:
     )
     rep = summarize_preview_dist(dist_path, validated, target_ids=list(validated.keys()))
     (run_dir / "screen-report.json").write_text(json.dumps(rep, indent=2))
-    print(f"=== 729k MUTATION ACTIVATION SCREEN ({len(rep)} candidates vs {len(panel_shells)} shells) ===")
+    print(f"=== {args.preview_iters // 1000}k MUTATION ACTIVATION SCREEN ({len(rep)} candidates vs {len(panel_shells)} shells) ===")
     for r in rep:
         rates = " ".join(f"{s['pick_pct']:5.1f}" for s in r["slots"])
         print(f"  {r['id']:34s} | min={r['min_pick_pct']:5.1f}% (<5:{r['n_lt5']},<10:{r['n_lt10']}) eff={r['eff_combos']:4.1f} | [{rates}]")
@@ -555,9 +558,11 @@ def cmd_live_ab(args: argparse.Namespace) -> None:
         a_mems, a_mix = resolve_entry(ex["a"])
         b_mems, b_mix = resolve_entry(ex["b"])
         npairs = int(ex["pairs"])
+        a_off = int(ex.get("a_offset", 0))
+        b_off = int(ex.get("b_offset", 0))
         for pi in range(npairs):
-            aid = a_mems[pi % len(a_mems)][0]
-            bid = b_mems[pi % len(b_mems)][0]
+            aid = a_mems[(pi + a_off) % len(a_mems)][0]
+            bid = b_mems[(pi + b_off) % len(b_mems)][0]
             bseed = u32_hash(f"ex-battle:{seed_tag}:{ex['a']}:{ex['b']}:p{pi}")
             for row_seat in (0, 1):
                 ids = [aid, bid] if row_seat == 0 else [bid, aid]
@@ -686,6 +691,9 @@ def cmd_live_analyze(args: argparse.Namespace) -> None:
     # Structure: ab[(group, subject)][(opp, pair)] -> [score_seat0, score_seat1]
     ab_pairs: dict[tuple[str, str], dict[tuple[str, int], list[float]]] = defaultdict(lambda: defaultdict(list))
     ab_picks: dict[tuple[str, str], list[int]] = defaultdict(lambda: [0] * 6)
+    ab_slot_pk_sum: dict[tuple[str, str], list[float]] = defaultdict(lambda: [0.0] * 6)
+    ab_slot_unpk_sum: dict[tuple[str, str], list[float]] = defaultdict(lambda: [0.0] * 6)
+    ab_slot_unpk_n: dict[tuple[str, str], list[int]] = defaultdict(lambda: [0] * 6)
     ab_games: dict[tuple[str, str], int] = defaultdict(int)
     ab_opp_scores: dict[tuple[str, str], dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
     group_base: dict[str, str] = {}
@@ -715,9 +723,14 @@ def cmd_live_analyze(args: argparse.Namespace) -> None:
             ab_pairs[(g, subj)][(opp, pi)].append(sc)
             ab_opp_scores[(g, subj)][opp].append(sc)
             ab_games[(g, subj)] += 1
-            for sl in slots:
-                if 1 <= sl <= 6:
-                    ab_picks[(g, subj)][sl - 1] += 1
+            slot_set = {sl for sl in slots if 1 <= sl <= 6}
+            for idx_s in range(6):
+                if (idx_s + 1) in slot_set:
+                    ab_picks[(g, subj)][idx_s] += 1
+                    ab_slot_pk_sum[(g, subj)][idx_s] += sc
+                else:
+                    ab_slot_unpk_n[(g, subj)][idx_s] += 1
+                    ab_slot_unpk_sum[(g, subj)][idx_s] += sc
         elif kind == "live_h2h":
             g = cell["group"]
             subj = cell["subject"]
@@ -788,6 +801,15 @@ def cmd_live_analyze(args: argparse.Namespace) -> None:
                 "h2h_se": round(h2h_se, 4) if h2h_se is not None else None,
                 "min_pick_pct": round(min_pk, 2),
                 "slot_picks_pct": [round(x, 2) for x in pk_rates],
+                "slot_picked_n": list(ab_picks[(g, s)]),
+                "slot_picked_wr": [
+                    round(ab_slot_pk_sum[(g, s)][i] / ab_picks[(g, s)][i], 4) if ab_picks[(g, s)][i] > 0 else None
+                    for i in range(6)
+                ],
+                "slot_unpicked_wr": [
+                    round(ab_slot_unpk_sum[(g, s)][i] / ab_slot_unpk_n[(g, s)][i], 4) if ab_slot_unpk_n[(g, s)][i] > 0 else None
+                    for i in range(6)
+                ],
                 "ge50": n_ge50,
                 "lt35": n_lt35,
                 "n_opps": len(opp_wrs),
@@ -800,7 +822,9 @@ def cmd_live_analyze(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    global WORK
     ap = argparse.ArgumentParser()
+    ap.add_argument("--work-dir", default=None, help="Override work dir (default: target/nash-work/okimono-v1)")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("census-run")
@@ -808,7 +832,7 @@ def main() -> None:
     p.add_argument("--catalog", default=None)
     p.add_argument("--k", type=int, default=4)
     p.add_argument("--rows-per-chunk", type=int, default=10)
-    p.add_argument("--preview-iters", type=int, default=729000)
+    p.add_argument("--preview-iters", type=int, default=DEFAULT_PREVIEW_ITERS)
     p.add_argument("--local-only", action="store_true")
     p.set_defaults(fn=cmd_census_run)
 
@@ -823,7 +847,7 @@ def main() -> None:
     p.add_argument("--catalog", default=None)
     p.add_argument("--k", type=int, default=4)
     p.add_argument("--rows-per-chunk", type=int, default=8)
-    p.add_argument("--preview-iters", type=int, default=729000)
+    p.add_argument("--preview-iters", type=int, default=DEFAULT_PREVIEW_ITERS)
     p.add_argument("--local-only", action="store_true")
     p.set_defaults(fn=cmd_preview_screen)
 
@@ -832,8 +856,8 @@ def main() -> None:
     p.add_argument("--spec", required=True)
     p.add_argument("--catalog", default=None)
     p.add_argument("--chunk-games", type=int, default=16)
-    p.add_argument("--preview-iters", type=int, default=729000)
-    p.add_argument("--battle-iters", type=int, default=243000)
+    p.add_argument("--preview-iters", type=int, default=DEFAULT_PREVIEW_ITERS)
+    p.add_argument("--battle-iters", type=int, default=DEFAULT_BATTLE_ITERS)
     p.add_argument("--battle-mode", default="adaptive")
     p.add_argument("--local-only", action="store_true")
     p.set_defaults(fn=cmd_live_ab)
@@ -843,6 +867,8 @@ def main() -> None:
     p.set_defaults(fn=cmd_live_analyze)
 
     args = ap.parse_args()
+    if args.work_dir:
+        WORK = Path(args.work_dir)
     args.fn(args)
 
 

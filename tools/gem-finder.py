@@ -1519,18 +1519,34 @@ def cmd_preview_gate(args: argparse.Namespace) -> None:
             for i in range(6):
                 slot_rates[i] += opp_s[i] / n_opp
             per_opp_target[opp_mix.replace("shell:", "")] = round(opp_s[slot_idx] * 100.0, 1)
+        tpk = round(slot_rates[slot_idx] * 100.0, 1)
+        # Empirically calibrated policy-v2 (SteppedCfPreview 240k + CfValuePuct) detection zones:
+        # <10% = dead/ignored, 10-42% = sweet spot, >42% = OOD CF-V_net over-pick risk (0/11 passed LIVE InWR-OutWR gate).
+        v2_zone = "DEAD(<10%)" if tpk < 10.0 else ("SWEET[10-42%]" if tpk <= 42.0 else "OVERPICK_RISK(>42%)")
         summary.append({
             "id": cid,
             "target_slot": slot_idx + 1,
             "target_species": sets[slot_idx]["species"],
-            "target_pick_pct": round(slot_rates[slot_idx] * 100.0, 1),
+            "target_pick_pct": tpk,
+            "policy_v2_zone": v2_zone,
             "min_slot_pct": round(min(slot_rates) * 100.0, 1),
             "all_slot_pcts": [round(r * 100.0, 1) for r in slot_rates],
             "per_opp_target_pct": per_opp_target,
         })
 
     rep_path = gate_dir / "gate-report.json"
-    rep_path.write_text(json.dumps({"preview_iters": args.preview_iters, "k": args.k, "elapsed_s": round(elapsed, 1), "results": summary}, indent=2))
+    rep_path.write_text(json.dumps({
+        "policy_epoch": "policy-v2",
+        "preview_iters": args.preview_iters,
+        "k": args.k,
+        "v2_thresholds": {
+            "sweet_pick_pct": [10.0, 42.0],
+            "overpick_risk_gt_pct": 42.0,
+            "live_in_minus_out_wr_min_pp": 5.0,
+        },
+        "elapsed_s": round(elapsed, 1),
+        "results": summary,
+    }, indent=2))
     print(json.dumps({"stage": "preview-gate", "cands": len(summary), "preview_iters": args.preview_iters, "k": args.k, "elapsed_s": round(elapsed, 1), "out": str(rep_path)}))
 
 
@@ -1555,9 +1571,10 @@ def main() -> None:
 
     sub.add_parser("analyze")
 
+    live_preview_default = int(json.loads((ROOT / "data/live-search.json").read_text()).get("unknownPreview", 240000))
     pg = sub.add_parser("preview-gate")
-    pg.add_argument("--preview-iters", type=int, default=243000)
-    pg.add_argument("--k", type=int, default=2)
+    pg.add_argument("--preview-iters", type=int, default=live_preview_default)
+    pg.add_argument("--k", type=int, default=4)
     pg.add_argument("--threads", type=int, default=10)
 
     args = ap.parse_args()
