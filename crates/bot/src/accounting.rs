@@ -12,16 +12,28 @@ pub enum LeafSettlementMode {
     /// Ablation baseline without the Setup-Relay Bellman solver (`-relay`): 8-turn
     /// `eps = 0.2` rollout + static `eval::compact_eval_leaf_blindspot_norelay`.
     BlindSpotLeafNoRelay,
+    /// Certified production default: 144-dim Siamese `CF-V_net` v2 0-rollout value leaf
+    /// + `P_net` PUCT interior selection + pure MC (`lam = 0`) backup + `n0+n1 <= 3`
+    /// `8r` `BlindSpotLeaf` Hybrid Endgame Guard (plus `SteppedCfPreview` at Team Preview).
+    CfValuePuct,
 }
 
 impl LeafSettlementMode {
     #[inline]
     pub const fn uses_blindspot_leaf(self) -> bool {
-        matches!(self, Self::BlindSpotLeaf | Self::BlindSpotLeafNoRelay)
+        matches!(
+            self,
+            Self::BlindSpotLeaf | Self::BlindSpotLeafNoRelay | Self::CfValuePuct
+        )
     }
 
     #[inline]
     pub const fn uses_relay_bellman(self) -> bool {
-        matches!(self, Self::BlindSpotLeaf)
+        matches!(self, Self::BlindSpotLeaf | Self::CfValuePuct)
+    }
+
+    #[inline]
+    pub const fn uses_cf_value_puct(self) -> bool {
+        matches!(self, Self::CfValuePuct)
     }
 }

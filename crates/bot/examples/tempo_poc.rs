@@ -1580,7 +1580,7 @@ fn build_blind_arm(
     seed: u64,
     preview_triple: [u8; 3],
 ) -> Box<dyn Agent> {
-    if let Some(rest) = spec.strip_prefix("blind-shipped:") {
+    if let Some(rest) = spec.strip_prefix("blind-default:") {
         if rest == "adaptive" {
             let cfg = RmConfig {
                 iterations: nc2000_bot::adaptive_budget::BATTLE_CAP,
@@ -1592,12 +1592,45 @@ fn build_blind_arm(
             if let Some(pol) = one_hot_preview_policy(preview_triple) {
                 ag = ag.with_own_preview_policy(pol);
             } else {
-                ag = ag.with_preview_iterations(1);
+                ag = ag.with_preview_iterations(240_000);
             }
             Box::new(ag)
         } else {
             let iters: u32 = rest.parse().unwrap_or_else(|_| panic!("bad spec: {spec}"));
             let cfg = RmConfig { iterations: iters, rule: SelRule::Ucb, c: 0.4, ..Default::default() };
+            let mut ag = BlindAgent::new(cfg, pool, None, seed);
+            if let Some(pol) = one_hot_preview_policy(preview_triple) {
+                ag = ag.with_own_preview_policy(pol);
+            } else {
+                ag = ag.with_preview_iterations(240_000);
+            }
+            Box::new(ag)
+        }
+    } else if let Some(rest) = spec.strip_prefix("blind-shipped:") {
+        if rest == "adaptive" {
+            let cfg = RmConfig {
+                iterations: nc2000_bot::adaptive_budget::BATTLE_CAP,
+                rule: SelRule::Ucb,
+                c: 0.4,
+                settlement: nc2000_bot::accounting::LeafSettlementMode::BlindSpotLeaf,
+                ..Default::default()
+            };
+            let mut ag = BlindAgent::new(cfg, pool, None, seed).with_adaptive_battle_budget();
+            if let Some(pol) = one_hot_preview_policy(preview_triple) {
+                ag = ag.with_own_preview_policy(pol);
+            } else {
+                ag = ag.with_preview_iterations(1);
+            }
+            Box::new(ag)
+        } else {
+            let iters: u32 = rest.parse().unwrap_or_else(|_| panic!("bad spec: {spec}"));
+            let cfg = RmConfig {
+                iterations: iters,
+                rule: SelRule::Ucb,
+                c: 0.4,
+                settlement: nc2000_bot::accounting::LeafSettlementMode::BlindSpotLeaf,
+                ..Default::default()
+            };
             let mut ag = BlindAgent::new(cfg, pool, None, seed);
             if let Some(pol) = one_hot_preview_policy(preview_triple) {
                 ag = ag.with_own_preview_policy(pol);

@@ -1863,6 +1863,7 @@ pub fn search_compact_teacher(
             &mut tt,
             &mut cb,
             table,
+            None,
             turn_cap,
             0,
             [None, None],

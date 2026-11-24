@@ -21,7 +21,30 @@
 //!    polishes near-binding cells to low SE, and outputs an exact Bayesian Minimax / LCB-gated
 //!    Mixed Nash strategy.
 
+#[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
+
+#[cfg(not(target_arch = "wasm32"))]
+#[inline]
+fn start_timer() -> Instant {
+    Instant::now()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[inline]
+fn elapsed_ms(t: Instant) -> f64 {
+    t.elapsed().as_secs_f64() * 1000.0
+}
+
+#[cfg(target_arch = "wasm32")]
+#[inline]
+fn start_timer() -> () {}
+
+#[cfg(target_arch = "wasm32")]
+#[inline]
+fn elapsed_ms(_t: ()) -> f64 {
+    0.0
+}
 
 use nc2000_engine::battle::SearchChoice;
 use nc2000_engine::compact::{
@@ -791,7 +814,7 @@ impl CfPreviewCell {
         let omit_qc = (root_cb.sides[0].request == 1 && root_cb.sides[1].request == 1)
             || !root_cb.quick_claw_observable(&table);
         let rk = root_cb.search_key(&table, 16, omit_qc);
-        let mut nodes = Vec::with_capacity(256);
+        let mut nodes = Vec::with_capacity(64);
         let mut tt: FxHashMap<u64, usize> = FxHashMap::default();
         nodes.push(rn);
         tt.insert(rk, 0);
@@ -814,6 +837,156 @@ impl CfPreviewCell {
         }
     }
 
+    fn step_one(
+        &mut self,
+        cfg: &PreviewSearchConfig,
+        rng: &mut SplitMix64,
+        eg_weights: &EvalWeights,
+        eg_playout: &Playout,
+        rollout_rules: crate::mcts::RolloutRules,
+        path: &mut Vec<(usize, usize, usize)>,
+    ) -> (f64, u32) {
+        let c_puct = cfg.c_puct;
+        let fpu_red = cfg.fpu_red;
+        let puct_eps = cfg.puct_eps;
+        let use_cf_policy = cfg.use_cf_policy;
+        let leaf_temp = cfg.leaf_temp;
+
+        let mut cb = self.root_cb;
+        {
+            let mut prng = nc2000_engine::prng::Prng::new(rng.next());
+            let qc = Battle::roll_quick_claw_with(self.table.ruleset, &mut prng);
+            cb.quick_claw_roll = (qc[0] as u8) | ((qc[1] as u8) << 1);
+            // Resample Berserk Gene lead confusion duration uniformly in {2, 3, 4, 5}.
+            for s in 0..2usize {
+                if self.berserk_confused[s] {
+                    cb.mons[s * 3].timers[timer_idx::CONFUSION] = (2 + prng.random(4)) as u8;
+                }
+            }
+            cb.prng_seed = prng.seed();
+        }
+        let mut cur_id = 0usize;
+        let mut depth = 0u8;
+        let mut root_i0 = 0usize;
+        let mut root_i1 = 0usize;
+        path.clear();
+
+        let val0 = loop {
+            self.nodes[cur_id].ensure_priors(
+                &cb,
+                &self.table,
+                &self.cache,
+                puct_eps,
+                use_cf_policy,
+            );
+            let node = &self.nodes[cur_id];
+            let n0_cur = node.n_acts[0] as usize;
+            let n1_cur = node.n_acts[1] as usize;
+            let i0 = node.select_puct(0, c_puct, fpu_red);
+            let i1 = node.select_puct(1, c_puct, fpu_red);
+            if depth == 0 {
+                root_i0 = i0;
+                root_i1 = i1;
+            }
+            let a0 = if n0_cur > 0 { node.acts[0][i0] } else { 7 };
+            let a1 = if n1_cur > 0 { node.acts[1][i1] } else { 7 };
+            if depth == 0 || n0_cur > 1 || n1_cur > 1 {
+                path.push((cur_id, i0, i1));
+            }
+            cb.apply_actions(&self.table, [a0, a1]);
+            depth = depth.saturating_add(1);
+            if cb.outcome != 0 {
+                break match cb.outcome {
+                    1 => 1.0,
+                    2 => 0.0,
+                    _ => 0.5,
+                };
+            }
+            if let Some(v) = compact_turn_limit_outcome(&cb, &self.table) {
+                break v;
+            }
+            if depth >= 250 || cb.turn > self.turn_cap {
+                let alive_sum = cb.sides[0].alive_mask.count_ones()
+                    + cb.sides[1].alive_mask.count_ones();
+                if alive_sum <= 3 {
+                    break compact_eval_leaf_blindspot(&cb, &self.table, eg_weights);
+                }
+                break evaluate_cf_value_resolving_switches(
+                    &cb,
+                    &self.table,
+                    Some(&self.cache),
+                    leaf_temp,
+                );
+            }
+            let oq = !cb.quick_claw_observable(&self.table);
+            let nk = cb.search_key(&self.table, 16, oq);
+            if let Some(&nid) = self.tt.get(&nk) {
+                cur_id = nid;
+            } else {
+                let nid = self.nodes.len();
+                self.nodes.push(CfPrevNode::new(&cb, &self.table));
+                self.tt.insert(nk, nid);
+                let alive_sum = cb.sides[0].alive_mask.count_ones()
+                    + cb.sides[1].alive_mask.count_ones();
+                if alive_sum <= 3 {
+                    // Hybrid Endgame Guard (`n0 + n1 <= 3` -> `8r EvalBlindspot + linear.rs`).
+                    let cutoff = self.turn_cap.min(cb.turn.saturating_add(7));
+                    break crate::mcts::compact_playout_with_leaf(
+                        &mut cb,
+                        &self.table,
+                        eg_playout,
+                        cutoff,
+                        rng,
+                        rollout_rules,
+                        |cb_l, t_l| compact_eval_leaf_blindspot(cb_l, t_l, eg_weights),
+                    );
+                }
+                break evaluate_cf_value_resolving_switches(
+                    &cb,
+                    &self.table,
+                    Some(&self.cache),
+                    leaf_temp,
+                );
+            }
+        };
+
+        // Pure MC backup (`lam = 0.0`), matching certified in-battle Champion.
+        for &(nid, i0, i1) in path.iter().rev() {
+            let n = &mut self.nodes[nid];
+            n.total += 1;
+            if n.n_acts[0] > 0 {
+                n.visits[0][i0] += 1;
+                n.sums[0][i0] += val0;
+            }
+            if n.n_acts[1] > 0 {
+                n.visits[1][i1] += 1;
+                n.sums[1][i1] += val0;
+            }
+        }
+        self.total_n += 1;
+        self.total_w0 += val0;
+        self.late_n += 1.0;
+        self.late_w0 += val0;
+        if root_i0 < 6 && root_i1 < 6 {
+            self.root_joint_n[root_i0][root_i1] += 1.0;
+            self.root_joint_w0[root_i0][root_i1] += val0;
+        }
+        if self.total_n == self.next_halve {
+            self.late_n *= 0.5;
+            self.late_w0 *= 0.5;
+            for r in 0..6 {
+                for c in 0..6 {
+                    if self.root_joint_n[r][c] >= 4.0 {
+                        self.root_joint_n[r][c] *= 0.5;
+                        self.root_joint_w0[r][c] *= 0.5;
+                    }
+                }
+            }
+            self.next_halve = self.next_halve.saturating_mul(2);
+        }
+        (val0, u32::from(depth))
+    }
+
     fn step(
         &mut self,
         iters: u32,
@@ -824,145 +997,8 @@ impl CfPreviewCell {
         rollout_rules: crate::mcts::RolloutRules,
         path: &mut Vec<(usize, usize, usize)>,
     ) {
-        let c_puct = cfg.c_puct;
-        let fpu_red = cfg.fpu_red;
-        let puct_eps = cfg.puct_eps;
-        let use_cf_policy = cfg.use_cf_policy;
-        let leaf_temp = cfg.leaf_temp;
-
         for _ in 0..iters {
-            let mut cb = self.root_cb;
-            {
-                let mut prng = nc2000_engine::prng::Prng::new(rng.next());
-                let qc = Battle::roll_quick_claw_with(self.table.ruleset, &mut prng);
-                cb.quick_claw_roll = (qc[0] as u8) | ((qc[1] as u8) << 1);
-                // Resample Berserk Gene lead confusion duration uniformly in {2, 3, 4, 5}.
-                for s in 0..2usize {
-                    if self.berserk_confused[s] {
-                        cb.mons[s * 3].timers[timer_idx::CONFUSION] = (2 + prng.random(4)) as u8;
-                    }
-                }
-                cb.prng_seed = prng.seed();
-            }
-            let mut cur_id = 0usize;
-            let mut depth = 0u8;
-            let mut root_i0 = 0usize;
-            let mut root_i1 = 0usize;
-            path.clear();
-
-            let val0 = loop {
-                self.nodes[cur_id].ensure_priors(
-                    &cb,
-                    &self.table,
-                    &self.cache,
-                    puct_eps,
-                    use_cf_policy,
-                );
-                let node = &self.nodes[cur_id];
-                let n0_cur = node.n_acts[0] as usize;
-                let n1_cur = node.n_acts[1] as usize;
-                let i0 = node.select_puct(0, c_puct, fpu_red);
-                let i1 = node.select_puct(1, c_puct, fpu_red);
-                if depth == 0 {
-                    root_i0 = i0;
-                    root_i1 = i1;
-                }
-                let a0 = if n0_cur > 0 { node.acts[0][i0] } else { 7 };
-                let a1 = if n1_cur > 0 { node.acts[1][i1] } else { 7 };
-                if depth == 0 || n0_cur > 1 || n1_cur > 1 {
-                    path.push((cur_id, i0, i1));
-                }
-                cb.apply_actions(&self.table, [a0, a1]);
-                depth = depth.saturating_add(1);
-                if cb.outcome != 0 {
-                    break match cb.outcome {
-                        1 => 1.0,
-                        2 => 0.0,
-                        _ => 0.5,
-                    };
-                }
-                if let Some(v) = compact_turn_limit_outcome(&cb, &self.table) {
-                    break v;
-                }
-                if depth >= 250 || cb.turn > self.turn_cap {
-                    let alive_sum = cb.sides[0].alive_mask.count_ones()
-                        + cb.sides[1].alive_mask.count_ones();
-                    if alive_sum <= 3 {
-                        break compact_eval_leaf_blindspot(&cb, &self.table, eg_weights);
-                    }
-                    break evaluate_cf_value_resolving_switches(
-                        &cb,
-                        &self.table,
-                        Some(&self.cache),
-                        leaf_temp,
-                    );
-                }
-                let oq = !cb.quick_claw_observable(&self.table);
-                let nk = cb.search_key(&self.table, 16, oq);
-                if let Some(&nid) = self.tt.get(&nk) {
-                    cur_id = nid;
-                } else {
-                    let nid = self.nodes.len();
-                    self.nodes.push(CfPrevNode::new(&cb, &self.table));
-                    self.tt.insert(nk, nid);
-                    let alive_sum = cb.sides[0].alive_mask.count_ones()
-                        + cb.sides[1].alive_mask.count_ones();
-                    if alive_sum <= 3 {
-                        // Hybrid Endgame Guard (`n0 + n1 <= 3` -> `8r EvalBlindspot + linear.rs`).
-                        let cutoff = self.turn_cap.min(cb.turn.saturating_add(7));
-                        break crate::mcts::compact_playout_with_leaf(
-                            &mut cb,
-                            &self.table,
-                            eg_playout,
-                            cutoff,
-                            rng,
-                            rollout_rules,
-                            |cb_l, t_l| compact_eval_leaf_blindspot(cb_l, t_l, eg_weights),
-                        );
-                    }
-                    break evaluate_cf_value_resolving_switches(
-                        &cb,
-                        &self.table,
-                        Some(&self.cache),
-                        leaf_temp,
-                    );
-                }
-            };
-
-            // Pure MC backup (`lam = 0.0`), matching certified in-battle Champion.
-            for &(nid, i0, i1) in path.iter().rev() {
-                let n = &mut self.nodes[nid];
-                n.total += 1;
-                if n.n_acts[0] > 0 {
-                    n.visits[0][i0] += 1;
-                    n.sums[0][i0] += val0;
-                }
-                if n.n_acts[1] > 0 {
-                    n.visits[1][i1] += 1;
-                    n.sums[1][i1] += val0;
-                }
-            }
-            self.total_n += 1;
-            self.total_w0 += val0;
-            self.late_n += 1.0;
-            self.late_w0 += val0;
-            if root_i0 < 6 && root_i1 < 6 {
-                self.root_joint_n[root_i0][root_i1] += 1.0;
-                self.root_joint_w0[root_i0][root_i1] += val0;
-            }
-            if self.total_n == self.next_halve {
-                self.late_n *= 0.5;
-                self.late_w0 *= 0.5;
-                for r in 0..6 {
-                    for c in 0..6 {
-                        if self.root_joint_n[r][c] >= 4.0 {
-                            self.root_joint_n[r][c] *= 0.5;
-                            self.root_joint_w0[r][c] *= 0.5;
-                        }
-                    }
-                }
-                self.next_halve = self.next_halve.saturating_mul(2);
-            }
+            self.step_one(cfg, rng, eg_weights, eg_playout, rollout_rules, path);
         }
     }
 
@@ -1075,6 +1111,7 @@ pub fn solve_shipped_preview(
         iterations,
         rule: SelRule::Ucb,
         c: 0.4,
+        settlement: crate::accounting::LeafSettlementMode::LegacyRollout,
         ..Default::default()
     };
     let mut bs = BlindSearch::from_observation_with_rng(position, dex, rm_cfg, side, rng);
@@ -1094,7 +1131,7 @@ pub fn solve_cf_preview(
     cfg: &PreviewSearchConfig,
     rng: &mut SplitMix64,
 ) -> PreviewSearchResult {
-    let t_total = Instant::now();
+    let t_total = start_timer();
     let mut base = position.model().clone();
     assert_eq!(base.request_state, RequestState::TeamPreview);
     let opp = 1 - side;
@@ -1121,7 +1158,7 @@ pub fn solve_cf_preview(
             used_mix: false,
             used_fallback: false,
             stage1_ms: 0.0,
-            total_ms: t_total.elapsed().as_secs_f64() * 1000.0,
+            total_ms: elapsed_ms(t_total),
             iters_used: 0,
             worlds_stage1: 0,
             worlds_stage2: 0,
@@ -1175,7 +1212,7 @@ pub fn solve_cf_preview(
             used_mix: false,
             used_fallback: true,
             stage1_ms: 0.0,
-            total_ms: t_total.elapsed().as_secs_f64() * 1000.0,
+            total_ms: elapsed_ms(t_total),
             iters_used: cfg.fallback_iters,
             worlds_stage1: world_plan.len(),
             worlds_stage2: 0,
@@ -1250,7 +1287,7 @@ pub fn solve_cf_preview(
             used_mix: false,
             used_fallback: true,
             stage1_ms: 0.0,
-            total_ms: t_total.elapsed().as_secs_f64() * 1000.0,
+            total_ms: elapsed_ms(t_total),
             iters_used: cfg.fallback_iters,
             worlds_stage1: 0,
             worlds_stage2: 0,
@@ -1278,7 +1315,7 @@ pub fn solve_cf_preview(
         .map(|w| (w.weight, w.opp_canon.len(), w.stage1_vals.as_slice()))
         .collect();
     let sol1 = solve_bayesian_rm_plus(n_own, &s1_slices, cfg.rm_sweeps_stage1);
-    let stage1_ms = t_total.elapsed().as_secs_f64() * 1000.0;
+    let stage1_ms = elapsed_ms(t_total);
 
     if matches!(cfg.policy_mode, PreviewPolicyMode::Stage1Only) || cfg.total_iters == 0 {
         let mut p = sol1.own_policy.clone();
@@ -1320,7 +1357,7 @@ pub fn solve_cf_preview(
             used_mix: p.iter().filter(|&&x| x > 0.0).count() > 1,
             used_fallback: false,
             stage1_ms,
-            total_ms: t_total.elapsed().as_secs_f64() * 1000.0,
+            total_ms: elapsed_ms(t_total),
             iters_used: 0,
             worlds_stage1: worlds.len(),
             worlds_stage2: 0,
@@ -2027,7 +2064,7 @@ pub fn solve_cf_preview(
         used_mix: use_mix,
         used_fallback: false,
         stage1_ms,
-        total_ms: t_total.elapsed().as_secs_f64() * 1000.0,
+        total_ms: elapsed_ms(t_total),
         iters_used,
         worlds_stage1: worlds.len(),
         worlds_stage2: n_w2,
@@ -2054,6 +2091,1169 @@ fn sample_dist(p: &[f64], draw: f64) -> usize {
         }
     }
     best
+}
+
+// =========================================================================
+// 5. Incrementally Steppable `SteppedCfPreview` (Production `BlindSearch`)
+// =========================================================================
+
+enum SteppedPreviewPhase {
+    CoarseTier0,
+    CoarseTier1,
+    CoarseTier2,
+    DoOpp {
+        round: usize,
+        do_cap_iters: u32,
+        opp_do_cap: u32,
+        supp_me: Vec<usize>,
+        supp_p_sum: f64,
+        wi: usize,
+        candidates: Vec<usize>,
+        cand_pos: usize,
+        active_cand: Option<(usize, bool)>,
+        pending_admit: Vec<usize>,
+        admitted_opp: bool,
+    },
+    DoOppFinalize {
+        round: usize,
+        do_cap_iters: u32,
+        admitted_opp: bool,
+    },
+    DoOwn {
+        round: usize,
+        do_cap_iters: u32,
+        supp_opp: Vec<Vec<usize>>,
+        candidates: Vec<usize>,
+        cand_pos: usize,
+        active_cand: Option<(usize, bool)>,
+        pending_admit: Vec<usize>,
+        admitted_opp: bool,
+        admitted_me: bool,
+    },
+    DoOwnFinalize {
+        round: usize,
+        do_cap_iters: u32,
+        admitted_opp: bool,
+        admitted_me: bool,
+    },
+    Polish {
+        polish_steps: u32,
+    },
+}
+
+/// Incrementally steppable, slice-invariant Two-Stage Persistent-Tree Double-Oracle
+/// Team Preview searcher driven 1 iteration at a time by `BlindSearch`.
+pub(crate) struct SteppedCfPreview {
+    my_acts: Vec<SearchChoice>,
+    side: usize,
+    cfg: PreviewSearchConfig,
+    own_canon: Vec<(usize, [u8; 3])>,
+    worlds: Vec<PreviewWorldData>,
+    s2_world_ids: Vec<usize>,
+    tail_world_ids: Vec<usize>,
+    s2_alloc_weights: Vec<f64>,
+    s2_post_weights: Vec<f64>,
+    tail_post_weights: Vec<f64>,
+    s_me: Vec<usize>,
+    s_opp: Vec<Vec<usize>>,
+    coarse_per_w: Vec<u32>,
+    cells: FxHashMap<(usize, usize, usize), CfPreviewCell>,
+    eg_weights: EvalWeights,
+    eg_playout: Playout,
+    rollout_rules: crate::mcts::RolloutRules,
+    path_buf: Vec<(usize, usize, usize)>,
+    sol2: BayesianRmSolution,
+    iters_done: u32,
+    total_nodes: usize,
+    current_work: Option<(usize, usize, usize, u32)>,
+    work_queue: std::collections::VecDeque<(usize, usize, usize, u32)>,
+    phase: SteppedPreviewPhase,
+}
+
+impl SteppedCfPreview {
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn try_new(
+        base: &Battle,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &crate::observe::Observer,
+        side: usize,
+        my_acts: &[SearchChoice],
+        my_mask: Option<&[bool]>,
+        c_ucb: f64,
+        rng: &mut SplitMix64,
+    ) -> Option<Self> {
+        if base.request_state != RequestState::TeamPreview {
+            return None;
+        }
+        let opp = 1 - side;
+        let order_matters = party_order_matters(dex, &base.sides[side].roster);
+        let mut own_canon: Vec<(usize, [u8; 3])> = Vec::with_capacity(my_acts.len());
+        let mut seen: Vec<[u8; 3]> = Vec::with_capacity(60);
+        for (idx, &ch) in my_acts.iter().enumerate() {
+            if my_mask.is_some_and(|m| !m[idx]) {
+                continue;
+            }
+            let SearchChoice::Team(t) = ch else {
+                return None;
+            };
+            if !order_matters && t[2] != 0 {
+                let mut key = t;
+                if key[1] > key[2] {
+                    key.swap(1, 2);
+                }
+                if seen.contains(&key) {
+                    continue;
+                }
+                seen.push(key);
+            }
+            own_canon.push((idx, t));
+        }
+        let n_own = own_canon.len();
+        if n_own <= 1 {
+            return None;
+        }
+
+        let mut cfg = PreviewSearchConfig::default();
+        cfg.c_puct = (1.0 * (c_ucb / 0.4)).clamp(0.25, 4.0);
+
+        let own_tactical = lead_tactical_flags(dex, base, side);
+        let world_plan = belief.preview_world_distribution(cfg.max_stage1_worlds, rng);
+        if world_plan.is_empty() {
+            return None;
+        }
+
+        let mut det_worlds: Vec<(f64, Battle)> = Vec::with_capacity(world_plan.len());
+        for &(plan_pick, weight) in &world_plan {
+            let mut sim_w = base.clone();
+            sim_w.set_log_enabled(false);
+            belief.determinize_in_place_planned(dex, &mut sim_w, obs, plan_pick, rng);
+            sim_w.quick_claw_rolls = [false, false];
+            if !is_compact_preview_supported(&sim_w, dex) {
+                return None;
+            }
+            det_worlds.push((weight, sim_w));
+        }
+
+        let mut worlds: Vec<PreviewWorldData> = Vec::with_capacity(det_worlds.len());
+        for (weight, mut sim_w) in det_worlds {
+            let (_, opp_canon) = canonical_preview_actions(dex, &mut sim_w, opp);
+            let n_opp = opp_canon.len();
+            if n_opp == 0 {
+                continue;
+            }
+            let opp_tactical = lead_tactical_flags(dex, &sim_w, opp);
+            let roster = CompactPreviewRoster::from_battle(&sim_w, dex, None);
+            let pcache = PreviewTempoCache::build_for_preview_roster(
+                &roster,
+                [sim_w.sides[0].party.len(), sim_w.sides[1].party.len()],
+            );
+            let mut stage1_vals = vec![0.5f64; n_own * n_opp];
+            for (i, &(_, own_t)) in own_canon.iter().enumerate() {
+                for (j, &(_, opp_t)) in opp_canon.iter().enumerate() {
+                    let picks = if side == 0 { [own_t, opp_t] } else { [opp_t, own_t] };
+                    let (table, mut cb) = roster.build_turn1(picks, 0);
+                    if cb.sides[0].request == 1 && cb.sides[1].request == 1 {
+                        cb.quick_claw_roll = 0;
+                    }
+                    let sliced = pcache.slice_for(&cb);
+                    let v0 = evaluate_cf_value(&cb, &table, Some(&sliced), cfg.leaf_temp);
+                    stage1_vals[i * n_opp + j] = if side == 0 { v0 } else { 1.0 - v0 };
+                }
+            }
+            worlds.push(PreviewWorldData {
+                weight,
+                opp_canon,
+                opp_tactical,
+                compact: Some((roster, pcache)),
+                stage1_vals,
+            });
+        }
+        if worlds.is_empty() {
+            return None;
+        }
+
+        let w_sum: f64 = worlds.iter().map(|w| w.weight).sum();
+        let w_len = worlds.len() as f64;
+        for w in &mut worlds {
+            w.weight = if w_sum > 0.0 {
+                w.weight / w_sum
+            } else {
+                1.0 / w_len
+            };
+        }
+
+        let s1_slices: Vec<(f64, usize, &[f64])> = worlds
+            .iter()
+            .map(|w| (w.weight, w.opp_canon.len(), w.stage1_vals.as_slice()))
+            .collect();
+        let sol1 = solve_bayesian_rm_plus(n_own, &s1_slices, cfg.rm_sweeps_stage1);
+
+        let mut ordered_worlds: Vec<usize> = (0..worlds.len()).collect();
+        ordered_worlds.sort_by(|&a, &b| worlds[b].weight.total_cmp(&worlds[a].weight));
+        let n_w2 = ordered_worlds.len().min(cfg.max_stage2_worlds.max(1));
+        let s2_world_ids: Vec<usize> = ordered_worlds[..n_w2].to_vec();
+        let tail_world_ids: Vec<usize> = ordered_worlds[n_w2..].to_vec();
+
+        let w2_sum: f64 = s2_world_ids.iter().map(|&w| worlds[w].weight).sum();
+        let s2_alloc_weights: Vec<f64> = s2_world_ids
+            .iter()
+            .map(|&w| {
+                if w2_sum > 0.0 {
+                    worlds[w].weight / w2_sum
+                } else {
+                    1.0 / (n_w2 as f64)
+                }
+            })
+            .collect();
+        let w_all_sum: f64 = ordered_worlds.iter().map(|&w| worlds[w].weight).sum();
+        let norm_w = |w_id: usize| -> f64 {
+            if w_all_sum > 0.0 {
+                worlds[w_id].weight / w_all_sum
+            } else {
+                1.0 / (ordered_worlds.len().max(1) as f64)
+            }
+        };
+        let s2_post_weights: Vec<f64> = s2_world_ids.iter().map(|&w| norm_w(w)).collect();
+        let tail_post_weights: Vec<f64> = tail_world_ids.iter().map(|&w| norm_w(w)).collect();
+
+        let k_eff = if n_w2 >= 4 {
+            cfg.support_k.min(8)
+        } else {
+            cfg.support_k
+        };
+        let s_me = select_diverse_support(
+            &own_canon,
+            &sol1.own_policy,
+            &sol1.row_vs_q,
+            &sol1.row_guarantees,
+            &own_tactical,
+            k_eff,
+        );
+        let mut s_opp: Vec<Vec<usize>> = Vec::with_capacity(n_w2);
+        for &w_id in &s2_world_ids {
+            let wd = &worlds[w_id];
+            let m = wd.opp_canon.len();
+            let opp_ev: Vec<f64> = sol1.col_vs_p[w_id].iter().map(|&v| 1.0 - v).collect();
+            let mut opp_guar = vec![1.0f64; m];
+            for j in 0..m {
+                let mut mx = 0.0f64;
+                for i in 0..n_own {
+                    let v = wd.stage1_vals[i * m + j];
+                    if v > mx {
+                        mx = v;
+                    }
+                }
+                opp_guar[j] = 1.0 - mx;
+            }
+            s_opp.push(select_diverse_support(
+                &wd.opp_canon,
+                &sol1.opp_policies[w_id],
+                &opp_ev,
+                &opp_guar,
+                &wd.opp_tactical,
+                k_eff,
+            ));
+        }
+        if s_me.is_empty() || s_opp.iter().any(Vec::is_empty) {
+            return None;
+        }
+
+        let coarse_budget = (u64::from(cfg.total_iters) * 45 / 100) as u32;
+        let coarse_cap = (cfg.total_iters / 320).clamp(cfg.coarse_iters.min(640), 640).max(1);
+        let mut coarse_per_w = vec![cfg.coarse_iters; n_w2];
+        for wi in 0..n_w2 {
+            let w_budget = ((f64::from(coarse_budget) * s2_alloc_weights[wi]).round() as u32).max(1);
+            let n_c = (s_me.len() * s_opp[wi].len()).max(1) as u32;
+            coarse_per_w[wi] = (w_budget / n_c).clamp(coarse_cap.min(32), coarse_cap);
+        }
+
+        // Tier 0: 1 visit per own support action so small budgets (e.g. visit-sample)
+        // immediately span all candidate actions.
+        let mut work_queue = std::collections::VecDeque::with_capacity(s_me.len() * 2);
+        let first_opp = s_opp[0][0];
+        for &own_i in &s_me {
+            work_queue.push_back((0usize, own_i, first_opp, 1u32));
+        }
+
+        let eg_weights = EvalWeights::default();
+        let eg_playout = Playout::Heavy {
+            turns: 8,
+            eps: 0.2,
+            weights: eg_weights.clone(),
+        };
+        let rollout_rules = RmConfig::default().rollout_rules();
+
+        Some(Self {
+            my_acts: my_acts.to_vec(),
+            side,
+            cfg,
+            own_canon,
+            worlds,
+            s2_world_ids,
+            tail_world_ids,
+            s2_alloc_weights,
+            s2_post_weights,
+            tail_post_weights,
+            s_me,
+            s_opp,
+            coarse_per_w,
+            cells: FxHashMap::default(),
+            eg_weights,
+            eg_playout,
+            rollout_rules,
+            path_buf: Vec::with_capacity(64),
+            sol2: sol1,
+            iters_done: 0,
+            total_nodes: 0,
+            current_work: None,
+            work_queue,
+            phase: SteppedPreviewPhase::CoarseTier0,
+        })
+    }
+
+    pub(crate) fn node_count(&self) -> usize {
+        self.total_nodes
+    }
+
+    fn solve_subgame(&self, sweeps: u32) -> (Vec<Vec<f64>>, BayesianRmSolution) {
+        let k_me = self.s_me.len();
+        let n_w2 = self.s2_world_ids.len();
+        let n_tail = self.tail_world_ids.len();
+        let mut mats: Vec<Vec<f64>> = Vec::with_capacity(n_w2 + n_tail);
+        let mut col_lens: Vec<usize> = Vec::with_capacity(n_w2 + n_tail);
+        let mut w_list: Vec<f64> = Vec::with_capacity(n_w2 + n_tail);
+        for wi in 0..n_w2 {
+            let w_id = self.s2_world_ids[wi];
+            let wd = &self.worlds[w_id];
+            let m_full = wd.opp_canon.len();
+            let k_opp = self.s_opp[wi].len();
+            let mut mat = vec![0.5f64; k_me * k_opp];
+            for (ri, &own_i) in self.s_me.iter().enumerate() {
+                for (cj, &opp_j) in self.s_opp[wi].iter().enumerate() {
+                    let v = if let Some(cell) = self.cells.get(&(wi, own_i, opp_j)) {
+                        let v0 = cell.value0(self.cfg.cell_readout);
+                        if self.side == 0 { v0 } else { 1.0 - v0 }
+                    } else {
+                        wd.stage1_vals[own_i * m_full + opp_j]
+                    };
+                    mat[ri * k_opp + cj] = v;
+                }
+            }
+            mats.push(mat);
+            col_lens.push(k_opp);
+            w_list.push(self.s2_post_weights[wi]);
+        }
+        for (ti, &w_id) in self.tail_world_ids.iter().enumerate() {
+            let wd = &self.worlds[w_id];
+            let m_full = wd.opp_canon.len();
+            let mut mat = vec![0.5f64; k_me * m_full];
+            for (ri, &own_i) in self.s_me.iter().enumerate() {
+                let src = &wd.stage1_vals[own_i * m_full..(own_i + 1) * m_full];
+                mat[ri * m_full..(ri + 1) * m_full].copy_from_slice(src);
+            }
+            mats.push(mat);
+            col_lens.push(m_full);
+            w_list.push(self.tail_post_weights[ti]);
+        }
+        let slices: Vec<(f64, usize, &[f64])> = (0..mats.len())
+            .map(|idx| (w_list[idx], col_lens[idx], mats[idx].as_slice()))
+            .collect();
+        let sol = solve_bayesian_rm_plus(k_me, &slices, sweeps);
+        (mats, sol)
+    }
+
+    fn build_do_opp_candidates(&self, wi: usize, supp_me: &[usize], supp_p_sum: f64) -> Vec<usize> {
+        let n_w2 = self.s2_world_ids.len();
+        if n_w2 > 1 && self.s2_alloc_weights[wi] < 0.04 {
+            return Vec::new();
+        }
+        let wd = &self.worlds[self.s2_world_ids[wi]];
+        let m_full = wd.opp_canon.len();
+        let mut outside: Vec<(usize, f64)> = Vec::new();
+        for j in 0..m_full {
+            if self.s_opp[wi].contains(&j) {
+                continue;
+            }
+            let mut ev = 0.0;
+            for &ri in supp_me {
+                let pw = if supp_p_sum > 0.0 {
+                    self.sol2.own_policy[ri] / supp_p_sum
+                } else {
+                    1.0 / (supp_me.len() as f64)
+                };
+                ev += pw * wd.stage1_vals[self.s_me[ri] * m_full + j];
+            }
+            outside.push((j, ev));
+        }
+        outside.sort_by(|a, b| a.1.total_cmp(&b.1));
+        outside
+            .into_iter()
+            .take(self.cfg.do_candidates)
+            .map(|(j, _)| j)
+            .collect()
+    }
+
+    fn start_do_round(&mut self, round: usize, do_cap_iters: u32, opp_do_cap: u32) {
+        let mut supp_me: Vec<usize> = (0..self.s_me.len())
+            .filter(|&ri| self.sol2.own_policy[ri] >= 0.02)
+            .collect();
+        if supp_me.is_empty() {
+            if let Some(best_r) = (0..self.s_me.len())
+                .max_by(|&a, &b| self.sol2.own_policy[a].total_cmp(&self.sol2.own_policy[b]))
+            {
+                supp_me.push(best_r);
+            }
+        }
+        let supp_p_sum: f64 = supp_me.iter().map(|&ri| self.sol2.own_policy[ri]).sum();
+        let candidates = self.build_do_opp_candidates(0, &supp_me, supp_p_sum);
+        self.phase = SteppedPreviewPhase::DoOpp {
+            round,
+            do_cap_iters,
+            opp_do_cap,
+            supp_me,
+            supp_p_sum,
+            wi: 0,
+            candidates,
+            cand_pos: 0,
+            active_cand: None,
+            pending_admit: Vec::new(),
+            admitted_opp: false,
+        };
+    }
+
+    fn start_do_own(&mut self, round: usize, do_cap_iters: u32, admitted_opp: bool) {
+        let n_w2 = self.s2_world_ids.len();
+        let supp_opp: Vec<Vec<usize>> = (0..n_w2)
+            .map(|wi| {
+                let mut v: Vec<usize> = (0..self.s_opp[wi].len())
+                    .filter(|&cj| self.sol2.opp_policies[wi][cj] >= 0.02)
+                    .collect();
+                if v.is_empty() {
+                    if let Some(bc) = (0..self.s_opp[wi].len()).max_by(|&a, &b| {
+                        self.sol2.opp_policies[wi][a].total_cmp(&self.sol2.opp_policies[wi][b])
+                    }) {
+                        v.push(bc);
+                    }
+                }
+                v
+            })
+            .collect();
+        let n_own = self.own_canon.len();
+        let mut outside_me: Vec<(usize, f64)> = Vec::new();
+        for i in 0..n_own {
+            if self.s_me.contains(&i) {
+                continue;
+            }
+            let mut ev = 0.0;
+            for wi in 0..n_w2 {
+                let wd = &self.worlds[self.s2_world_ids[wi]];
+                let m_full = wd.opp_canon.len();
+                let qsum: f64 = supp_opp[wi]
+                    .iter()
+                    .map(|&cj| self.sol2.opp_policies[wi][cj])
+                    .sum();
+                let mut ev_w = 0.0;
+                for &cj in &supp_opp[wi] {
+                    let qw = if qsum > 0.0 {
+                        self.sol2.opp_policies[wi][cj] / qsum
+                    } else {
+                        1.0 / (supp_opp[wi].len() as f64)
+                    };
+                    ev_w += qw * wd.stage1_vals[i * m_full + self.s_opp[wi][cj]];
+                }
+                ev += self.s2_post_weights[wi] * ev_w;
+            }
+            for (ti, &w_id) in self.tail_world_ids.iter().enumerate() {
+                let wd = &self.worlds[w_id];
+                let m_full = wd.opp_canon.len();
+                let q_tail = &self.sol2.opp_policies[n_w2 + ti];
+                let mut ev_w = 0.0;
+                for j in 0..m_full {
+                    let qj = q_tail[j];
+                    if qj > 0.0 {
+                        ev_w += qj * wd.stage1_vals[i * m_full + j];
+                    }
+                }
+                ev += self.tail_post_weights[ti] * ev_w;
+            }
+            outside_me.push((i, ev));
+        }
+        outside_me.sort_by(|a, b| b.1.total_cmp(&a.1));
+        let candidates: Vec<usize> = outside_me
+            .into_iter()
+            .take(self.cfg.do_candidates)
+            .map(|(i, _)| i)
+            .collect();
+        self.phase = SteppedPreviewPhase::DoOwn {
+            round,
+            do_cap_iters,
+            supp_opp,
+            candidates,
+            cand_pos: 0,
+            active_cand: None,
+            pending_admit: Vec::new(),
+            admitted_opp,
+            admitted_me: false,
+        };
+    }
+
+    fn advance_phase(&mut self) {
+        let n_w2 = self.s2_world_ids.len();
+        loop {
+            if !self.work_queue.is_empty() {
+                return;
+            }
+            let phase = std::mem::replace(
+                &mut self.phase,
+                SteppedPreviewPhase::Polish { polish_steps: 0 },
+            );
+            match phase {
+                SteppedPreviewPhase::CoarseTier0 => {
+                    for wi in 0..n_w2 {
+                        let target = self.coarse_per_w[wi].min(32);
+                        for &own_i in &self.s_me {
+                            for &opp_j in &self.s_opp[wi] {
+                                let cur = self
+                                    .cells
+                                    .get(&(wi, own_i, opp_j))
+                                    .map_or(0, |c| c.total_n);
+                                if target > cur {
+                                    self.work_queue.push_back((wi, own_i, opp_j, target - cur));
+                                }
+                            }
+                        }
+                    }
+                    self.phase = SteppedPreviewPhase::CoarseTier1;
+                }
+                SteppedPreviewPhase::CoarseTier1 => {
+                    let mut budget_rem = self.cfg.total_iters.saturating_sub(self.iters_done);
+                    for wi in 0..n_w2 {
+                        let target = self.coarse_per_w[wi];
+                        for &own_i in &self.s_me {
+                            for &opp_j in &self.s_opp[wi] {
+                                if budget_rem == 0 {
+                                    break;
+                                }
+                                let cur = self
+                                    .cells
+                                    .get(&(wi, own_i, opp_j))
+                                    .map_or(0, |c| c.total_n);
+                                if target > cur {
+                                    let add = (target - cur).min(budget_rem);
+                                    self.work_queue.push_back((wi, own_i, opp_j, add));
+                                    budget_rem -= add;
+                                }
+                            }
+                        }
+                    }
+                    self.phase = SteppedPreviewPhase::CoarseTier2;
+                }
+                SteppedPreviewPhase::CoarseTier2 => {
+                    let (_, sol2) = self.solve_subgame(600);
+                    self.sol2 = sol2;
+                    let do_cap_iters = (u64::from(self.cfg.total_iters) * 65 / 100) as u32;
+                    if self.cfg.do_rounds > 0 && self.iters_done < do_cap_iters {
+                        let opp_do_cap = self.iters_done.saturating_add(
+                            (do_cap_iters.saturating_sub(self.iters_done)) * 60 / 100,
+                        );
+                        self.start_do_round(0, do_cap_iters, opp_do_cap);
+                    } else {
+                        self.phase = SteppedPreviewPhase::Polish { polish_steps: 0 };
+                    }
+                }
+                SteppedPreviewPhase::DoOpp {
+                    round,
+                    do_cap_iters,
+                    opp_do_cap,
+                    supp_me,
+                    supp_p_sum,
+                    mut wi,
+                    mut candidates,
+                    mut cand_pos,
+                    mut active_cand,
+                    mut pending_admit,
+                    mut admitted_opp,
+                } => {
+                    if let Some((cand_j, probed_all)) = active_cand.take() {
+                        if probed_all {
+                            let mut ev2 = 0.0;
+                            for &ri in &supp_me {
+                                let own_i = self.s_me[ri];
+                                let pw = if supp_p_sum > 0.0 {
+                                    self.sol2.own_policy[ri] / supp_p_sum
+                                } else {
+                                    1.0 / (supp_me.len() as f64)
+                                };
+                                let v = self.cells.get(&(wi, own_i, cand_j)).map_or(0.5, |c| {
+                                    let v0 = c.value0(self.cfg.cell_readout);
+                                    if self.side == 0 { v0 } else { 1.0 - v0 }
+                                });
+                                ev2 += pw * v;
+                            }
+                            if ev2 < self.sol2.world_values[wi] - self.cfg.do_margin {
+                                pending_admit.push(cand_j);
+                            }
+                        }
+                    }
+
+                    if wi < n_w2 && cand_pos < candidates.len() && self.iters_done < opp_do_cap {
+                        let cand_j = candidates[cand_pos];
+                        cand_pos += 1;
+                        let do_step_w = self.coarse_per_w[wi].clamp(64, self.cfg.do_iters.max(192));
+                        let mut rem = opp_do_cap.saturating_sub(self.iters_done);
+                        let mut probed_all = true;
+                        for &ri in &supp_me {
+                            let step_n = do_step_w.min(rem);
+                            if step_n == 0 {
+                                probed_all = false;
+                                break;
+                            }
+                            self.work_queue.push_back((wi, self.s_me[ri], cand_j, step_n));
+                            rem -= step_n;
+                        }
+                        active_cand = Some((cand_j, probed_all));
+                        self.phase = SteppedPreviewPhase::DoOpp {
+                            round,
+                            do_cap_iters,
+                            opp_do_cap,
+                            supp_me,
+                            supp_p_sum,
+                            wi,
+                            candidates,
+                            cand_pos,
+                            active_cand,
+                            pending_admit,
+                            admitted_opp,
+                        };
+                        continue;
+                    }
+
+                    // Finished probing candidates for world `wi`: admit violators and fill.
+                    if wi < n_w2 && !pending_admit.is_empty() {
+                        let do_step_w = self.coarse_per_w[wi].clamp(64, self.cfg.do_iters.max(192));
+                        let per_fill = (do_step_w / 2).clamp(48, 128);
+                        let mut rem = opp_do_cap.saturating_sub(self.iters_done);
+                        for cand_j in pending_admit.drain(..) {
+                            if self.s_opp[wi].contains(&cand_j) {
+                                continue;
+                            }
+                            let missing = self
+                                .s_me
+                                .iter()
+                                .filter(|&&own_i| !self.cells.contains_key(&(wi, own_i, cand_j)))
+                                .count() as u32;
+                            if rem < missing.saturating_mul(per_fill) {
+                                continue;
+                            }
+                            self.s_opp[wi].push(cand_j);
+                            admitted_opp = true;
+                            for &own_i in &self.s_me {
+                                if self.cells.contains_key(&(wi, own_i, cand_j)) {
+                                    continue;
+                                }
+                                let step_n = per_fill.min(rem);
+                                if step_n > 0 {
+                                    self.work_queue.push_back((wi, own_i, cand_j, step_n));
+                                    rem -= step_n;
+                                }
+                            }
+                        }
+                    }
+
+                    wi += 1;
+                    if wi < n_w2 && self.iters_done < opp_do_cap {
+                        candidates = self.build_do_opp_candidates(wi, &supp_me, supp_p_sum);
+                        cand_pos = 0;
+                        self.phase = SteppedPreviewPhase::DoOpp {
+                            round,
+                            do_cap_iters,
+                            opp_do_cap,
+                            supp_me,
+                            supp_p_sum,
+                            wi,
+                            candidates,
+                            cand_pos,
+                            active_cand: None,
+                            pending_admit: Vec::new(),
+                            admitted_opp,
+                        };
+                    } else {
+                        // Drain any newly enqueued admission fill cells BEFORE re-solving `sol2`
+                        // and transitioning to Own BR / Polish.
+                        self.phase = SteppedPreviewPhase::DoOppFinalize {
+                            round,
+                            do_cap_iters,
+                            admitted_opp,
+                        };
+                    }
+                }
+                SteppedPreviewPhase::DoOppFinalize {
+                    round,
+                    do_cap_iters,
+                    admitted_opp,
+                } => {
+                    if admitted_opp {
+                        let (_, updated) = self.solve_subgame(600);
+                        self.sol2 = updated;
+                    }
+                    if self.iters_done < do_cap_iters {
+                        self.start_do_own(round, do_cap_iters, admitted_opp);
+                    } else {
+                        self.phase = SteppedPreviewPhase::Polish { polish_steps: 0 };
+                    }
+                }
+                SteppedPreviewPhase::DoOwn {
+                    round,
+                    do_cap_iters,
+                    supp_opp,
+                    candidates,
+                    mut cand_pos,
+                    mut active_cand,
+                    mut pending_admit,
+                    admitted_opp,
+                    mut admitted_me,
+                } => {
+                    if let Some((cand_i, probed_all)) = active_cand.take() {
+                        if probed_all {
+                            let mut ev2 = 0.0;
+                            for wi in 0..n_w2 {
+                                let qsum: f64 = supp_opp[wi]
+                                    .iter()
+                                    .map(|&cj| self.sol2.opp_policies[wi][cj])
+                                    .sum();
+                                let mut ev_w = 0.0;
+                                for &cj in &supp_opp[wi] {
+                                    let opp_j = self.s_opp[wi][cj];
+                                    let qw = if qsum > 0.0 {
+                                        self.sol2.opp_policies[wi][cj] / qsum
+                                    } else {
+                                        1.0 / (supp_opp[wi].len() as f64)
+                                    };
+                                    let v = self.cells.get(&(wi, cand_i, opp_j)).map_or(0.5, |c| {
+                                        let v0 = c.value0(self.cfg.cell_readout);
+                                        if self.side == 0 { v0 } else { 1.0 - v0 }
+                                    });
+                                    ev_w += qw * v;
+                                }
+                                ev2 += self.s2_post_weights[wi] * ev_w;
+                            }
+                            for (ti, &w_id) in self.tail_world_ids.iter().enumerate() {
+                                let wd = &self.worlds[w_id];
+                                let m_full = wd.opp_canon.len();
+                                let q_tail = &self.sol2.opp_policies[n_w2 + ti];
+                                let mut ev_w = 0.0;
+                                for j in 0..m_full {
+                                    let qj = q_tail[j];
+                                    if qj > 0.0 {
+                                        ev_w += qj * wd.stage1_vals[cand_i * m_full + j];
+                                    }
+                                }
+                                ev2 += self.tail_post_weights[ti] * ev_w;
+                            }
+                            if ev2 > self.sol2.value + self.cfg.do_margin {
+                                pending_admit.push(cand_i);
+                            }
+                        }
+                    }
+
+                    if cand_pos < candidates.len() && self.iters_done < do_cap_iters {
+                        let cand_i = candidates[cand_pos];
+                        cand_pos += 1;
+                        let mut rem = do_cap_iters.saturating_sub(self.iters_done);
+                        let mut probed_all = true;
+                        for wi in 0..n_w2 {
+                            let do_step_w = self.coarse_per_w[wi].clamp(64, self.cfg.do_iters.max(192));
+                            for &cj in &supp_opp[wi] {
+                                let step_n = do_step_w.min(rem);
+                                if step_n == 0 {
+                                    probed_all = false;
+                                    break;
+                                }
+                                self.work_queue.push_back((wi, cand_i, self.s_opp[wi][cj], step_n));
+                                rem -= step_n;
+                            }
+                            if !probed_all {
+                                break;
+                            }
+                        }
+                        active_cand = Some((cand_i, probed_all));
+                        self.phase = SteppedPreviewPhase::DoOwn {
+                            round,
+                            do_cap_iters,
+                            supp_opp,
+                            candidates,
+                            cand_pos,
+                            active_cand,
+                            pending_admit,
+                            admitted_opp,
+                            admitted_me,
+                        };
+                        continue;
+                    }
+
+                    // Admit winning outside own candidates and enqueue missing fills.
+                    if !pending_admit.is_empty() {
+                        let per_fill = (self.coarse_per_w[0] / 2).clamp(48, 128);
+                        let mut rem = do_cap_iters.saturating_sub(self.iters_done);
+                        for cand_i in pending_admit.drain(..) {
+                            if self.s_me.contains(&cand_i) {
+                                continue;
+                            }
+                            let mut missing = 0u32;
+                            for wi in 0..n_w2 {
+                                missing += self.s_opp[wi]
+                                    .iter()
+                                    .filter(|&&opp_j| !self.cells.contains_key(&(wi, cand_i, opp_j)))
+                                    .count() as u32;
+                            }
+                            if rem < missing.saturating_mul(per_fill) {
+                                continue;
+                            }
+                            self.s_me.push(cand_i);
+                            admitted_me = true;
+                            for wi in 0..n_w2 {
+                                for &opp_j in &self.s_opp[wi] {
+                                    if self.cells.contains_key(&(wi, cand_i, opp_j)) {
+                                        continue;
+                                    }
+                                    let step_n = per_fill.min(rem);
+                                    if step_n > 0 {
+                                        self.work_queue.push_back((wi, cand_i, opp_j, step_n));
+                                        rem -= step_n;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Drain any newly enqueued admission fill cells BEFORE re-solving `sol2`
+                    // and entering the next DO round or Polish.
+                    self.phase = SteppedPreviewPhase::DoOwnFinalize {
+                        round,
+                        do_cap_iters,
+                        admitted_opp,
+                        admitted_me,
+                    };
+                }
+                SteppedPreviewPhase::DoOwnFinalize {
+                    round,
+                    do_cap_iters,
+                    admitted_opp,
+                    admitted_me,
+                } => {
+                    if admitted_me {
+                        let (_, updated) = self.solve_subgame(600);
+                        self.sol2 = updated;
+                    }
+                    if round + 1 < self.cfg.do_rounds
+                        && (admitted_opp || admitted_me)
+                        && self.iters_done < do_cap_iters
+                    {
+                        let opp_do_cap = self.iters_done.saturating_add(
+                            (do_cap_iters.saturating_sub(self.iters_done)) * 60 / 100,
+                        );
+                        self.start_do_round(round + 1, do_cap_iters, opp_do_cap);
+                    } else {
+                        self.phase = SteppedPreviewPhase::Polish { polish_steps: 0 };
+                    }
+                }
+                SteppedPreviewPhase::Polish { mut polish_steps } => {
+                    if polish_steps > 0 && polish_steps % 8 == 0 {
+                        let (_, updated) = self.solve_subgame(600);
+                        self.sol2 = updated;
+                    }
+                    let mut active_rows: Vec<usize> = (0..self.s_me.len())
+                        .filter(|&ri| {
+                            self.sol2.own_policy[ri] >= 0.01
+                                || self.sol2.row_vs_q[ri] >= self.sol2.value - self.cfg.polish_gap
+                        })
+                        .collect();
+                    let pure_r_opt = (0..self.s_me.len()).max_by(|&a, &b| {
+                        self.sol2.row_guarantees[a].total_cmp(&self.sol2.row_guarantees[b])
+                    });
+                    if let Some(pure_r) = pure_r_opt {
+                        if !active_rows.contains(&pure_r) {
+                            active_rows.push(pure_r);
+                        }
+                    }
+                    if active_rows.len() < 2 {
+                        let mut ord: Vec<usize> = (0..self.s_me.len()).collect();
+                        ord.sort_by(|&a, &b| {
+                            self.sol2.row_vs_q[b].total_cmp(&self.sol2.row_vs_q[a])
+                        });
+                        for ri in ord {
+                            if active_rows.len() >= 2 {
+                                break;
+                            }
+                            if !active_rows.contains(&ri) {
+                                active_rows.push(ri);
+                            }
+                        }
+                    }
+
+                    let mut best_target: Option<(usize, usize, usize, f64)> = None;
+                    let mut best_uncapped: Option<(usize, usize, usize, f64)> = None;
+                    for wi in 0..n_w2 {
+                        let cell_cap_w = (self.coarse_per_w[wi].saturating_mul(4)).clamp(512, 2048);
+                        let mut active_cols: Vec<usize> = (0..self.s_opp[wi].len())
+                            .filter(|&cj| {
+                                self.sol2.opp_policies[wi][cj] >= 0.01
+                                    || self.sol2.col_vs_p[wi][cj]
+                                        <= self.sol2.world_values[wi] + self.cfg.polish_gap
+                            })
+                            .collect();
+                        if let Some(pure_r) = pure_r_opt {
+                            let own_i = self.s_me[pure_r];
+                            if let Some(worst_cj) = (0..self.s_opp[wi].len()).min_by(|&a, &b| {
+                                let va = self
+                                    .cells
+                                    .get(&(wi, own_i, self.s_opp[wi][a]))
+                                    .map_or(0.5, |c| {
+                                        let v0 = c.value0(self.cfg.cell_readout);
+                                        if self.side == 0 { v0 } else { 1.0 - v0 }
+                                    });
+                                let vb = self
+                                    .cells
+                                    .get(&(wi, own_i, self.s_opp[wi][b]))
+                                    .map_or(0.5, |c| {
+                                        let v0 = c.value0(self.cfg.cell_readout);
+                                        if self.side == 0 { v0 } else { 1.0 - v0 }
+                                    });
+                                va.total_cmp(&vb)
+                            }) {
+                                if !active_cols.contains(&worst_cj) {
+                                    active_cols.push(worst_cj);
+                                }
+                            }
+                        }
+                        if active_cols.len() < 2 {
+                            let mut ord: Vec<usize> = (0..self.s_opp[wi].len()).collect();
+                            ord.sort_by(|&a, &b| {
+                                self.sol2.col_vs_p[wi][a].total_cmp(&self.sol2.col_vs_p[wi][b])
+                            });
+                            for cj in ord {
+                                if active_cols.len() >= 2 {
+                                    break;
+                                }
+                                if !active_cols.contains(&cj) {
+                                    active_cols.push(cj);
+                                }
+                            }
+                        }
+                        for &ri in &active_rows {
+                            let own_i = self.s_me[ri];
+                            let pw = self.sol2.own_policy[ri] + 0.05;
+                            for &cj in &active_cols {
+                                let opp_j = self.s_opp[wi][cj];
+                                let visits =
+                                    self.cells.get(&(wi, own_i, opp_j)).map_or(0, |c| c.total_n);
+                                let qw = self.sol2.opp_policies[wi][cj] + 0.05;
+                                let score = self.s2_alloc_weights[wi] * pw * qw
+                                    / f64::from(visits + 1).sqrt();
+                                if best_uncapped.map_or(true, |bt| score > bt.3) {
+                                    best_uncapped = Some((wi, own_i, opp_j, score));
+                                }
+                                if visits < cell_cap_w
+                                    && best_target.map_or(true, |bt| score > bt.3)
+                                {
+                                    best_target = Some((wi, own_i, opp_j, score));
+                                }
+                            }
+                        }
+                    }
+                    if best_target.is_none() {
+                        for wi in 0..n_w2 {
+                            let half_cap =
+                                self.coarse_per_w[wi].saturating_mul(2).clamp(256, 1024);
+                            for &ri in &active_rows {
+                                let own_i = self.s_me[ri];
+                                let pw = self.sol2.own_policy[ri] + 0.05;
+                                for &opp_j in &self.s_opp[wi] {
+                                    let visits = self
+                                        .cells
+                                        .get(&(wi, own_i, opp_j))
+                                        .map_or(0, |c| c.total_n);
+                                    if visits >= half_cap {
+                                        continue;
+                                    }
+                                    let score = self.s2_alloc_weights[wi] * pw
+                                        / f64::from(visits + 1).sqrt();
+                                    if best_target.map_or(true, |bt| score > bt.3) {
+                                        best_target = Some((wi, own_i, opp_j, score));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    let (wi, own_i, opp_j, _) = best_target
+                        .or(best_uncapped)
+                        .unwrap_or((0, self.s_me[0], self.s_opp[0][0], 0.0));
+                    self.work_queue
+                        .push_back((wi, own_i, opp_j, self.cfg.polish_chunk));
+                    polish_steps = polish_steps.saturating_add(1);
+                    self.phase = SteppedPreviewPhase::Polish { polish_steps };
+                }
+            }
+        }
+    }
+
+    /// Execute exactly ONE Turn-1 `cfv-0r@puct@lam0` iteration.
+    /// Returns `(own_orig_idx, opp_choice, val0, val_mine, depth)`.
+    pub(crate) fn step_one(&mut self, rng: &mut SplitMix64) -> (usize, SearchChoice, f64, f64, u32) {
+        let (wi, own_i, opp_j) = loop {
+            if let Some((wi, own_i, opp_j, ref mut rem)) = self.current_work {
+                if *rem > 0 {
+                    *rem -= 1;
+                    break (wi, own_i, opp_j);
+                }
+            }
+            self.current_work = None;
+            if self.work_queue.is_empty() {
+                self.advance_phase();
+            }
+            self.current_work = self.work_queue.pop_front();
+        };
+
+        let w_id = self.s2_world_ids[wi];
+        let wd = &self.worlds[w_id];
+        let (ref roster, ref pcache) = wd.compact.as_ref().unwrap();
+        let m = wd.opp_canon.len();
+        let prior_v_mine = wd.stage1_vals[own_i * m + opp_j];
+        let prior_v0 = if self.side == 0 {
+            prior_v_mine
+        } else {
+            1.0 - prior_v_mine
+        };
+        let own_t = self.own_canon[own_i].1;
+        let opp_t = wd.opp_canon[opp_j].1;
+        let picks = if self.side == 0 {
+            [own_t, opp_t]
+        } else {
+            [opp_t, own_t]
+        };
+
+        let mut added_nodes = 0usize;
+        let cell = self.cells.entry((wi, own_i, opp_j)).or_insert_with(|| {
+            let c = CfPreviewCell::new(roster, pcache, picks, prior_v0, &self.cfg);
+            added_nodes = c.nodes.len();
+            c
+        });
+        let prev_nodes = cell.nodes.len();
+        let (val0, depth) = cell.step_one(
+            &self.cfg,
+            rng,
+            &self.eg_weights,
+            &self.eg_playout,
+            self.rollout_rules,
+            &mut self.path_buf,
+        );
+        self.total_nodes += added_nodes + (cell.nodes.len() - prev_nodes);
+        self.iters_done += 1;
+
+        let val_mine = if self.side == 0 { val0 } else { 1.0 - val0 };
+        let own_orig_idx = self.own_canon[own_i].0;
+        let opp_choice = SearchChoice::Team(opp_t);
+        (own_orig_idx, opp_choice, val0, val_mine, depth)
+    }
+
+    /// Deterministic `LcbGatedMixed` Bayesian RM+ choice readout over the full 100% posterior.
+    pub(crate) fn best_choice(&self, decision_seed: u64, done: u32) -> SearchChoice {
+        let sweeps = if done >= 4096 {
+            self.cfg.rm_sweeps_final
+        } else {
+            self.cfg.rm_sweeps_stage1
+        };
+        let (final_mats, final_sol) = self.solve_subgame(sweeps);
+        let k_me = self.s_me.len();
+        let n_w2 = self.s2_world_ids.len();
+        let best_pure_r = (0..k_me)
+            .max_by(|&a, &b| {
+                final_sol.row_guarantees[a]
+                    .total_cmp(&final_sol.row_guarantees[b])
+                    .then_with(|| final_sol.row_vs_q[a].total_cmp(&final_sol.row_vs_q[b]))
+            })
+            .unwrap_or(0);
+        let pure_guarantee = final_sol.row_guarantees[best_pure_r];
+
+        let mut p_mix = final_sol.own_policy.clone();
+        let (min_mix_margin, dust_ratio, lcb_z) = match self.cfg.policy_mode {
+            PreviewPolicyMode::LcbGatedMixed {
+                min_mix_margin,
+                dust_ratio,
+                lcb_z,
+            } => (min_mix_margin, dust_ratio, lcb_z),
+            _ => (0.015, 0.08, 1.0),
+        };
+        shed_dust(&mut p_mix, dust_ratio);
+
+        let mut mixed_guarantee = 0.0;
+        let mut mixed_guarantee_lcb = 0.0;
+        for wi in 0..n_w2 {
+            let k_opp = self.s_opp[wi].len();
+            let mat = &final_mats[wi];
+            let mut min_col = f64::INFINITY;
+            let mut min_col_lcb = f64::INFINITY;
+            for cj in 0..k_opp {
+                let opp_j = self.s_opp[wi][cj];
+                let mut mean_j = 0.0;
+                let mut var_j = 0.0;
+                for ri in 0..k_me {
+                    let pr = p_mix[ri];
+                    if pr > 0.0 {
+                        let v = mat[ri * k_opp + cj];
+                        mean_j += pr * v;
+                        let n_c = self
+                            .cells
+                            .get(&(wi, self.s_me[ri], opp_j))
+                            .map_or(1, |c| c.total_n.max(1));
+                        var_j += (pr * pr) * (0.25 / f64::from(n_c));
+                    }
+                }
+                if mean_j < min_col {
+                    min_col = mean_j;
+                }
+                let lcb_j = mean_j - lcb_z * var_j.sqrt();
+                if lcb_j < min_col_lcb {
+                    min_col_lcb = lcb_j;
+                }
+            }
+            mixed_guarantee += self.s2_post_weights[wi] * min_col;
+            mixed_guarantee_lcb += self.s2_post_weights[wi] * min_col_lcb;
+        }
+        for (ti, &w_id) in self.tail_world_ids.iter().enumerate() {
+            let m_full = self.worlds[w_id].opp_canon.len();
+            let mat = &final_mats[n_w2 + ti];
+            let mut min_col = f64::INFINITY;
+            for cj in 0..m_full {
+                let mut mean_j = 0.0;
+                for ri in 0..k_me {
+                    let pr = p_mix[ri];
+                    if pr > 0.0 {
+                        mean_j += pr * mat[ri * m_full + cj];
+                    }
+                }
+                if mean_j < min_col {
+                    min_col = mean_j;
+                }
+            }
+            mixed_guarantee += self.tail_post_weights[ti] * min_col;
+            mixed_guarantee_lcb += self.tail_post_weights[ti] * min_col;
+        }
+
+        let use_mix = p_mix.iter().filter(|&&x| x > 0.0).count() > 1
+            && mixed_guarantee > pure_guarantee + min_mix_margin
+            && mixed_guarantee_lcb > pure_guarantee - 0.005;
+
+        let picked_r = if use_mix {
+            let draw = SplitMix64::new(decision_seed ^ u64::from(done)).next_f64();
+            sample_dist(&p_mix, draw)
+        } else {
+            best_pure_r
+        };
+        let picked_canon_i = self.s_me[picked_r];
+        self.my_acts[self.own_canon[picked_canon_i].0]
+    }
 }
 
 #[cfg(test)]
@@ -2327,5 +3527,147 @@ mod tests {
         let res_do = solve_cf_preview(&pos, &dex, &belief, &obs, 0, &cfg_do, &mut rng_do);
         assert!(res_do.iters_used <= cfg_do.total_iters);
         assert!(!res_do.used_fallback);
+    }
+
+    #[test]
+    fn stepped_cf_preview_slice_invariance_c_sensitivity_and_mask_legality() {
+        let dex = conformance::load_dex();
+        let t_a = vec![
+            mk("Snorlax", 55, "Leftovers", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+            mk("Zapdos", 50, "Leftovers", &["Thunderbolt", "Hidden Power Ice", "Rest", "Sleep Talk"]),
+            mk("Cloyster", 50, "Leftovers", &["Surf", "Spikes", "Explosion", "Rapid Spin"]),
+            mk("Marowak", 50, "Thick Club", &["Earthquake", "Rock Slide", "Swords Dance", "Hidden Power Bug"]),
+            mk("Gengar", 50, "Leftovers", &["Thunderbolt", "Ice Punch", "Hypnosis", "Explosion"]),
+            mk("Skarmory", 50, "Leftovers", &["Drill Peck", "Whirlwind", "Rest", "Curse"]),
+        ];
+        let t_b = vec![
+            mk("Raikou", 50, "Leftovers", &["Thunderbolt", "Hidden Power Ice", "Roar", "Rest"]),
+            mk("Suicune", 50, "Leftovers", &["Surf", "Ice Beam", "Rest", "Sleep Talk"]),
+            mk("Exeggutor", 50, "Leftovers", &["Psychic", "Giga Drain", "Sleep Powder", "Explosion"]),
+            mk("Tyranitar", 50, "Leftovers", &["Rock Slide", "Crunch", "Earthquake", "Pursuit"]),
+            mk("Snorlax", 55, "Leftovers", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+            mk("Umbreon", 50, "Leftovers", &["Pursuit", "Charm", "Rest", "Baton Pass"]),
+        ];
+        let pool = Arc::new(MetaPool {
+            teams: vec![MetaTeam { id: "tb".into(), sets: t_b.clone(), weight: Some(1.0) }],
+        });
+        let b = Battle::from_fixture(&dex, "1,2,3,4", &t_a, &t_b).unwrap();
+        let (mut lp, mut obs) = LocalPlayer::new_with_own_sets(&b, &dex, 0, t_a.clone()).unwrap();
+        lp.observe(&b, &dex, &mut obs).unwrap();
+        let mut belief = Belief::new(&dex, &pool, &obs);
+        belief.sync(&dex, &obs);
+        let pos = lp.position(&dex, &mut belief, &obs, &mut SplitMix64::new(99)).unwrap();
+
+        // 1. Exact bit-identical slice invariance (`step(1)*256 == step(64)*4 == step(256)`).
+        let mk_search = |c: f64| {
+            let mut bs = BlindSearch::from_observation(
+                &pos,
+                &dex,
+                RmConfig { c, ..Default::default() },
+                0,
+                777,
+            );
+            bs.prune_preview_aliases(&dex);
+            bs
+        };
+        let mut s_one = mk_search(0.4);
+        for _ in 0..256 {
+            s_one.step(&dex, &belief, &obs, 1);
+        }
+        let mut s_chunk = mk_search(0.4);
+        for _ in 0..4 {
+            s_chunk.step(&dex, &belief, &obs, 64);
+        }
+        let mut s_full = mk_search(0.4);
+        s_full.step(&dex, &belief, &obs, 256);
+
+        assert_eq!(s_one.visits(), s_full.visits());
+        assert_eq!(s_chunk.visits(), s_full.visits());
+        assert_eq!(s_one.means(), s_full.means());
+        assert_eq!(s_chunk.means(), s_full.means());
+        assert_eq!(s_one.best(), s_full.best());
+        assert_eq!(s_chunk.best(), s_full.best());
+        assert_eq!(s_one.node_count(), s_full.node_count());
+        assert!(s_full.node_count() > 0);
+        assert!(!s_full.root_replies().is_empty());
+        // Visit-sample invariant: >= 2 distinct actions visited early.
+        assert!(s_full.visits().iter().filter(|&&n| n > 0).count() >= 2);
+
+        // 2. Double-Oracle admission-fill finalize invariant: fills MUST drain before `sol2` / `Polish`.
+        let mut rng_do = SplitMix64::new(5151);
+        let mut model_clone = pos.model().clone();
+        let acts = model_clone.legal_choices(&dex, 0);
+        let mut stepped = SteppedCfPreview::try_new(
+            pos.model(),
+            &dex,
+            &belief,
+            &obs,
+            0,
+            &acts,
+            None,
+            0.4,
+            &mut rng_do,
+        )
+        .unwrap();
+        stepped.cfg.total_iters = 3000;
+        stepped.cfg.coarse_iters = 24;
+        stepped.cfg.do_iters = 32;
+        stepped.cfg.do_candidates = 4;
+        stepped.cfg.do_margin = -0.5;
+        stepped.cfg.polish_chunk = 32;
+        for w in &mut stepped.coarse_per_w {
+            *w = 8;
+        }
+        let mut entered_polish = false;
+        for _ in 0..3000 {
+            stepped.step_one(&mut rng_do);
+            if matches!(stepped.phase, SteppedPreviewPhase::Polish { .. }) {
+                entered_polish = true;
+                for wi in 0..stepped.s2_world_ids.len() {
+                    for &own_i in &stepped.s_me {
+                        for &opp_j in &stepped.s_opp[wi] {
+                            let n = stepped
+                                .cells
+                                .get(&(wi, own_i, opp_j))
+                                .map_or(0, |c| c.total_n);
+                            assert!(
+                                n > 0,
+                                "entered Polish before DO fill drained for ({wi},{own_i},{opp_j})"
+                            );
+                        }
+                    }
+                }
+                break;
+            }
+        }
+        assert!(entered_polish, "SteppedCfPreview should reach Polish under tight test budget");
+
+        // 2. Exploration constant `c` sensitivity (`c = 0.4` vs `c = 1.0` at 512 iters).
+        let mut s_c04 = mk_search(0.4);
+        let mut s_c10 = mk_search(1.0);
+        s_c04.step(&dex, &belief, &obs, 512);
+        s_c10.step(&dex, &belief, &obs, 512);
+        assert_ne!(
+            s_c04.means(),
+            s_c10.means(),
+            "c = 0.4 vs c = 1.0 must produce distinct SteppedCfPreview rollouts"
+        );
+
+        // 3. Explicit `mask_actions` enforcement: masked actions get 0 visits and are never chosen.
+        let mut s_masked = mk_search(0.4);
+        let mut allowed = vec![false; s_masked.actions().len()];
+        allowed[0] = true;
+        allowed[5] = true;
+        allowed[10] = true;
+        s_masked.mask_actions(&allowed);
+        s_masked.step(&dex, &belief, &obs, 128);
+        assert!(s_masked
+            .visits()
+            .iter()
+            .zip(&allowed)
+            .all(|(&n, &ok)| ok || n == 0));
+        let chosen = s_masked.best().unwrap();
+        let chosen_idx = s_masked.actions().iter().position(|&c| c == chosen).unwrap();
+        assert!(allowed[chosen_idx], "best() returned masked preview action");
     }
 }

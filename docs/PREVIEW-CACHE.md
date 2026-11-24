@@ -22,7 +22,7 @@ const cache = createPreviewCache({
     './crates/wasm/pkg-node/nc2000_wasm_bg.wasm'
   )).digest('hex'),
   dexJson: wasm.embeddedDexJson(), // for new Dex(); pass actual JSON for Dex.fromJson
-  iterations: 729000,
+  iterations: 240000,
   formatId: 'gen2nintendocup2000noohkostadium2strict',
 });
 
@@ -79,8 +79,8 @@ entries even if the policy happens to be unchanged.
 The current interface supports blind selection only. Pinned/open sheets,
 `fromFork`, hand-entered positions, endgame sessions and in-battle decisions
 return no usable key. It caches final choices, not search trees/checkpoints;
-it cannot resume a partial search. The 729k default comes from the measured
-blind-selection study and is independent of the 27k/81k battle setting.
+it cannot resume a partial search. The 240k default matches `data/live-search.json`
+(`SteppedCfPreview` live preview search) and is independent of the adaptive battle cap.
 The same interface can generate a record offline or on the first live miss;
 storage and distribution remain entirely with the fork.
 
