@@ -152,7 +152,7 @@ fn default_search_uses_eight_turn_rollout_without_experimental_bundle() {
     let cfg = RmConfig::default();
     assert_eq!(
         cfg.settlement,
-        nc2000_bot::accounting::LeafSettlementMode::BlindSpotLeaf
+        nc2000_bot::accounting::LeafSettlementMode::CfValuePuct
     );
     assert!(matches!(
         cfg.playout,

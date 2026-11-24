@@ -28,8 +28,9 @@ struct TypeMatrix {
     values: Vec<f64>,
 }
 
-fn response_column(types: &[TypeMatrix], policy: &[f64]) -> Vec<f64> {
+fn response_column_with_replies(types: &[TypeMatrix], policy: &[f64]) -> (Vec<f64>, Vec<usize>) {
     let mut column = vec![0.; policy.len()];
+    let mut replies = Vec::with_capacity(types.len());
     for t in types {
         let reply = (0..t.replies)
             .min_by(|&a, &b| {
@@ -43,11 +44,16 @@ fn response_column(types: &[TypeMatrix], policy: &[f64]) -> Vec<f64> {
                 value(a).total_cmp(&value(b))
             })
             .unwrap();
+        replies.push(reply);
         for (i, value) in column.iter_mut().enumerate() {
             *value += t.weight * t.values[i * t.replies + reply];
         }
     }
-    column
+    (column, replies)
+}
+
+fn response_column(types: &[TypeMatrix], policy: &[f64]) -> Vec<f64> {
+    response_column_with_replies(types, policy).0
 }
 
 fn guarantee(types: &[TypeMatrix], policy: &[f64]) -> f64 {
@@ -85,6 +91,7 @@ struct BayesianColumnSolution {
     x: Vec<f64>,
     y: Vec<f64>,
     columns: Vec<Vec<f64>>,
+    col_replies: Vec<Vec<usize>>,
     used_cols: usize,
 }
 
@@ -98,17 +105,23 @@ fn solve_bayesian_columns(
 ) -> Option<BayesianColumnSolution> {
     let uniform = vec![1.0 / rows as f64; rows];
     let mut columns = Vec::new();
+    let mut col_replies = Vec::new();
     let mut best_x = if let Some(pure_idx) = seed_pure {
         let mut p = vec![0.0; rows];
         p[pure_idx] = 1.0;
-        columns.push(response_column(types, &p));
-        let u_col = response_column(types, &uniform);
+        let (c0, r0) = response_column_with_replies(types, &p);
+        columns.push(c0);
+        col_replies.push(r0);
+        let (u_col, u_rep) = response_column_with_replies(types, &uniform);
         if !columns.contains(&u_col) {
             columns.push(u_col);
+            col_replies.push(u_rep);
         }
         p
     } else {
-        columns.push(response_column(types, &uniform));
+        let (u_col, u_rep) = response_column_with_replies(types, &uniform);
+        columns.push(u_col);
+        col_replies.push(u_rep);
         uniform
     };
     let mut best_y = vec![1.0; 1];
@@ -151,7 +164,7 @@ fn solve_bayesian_columns(
         best_cols_len = c_len;
         any_valid = true;
 
-        let response = response_column(types, &solution.x);
+        let (response, reps) = response_column_with_replies(types, &solution.x);
         let lower: f64 = response.iter().zip(&solution.x).map(|(v, p)| v * p).sum();
         let upper = solution.value + solution.gap / 2.0;
         if upper - lower <= conv_tol {
@@ -159,6 +172,7 @@ fn solve_bayesian_columns(
                 x: best_x,
                 y: best_y,
                 columns,
+                col_replies,
                 used_cols: best_cols_len,
             });
         }
@@ -169,6 +183,7 @@ fn solve_bayesian_columns(
             break;
         }
         columns.push(response);
+        col_replies.push(reps);
     }
 
     if !require_exact && any_valid {
@@ -176,6 +191,7 @@ fn solve_bayesian_columns(
             x: best_x,
             y: best_y,
             columns,
+            col_replies,
             used_cols: best_cols_len,
         })
     } else {
@@ -558,6 +574,7 @@ pub fn solve_bayesian_equilibrium_with_priors(
         x: best_x,
         y: best_y,
         columns,
+        col_replies: _,
         used_cols: best_cols_len,
     } = col_sol;
 
@@ -618,6 +635,561 @@ pub fn solve_bayesian_equilibrium_with_priors(
             best_pure_action,
         })
     }
+}
+
+/// Extended Stage-2 Bayesian equilibrium result returning the exact per-type opponent equilibrium
+/// distribution `y*(t, j)`, active columns, and unblocked search-guidance values for all eligible
+/// own actions while keeping readout LCB gating strictly free of 1-ply prior pseudo-counts.
+#[derive(Clone, Debug)]
+pub struct Stage2BayesianEquilibrium {
+    pub eq: BayesianEquilibrium,
+    pub search_action_values: Vec<f64>,
+    /// True for each own action `i` admitted into the prior-free `KAPPA_CELL = 64` readout LP.
+    pub lp_admitted: Vec<bool>,
+    pub opp_eq_policy: Vec<Vec<f64>>,
+    pub active_cols: Vec<Vec<usize>>,
+    pub type_weights: Vec<f64>,
+    /// Flat `k_total * types[t].replies` search-guidance cell estimates per input type `t`.
+    pub search_v: Vec<Vec<f64>>,
+}
+
+/// Solve the `iter == 0` 1-ply Bayesian LP from read-only prior payoff matrices across canonical
+/// root types. Returns `(p_0, opp_eq_policy_per_type, q_0)`.
+pub fn solve_initial_bayesian_prior(
+    eligible: &[bool],
+    type_weights: &[f64],
+    type_replies: &[usize],
+    prior_cells: &[&[f64]],
+) -> Option<(Vec<f64>, Vec<Vec<f64>>, Vec<f64>)> {
+    let k_total = eligible.len();
+    let actions: Vec<usize> = (0..k_total).filter(|&i| eligible[i]).collect();
+    if actions.is_empty() || type_weights.len() != type_replies.len() || type_weights.len() != prior_cells.len() {
+        return None;
+    }
+    let n = actions.len();
+    let mut tm_list: Vec<TypeMatrix> = Vec::new();
+    let mut orig_map: Vec<usize> = Vec::new();
+    let mut total_w = 0.0f64;
+    for (t_idx, (&w, &m)) in type_weights.iter().zip(type_replies.iter()).enumerate() {
+        if w <= 0.0 || m == 0 || prior_cells[t_idx].len() < k_total * m {
+            continue;
+        }
+        total_w += w;
+    }
+    if total_w <= 0.0 {
+        return None;
+    }
+    for (t_idx, (&w, &m)) in type_weights.iter().zip(type_replies.iter()).enumerate() {
+        if w <= 0.0 || m == 0 || prior_cells[t_idx].len() < k_total * m {
+            continue;
+        }
+        let mut vals = vec![0.5f64; n * m];
+        for (r, &own) in actions.iter().enumerate() {
+            for j in 0..m {
+                vals[r * m + j] = prior_cells[t_idx][own * m + j].clamp(0.0, 1.0);
+            }
+        }
+        tm_list.push(TypeMatrix {
+            weight: w / total_w,
+            replies: m,
+            values: vals,
+        });
+        orig_map.push(t_idx);
+    }
+    if tm_list.is_empty() {
+        return None;
+    }
+    let pg = row_pure_guarantees(&tm_list, n);
+    let best_pure_sub = (0..n)
+        .max_by(|&a, &b| pg[a].total_cmp(&pg[b]).then_with(|| actions[b].cmp(&actions[a])))
+        .unwrap_or(0);
+    let mut p0 = vec![0.0f64; k_total];
+    let mut q0 = vec![0.5f64; k_total];
+    let mut opp_pol: Vec<Vec<f64>> = type_replies.iter().map(|&m| vec![0.0; m]).collect();
+
+    if n == 1 {
+        p0[actions[0]] = 1.0;
+        q0[actions[0]] = pg[0];
+        for (tm_idx, tm) in tm_list.iter().enumerate() {
+            let orig_t = orig_map[tm_idx];
+            let best_j = (0..tm.replies)
+                .min_by(|&a, &b| tm.values[a].total_cmp(&tm.values[b]).then_with(|| a.cmp(&b)))
+                .unwrap_or(0);
+            opp_pol[orig_t][best_j] = 1.0;
+        }
+        return Some((p0, opp_pol, q0));
+    }
+
+    let sol = solve_bayesian_columns(&tm_list, n, Some(best_pure_sub), false)?;
+    for (r, &own) in actions.iter().enumerate() {
+        p0[own] = sol.x[r];
+    }
+    let y_sum: f64 = sol.y.iter().take(sol.used_cols).map(|&y| y.max(0.0)).sum();
+    if y_sum > 0.0 && sol.col_replies.len() >= sol.used_cols {
+        for c in 0..sol.used_cols {
+            let wc = sol.y[c].max(0.0) / y_sum;
+            if wc <= 0.0 {
+                continue;
+            }
+            for (tm_idx, &rep_j) in sol.col_replies[c].iter().enumerate() {
+                let orig_t = orig_map[tm_idx];
+                if rep_j < opp_pol[orig_t].len() {
+                    opp_pol[orig_t][rep_j] += wc;
+                }
+            }
+        }
+    } else {
+        let (_, reps) = response_column_with_replies(&tm_list, &sol.x);
+        for (tm_idx, &rep_j) in reps.iter().enumerate() {
+            let orig_t = orig_map[tm_idx];
+            if rep_j < opp_pol[orig_t].len() {
+                opp_pol[orig_t][rep_j] = 1.0;
+            }
+        }
+    }
+    for (r, &own) in actions.iter().enumerate() {
+        let mut eq_v = 0.0f64;
+        for (tm_idx, tm) in tm_list.iter().enumerate() {
+            let orig_t = orig_map[tm_idx];
+            let mut tv = 0.0f64;
+            for j in 0..tm.replies {
+                tv += opp_pol[orig_t][j] * tm.values[r * tm.replies + j];
+            }
+            eq_v += tm.weight * tv;
+        }
+        q0[own] = 0.5 * eq_v + 0.5 * pg[r];
+    }
+    Some((p0, opp_pol, q0))
+}
+
+/// Stage-2 Bayesian equilibrium solver with:
+/// - Capped two-path LP row admission (`min_own_std <= 512` OR threat-covered rival `>= 32..128` with `cov >= 0.75`),
+/// - Cross-type LCB effective-sample safety cap (`eff_n = cn + min(0.25 * p_n, cn + 8)`),
+/// - Unblocked `opp_eq_policy` and `search_action_values` for all eligible actions (even on singleton LP),
+/// - Strict isolation of optional 1-ply `prior_cells` to search-guidance (`search_v`) only.
+pub fn solve_bayesian_equilibrium_stage2(
+    eligible: &[bool],
+    global_visits: &[u32],
+    global_means: &[f64],
+    types: &[RootType],
+    pooled_priors: &[Vec<RootCell>],
+    calibrated_priors: Option<&[&[f64]]>,
+) -> Option<Stage2BayesianEquilibrium> {
+    let k_total = eligible.len();
+    if k_total == 0
+        || global_visits.len() != k_total
+        || global_means.len() != k_total
+        || types.is_empty()
+    {
+        return None;
+    }
+    let all_elig: Vec<usize> = (0..k_total).filter(|&i| eligible[i]).collect();
+    if all_elig.is_empty() {
+        return None;
+    }
+
+    // Pass 1: Aggregate cell stats across ALL eligible rows per type so `active_cols` and
+    // per-row active-column coverage `cov(i)` have zero circular dependency on row admission.
+    struct TypeAgg {
+        orig_t: usize,
+        m: usize,
+        world_n: u32,
+        world_mean: f64,
+        cell_n: Vec<u32>,
+        cell_w: Vec<f64>,
+        row_n: Vec<u32>,
+        row_w: Vec<f64>,
+        col_n: Vec<u32>,
+        col_w: Vec<f64>,
+        prior_n: Vec<u32>,
+        prior_mean: Vec<f64>,
+        active_cols: Vec<usize>,
+    }
+
+    let mut aggs: Vec<TypeAgg> = Vec::with_capacity(types.len());
+    let mut total_all_weight = 0.0f64;
+    for (t_idx, t) in types.iter().enumerate() {
+        let m = t.replies;
+        if t.samples == 0 || m == 0 || t.cells.is_empty() {
+            continue;
+        }
+        let mut cell_n = vec![0u32; k_total * m];
+        let mut cell_w = vec![0.0f64; k_total * m];
+        let mut row_n = vec![0u32; k_total];
+        let mut row_w = vec![0.0f64; k_total];
+        let mut col_n = vec![0u32; m];
+        let mut col_w = vec![0.0f64; m];
+        let mut world_n = 0u32;
+        let mut world_w = 0.0f64;
+
+        for cell in &t.cells {
+            if cell.own >= k_total
+                || !eligible[cell.own]
+                || cell.reply >= m
+                || cell.samples == 0
+                || !cell.mean.is_finite()
+            {
+                continue;
+            }
+            let s = cell.samples;
+            let w = f64::from(s) * cell.mean.clamp(0.0, 1.0);
+            cell_n[cell.own * m + cell.reply] += s;
+            cell_w[cell.own * m + cell.reply] += w;
+            row_n[cell.own] += s;
+            row_w[cell.own] += w;
+            col_n[cell.reply] += s;
+            col_w[cell.reply] += w;
+            world_n += s;
+            world_w += w;
+        }
+        if world_n == 0 {
+            continue;
+        }
+        let mut prior_n = vec![0u32; k_total * m];
+        let mut prior_mean = vec![0.0f64; k_total * m];
+        if let Some(priors) = pooled_priors.get(t_idx) {
+            for cell in priors {
+                if cell.own >= k_total
+                    || !eligible[cell.own]
+                    || cell.reply >= m
+                    || cell.samples == 0
+                    || !cell.mean.is_finite()
+                {
+                    continue;
+                }
+                prior_n[cell.own * m + cell.reply] = cell.samples;
+                prior_mean[cell.own * m + cell.reply] = cell.mean.clamp(0.0, 1.0);
+            }
+        }
+        let max_col_n = col_n.iter().copied().max().unwrap_or(0);
+        let col_cap = (world_n / 64).clamp(96, 512);
+        let min_col_n = (world_n / (2 * m as u32))
+            .max(max_col_n / 5)
+            .clamp(4, col_cap)
+            .min(max_col_n);
+        let mut active_cols: Vec<usize> = (0..m).filter(|&j| col_n[j] >= min_col_n).collect();
+        if active_cols.is_empty() {
+            active_cols = (0..m).filter(|&j| col_n[j] > 0).collect();
+        }
+        if active_cols.is_empty() {
+            continue;
+        }
+        total_all_weight += f64::from(world_n);
+        aggs.push(TypeAgg {
+            orig_t: t_idx,
+            m,
+            world_n,
+            world_mean: world_w / f64::from(world_n),
+            cell_n,
+            cell_w,
+            row_n,
+            row_w,
+            col_n,
+            col_w,
+            prior_n,
+            prior_mean,
+            active_cols,
+        });
+    }
+    if aggs.is_empty() || total_all_weight <= 0.0 {
+        return None;
+    }
+
+    // Pass 2: Scale-safe two-path row admission:
+    // - Path 1 matches shipped `min_equilibrium_visits(max_v)` (`max_v / 8`) so low-visit losing
+    //   exploration arms never leak unconditionally into the readout LP at 486k–972k.
+    // - Path 2 admits threat-covered rivals (`>= 32..256` visits with `min_active >= 16` across
+    //   `>= 75%` of world weight), rescuing Turn-35 style buried rivals safely.
+    let max_v = all_elig.iter().map(|&i| global_visits[i]).max().unwrap_or(0);
+    let min_own_std = min_equilibrium_visits(max_v);
+    let min_own_threat = (max_v / 16).clamp(32, 256).min(max_v);
+
+    let mut lp_actions: Vec<usize> = all_elig
+        .iter()
+        .copied()
+        .filter(|&own| {
+            let v = global_visits[own];
+            if v >= min_own_std {
+                return true;
+            }
+            // Path 2 allows real cross-sampled cell visits (`row_tot`) even when ordinary visits
+            // (`global_visits`) are small, while Path 1 stays anchored strictly to ordinary visits
+            // so `argmax(ord_n)` is guaranteed to enter `lp_actions`.
+            let row_tot: u32 = aggs.iter().map(|a| a.row_n[own]).sum();
+            if v.max(row_tot) < min_own_threat {
+                return false;
+            }
+            let mut cov_w = 0.0f64;
+            for agg in &aggs {
+                let min_active = agg
+                    .active_cols
+                    .iter()
+                    .map(|&j| agg.cell_n[own * agg.m + j])
+                    .min()
+                    .unwrap_or(0);
+                if min_active >= 16 {
+                    cov_w += f64::from(agg.world_n);
+                }
+            }
+            (cov_w / total_all_weight) >= 0.75
+        })
+        .collect();
+    if lp_actions.is_empty() {
+        lp_actions = all_elig.clone();
+    }
+
+    // Pass 3: Build search-guidance cell matrices (ALL eligible × ALL replies, KAPPA_SEARCH = 12)
+    // and strictly prior-free LP / LCB matrices (`lp_actions × active_cols`).
+    const KAPPA_ROW: f64 = 16.0;
+    const KAPPA_COL: f64 = 8.0;
+    const KAPPA_CELL: f64 = 64.0;
+    const KAPPA_LCB: f64 = 8.0;
+    const KAPPA_SEARCH: f64 = 12.0;
+
+    let n = lp_actions.len();
+    let mut type_matrices: Vec<TypeMatrix> = Vec::with_capacity(aggs.len());
+    let mut lcb_type_matrices: Vec<TypeMatrix> = Vec::with_capacity(aggs.len());
+    let mut search_v: Vec<Vec<f64>> = types.iter().map(|t| vec![0.5; k_total * t.replies]).collect();
+    let mut active_cols_out: Vec<Vec<usize>> = vec![Vec::new(); types.len()];
+    let mut type_weights_out: Vec<f64> = vec![0.0; types.len()];
+
+    for agg in &aggs {
+        let weight = f64::from(agg.world_n) / total_all_weight;
+        type_weights_out[agg.orig_t] = weight;
+        active_cols_out[agg.orig_t] = agg.active_cols.clone();
+        let m = agg.m;
+        let m_act = agg.active_cols.len();
+        let cal_prior = calibrated_priors
+            .and_then(|cp| cp.get(agg.orig_t).copied())
+            .filter(|sl| sl.len() >= k_total * m);
+
+        // Search-guidance values over all eligible rows and all `0..m` replies.
+        for &own in &all_elig {
+            let g_mean = global_means[own].clamp(0.0, 1.0);
+            let mu_row = (agg.row_w[own] + KAPPA_ROW * g_mean)
+                / (f64::from(agg.row_n[own]) + KAPPA_ROW);
+            for j in 0..m {
+                let mu_col = (agg.col_w[j] + KAPPA_COL * agg.world_mean)
+                    / (f64::from(agg.col_n[j]) + KAPPA_COL);
+                let additive_prior = (mu_row + (mu_col - agg.world_mean)).clamp(0.0, 1.0);
+                let p_n = f64::from(agg.prior_n[own * m + j]);
+                let pooled_prior = if p_n > 0.0 {
+                    let pv = agg.prior_mean[own * m + j].clamp(0.0, 1.0);
+                    (p_n * pv + 8.0 * additive_prior) / (p_n + 8.0)
+                } else {
+                    additive_prior
+                };
+                let mu_search = if let Some(cp) = cal_prior {
+                    let p_cal = cp[own * m + j].clamp(0.02, 0.98);
+                    (p_n * pooled_prior + 8.0 * p_cal) / (p_n + 8.0)
+                } else {
+                    pooled_prior
+                };
+                let cn = f64::from(agg.cell_n[own * m + j]);
+                let cw = agg.cell_w[own * m + j];
+                search_v[agg.orig_t][own * m + j] =
+                    (cw + KAPPA_SEARCH * mu_search) / (cn + KAPPA_SEARCH);
+            }
+        }
+
+        // Readout LP & LCB matrices (STRICTLY no 1-ply prior injection!).
+        let mut values = vec![0.5f64; n * m_act];
+        let mut lcb_values = vec![0.0f64; n * m_act];
+        for (r, &own) in lp_actions.iter().enumerate() {
+            let g_mean = global_means[own].clamp(0.0, 1.0);
+            let mu_row = (agg.row_w[own] + KAPPA_ROW * g_mean)
+                / (f64::from(agg.row_n[own]) + KAPPA_ROW);
+            for (c_idx, &j) in agg.active_cols.iter().enumerate() {
+                let mu_col = (agg.col_w[j] + KAPPA_COL * agg.world_mean)
+                    / (f64::from(agg.col_n[j]) + KAPPA_COL);
+                let additive_prior = (mu_row + (mu_col - agg.world_mean)).clamp(0.0, 1.0);
+                let p_n = f64::from(agg.prior_n[own * m + j]);
+                let mu_prior = if p_n > 0.0 {
+                    let pv = agg.prior_mean[own * m + j].clamp(0.0, 1.0);
+                    (p_n * pv + 8.0 * additive_prior) / (p_n + 8.0)
+                } else {
+                    additive_prior
+                };
+                let cn = f64::from(agg.cell_n[own * m + j]);
+                let cw = agg.cell_w[own * m + j];
+                values[r * m_act + c_idx] = (cw + KAPPA_CELL * mu_prior) / (cn + KAPPA_CELL);
+
+                // Cross-type LCB safety cap: never let pooled prior fake high LCB confidence on cn == 0.
+                let lcb_est = (cw + KAPPA_LCB * mu_prior) / (cn + KAPPA_LCB);
+                let eff_n = cn + (0.25 * p_n).min(cn + 8.0);
+                let se = (lcb_est * (1.0 - lcb_est) / (eff_n + 1.0)
+                    + 0.25 / (eff_n + 1.0).powi(2))
+                .sqrt();
+                lcb_values[r * m_act + c_idx] = (lcb_est - se).clamp(0.0, 1.0);
+            }
+        }
+        type_matrices.push(TypeMatrix { weight, replies: m_act, values });
+        lcb_type_matrices.push(TypeMatrix { weight, replies: m_act, values: lcb_values });
+    }
+
+    let mut pure_guarantees = global_means.to_vec();
+    for (&own, pg) in lp_actions.iter().zip(row_pure_guarantees(&type_matrices, n)) {
+        pure_guarantees[own] = pg;
+    }
+    let best_pure_sub = (0..n)
+        .max_by(|&a, &b| {
+            pure_guarantees[lp_actions[a]]
+                .total_cmp(&pure_guarantees[lp_actions[b]])
+                .then_with(|| global_visits[lp_actions[a]].cmp(&global_visits[lp_actions[b]]))
+                .then_with(|| lp_actions[b].cmp(&lp_actions[a]))
+        })
+        .unwrap_or(0);
+    let best_pure_action = lp_actions[best_pure_sub];
+    let best_pure_value = pure_guarantees[best_pure_action];
+
+    let mut opp_eq_policy: Vec<Vec<f64>> = types.iter().map(|t| vec![0.0; t.replies]).collect();
+    let eq = if n == 1 {
+        let only = lp_actions[0];
+        let mut policy = vec![0.0; k_total];
+        policy[only] = 1.0;
+        let mut pure_p = vec![1.0];
+        let override_value = guarantee(&lcb_type_matrices, &pure_p);
+        let _ = &mut pure_p;
+        for (tm_idx, agg) in aggs.iter().enumerate() {
+            let tm = &type_matrices[tm_idx];
+            let best_c = (0..tm.replies)
+                .min_by(|&a, &b| tm.values[a].total_cmp(&tm.values[b]).then_with(|| a.cmp(&b)))
+                .unwrap_or(0);
+            let orig_j = agg.active_cols[best_c];
+            opp_eq_policy[agg.orig_t][orig_j] = 1.0;
+        }
+        BayesianEquilibrium {
+            policy,
+            action_values: pure_guarantees.clone(),
+            pure_guarantees,
+            equilibrium_value: best_pure_value,
+            override_value,
+            best_pure_value,
+            best_pure_action: only,
+        }
+    } else {
+        let col_sol = solve_bayesian_columns(&type_matrices, n, Some(best_pure_sub), false)?;
+        let BayesianColumnSolution {
+            x: best_x,
+            y: best_y,
+            columns,
+            col_replies,
+            used_cols: best_cols_len,
+        } = col_sol;
+
+        let mut action_values = pure_guarantees.clone();
+        let y_sum: f64 = best_y.iter().take(best_cols_len).map(|&y| y.max(0.0)).sum();
+        if best_y.len() >= best_cols_len && best_cols_len <= columns.len() && y_sum > 0.0 {
+            for (r, &own) in lp_actions.iter().enumerate() {
+                let eq_v: f64 = (0..best_cols_len)
+                    .map(|c| (best_y[c].max(0.0) / y_sum) * columns[c][r])
+                    .sum();
+                action_values[own] = 0.5 * eq_v + 0.5 * pure_guarantees[own];
+            }
+            for c in 0..best_cols_len {
+                let wc = best_y[c].max(0.0) / y_sum;
+                if wc <= 0.0 {
+                    continue;
+                }
+                for (tm_idx, &c_idx) in col_replies[c].iter().enumerate() {
+                    let agg = &aggs[tm_idx];
+                    let orig_j = agg.active_cols[c_idx];
+                    opp_eq_policy[agg.orig_t][orig_j] += wc;
+                }
+            }
+        } else {
+            let (_, reps) = response_column_with_replies(&type_matrices, &best_x);
+            for (tm_idx, &c_idx) in reps.iter().enumerate() {
+                let agg = &aggs[tm_idx];
+                let orig_j = agg.active_cols[c_idx];
+                opp_eq_policy[agg.orig_t][orig_j] = 1.0;
+            }
+        }
+
+        let max_p = best_x.iter().copied().fold(0.0_f64, f64::max);
+        let mut purified_x: Vec<f64> = best_x
+            .iter()
+            .map(|&p| if p >= 0.05 * max_p { p } else { 0.0 })
+            .collect();
+        let p_sum: f64 = purified_x.iter().sum();
+        if p_sum > 0.0 {
+            purified_x.iter_mut().for_each(|p| *p /= p_sum);
+        } else {
+            purified_x = vec![0.0; n];
+            purified_x[best_pure_sub] = 1.0;
+        }
+
+        let eq_guarantee = guarantee(&type_matrices, &purified_x);
+        let mut policy = vec![0.0; k_total];
+        if eq_guarantee > best_pure_value + 0.005 {
+            let override_value = guarantee(&lcb_type_matrices, &purified_x);
+            for (r, &own) in lp_actions.iter().enumerate() {
+                policy[own] = purified_x[r];
+            }
+            BayesianEquilibrium {
+                policy,
+                action_values,
+                pure_guarantees,
+                equilibrium_value: eq_guarantee,
+                override_value,
+                best_pure_value,
+                best_pure_action,
+            }
+        } else {
+            policy[best_pure_action] = 1.0;
+            let mut pure_policy = vec![0.0; n];
+            pure_policy[best_pure_sub] = 1.0;
+            let override_value = guarantee(&lcb_type_matrices, &pure_policy);
+            BayesianEquilibrium {
+                policy,
+                action_values,
+                pure_guarantees,
+                equilibrium_value: best_pure_value,
+                override_value,
+                best_pure_value,
+                best_pure_action,
+            }
+        }
+    };
+
+    // Pass 4: Compute unblocked `search_action_values` for EVERY eligible action `own ∈ all_elig`!
+    let mut search_action_values = global_means.to_vec();
+    for &own in &all_elig {
+        let mut eq_v = 0.0f64;
+        let mut pg_v = 0.0f64;
+        for agg in &aggs {
+            let wt = type_weights_out[agg.orig_t];
+            let m = agg.m;
+            let sv = &search_v[agg.orig_t];
+            let mut tv = 0.0f64;
+            let mut tmin = f64::INFINITY;
+            for &j in &agg.active_cols {
+                let v = sv[own * m + j];
+                tv += opp_eq_policy[agg.orig_t][j] * v;
+                if v < tmin {
+                    tmin = v;
+                }
+            }
+            eq_v += wt * tv;
+            pg_v += wt * tmin;
+        }
+        search_action_values[own] = 0.5 * eq_v + 0.5 * pg_v;
+    }
+
+    let mut lp_admitted = vec![false; k_total];
+    for &own in &lp_actions {
+        lp_admitted[own] = true;
+    }
+
+    Some(Stage2BayesianEquilibrium {
+        eq,
+        search_action_values,
+        lp_admitted,
+        opp_eq_policy,
+        active_cols: active_cols_out,
+        type_weights: type_weights_out,
+        search_v,
+    })
 }
 
 
@@ -1102,5 +1674,180 @@ mod tests {
         .unwrap();
         assert_eq!(eq.best_pure_action, 0);
         assert_eq!(eq.policy, vec![1.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn stage2_bayesian_equilibrium_row_admission_lcb_cap_and_prior_isolation() {
+        // 1. High-budget Turn-35 admission: max_v = 700_000 -> min_own_std capped at 512 (not 87_500!).
+        //    Rival action 1 has 600 visits and forms a clean RPS equilibrium with action 0.
+        let high_budget = [RootType {
+            samples: 700_600,
+            replies: 2,
+            cells: vec![
+                RootCell { own: 0, reply: 0, samples: 350_000, mean: 0.45 },
+                RootCell { own: 0, reply: 1, samples: 350_000, mean: 0.75 },
+                RootCell { own: 1, reply: 0, samples: 300, mean: 0.75 },
+                RootCell { own: 1, reply: 1, samples: 300, mean: 0.45 },
+            ],
+        }];
+        let s2_hi = solve_bayesian_equilibrium_stage2(
+            &[true, true],
+            &[700_000, 600],
+            &[0.60, 0.60],
+            &high_budget,
+            &[],
+            None,
+        )
+        .unwrap();
+        assert!(
+            s2_hi.eq.policy[0] > 0.3 && s2_hi.eq.policy[1] > 0.3,
+            "threat-covered Path 2 must admit 600-visit RPS rival at 700k: {:?}",
+            s2_hi.eq.policy
+        );
+        // Uncovered 600-visit exploration tail at 700k (min_active = 4 < 16) MUST be rejected!
+        let high_budget_uncovered = [RootType {
+            samples: 700_600,
+            replies: 2,
+            cells: vec![
+                RootCell { own: 0, reply: 0, samples: 350_000, mean: 0.45 },
+                RootCell { own: 0, reply: 1, samples: 350_000, mean: 0.75 },
+                RootCell { own: 1, reply: 0, samples: 596, mean: 0.75 },
+                RootCell { own: 1, reply: 1, samples: 4, mean: 0.45 },
+            ],
+        }];
+        let s2_uncov = solve_bayesian_equilibrium_stage2(
+            &[true, true],
+            &[700_000, 600],
+            &[0.60, 0.748],
+            &high_budget_uncovered,
+            &[],
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            s2_uncov.eq.policy,
+            vec![1.0, 0.0],
+            "uncovered 600-visit rival at 700k must NOT leak into LP readout"
+        );
+        assert!(
+            (s2_hi.opp_eq_policy[0].iter().sum::<f64>() - 1.0).abs() < 1e-9
+                && s2_hi.opp_eq_policy[0][0] > 0.3
+                && s2_hi.opp_eq_policy[0][1] > 0.3,
+            "opp_eq_policy must capture mixed opponent threats: {:?}",
+            s2_hi.opp_eq_policy[0]
+        );
+
+        // 2. 3809 T13 rejection: max_v = 3909, rival has 151 visits but reply 2 has only 9 (< 16)
+        //    samples, so cov < 0.75 -> excluded from LP readout, singleton LP still populates
+        //    opp_eq_policy and unblocked search_action_values for BOTH actions.
+        let sparse_switch = [RootType {
+            samples: 4060,
+            replies: 3,
+            cells: vec![
+                RootCell { own: 0, reply: 0, samples: 2900, mean: 0.550 },
+                RootCell { own: 0, reply: 1, samples: 600, mean: 0.580 },
+                RootCell { own: 0, reply: 2, samples: 409, mean: 0.582 },
+                RootCell { own: 1, reply: 0, samples: 119, mean: 0.617 },
+                RootCell { own: 1, reply: 1, samples: 17, mean: 0.290 },
+                RootCell { own: 1, reply: 2, samples: 9, mean: 0.467 },
+            ],
+        }];
+        let s2_t13 = solve_bayesian_equilibrium_stage2(
+            &[true, true],
+            &[3909, 151],
+            &[0.558, 0.562],
+            &sparse_switch,
+            &[],
+            None,
+        )
+        .unwrap();
+        assert_eq!(s2_t13.eq.policy, vec![1.0, 0.0]);
+        assert!((s2_t13.opp_eq_policy[0].iter().sum::<f64>() - 1.0).abs() < 1e-9);
+        assert!(
+            s2_t13.search_action_values[1] < 0.55,
+            "unblocked search_action_values must reflect dropped rival's reply-1 trap: {:?}",
+            s2_t13.search_action_values
+        );
+
+        // 3. Path-2 threat-covered rival admission: max_v = 10_000 (min_own_std = 1250,
+        //    min_own_threat = 256), rival has 260 visits with >= 16 samples on every active col.
+        let threat_covered = [RootType {
+            samples: 10_260,
+            replies: 2,
+            cells: vec![
+                RootCell { own: 0, reply: 0, samples: 5_000, mean: 0.40 },
+                RootCell { own: 0, reply: 1, samples: 5_000, mean: 0.75 },
+                RootCell { own: 1, reply: 0, samples: 130, mean: 0.72 },
+                RootCell { own: 1, reply: 1, samples: 130, mean: 0.42 },
+            ],
+        }];
+        let s2_cov = solve_bayesian_equilibrium_stage2(
+            &[true, true],
+            &[10_000, 260],
+            &[0.575, 0.570],
+            &threat_covered,
+            &[],
+            None,
+        )
+        .unwrap();
+        assert!(
+            s2_cov.eq.policy[1] > 0.25,
+            "threat-covered rival with cov=1.0 and 260 >= 256 visits must enter LP: {:?}",
+            s2_cov.eq.policy
+        );
+
+        // 4. Cross-type LCB safety cap: cn == 0 with huge pooled prior p_n == 2000 must still
+        //    incur full finite-sample uncertainty (eff_n <= 8.0) and fail override gate.
+        let pooled_spoof = [RootType {
+            samples: 4600,
+            replies: 2,
+            cells: vec![
+                RootCell { own: 0, reply: 0, samples: 2000, mean: 0.55 },
+                RootCell { own: 0, reply: 1, samples: 2000, mean: 0.55 },
+                RootCell { own: 1, reply: 0, samples: 600, mean: 0.61 },
+            ],
+        }];
+        let huge_prior = [vec![RootCell {
+            own: 1,
+            reply: 1,
+            samples: 2000,
+            mean: 0.62,
+        }]];
+        let s2_lcb = solve_bayesian_equilibrium_stage2(
+            &[true, true],
+            &[4000, 600],
+            &[0.55, 0.61],
+            &pooled_spoof,
+            &huge_prior,
+            None,
+        )
+        .unwrap();
+        assert!(
+            s2_lcb.eq.override_value <= s2_lcb.eq.pure_guarantees[0] + MIN_MIX_MARGIN,
+            "huge pooled prior on cn=0 must not spoof LCB override: override={} pure0={}",
+            s2_lcb.eq.override_value,
+            s2_lcb.eq.pure_guarantees[0]
+        );
+
+        // 5. Strict 1-ply calibrated_priors isolation: readout `eq` is bit-identical with or
+        //    without `calibrated_priors`, while `search_v` and `search_action_values` update.
+        let cal_mat = [0.40, 0.75, 0.90, 0.90];
+        let cal_slices: [&[f64]; 1] = [&cal_mat];
+        let s2_with_cal = solve_bayesian_equilibrium_stage2(
+            &[true, true],
+            &[10_000, 260],
+            &[0.575, 0.570],
+            &threat_covered,
+            &[],
+            Some(&cal_slices),
+        )
+        .unwrap();
+        assert_eq!(s2_cov.eq.policy, s2_with_cal.eq.policy);
+        assert_eq!(s2_cov.eq.override_value, s2_with_cal.eq.override_value);
+        assert_eq!(s2_cov.eq.pure_guarantees, s2_with_cal.eq.pure_guarantees);
+        assert!(
+            s2_with_cal.search_action_values[1] > s2_cov.search_action_values[1] + 0.01,
+            "calibrated_priors must guide search_action_values without touching readout LP"
+        );
     }
 }

@@ -117,7 +117,7 @@ try {
           games: actual.run.pairs[0].games.map(g => ({ turns: g.turns, outcome: g.outcome, selections: g.selections })) } };
     } finally { dex.free(); }
   }, `/@fs${fileURLToPath(new URL("../../crates/wasm/pkg-web/nc2000_wasm.js", import.meta.url))}`);
-  assert.equal(result.production.preview, 729000);
+  assert.equal(result.production.preview, 240000);
   assert.equal(result.production.battle, 243000);
   assert.deepEqual(result.capped, ["cap", "cap"]);
   console.log(JSON.stringify(result));

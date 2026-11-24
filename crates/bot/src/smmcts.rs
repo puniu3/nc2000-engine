@@ -145,7 +145,7 @@ impl Default for RmConfig {
             threshold: 0.5,
             hp_buckets: 16,
             solve_sweeps: 2000,
-            settlement: crate::accounting::LeafSettlementMode::BlindSpotLeaf,
+            settlement: crate::accounting::LeafSettlementMode::CfValuePuct,
         }
     }
 }
@@ -257,6 +257,9 @@ pub(crate) struct CompactNode {
     pub(crate) len: [u8; 2],
     pub(crate) n: [[u32; 6]; 2],
     pub(crate) w: [[f64; 6]; 2],
+    pub(crate) priors_ready: bool,
+    pub(crate) noop_mask: [u8; 2],
+    pub(crate) priors_q: [[u16; 6]; 2],
 }
 
 impl CompactNode {
@@ -283,7 +286,97 @@ impl CompactNode {
             len,
             n: [[0; 6]; 2],
             w: [[0.0; 6]; 2],
+            priors_ready: false,
+            noop_mask: [0; 2],
+            priors_q: [[0; 6]; 2],
         }
+    }
+
+    #[inline]
+    pub(crate) fn ensure_puct_priors(
+        &mut self,
+        cb: &nc2000_engine::compact::CompactBattle,
+        table: &nc2000_engine::compact::MatchTable,
+        tempo_cache: &crate::tempo::TempoMatchCache,
+        eps_p: f32,
+    ) {
+        if self.priors_ready {
+            return;
+        }
+        let ((p0, m0), (p1, m1)) = crate::compact_az::policy_priors_both_mode(
+            cb,
+            table,
+            Some(tempo_cache),
+            &self.acts[0],
+            self.len[0] as usize,
+            &self.acts[1],
+            self.len[1] as usize,
+            eps_p,
+            false,
+        );
+        for i in 0..6 {
+            self.priors_q[0][i] = (p0[i].clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
+            self.priors_q[1][i] = (p1[i].clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
+        }
+        self.noop_mask = [m0, m1];
+        self.priors_ready = true;
+    }
+
+    /// PUCT selection for `side` (Note: `self.w[side]` already accumulates `side`'s own reward).
+    #[inline]
+    pub(crate) fn select_puct(&mut self, side: usize, c_puct: f64, fpu_red: f64) -> usize {
+        let k = self.len[side] as usize;
+        if k <= 1 {
+            if k == 1 {
+                self.n[side][0] += 1;
+            }
+            return 0;
+        }
+        let mask = self.noop_mask[side];
+        let mut n_tot = 0u32;
+        let mut w_tot = 0.0f64;
+        for i in 0..k {
+            n_tot += self.n[side][i];
+            w_tot += self.w[side][i];
+        }
+        let pick = if n_tot == 0 {
+            let mut best_i = 0usize;
+            let mut best_p = 0u16;
+            let mut found = false;
+            for i in 0..k {
+                if ((mask >> i) & 1) == 0 && (!found || self.priors_q[side][i] > best_p) {
+                    found = true;
+                    best_p = self.priors_q[side][i];
+                    best_i = i;
+                }
+            }
+            best_i
+        } else {
+            let r_bar_s = w_tot / f64::from(n_tot);
+            let fpu = (r_bar_s - fpu_red).clamp(0.01, 0.99);
+            let scale = c_puct * (1.0 / 65535.0) * f64::from(n_tot).sqrt();
+            let mut best_i = 0usize;
+            let mut best_u = f64::NEG_INFINITY;
+            for i in 0..k {
+                if ((mask >> i) & 1) != 0 {
+                    continue;
+                }
+                let vi = self.n[side][i];
+                let q = if vi > 0 {
+                    self.w[side][i] / f64::from(vi)
+                } else {
+                    fpu
+                };
+                let u = q + scale * f64::from(self.priors_q[side][i]) / f64::from(vi + 1);
+                if u > best_u {
+                    best_u = u;
+                    best_i = i;
+                }
+            }
+            best_i
+        };
+        self.n[side][pick] += 1;
+        pick
     }
 
     /// Verify 1:1 root action order and choice identity against `Battle::legal_choices_into`.
@@ -985,11 +1078,52 @@ pub(crate) fn compact_default_leaf(
 }
 
 #[inline]
+fn compact_cf_or_default_leaf(
+    cfg: &RmConfig,
+    cb: &mut nc2000_engine::compact::CompactBattle,
+    table: &nc2000_engine::compact::MatchTable,
+    tempo_cache: Option<&crate::tempo::TempoMatchCache>,
+    turn_cap: u16,
+    rng: &mut SplitMix64,
+    rollout: bool,
+) -> f64 {
+    if let Some(tc) = tempo_cache.filter(|_| cfg.settlement.uses_cf_value_puct()) {
+        if cb.outcome != 0 {
+            crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_compact(cb));
+            return match cb.outcome {
+                1 => 1.0,
+                2 => 0.0,
+                _ => 0.5,
+            };
+        }
+        if let Some(v) = crate::eval::compact_turn_limit_outcome(cb, table) {
+            let mut info = crate::mcts::SimEndInfo::from_compact(cb);
+            if info.outcome == 0 {
+                info.outcome = crate::mcts::value_to_outcome_code(v);
+            }
+            crate::mcts::set_last_sim_end(info);
+            return v;
+        }
+        let alive_sum =
+            cb.sides[0].alive_mask.count_ones() + cb.sides[1].alive_mask.count_ones();
+        if alive_sum <= 3 {
+            // Hybrid Endgame Guard (`n0 + n1 <= 3` -> `8r` BlindSpotLeaf + linear.rs).
+            return compact_default_leaf(cfg, cb, table, turn_cap, rng, rollout);
+        }
+        let v = crate::compact_az::evaluate_cf_value_resolving_switches(cb, table, Some(tc), 1.0);
+        crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_compact(cb));
+        return v;
+    }
+    compact_default_leaf(cfg, cb, table, turn_cap, rng, rollout)
+}
+
+#[inline]
 fn back_up_compact_path(
     nodes: &mut [CompactNode],
     path: &[(usize, [Option<usize>; 2])],
     root: usize,
     reward0: f64,
+    pure_mc: bool,
 ) -> f64 {
     let mut value = reward0;
     let mut root_value = reward0;
@@ -1003,7 +1137,7 @@ fn back_up_compact_path(
         }
         if index == root {
             root_value = value;
-        } else if value > 0.000_001 && value < 0.999_999 {
+        } else if !pure_mc && value > 0.000_001 && value < 0.999_999 {
             value = node.backed_up_value(value);
         }
     }
@@ -1614,8 +1748,11 @@ pub(crate) fn run_compact_preview_iteration_with_hooks(
     root_reward0
 }
 
-/// Hot-path iteration natively over 256-byte `CompactBattle` with zero `Battle` allocation,
-/// zero `from_battle` conversion, and identical UCB1 / HP-bucketed TT / empirical-Bayes backup.
+/// Hot-path iteration natively over 256-byte `CompactBattle` with zero `Battle` allocation
+/// and zero `from_battle` conversion. When `cfg.settlement == CfValuePuct` and `tempo_cache`
+/// is supplied, interior nodes use `P_net` PUCT (`c_puct = 1.0`, `fpu_red = 0.09`, `eps = 0.02`),
+/// leaves settle via 0-rollout `CF-V_net` v2 (`n0+n1 <= 3` Hybrid Endgame Guard), and backup
+/// uses pure MC (`lam = 0.0`), matching the certified `+52.3` Elo Champion.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run_compact_iteration(
     cfg: &RmConfig,
@@ -1624,17 +1761,24 @@ pub(crate) fn run_compact_iteration(
     table: &mut FxHashMap<u64, usize>,
     cb: &mut nc2000_engine::compact::CompactBattle,
     match_table: &nc2000_engine::compact::MatchTable,
+    tempo_cache: Option<&crate::tempo::TempoMatchCache>,
     turn_cap: u16,
     start: usize,
     force_root: [Option<usize>; 2],
     root_joint: &mut [usize; 2],
     depth_out: &mut u32,
 ) -> f64 {
+    let cf_tc = tempo_cache.filter(|_| cfg.settlement.uses_cf_value_puct());
     let mut path = nc2000_engine::smallvec::SmallVec::<[(usize, [Option<usize>; 2]); 16]>::new();
     let mut node_idx = start;
 
     let reward0 = loop {
         let at_root = node_idx == start;
+        if !at_root {
+            if let Some(tc) = cf_tc {
+                nodes[node_idx].ensure_puct_priors(cb, match_table, tc, 0.02);
+            }
+        }
         let mut joint = [7u8, 7u8];
         let mut selected = [None; 2];
         for s in 0..2usize {
@@ -1650,6 +1794,7 @@ pub(crate) fn run_compact_iteration(
                         nodes[node_idx].n[s][f] += 1;
                         f
                     }
+                    _ if !at_root && cf_tc.is_some() => nodes[node_idx].select_puct(s, 1.0, 0.09),
                     _ => {
                         let node = &mut nodes[node_idx];
                         select_ucb_counts(cfg.c, rng, &mut node.n[s][..k], &node.w[s][..k])
@@ -1667,7 +1812,7 @@ pub(crate) fn run_compact_iteration(
             path.push((node_idx, selected));
         }
         if joint == [7, 7] {
-            break compact_default_leaf(cfg, cb, match_table, turn_cap, rng, false);
+            break compact_cf_or_default_leaf(cfg, cb, match_table, cf_tc, turn_cap, rng, false);
         }
         cb.apply_actions(match_table, joint);
         if cb.outcome != 0 {
@@ -1687,7 +1832,7 @@ pub(crate) fn run_compact_iteration(
             break v;
         }
         if cb.turn > turn_cap {
-            break compact_default_leaf(cfg, cb, match_table, turn_cap, rng, false);
+            break compact_cf_or_default_leaf(cfg, cb, match_table, cf_tc, turn_cap, rng, false);
         }
         let omit_qc = !cb.quick_claw_observable(match_table);
         let key = cb.search_key(match_table, cfg.hp_buckets, omit_qc);
@@ -1700,12 +1845,12 @@ pub(crate) fn run_compact_iteration(
                 let child = nodes.len();
                 nodes.push(CompactNode::at(cb, match_table));
                 table.insert(key, child);
-                break compact_default_leaf(cfg, cb, match_table, turn_cap, rng, true);
+                break compact_cf_or_default_leaf(cfg, cb, match_table, cf_tc, turn_cap, rng, true);
             }
         }
     };
 
-    back_up_compact_path(nodes, &path, start, reward0)
+    back_up_compact_path(nodes, &path, start, reward0, cf_tc.is_some())
 }
 
 /// Fast-path `CompactBattle` iteration with lazy `EndgameSession` leaf interception:
@@ -1720,6 +1865,7 @@ pub(crate) fn run_compact_iteration_with_endgame(
     table: &mut FxHashMap<u64, usize>,
     cb: &mut nc2000_engine::compact::CompactBattle,
     match_table: &nc2000_engine::compact::MatchTable,
+    tempo_cache: Option<&crate::tempo::TempoMatchCache>,
     turn_cap: u16,
     start: usize,
     force_root: [Option<usize>; 2],
@@ -1736,11 +1882,17 @@ pub(crate) fn run_compact_iteration_with_endgame(
         &mut dyn FnMut() -> f64,
     ) -> f64,
 ) -> f64 {
+    let cf_tc = tempo_cache.filter(|_| cfg.settlement.uses_cf_value_puct());
     let mut path = nc2000_engine::smallvec::SmallVec::<[(usize, [Option<usize>; 2]); 16]>::new();
     let mut node_idx = start;
 
     let reward0 = loop {
         let at_root = node_idx == start;
+        if !at_root {
+            if let Some(tc) = cf_tc {
+                nodes[node_idx].ensure_puct_priors(cb, match_table, tc, 0.02);
+            }
+        }
         let mut joint = [7u8, 7u8];
         let mut selected = [None; 2];
         for s in 0..2usize {
@@ -1756,6 +1908,7 @@ pub(crate) fn run_compact_iteration_with_endgame(
                         nodes[node_idx].n[s][f] += 1;
                         f
                     }
+                    _ if !at_root && cf_tc.is_some() => nodes[node_idx].select_puct(s, 1.0, 0.09),
                     _ => {
                         let node = &mut nodes[node_idx];
                         select_ucb_counts(cfg.c, rng, &mut node.n[s][..k], &node.w[s][..k])
@@ -1777,7 +1930,7 @@ pub(crate) fn run_compact_iteration_with_endgame(
                 crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_compact(cb));
                 materialize(cb, match_table, rng, false, session, clock)
             } else {
-                compact_default_leaf(cfg, cb, match_table, turn_cap, rng, false)
+                compact_cf_or_default_leaf(cfg, cb, match_table, cf_tc, turn_cap, rng, false)
             };
         }
         cb.apply_actions(match_table, joint);
@@ -1802,7 +1955,7 @@ pub(crate) fn run_compact_iteration_with_endgame(
                 crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_compact(cb));
                 materialize(cb, match_table, rng, false, session, clock)
             } else {
-                compact_default_leaf(cfg, cb, match_table, turn_cap, rng, false)
+                compact_cf_or_default_leaf(cfg, cb, match_table, cf_tc, turn_cap, rng, false)
             };
         }
         let omit_qc = !cb.quick_claw_observable(match_table);
@@ -1820,13 +1973,13 @@ pub(crate) fn run_compact_iteration_with_endgame(
                     crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_compact(cb));
                     materialize(cb, match_table, rng, true, session, clock)
                 } else {
-                    compact_default_leaf(cfg, cb, match_table, turn_cap, rng, true)
+                    compact_cf_or_default_leaf(cfg, cb, match_table, cf_tc, turn_cap, rng, true)
                 };
             }
         }
     };
 
-    back_up_compact_path(nodes, &path, start, reward0)
+    back_up_compact_path(nodes, &path, start, reward0, cf_tc.is_some())
 }
 
 #[cold]
@@ -1886,6 +2039,7 @@ pub(crate) fn run_compact_iteration_with_hooks(
     table: &mut FxHashMap<u64, usize>,
     cb: &mut nc2000_engine::compact::CompactBattle,
     match_table: &nc2000_engine::compact::MatchTable,
+    tempo_cache: Option<&crate::tempo::TempoMatchCache>,
     dex: &Dex,
     battle_buf: &mut Battle,
     turn_cap: u16,
@@ -1897,11 +2051,17 @@ pub(crate) fn run_compact_iteration_with_hooks(
     mut trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
     mut root_child_value: Option<&mut dyn FnMut(&Battle) -> Option<f64>>,
 ) -> f64 {
+    let cf_tc = tempo_cache.filter(|_| cfg.settlement.uses_cf_value_puct());
     let mut path = nc2000_engine::smallvec::SmallVec::<[(usize, [Option<usize>; 2]); 16]>::new();
     let mut node_idx = start;
 
     let reward0 = loop {
         let at_root = node_idx == start;
+        if !at_root {
+            if let Some(tc) = cf_tc {
+                nodes[node_idx].ensure_puct_priors(cb, match_table, tc, 0.02);
+            }
+        }
         let mut joint = [7u8, 7u8];
         let mut selected = [None; 2];
         for s in 0..2usize {
@@ -1917,6 +2077,7 @@ pub(crate) fn run_compact_iteration_with_hooks(
                         nodes[node_idx].n[s][f] += 1;
                         f
                     }
+                    _ if !at_root && cf_tc.is_some() => nodes[node_idx].select_puct(s, 1.0, 0.09),
                     _ => {
                         let node = &mut nodes[node_idx];
                         select_ucb_counts(cfg.c, rng, &mut node.n[s][..k], &node.w[s][..k])
@@ -1959,7 +2120,7 @@ pub(crate) fn run_compact_iteration_with_hooks(
                 cb.sync_to_battle(match_table, dex, battle_buf);
                 lf(battle_buf, rng, false)
             } else {
-                compact_default_leaf(cfg, cb, match_table, turn_cap, rng, false)
+                compact_cf_or_default_leaf(cfg, cb, match_table, cf_tc, turn_cap, rng, false)
             };
         }
         cb.apply_actions(match_table, joint);
@@ -2003,7 +2164,7 @@ pub(crate) fn run_compact_iteration_with_hooks(
                 cb.sync_to_battle(match_table, dex, battle_buf);
                 lf(battle_buf, rng, false)
             } else {
-                compact_default_leaf(cfg, cb, match_table, turn_cap, rng, false)
+                compact_cf_or_default_leaf(cfg, cb, match_table, cf_tc, turn_cap, rng, false)
             };
         }
         let omit_qc = !cb.quick_claw_observable(match_table);
@@ -2030,13 +2191,13 @@ pub(crate) fn run_compact_iteration_with_hooks(
                     cb.sync_to_battle(match_table, dex, battle_buf);
                     lf(battle_buf, rng, true)
                 } else {
-                    compact_default_leaf(cfg, cb, match_table, turn_cap, rng, true)
+                    compact_cf_or_default_leaf(cfg, cb, match_table, cf_tc, turn_cap, rng, true)
                 };
             }
         }
     };
 
-    let root_reward0 = back_up_compact_path(nodes, &path, start, reward0);
+    let root_reward0 = back_up_compact_path(nodes, &path, start, reward0, cf_tc.is_some());
     if let Some(tr) = trace {
         cb.sync_to_battle(match_table, dex, battle_buf);
         tr(SearchTrace::Result {
@@ -2136,6 +2297,7 @@ impl SkuctSearch {
             cfg.settlement,
             crate::accounting::LeafSettlementMode::BlindSpotLeaf
                 | crate::accounting::LeafSettlementMode::BlindSpotLeafNoRelay
+                | crate::accounting::LeafSettlementMode::CfValuePuct
         ) {
             cfg.settlement = crate::accounting::LeafSettlementMode::LegacyRollout;
         }
@@ -2319,6 +2481,7 @@ impl SkuctSearch {
                         &mut c.table,
                         &mut cb,
                         &c.match_table,
+                        None,
                         self.turn_cap,
                         0,
                         [None, None],
@@ -2399,6 +2562,7 @@ impl SkuctSearch {
                         &mut c.table,
                         &mut cb,
                         &c.match_table,
+                        None,
                         self.turn_cap,
                         0,
                         [Some(force[0]), Some(force[1])],
@@ -2494,6 +2658,7 @@ impl SkuctSearch {
                                 &mut c.table,
                                 &mut cb,
                                 &c.match_table,
+                                None,
                                 dex,
                                 &mut sim,
                                 self.turn_cap,

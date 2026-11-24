@@ -754,7 +754,7 @@ pub(crate) fn open_preview_pick_sets(
     Some(SearchChoice::Team(tables.actions()[sample_mixed(p, rng)]))
 }
 
-fn draw_policy(actions: &[SearchChoice], policy: &[f64], draw: f64) -> Option<SearchChoice> {
+pub(crate) fn draw_policy(actions: &[SearchChoice], policy: &[f64], draw: f64) -> Option<SearchChoice> {
     let mut total = 0.;
     let mut last = None;
     for (&action, &mass) in actions.iter().zip(policy) {
@@ -844,7 +844,7 @@ pub(crate) fn root_search_key_cached(
     key
 }
 
-fn party_order_matters(dex: &Dex, roster: &[Pokemon]) -> bool {
+pub(crate) fn party_order_matters(dex: &Dex, roster: &[Pokemon]) -> bool {
     roster.iter().any(|mon| {
         mon.base_move_slots.iter().chain(&mon.move_slots).any(|slot| {
             matches!(dex.moves.key(slot.id),
@@ -853,7 +853,7 @@ fn party_order_matters(dex: &Dex, roster: &[Pokemon]) -> bool {
     })
 }
 
-fn canonicalize_unseen_bench(dex: &Dex, sim: &mut Battle, opponent: usize) {
+pub(crate) fn canonicalize_unseen_bench(dex: &Dex, sim: &mut Battle, opponent: usize) {
     if sim.request_state == nc2000_engine::state::RequestState::TeamPreview
         || sim.mid_turn || !sim.queue.is_empty()
     {
@@ -881,6 +881,7 @@ struct CompactWorld {
     table: nc2000_engine::compact::MatchTable,
     cb: nc2000_engine::compact::CompactBattle,
     root: usize,
+    tempo_cache: Option<crate::tempo::TempoMatchCache>,
 }
 
 struct CompactPreviewWorld {
@@ -993,6 +994,9 @@ pub struct BlindSearch {
     /// without overwriting explicit `mask_actions` / alias masks.
     prune_dominated: bool,
     opponent_preview_prior: bool,
+    /// Two-Stage Persistent-Tree Double-Oracle preview search (`CfValuePuct` default).
+    cf_preview: Option<Box<crate::preview_search::SteppedCfPreview>>,
+    cf_preview_disabled: bool,
     /// Per-determinization roots + full-state interior nodes.
     nodes: Vec<Node>,
     table: FxHashMap<u64, usize>,
@@ -1023,6 +1027,12 @@ pub struct BlindSearch {
 impl BlindSearch {
     pub fn set_opponent_preview_prior(&mut self, enabled: bool) {
         self.opponent_preview_prior = enabled;
+        if enabled {
+            self.cf_preview = None;
+            if self.is_preview() && self.cfg.settlement.uses_cf_value_puct() {
+                self.cfg.settlement = crate::accounting::LeafSettlementMode::LegacyRollout;
+            }
+        }
     }
 
     pub fn with_max_worlds(mut self, k: usize) -> Self {
@@ -1216,6 +1226,8 @@ impl BlindSearch {
             my_dominated_reasons,
             prune_dominated: false,
             opponent_preview_prior: false,
+            cf_preview: None,
+            cf_preview_disabled: false,
             my_acts,
             nodes: Vec::new(),
             table: FxHashMap::default(),
@@ -1367,10 +1379,16 @@ impl BlindSearch {
         self.compact_root_battle_nodes
             .entry(battle_root)
             .or_insert(c_root);
+        let tempo_cache = self
+            .cfg
+            .settlement
+            .uses_cf_value_puct()
+            .then(|| crate::tempo::TempoMatchCache::build(&cb, &table));
         Some(Arc::new(CompactWorld {
             table,
             cb,
             root: c_root,
+            tempo_cache,
         }))
     }
 
@@ -1844,6 +1862,7 @@ impl BlindSearch {
                         &mut self.compact_table,
                         &mut cb,
                         &cw.table,
+                        cw.tempo_cache.as_ref(),
                         self.turn_cap,
                         cw.root,
                         force,
@@ -1871,6 +1890,7 @@ impl BlindSearch {
                         &mut self.compact_table,
                         &mut cb,
                         &cw.table,
+                        cw.tempo_cache.as_ref(),
                         dex,
                         &mut battle_buf,
                         self.turn_cap,
@@ -2051,6 +2071,64 @@ impl BlindSearch {
         leaf: Option<&mut dyn FnMut(&mut Battle, &mut SplitMix64, bool) -> f64>,
         trace: Option<&mut dyn FnMut(crate::smmcts::SearchTrace<'_>)>,
     ) -> f64 {
+        if self.is_preview()
+            && self.cfg.settlement.uses_cf_value_puct()
+            && !self.opponent_preview_prior
+            && !self.cf_preview_disabled
+            && leaf.is_none()
+            && trace.is_none()
+        {
+            if self.cf_preview.is_none() {
+                if self.done == 0 {
+                    self.cf_preview = crate::preview_search::SteppedCfPreview::try_new(
+                        &self.base,
+                        dex,
+                        belief,
+                        obs,
+                        self.side,
+                        &self.my_acts,
+                        self.my_mask.as_deref(),
+                        self.cfg.c,
+                        &mut self.rng,
+                    )
+                    .map(Box::new);
+                }
+                if self.cf_preview.is_none() {
+                    self.cf_preview_disabled = true;
+                    self.cfg.settlement = crate::accounting::LeafSettlementMode::LegacyRollout;
+                }
+            }
+            if let Some(ref mut cfp) = self.cf_preview {
+                let (own_idx, opp_choice, val0, val_mine, iter_depth) =
+                    cfp.step_one(&mut self.rng);
+                self.my_n[own_idx] += 1;
+                self.my_w[own_idx] += val_mine;
+                self.depth_sum += u64::from(iter_depth);
+                self.max_depth = self.max_depth.max(iter_depth);
+                if let Some((_, count)) = self.avail.iter_mut().find(|(a, _)| *a == opp_choice) {
+                    *count += 1;
+                } else {
+                    self.avail.push((opp_choice, 1));
+                }
+                let index = match self.joint_index.entry((own_idx, opp_choice)) {
+                    std::collections::hash_map::Entry::Occupied(entry) => *entry.get(),
+                    std::collections::hash_map::Entry::Vacant(entry) => {
+                        self.joint.push((own_idx, opp_choice, 0, 0.0));
+                        *entry.insert(self.joint.len() - 1)
+                    }
+                };
+                self.joint[index].2 += 1;
+                self.joint[index].3 += val_mine;
+                self.done += 1;
+                return val0;
+            }
+        } else if self.is_preview() && self.cfg.settlement.uses_cf_value_puct() {
+            // Decoupled preview UCB1 fallback (`step_observed`/`step_with_leaf`/prior) uses
+            // `LegacyRollout`, matching pre-`CfValuePuct` preview behavior.
+            self.cf_preview = None;
+            self.cf_preview_disabled = true;
+            self.cfg.settlement = crate::accounting::LeafSettlementMode::LegacyRollout;
+        }
         if !self.is_preview() && self.done >= 512 && self.done % 256 == 0 {
             if let Some(eq) = self.bayesian_equilibrium() {
                 self.bayesian_row_q = Some(eq.action_values);
@@ -2245,6 +2323,13 @@ impl BlindSearch {
         trace: Option<&mut dyn FnMut(crate::smmcts::SearchTrace<'_>)>,
         root_child_value: Option<&mut dyn FnMut(&Battle) -> Option<f64>>,
     ) -> f64 {
+        if self.is_preview() {
+            self.cf_preview = None;
+            self.cf_preview_disabled = true;
+            if self.cfg.settlement.uses_cf_value_puct() {
+                self.cfg.settlement = crate::accounting::LeafSettlementMode::LegacyRollout;
+            }
+        }
         if let ForcedRoot::Action { own, .. } = forcing {
             assert!(own < self.my_acts.len(), "forced root action out of range");
             assert!(
@@ -2585,6 +2670,14 @@ impl BlindSearch {
             if session.expired(clock()) {
                 break;
             }
+            if self.is_preview()
+                && self.cfg.settlement.uses_cf_value_puct()
+                && !self.opponent_preview_prior
+                && !self.cf_preview_disabled
+            {
+                self.step_one_impl(dex, belief, obs, None, None);
+                continue;
+            }
             if !session.can_probe() {
                 self.step_one_impl(dex, belief, obs, None, None);
                 continue;
@@ -2670,6 +2763,7 @@ impl BlindSearch {
                         &mut self.compact_table,
                         &mut cb,
                         &cw.table,
+                        cw.tempo_cache.as_ref(),
                         self.turn_cap,
                         cw.root,
                         force,
@@ -2793,7 +2887,10 @@ impl BlindSearch {
 
     /// Distinct states in the determinized tree (see `SkuctSearch::node_count`).
     pub fn node_count(&self) -> usize {
-        self.nodes.len() + self.compact_nodes.len() - self.compact_root_battle_nodes.len()
+        self.nodes.len()
+            + self.compact_nodes.len()
+            - self.compact_root_battle_nodes.len()
+            + self.cf_preview.as_ref().map_or(0, |c| c.node_count())
     }
 
     pub fn mean_depth(&self) -> f64 {
@@ -2863,6 +2960,7 @@ impl BlindSearch {
         assert_eq!(allowed.len(), self.my_acts.len(), "mask length mismatch");
         assert!(allowed.iter().any(|&a| a), "mask leaves no legal action");
         self.my_mask = Some(allowed.to_vec());
+        self.cf_preview = None;
     }
 
     pub fn prune_dominated(&mut self) {
@@ -3028,6 +3126,9 @@ impl BlindSearch {
             );
         }
         if self.is_preview() {
+            if let Some(ref cfp) = self.cf_preview {
+                return Some(cfp.best_choice(self.decision_seed, self.done));
+            }
             return (0..self.my_acts.len())
                 .filter(|&i| eligible(i))
                 .max_by(|&a, &b| {
@@ -4601,8 +4702,12 @@ mod mixed_selection_tests {
         let mut belief = Belief::new(&dex, &pool, &obs);
         belief.sync(&dex, &obs);
 
-        // 1. `det_cache` populates at TeamPreview with `preview_compact` and is bit-identical to uncached.
-        let cfg = RmConfig::default();
+        // 1. `det_cache` populates at TeamPreview with `preview_compact` (LegacyRollout / fallback path)
+        //    and is bit-identical to uncached.
+        let cfg = RmConfig {
+            settlement: crate::accounting::LeafSettlementMode::LegacyRollout,
+            ..Default::default()
+        };
         let mut cached = BlindSearch::new(&battle, &dex, cfg.clone(), 0, 0xBEEF_1234);
         cached.step(&dex, &belief, &obs, 400);
         assert!(

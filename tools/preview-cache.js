@@ -15,7 +15,7 @@ const canonical = value => {
 
 /** wasmSha256 must hash the actual loaded .wasm; dexJson is the exact data
  * used to construct Dex (embeddedDexJson() when using new Dex()). */
-function createPreviewCache({wasmSha256, dexJson, iterations = 729000, formatId = 'gen2nintendocup2000noohkostadium2strict'}) {
+function createPreviewCache({wasmSha256, dexJson, iterations = 240000, formatId = 'gen2nintendocup2000noohkostadium2strict'}) {
 	if (!/^[a-f0-9]{64}$/.test(wasmSha256 || '')) throw new TypeError('wasmSha256 must be a SHA-256 hex digest');
 	if (!Number.isInteger(iterations) || iterations <= 0 || iterations > 0xffffffff) throw new TypeError('iterations must be a positive u32');
 	if (typeof formatId !== 'string' || !formatId) throw new TypeError('formatId is required');

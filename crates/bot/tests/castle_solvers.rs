@@ -1075,15 +1075,15 @@ fn turn_limit_80_judge_and_cache_separation_across_solvers_and_compiled_preview(
     assert!(es.eligible(&b_ps_t81), "EndgameSession must treat PS turn 81 as eligible");
 
     // 5. compiled_preview: PS backward compatibility + Castle key separation & policy_epoch_for.
-    assert_eq!(compiled_preview::POLICY_EPOCH, "policy-v1");
-    assert_eq!(compiled_preview::CASTLE_POLICY_EPOCH, "castle-policy-v1");
+    assert_eq!(compiled_preview::POLICY_EPOCH, "policy-v2");
+    assert_eq!(compiled_preview::CASTLE_POLICY_EPOCH, "castle-policy-v2");
     assert_eq!(
         compiled_preview::policy_epoch_for(Ruleset::PsStadium2),
-        "policy-v1"
+        "policy-v2"
     );
     assert_eq!(
         compiled_preview::policy_epoch_for(Ruleset::castle_tournament()),
-        "castle-policy-v1"
+        "castle-policy-v2"
     );
 
     let mut b_prev_ps = Battle::from_fixture_with_ruleset(
@@ -1096,7 +1096,7 @@ fn turn_limit_80_judge_and_cache_separation_across_solvers_and_compiled_preview(
     .unwrap();
     let k_ps0 = compiled_preview::key(&b_prev_ps, 0).unwrap();
     assert!(
-        k_ps0.starts_with("[[") && !k_ps0.contains("castle-policy-v1"),
+        k_ps0.starts_with("[[") && !k_ps0.contains("castle-policy-v2"),
         "PS key format preserved: {k_ps0}"
     );
     // Opponent gender change must NOT alter legacy PS key!
@@ -1114,8 +1114,8 @@ fn turn_limit_80_judge_and_cache_separation_across_solvers_and_compiled_preview(
     let k_cs0 = compiled_preview::key(&b_prev_cs, 0).unwrap();
     let k_cs1 = compiled_preview::key(&b_prev_cs, 1).unwrap();
     assert!(
-        k_cs0.contains("\"epoch\":\"castle-policy-v1\""),
-        "Castle key must carry castle-policy-v1 epoch: {k_cs0}"
+        k_cs0.contains("\"epoch\":\"castle-policy-v2\""),
+        "Castle key must carry castle-policy-v2 epoch: {k_cs0}"
     );
     assert_ne!(k_cs0, k_ps0, "Castle preview key must differ from PS key");
     assert_ne!(k_cs0, k_cs1, "Castle preview key must encode side");
