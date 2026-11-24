@@ -1,7 +1,7 @@
 {
  "format": "nc2000-okimono-upgrades-v2",
  "policyEpoch": "policy-v2",
- "verification": "8,312 strictly NO-CACHE LIVE (243k adaptive CF-V_net v2 PUCT / 240k SteppedCfPreview, preview.source=live, cache_hits=0) games + 10,392 exact 240k previews across all 32 shells of team-pool-v3 & team-pool-v4",
+ "verification": "8,312 strictly NO-CACHE LIVE (243k adaptive CF-V_net v2 PUCT / 240k SteppedCfPreview, preview.source=live, cache_hits=0) games + 15,432 exact 240k previews (13,032 unique-key) across all 32 shells of team-pool-v3 & team-pool-v4",
  "trainingPolicy": "training-v3",
  "legality": "WASM Validator PASS + strict Japanese NC2000 cartridge legality",
  "teams": [
@@ -18,7 +18,11 @@
     "panA_or_s1c_delta_pp": 6.2,
     "panB_delta_pp": 3.1,
     "champs10_rr_wr": 0.6019,
-    "champs10_nash_weight": 0.31,
+    "champs10_nash_weight": 0.309091,
+    "champs10_nash_range": [
+     0.3,
+     0.318182
+    ],
     "v4_census_min_pick_pct": 32.4
    },
    "sets": [
@@ -228,9 +232,13 @@
     "field_delta_pp": 23.4,
     "panA_delta_pp": 21.9,
     "panB_delta_pp": 25.0,
-    "combined_z": 3.28,
+    "combined_z": 3.3,
     "champs10_rr_wr": 0.5741,
-    "champs10_nash_weight": 0.091,
+    "champs10_nash_weight": 0.045455,
+    "champs10_nash_range": [
+     0.0,
+     0.090909
+    ],
     "v4_census_min_pick_pct": 24.2
    },
    "sets": [
@@ -443,7 +451,11 @@
     "s1d_delta_pp": 9.4,
     "panB_delta_pp": 18.8,
     "champs10_rr_wr": 0.5,
-    "champs10_nash_weight": 0.183,
+    "champs10_nash_weight": 0.190909,
+    "champs10_nash_range": [
+     0.181818,
+     0.2
+    ],
     "v4_census_min_pick_pct": 14.8,
     "minor_v4_census_pick_pct": 23.8
    },
@@ -652,11 +664,15 @@
     "policy_epoch": "policy-v2",
     "field_games": 64,
     "field_wr": 0.5625,
-    "field_delta_pp": 6.2,
-    "panA_delta_pp": 6.2,
-    "panB_delta_pp": 6.2,
+    "field_delta_pp": 6.25,
+    "panA_delta_pp": 6.25,
+    "panB_delta_pp": 6.25,
     "champs10_rr_wr": 0.5463,
-    "champs10_nash_weight": 0.008,
+    "champs10_nash_weight": 0.1,
+    "champs10_nash_range": [
+     0.0,
+     0.2
+    ],
     "v4_census_min_pick_pct": 7.8,
     "minor_v4_census_pick_pct": 22.7
    },
@@ -869,7 +885,11 @@
     "panB_delta_pp": -3.1,
     "h2h_wr": 0.6667,
     "champs10_rr_wr": 0.5463,
-    "champs10_nash_weight": 0.178,
+    "champs10_nash_weight": 0.190909,
+    "champs10_nash_range": [
+     0.181818,
+     0.2
+    ],
     "v4_census_min_pick_pct": 13.3
    },
    "sets": [
@@ -1708,9 +1728,9 @@
     "policy_epoch": "policy-v2",
     "field_games": 64,
     "field_wr": 0.4688,
-    "field_delta_pp": 6.3,
-    "panA_delta_pp": 9.4,
-    "panB_delta_pp": 3.1,
+    "field_delta_pp": 6.25,
+    "panA_delta_pp": 9.38,
+    "panB_delta_pp": 3.12,
     "h2h_wr": 0.4167,
     "v4_census_min_pick_pct": 28.1
    },

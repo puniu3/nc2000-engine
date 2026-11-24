@@ -1373,7 +1373,7 @@ try {
 
 def cmd_preview_gate(args: argparse.Namespace) -> None:
     """Step 3 Exit Gate: Splice top minor gems into flagship/pillar shells and measure real Team Preview pick rate."""
-    import copy, hashlib, os
+    import copy, hashlib, os, shutil
 
     def u32(tag: str) -> int:
         return int.from_bytes(hashlib.blake2b(tag.encode(), digest_size=4).digest(), "little")
@@ -1444,11 +1444,13 @@ def cmd_preview_gate(args: argparse.Namespace) -> None:
         pools_teams.append({"id": cid, "sets": sets})
         mixtures[f"mix:{cid}"] = [{"id": cid, "weight": 1.0}]
 
-    gate_dir = WORK / "preview-gate"
+    gate_dir = (Path(args.work_dir) if getattr(args, "work_dir", None) else WORK) / "preview-gate"
     gate_dir.mkdir(parents=True, exist_ok=True)
     pools_path = gate_dir / "pools.json"
     sched_path = gate_dir / "schedule.jsonl"
     out_dir = gate_dir / "out"
+    if out_dir.exists():
+        shutil.rmtree(out_dir)
     pools_path.write_text(json.dumps({"teams": pools_teams, "mixtures": mixtures}, separators=(",", ":")))
 
     rows = []
@@ -1521,7 +1523,7 @@ def cmd_preview_gate(args: argparse.Namespace) -> None:
             per_opp_target[opp_mix.replace("shell:", "")] = round(opp_s[slot_idx] * 100.0, 1)
         tpk = round(slot_rates[slot_idx] * 100.0, 1)
         # Empirically calibrated policy-v2 (SteppedCfPreview 240k + CfValuePuct) detection zones:
-        # <10% = dead/ignored, 10-42% = sweet spot, >42% = OOD CF-V_net over-pick risk (0/11 passed LIVE InWR-OutWR gate).
+        # <10% = dead/ignored, 10-42% = sweet spot, >42% = OOD CF-V_net over-pick risk (0/12 passed naive InWR-OutWR>=+5pp screen; mean CRN InΔ = -13.7pp).
         v2_zone = "DEAD(<10%)" if tpk < 10.0 else ("SWEET[10-42%]" if tpk <= 42.0 else "OVERPICK_RISK(>42%)")
         summary.append({
             "id": cid,
@@ -1534,20 +1536,27 @@ def cmd_preview_gate(args: argparse.Namespace) -> None:
             "per_opp_target_pct": per_opp_target,
         })
 
+    manifest_path = out_dir / "manifest.json"
+    policy_epoch = (
+        json.loads(manifest_path.read_text()).get("policyEpoch", "unknown")
+        if manifest_path.exists()
+        else "unknown"
+    )
     rep_path = gate_dir / "gate-report.json"
     rep_path.write_text(json.dumps({
-        "policy_epoch": "policy-v2",
+        "policy_epoch": policy_epoch,
         "preview_iters": args.preview_iters,
         "k": args.k,
         "v2_thresholds": {
             "sweet_pick_pct": [10.0, 42.0],
             "overpick_risk_gt_pct": 42.0,
-            "live_in_minus_out_wr_min_pp": 5.0,
+            "live_crn_in_delta_min_pp": 0.0,
+            "live_in_minus_out_wr_screen_pp": 5.0,
         },
         "elapsed_s": round(elapsed, 1),
         "results": summary,
     }, indent=2))
-    print(json.dumps({"stage": "preview-gate", "cands": len(summary), "preview_iters": args.preview_iters, "k": args.k, "elapsed_s": round(elapsed, 1), "out": str(rep_path)}))
+    print(json.dumps({"stage": "preview-gate", "policy_epoch": policy_epoch, "cands": len(summary), "preview_iters": args.preview_iters, "k": args.k, "elapsed_s": round(elapsed, 1), "out": str(rep_path)}))
 
 
 def main() -> None:
@@ -1576,6 +1585,7 @@ def main() -> None:
     pg.add_argument("--preview-iters", type=int, default=live_preview_default)
     pg.add_argument("--k", type=int, default=4)
     pg.add_argument("--threads", type=int, default=10)
+    pg.add_argument("--work-dir", default=None, help="Override work dir (default: target/gem-finder)")
 
     args = ap.parse_args()
     if args.cmd == "generate":

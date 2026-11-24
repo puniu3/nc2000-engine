@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Okimono (dead-slot / hitchhiker) exposure, mutation screening, and strict NO-CACHE LIVE A/B
-verification harness for `data/team-pool-v3/team-pool.json`.
+verification harness for NC2000 team catalogs (defaults to `data/live-search.json` budgets).
 
 Subcommands:
-  census-run       Exact 729k preview census across all 33 teams x 32 shells of team-pool-v3.
-  census-analyze   Aggregate 729k preview-dist into per-team, per-slot pick rates & okimono ranking.
-  preview-screen   Exact 729k preview activation screen for candidate mutations vs panel.
-  live-ab          Paired CRN strictly NO-CACHE LIVE (243k/729k) A/B evaluation + H2H.
-  live-analyze     Analyze paired CRN LIVE A/B results (WR, paired delta, t-test, live slot picks).
+  census-run       Exact preview census across all teams x shells of a catalog.
+  census-analyze   Aggregate preview-dist into per-team, per-slot pick rates & okimono ranking.
+  preview-screen   Exact preview activation screen for candidate mutations vs panel.
+  live-ab          Paired CRN strictly NO-CACHE LIVE A/B evaluation + H2H.
+  live-analyze     Analyze paired CRN LIVE A/B results (WR, paired delta, t-test, per-slot picks/InWR/InΔ).
 """
 from __future__ import annotations
 
@@ -690,6 +690,8 @@ def cmd_live_analyze(args: argparse.Namespace) -> None:
     src_counts: Counter[str] = Counter()
     # Structure: ab[(group, subject)][(opp, pair)] -> [score_seat0, score_seat1]
     ab_pairs: dict[tuple[str, str], dict[tuple[str, int], list[float]]] = defaultdict(lambda: defaultdict(list))
+    # Per-game CRN key: (opp, pair, rowSeat) -> (score, slot_set) for Simpson-free InΔ/OutΔ calculation
+    ab_game_map: dict[tuple[str, str], dict[tuple[str, int, int], tuple[float, set[int]]]] = defaultdict(dict)
     ab_picks: dict[tuple[str, str], list[int]] = defaultdict(lambda: [0] * 6)
     ab_slot_pk_sum: dict[tuple[str, str], list[float]] = defaultdict(lambda: [0.0] * 6)
     ab_slot_unpk_sum: dict[tuple[str, str], list[float]] = defaultdict(lambda: [0.0] * 6)
@@ -724,6 +726,7 @@ def cmd_live_analyze(args: argparse.Namespace) -> None:
             ab_opp_scores[(g, subj)][opp].append(sc)
             ab_games[(g, subj)] += 1
             slot_set = {sl for sl in slots if 1 <= sl <= 6}
+            ab_game_map[(g, subj)][(opp, pi, rs)] = (sc, slot_set)
             for idx_s in range(6):
                 if (idx_s + 1) in slot_set:
                     ab_picks[(g, subj)][idx_s] += 1
@@ -769,12 +772,32 @@ def cmd_live_analyze(args: argparse.Namespace) -> None:
 
             delta_str = "BASE"
             d_mu = d_se = z_val = None
+            slot_pk_delta: list[float | None] | None = None
+            slot_unpk_delta: list[float | None] | None = None
+            slot_pk_contrib: list[float | None] | None = None
+            slot_unpk_contrib: list[float | None] | None = None
             if base and s != base:
                 common = sorted(set(pm.keys()) & set(base_pm.keys()))
                 diffs = [pm[k] - base_pm[k] for k in common]
                 d_mu, d_se = mean_se(diffs)
                 z_val = d_mu / d_se if d_se > 0 else 0.0
                 delta_str = f"{100*d_mu:+5.1f}pp ±{100*d_se:4.1f} (z={z_val:+.2f})"
+                cg_map = ab_game_map[(g, s)]
+                bg_map = ab_game_map[(g, base)]
+                common_g = sorted(set(cg_map.keys()) & set(bg_map.keys()))
+                if common_g:
+                    ng_c = len(common_g)
+                    slot_pk_delta = []
+                    slot_unpk_delta = []
+                    slot_pk_contrib = []
+                    slot_unpk_contrib = []
+                    for idx_s in range(6):
+                        in_d = [cg_map[k][0] - bg_map[k][0] for k in common_g if (idx_s + 1) in cg_map[k][1]]
+                        out_d = [cg_map[k][0] - bg_map[k][0] for k in common_g if (idx_s + 1) not in cg_map[k][1]]
+                        slot_pk_delta.append(round(sum(in_d) / len(in_d), 4) if in_d else None)
+                        slot_unpk_delta.append(round(sum(out_d) / len(out_d), 4) if out_d else None)
+                        slot_pk_contrib.append(round(sum(in_d) / ng_c, 4))
+                        slot_unpk_contrib.append(round(sum(out_d) / ng_c, 4))
 
             h2h_str = ""
             h2h_mu = h2h_se = None
@@ -810,6 +833,10 @@ def cmd_live_analyze(args: argparse.Namespace) -> None:
                     round(ab_slot_unpk_sum[(g, s)][i] / ab_slot_unpk_n[(g, s)][i], 4) if ab_slot_unpk_n[(g, s)][i] > 0 else None
                     for i in range(6)
                 ],
+                "slot_picked_delta": slot_pk_delta,
+                "slot_unpicked_delta": slot_unpk_delta,
+                "slot_picked_contrib": slot_pk_contrib,
+                "slot_unpicked_contrib": slot_unpk_contrib,
                 "ge50": n_ge50,
                 "lt35": n_lt35,
                 "n_opps": len(opp_wrs),
@@ -827,7 +854,11 @@ def main() -> None:
     ap.add_argument("--work-dir", default=None, help="Override work dir (default: target/nash-work/okimono-v1)")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
+    def add_wd(sp: argparse.ArgumentParser) -> None:
+        sp.add_argument("--work-dir", default=argparse.SUPPRESS, help="Override work dir (default: target/nash-work/okimono-v1)")
+
     p = sub.add_parser("census-run")
+    add_wd(p)
     p.add_argument("--name", default="census-v3-k4")
     p.add_argument("--catalog", default=None)
     p.add_argument("--k", type=int, default=4)
@@ -837,11 +868,13 @@ def main() -> None:
     p.set_defaults(fn=cmd_census_run)
 
     p = sub.add_parser("census-analyze")
+    add_wd(p)
     p.add_argument("--name", default="census-v3-k4")
     p.add_argument("--catalog", default=None)
     p.set_defaults(fn=cmd_census_analyze)
 
     p = sub.add_parser("preview-screen")
+    add_wd(p)
     p.add_argument("--name", required=True)
     p.add_argument("--spec", required=True)
     p.add_argument("--catalog", default=None)
@@ -852,6 +885,7 @@ def main() -> None:
     p.set_defaults(fn=cmd_preview_screen)
 
     p = sub.add_parser("live-ab")
+    add_wd(p)
     p.add_argument("--name", required=True)
     p.add_argument("--spec", required=True)
     p.add_argument("--catalog", default=None)
@@ -863,11 +897,12 @@ def main() -> None:
     p.set_defaults(fn=cmd_live_ab)
 
     p = sub.add_parser("live-analyze")
+    add_wd(p)
     p.add_argument("--name", required=True)
     p.set_defaults(fn=cmd_live_analyze)
 
     args = ap.parse_args()
-    if args.work_dir:
+    if getattr(args, "work_dir", None):
         WORK = Path(args.work_dir)
     args.fn(args)
 

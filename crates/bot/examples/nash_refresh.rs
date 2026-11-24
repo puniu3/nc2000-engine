@@ -149,6 +149,8 @@ struct PreviewDistEntry {
 #[derive(Clone, Deserialize, Serialize)]
 struct PreviewDistFile {
     format: String,
+    #[serde(default, rename = "policyEpoch", skip_serializing_if = "Option::is_none")]
+    policy_epoch: Option<String>,
     entries: BTreeMap<String, PreviewDistEntry>,
 }
 
@@ -269,7 +271,8 @@ impl PreviewDistCache {
     }
 }
 
-fn preview_dist_key(
+fn preview_dist_key_with_epoch(
+    policy_epoch: &str,
     side: usize,
     preview_iters: u32,
     blind_c: f64,
@@ -283,8 +286,8 @@ fn preview_dist_key(
 ) -> [u8; 32] {
     let mut h = Sha256::new();
     h.update(b"nc2000-preview-dist-v1\0");
-    h.update((POLICY_EPOCH.len() as u64).to_le_bytes());
-    h.update(POLICY_EPOCH.as_bytes());
+    h.update((policy_epoch.len() as u64).to_le_bytes());
+    h.update(policy_epoch.as_bytes());
     h.update([side as u8]);
     h.update(preview_iters.to_le_bytes());
     h.update(blind_c.to_bits().to_le_bytes());
@@ -320,6 +323,33 @@ fn preview_dist_key(
         h.update([0u8]);
     }
     h.finalize().into()
+}
+
+fn preview_dist_key(
+    side: usize,
+    preview_iters: u32,
+    blind_c: f64,
+    policy_name: &str,
+    own_sets_json: &str,
+    frame_lines: &[String],
+    req_json: &str,
+    prior: &MetaPool,
+    agent: &ProtocolAgent,
+    team_json_map: &HashMap<String, String>,
+) -> [u8; 32] {
+    preview_dist_key_with_epoch(
+        POLICY_EPOCH,
+        side,
+        preview_iters,
+        blind_c,
+        policy_name,
+        own_sets_json,
+        frame_lines,
+        req_json,
+        prior,
+        agent,
+        team_json_map,
+    )
 }
 
 fn read_data(root: &Path, name: &str) -> String {
@@ -390,7 +420,8 @@ impl PreviewCache {
     }
 }
 
-fn preview_cache_key(
+fn preview_cache_key_with_epoch(
+    policy_epoch: &str,
     side: usize,
     seed: u32,
     preview_iters: u32,
@@ -404,8 +435,8 @@ fn preview_cache_key(
     team_json_map: &HashMap<String, String>,
 ) -> [u8; 32] {
     let mut h = Sha256::new();
-    h.update((POLICY_EPOCH.len() as u64).to_le_bytes());
-    h.update(POLICY_EPOCH.as_bytes());
+    h.update((policy_epoch.len() as u64).to_le_bytes());
+    h.update(policy_epoch.as_bytes());
     h.update([side as u8]);
     h.update(seed.to_le_bytes());
     h.update(preview_iters.to_le_bytes());
@@ -442,6 +473,35 @@ fn preview_cache_key(
         h.update([0u8]);
     }
     h.finalize().into()
+}
+
+fn preview_cache_key(
+    side: usize,
+    seed: u32,
+    preview_iters: u32,
+    blind_c: f64,
+    policy_name: &str,
+    own_sets_json: &str,
+    frame_lines: &[String],
+    req_json: &str,
+    prior: &MetaPool,
+    agent: &ProtocolAgent,
+    team_json_map: &HashMap<String, String>,
+) -> [u8; 32] {
+    preview_cache_key_with_epoch(
+        POLICY_EPOCH,
+        side,
+        seed,
+        preview_iters,
+        blind_c,
+        policy_name,
+        own_sets_json,
+        frame_lines,
+        req_json,
+        prior,
+        agent,
+        team_json_map,
+    )
 }
 
 struct SharedState {
@@ -1102,6 +1162,7 @@ fn precompute_preview_dists(
 
     let doc = PreviewDistFile {
         format: PREVIEW_DIST_FORMAT.to_string(),
+        policy_epoch: Some(POLICY_EPOCH.to_string()),
         entries,
     };
     fs::write(
@@ -1415,7 +1476,10 @@ fn main() {
     }
     manifest.insert("previewCache".into(), json!(preview_cache_enabled));
     manifest.insert("previewDistCache".into(), json!(use_preview_dist));
-    if use_preview_dist {
+    if preview_dist_only {
+        manifest.insert("previewDistOnly".into(), json!(true));
+    }
+    if use_preview_dist || preview_dist_only {
         manifest.insert("previewDistK".into(), json!(preview_dist_k));
         if let Some(sha) = dist_file_sha {
             manifest.insert("previewDistSha256".into(), json!(sha));
@@ -1505,6 +1569,7 @@ fn main() {
         if !new_entries.is_empty() {
             let doc = PreviewDistFile {
                 format: PREVIEW_DIST_FORMAT.to_string(),
+                policy_epoch: Some(POLICY_EPOCH.to_string()),
                 entries: new_entries,
             };
             fs::write(
@@ -1528,4 +1593,74 @@ fn main() {
             "preview_dist_misses": dist_misses,
         })
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_dex() -> Dex {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("workspace root");
+        let bytes = fs::read(root.join("data/gen2stadium2.json")).expect("read dex");
+        Dex::from_json(std::str::from_utf8(&bytes).unwrap()).expect("parse dex")
+    }
+
+    #[test]
+    fn preview_keys_isolate_policy_epoch_and_policy_name() {
+        let dex = test_dex();
+        let prior = MetaPool { teams: vec![] };
+        let cfg = RmConfig::default();
+        let agent = ProtocolAgent::new(&dex, 0, prior.clone(), cfg, 42);
+        let frame = vec!["|poke|p2|Snorlax, L55, M|item".to_string()];
+        let team_map = HashMap::new();
+
+        let d_v1 = preview_dist_key_with_epoch(
+            "policy-v1", 0, 240_000, 0.4, "current", "[]", &frame, "{}", &prior, &agent, &team_map,
+        );
+        let d_v2 = preview_dist_key_with_epoch(
+            "policy-v2", 0, 240_000, 0.4, "current", "[]", &frame, "{}", &prior, &agent, &team_map,
+        );
+        let d_v2_cur81 = preview_dist_key_with_epoch(
+            "policy-v2", 0, 240_000, 0.4, "current81", "[]", &frame, "{}", &prior, &agent, &team_map,
+        );
+        let d_v2_default = preview_dist_key(
+            0, 240_000, 0.4, "current", "[]", &frame, "{}", &prior, &agent, &team_map,
+        );
+        assert_ne!(d_v1, d_v2, "preview_dist_key must differ across policy epochs");
+        assert_ne!(d_v2, d_v2_cur81, "preview_dist_key must differ across policy names");
+        assert_eq!(d_v2, d_v2_default, "default preview_dist_key must hash POLICY_EPOCH");
+
+        let c_v1 = preview_cache_key_with_epoch(
+            "policy-v1", 0, 123, 240_000, 0.4, "current", "[]", &frame, "{}", &prior, &agent, &team_map,
+        );
+        let c_v2 = preview_cache_key_with_epoch(
+            "policy-v2", 0, 123, 240_000, 0.4, "current", "[]", &frame, "{}", &prior, &agent, &team_map,
+        );
+        let c_v2_cur81 = preview_cache_key_with_epoch(
+            "policy-v2", 0, 123, 240_000, 0.4, "current81", "[]", &frame, "{}", &prior, &agent, &team_map,
+        );
+        let c_v2_default = preview_cache_key(
+            0, 123, 240_000, 0.4, "current", "[]", &frame, "{}", &prior, &agent, &team_map,
+        );
+        assert_ne!(c_v1, c_v2, "preview_cache_key must differ across policy epochs");
+        assert_ne!(c_v2, c_v2_cur81, "preview_cache_key must differ across policy names");
+        assert_eq!(c_v2, c_v2_default, "default preview_cache_key must hash POLICY_EPOCH");
+    }
+
+    #[test]
+    fn preview_dist_file_backward_compatible_with_missing_policy_epoch() {
+        let legacy = r#"{"format":"nc2000-preview-dist-v1","entries":{}}"#;
+        let parsed: PreviewDistFile = serde_json::from_str(legacy).expect("parse legacy");
+        assert_eq!(parsed.policy_epoch, None);
+        let current = PreviewDistFile {
+            format: PREVIEW_DIST_FORMAT.to_string(),
+            policy_epoch: Some(POLICY_EPOCH.to_string()),
+            entries: BTreeMap::new(),
+        };
+        let v: Value = serde_json::to_value(&current).unwrap();
+        assert_eq!(v["policyEpoch"], POLICY_EPOCH);
+    }
 }

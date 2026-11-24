@@ -43,16 +43,17 @@ const sha256File = rel =>
 //   - 9 certified `policy-v2` okimono/minor-gem upgrades (docs/reports/okimono-upgrades-v2.json),
 //     each verified via strict NO-CACHE LIVE (243k/240k) + disjoint Panel-B holdout
 //   - 23 preserved clean/unbeaten `team-pool-v3` shells (including 2-variant `s0053-lefties`)
-//   - Tier S (`nash: true`) reflects the exact 6-shell RM+ Nash core from the 10x10
-//     Super-Champions Round-Robin (540g strict NO-CACHE LIVE, max_BR = 50.00%).
+//   - Tier S (`nash: true`) reflects the exact rational midpoint (t = 1/2) of the 1D Nash
+//     equilibrium polytope on the 10x10 Super-Champions Round-Robin (540g strict NO-CACHE LIVE,
+//     exact rational max_BR = 50.000000%, 6-decimal max_BR = 50.000008%, eff = 5.271 shells).
 const ROSTER_SPEC = [
-	// Tier S: 6-Shell `policy-v2` RM+ Nash Core (`nash: true`)
-	{ id: 'rraikou-m-cune50', tier: 'S', nash: true, nashWeight: 0.3109, evolved: true, score: 0.6019, fromUpgrade: true },
-	{ id: 'sample-08', tier: 'S', nash: true, nashWeight: 0.2277, score: 0.6129 },
-	{ id: 'pb84-cln-sking50', tier: 'S', nash: true, nashWeight: 0.1836, evolved: true, minorGem: 'Slowking', score: 0.5500, fromUpgrade: true },
-	{ id: 'pb66-m-wak55', tier: 'S', nash: true, nashWeight: 0.1785, evolved: true, score: 0.6146, fromUpgrade: true },
-	{ id: 'pb122-m-lax50', tier: 'S', nash: true, nashWeight: 0.0913, evolved: true, score: 0.6250, fromUpgrade: true },
-	{ id: 'pb63-m-esp55', tier: 'S', nash: true, nashWeight: 0.0080, evolved: true, minorGem: 'Espeon', score: 0.5625, fromUpgrade: true },
+	// Tier S: 6-Shell `policy-v2` Exact Nash Core (`nash: true`, ordered by exact Nash midpoint weight)
+	{ id: 'rraikou-m-cune50', tier: 'S', nash: true, nashWeight: 0.309091, evolved: true, score: 0.6019, fromUpgrade: true },
+	{ id: 'pb84-cln-sking50', tier: 'S', nash: true, nashWeight: 0.190909, evolved: true, minorGem: 'Slowking', score: 0.5500, fromUpgrade: true },
+	{ id: 'pb66-m-wak55', tier: 'S', nash: true, nashWeight: 0.190909, evolved: true, score: 0.6146, fromUpgrade: true },
+	{ id: 'sample-08', tier: 'S', nash: true, nashWeight: 0.163636, score: 0.6129 },
+	{ id: 'pb63-m-esp55', tier: 'S', nash: true, nashWeight: 0.100000, evolved: true, minorGem: 'Espeon', score: 0.5625, fromUpgrade: true },
+	{ id: 'pb122-m-lax50', tier: 'S', nash: true, nashWeight: 0.045455, evolved: true, score: 0.6250, fromUpgrade: true },
 
 	// Tier 1A: Certified `policy-v2` Top Contenders & Camouflage Core (12 shells / 13 teams)
 	{ id: 'ayagen-m-zap50', tier: '1', evolved: true, score: 0.6562, fromUpgrade: true },
@@ -120,6 +121,10 @@ function checkJpNc2000Legality(id, sets) {
 			items.add(s.item);
 		}
 	}
+	const min3Sum = sets.map(s => s.level).sort((a, b) => a - b).slice(0, 3).reduce((a, b) => a + b, 0);
+	if (min3Sum > 155) {
+		throw new Error(`${id}: lowest 3 levels sum to ${min3Sum} > 155 (no legal 3-mon NC2000 pick)`);
+	}
 }
 
 function main() {
@@ -176,6 +181,7 @@ function main() {
 	});
 
 	// Canonicalize, training-v3 normalize, and strictly validate via WASM Validator + Battle
+	const attract = attractGenderCensus(bakePrior);
 	const engineDex = new wasm.Dex();
 	const validator = new wasm.Validator(engineDex);
 	let optimized;
@@ -187,7 +193,6 @@ function main() {
 			}
 			t.sets = canon.team;
 		}
-		const attract = attractGenderCensus(bakePrior);
 		optimized = normalizeCatalog(selected, dex, attract.preferFemale);
 		for (const t of selected) {
 			const sets = optimized.get(t.id).sets;
@@ -203,7 +208,6 @@ function main() {
 		validator.free();
 		engineDex.free();
 	}
-	const attract = attractGenderCensus(bakePrior);
 
 	// Verify pairwise Turn-0 shell uniqueness across clusters & byte-identical camouflage within clusters
 	const clusterSizes = new Map();
@@ -277,9 +281,9 @@ function main() {
 		flagship: {
 			cluster: 'policy-v2-nash-core-6',
 			mixture: 'data/team-pool-v4/flagship-mixture.json',
-			verification: '8,312 strict NO-CACHE LIVE games (243k adaptive CF-V_net v2 PUCT / 240k SteppedCfPreview, preview.source=live, cache_hits=0) + 10,392 exact 240k previews across v3/v4 catalogs, disjoint Panel-B holdout, and 10x10 Super-Champions RR',
+			verification: '8,312 strict NO-CACHE LIVE games (243k adaptive CF-V_net v2 PUCT / 240k SteppedCfPreview, preview.source=live, cache_hits=0) + 15,432 exact 240k previews (13,032 unique-key) across v3/v4 catalogs, disjoint Panel-B holdout, and 10x10 Super-Champions RR',
 			champs10MaxBr: 0.5000,
-			topChampion: { id: 'rraikou-m-cune50', champs10Wr: 0.6019, nashWeight: 0.3109 },
+			topChampion: { id: 'rraikou-m-cune50', champs10Wr: 0.6019, nashWeight: 0.309091 },
 			certifiedMinorGems: ['pb84-cln-sking50 (Slowking L50)', 'pb63-m-esp55 (Espeon L55)'],
 			v4CensusZeroOkimonos: 0,
 			v4CensusMeanMinSlotPickRate: 0.1508,
@@ -320,7 +324,7 @@ function main() {
 		support_size: flagshipTeams.length,
 		champs10_max_br: 0.5000,
 		trainingPolicy: 'training-v3',
-		measurementStatus: 'Derived from exact RM+ Nash equilibrium on the 10x10 Super-Champions Round-Robin (540 strictly NO-CACHE LIVE 243k/240k games, 12g/edge, max_BR=50.00%, purified at weight >= 0.005) under policy-v2.',
+		measurementStatus: 'Exact rational midpoint (t = 1/2: 17/55, 21/110, 21/110, 9/55, 1/10, 1/22; eff = 5.271) of the 1D exact Nash equilibrium polytope on the 10x10 Super-Champions Round-Robin (540 strictly NO-CACHE LIVE 243k/240k games, 12g/edge; exact rational max_BR = 50.000000%, 6-decimal max_BR = 50.000008%) under policy-v2.',
 		teams: flagshipTeams,
 	};
 

@@ -2,13 +2,13 @@
 
 ## Executive Summary
 
-Following the promotion of **`policy-v2`** (`CF-V_net v2` PUCT adaptive `243k` + `SteppedCfPreview 240k`, commit `ac24efd9`) to production default, we executed an end-to-end **8,312 strictly NO-CACHE LIVE games (`243k/240k`, `NASH_PREVIEW_CACHE=0`, `preview.source == "live"` on 100% of 16,624 player-sides, `0` cache hits, `0` `barn` requeues)** + **10,392 exact `240k` `SteppedCfPreview` evaluations** campaign (`26.10 CU` total on `mini1 + mini2 + Colab G4`) to:
+Following the promotion of **`policy-v2`** (`CF-V_net v2` PUCT adaptive `243k` + `SteppedCfPreview 240k`, commit `ac24efd9`) to production default, we executed an end-to-end **8,312 strictly NO-CACHE LIVE games (`243k/240k`, `NASH_PREVIEW_CACHE=0`, `preview.source == "live"` on 100% of 16,624 player-sides, `0` cache hits, `0` `barn` requeues)** + **15,432 exact `240k` `SteppedCfPreview` evaluations (`13,032` unique-key across `3,258` distinct keys)** campaign (`26.10 CU` total on `mini1 + mini2 + Colab G4`) to:
 
 1. **Quantify the `policy-v1 -> policy-v2` three-body meta-shift** across all 32 shells of [`data/team-pool-v3/team-pool.json`](../../data/team-pool-v3/team-pool.json), all 10 `okimono-upgrades-v1` teams, and top Gen-2 candidates.
-2. **Empirically calibrate minor-Pokémon gem detection thresholds under `policy-v2`** across **37 strictly NO-CACHE LIVE minor-gem experiments** (all 17 `policy-v1` benchmarks + `Vaporeon55` + 19 new 3v3-screened minor archetypes spanning all 7 functional roles), proving why the `policy-v2` detection boundary shifts from `policy-v1`'s broken one-sided `pick% >= 25%` gate to a **two-sided inverted-U band (`10% <= pick% <= 42%`) + mandatory `InWR - OutWR >= +5 pp` gate** (validated out-of-sample with 100% precision on disjoint Panel B!).
-3. **Build and certify [`data/team-pool-v4/`](../../data/team-pool-v4/)** (`33` teams / `32` pairwise-distinct public Turn-0 shells + 6-shell RM+ Nash core mixture) containing **9 independently holdout-certified `policy-v2` upgrades**, including **2 certified Minor-Pokémon Gems (`Slowking L50` in `pb84-cln-sking50` and `Espeon L55` in `pb63-m-esp55`) — BOTH earning active support in the Tier-S RM+ Nash equilibrium!**
+2. **Empirically calibrate minor-Pokémon gem detection thresholds under `policy-v2`** across **37 strictly NO-CACHE LIVE minor-gem experiments** (all 17 `policy-v1` benchmarks + `Vaporeon55` + 19 new 3v3-screened minor archetypes spanning all 7 functional roles; plus 1 cross-test `m2b:pb89_sking50` in `step2-major-upgrades`, `n=38` total), proving why the `policy-v2` detection boundary shifts from `policy-v1`'s one-sided `pick% >= 25%` gate to a **two-sided inverted-U band (`10% <= pick% <= 42%`) + CRN-matched causal `InΔ` (`E[score(cand) - score(base) | minor picked] >= 0`) + disjoint Panel-B holdout**.
+3. **Build and certify [`data/team-pool-v4/`](../../data/team-pool-v4/)** (`33` teams / `32` pairwise-distinct public Turn-0 shells + 6-shell exact Nash core mixture) containing **9 independently holdout-certified `policy-v2` upgrades**, including **2 certified Minor-Pokémon Gems (`Slowking L50` in `pb84-cln-sking50` and `Espeon L55` in `pb63-m-esp55`) — BOTH earning active support in the exact Tier-S Nash equilibrium!**
 
-- **Infrastructure**: Added `POLICY_EPOCH` (`"policy-v2"`) to `preview_dist_key`, `preview_cache_key`, and `manifest.json` in [`crates/bot/examples/nash_refresh.rs`](../../crates/bot/examples/nash_refresh.rs); rebuilt native Apple-M5 CS-PGO (`tools/build-native-pgo.sh`) and Linux `x86-64-v3` (`tools/build-colab-x86.sh`) binaries; updated [`tools/okimono-audit.py`](../../tools/okimono-audit.py) (`240k` default, `--work-dir`, per-slot `picked_WR` / `unpicked_WR`) and [`tools/gem-finder.py`](../../tools/gem-finder.py) (`policy-v2` zone tags).
+- **Infrastructure**: Added `POLICY_EPOCH` (`"policy-v2"`) to `preview_dist_key`, `preview_cache_key`, `PreviewDistFile`, and `manifest.json` (plus `previewDistOnly`/`previewDistK` manifest tracking and unit tests) in [`crates/bot/examples/nash_refresh.rs`](../../crates/bot/examples/nash_refresh.rs); rebuilt native Apple-M5 CS-PGO (`tools/build-native-pgo.sh`) and Linux `x86-64-v3` (`tools/build-colab-x86.sh`) binaries; updated [`tools/okimono-audit.py`](../../tools/okimono-audit.py) (`240k` default, `--work-dir`, per-slot `picked_WR`/`unpicked_WR` and CRN-matched `slot_picked_delta`/`slot_unpicked_delta`) and [`tools/gem-finder.py`](../../tools/gem-finder.py) (`policy-v2` zone tags, dynamic `policyEpoch`, idempotent `out` cleanup).
 - **Shipped Outputs**: [`data/team-pool-v4/team-pool.json`](../../data/team-pool-v4/team-pool.json), [`data/team-pool-v4/flagship-mixture.json`](../../data/team-pool-v4/flagship-mixture.json), [`tools/build-team-products-v4.js`](../../tools/build-team-products-v4.js), [`docs/reports/okimono-upgrades-v2.json`](./okimono-upgrades-v2.json).
 - **Raw gitignored artifacts**: `target/nash-work/okimono-v2/{census-v3-k4,step1-v3-rr,step1-upgrades-gen2,step1-v1-minorgem-cal,step2a-minor-screen,step2b-major-screen,step2-new-minors,step2-major-upgrades,step3a-holdout-panelB,step3b-v4-census-k4,step3b-champs10-rr}/`.
 
@@ -69,30 +69,32 @@ Across **37 strictly NO-CACHE LIVE minor-gem experiments** (`step1-v1-minorgem-c
 
 ### 2.2 Empirical Inverted-U Detection Curve Across All 37 `policy-v2` Minor-Gem Experiments
 
-| Live Minor `pick%` Zone | `n` | Mean `dWR` | Mean `InWR - OutWR` | `dWR > 0` | `dWR > 0 & (In-Out) >= +5pp` | Interpretation |
-|---|---:|---:|---:|---:|---:|---|
-| **`< 10%` (Dead / Ignored)** | 3 | **`-8.33 pp`** | **`-12.0 pp`** | `0/3` | **`0/3`** | Too weak / Stage-1 pruned (`Wobbuffet`, `Jumpluff`, `Qwilfish`, `Magneton55`, `Queen50`) |
-| **`10% – 42%` (Sweet Spot)** | 23 | **`-1.49 pp`** | **`-1.7 pp`** | `10/23` | **`4/23`** | **ALL 4 true `policy-v2` gems reside here** (`Slowking50`, `Espeon55` ×2, `Piloswine50`) |
-| **`> 42%` (OOD Over-Pick Trap)** | 11 | **`-11.08 pp`** | **`-7.7 pp`** | `2/11` | **`0/11`** | **100% false-positive zone** (`CF-V_net v2` OOD over-valuation) |
+Using the exact spliced minor slot on every candidate (including `s6 Espeon55` on `pb6-g2-espeon55` and `s5 Muk50` on `pb84g2-muk50-sking`), and decomposing overall `dWR` into both naive `InWR - OutWR` and **CRN-matched causal `InΔ = E[score(cand) - score(base) | minor picked]`**:
 
-Overall Pearson correlation across all 37 minor experiments: **`r(live_pick%, dWR) = -0.286`**.
+| Live Minor `pick%` Zone | `n` | Mean `dWR` | Mean `InWR - OutWR` | Mean CRN `InΔ` | `dWR > 0` | `dWR > 0 & (In-Out) >= +5pp` | `dWR > 0 & InΔ >= 0` | Interpretation |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| **`< 10%` (Dead / Ignored)** | 3 | **`-8.33 pp`** | **`-12.0 pp`** | **`-13.3 pp`** | `0/3` | **`0/3`** | **`0/3`** | Too weak / Stage-1 pruned (`Magneton55`, `Muk55`, `Queen50`; plus `Wobbuffet`, `Jumpluff`, `Qwilfish` at 3v3 screen) |
+| **`10% – 42%` (Sweet Spot)** | 22 | **`-1.78 pp`** | **`-1.9 pp`** | **`-5.4 pp`** | `9/22` | **`3/22`** | **`7/22`** | Core specialist zone (`Slowking50`, `Espeon55` on `pb-63`, `Piloswine50` on `pb-84`); adding cross-test `m2b:pb89_sking50` (`15.6%`, `-12.5 pp`, `InΔ -40.0 pp`) gives `n=23`, mean `dWR = -2.24 pp`, `3/23` naive / `7/23` causal |
+| **`> 42%` (OOD Over-Pick Trap)** | 12 | **`-9.77 pp`** | **`-8.2 pp`** | **`-13.7 pp`** | `3/12` | **`0/12`** | **`2/12`** | Severe `CF-V_net v2` OOD over-valuation (`0/12` pass naive `In-Out`; only boundary `pb6-g2-espeon55` at `42.2%` [`InΔ +7.4 pp`] and `pb84-cln-shuck50` at `46.9%` [`InΔ +3.3 pp`] avoided negative `InΔ`) |
 
-### 2.3 Calibrated `policy-v2` Detection Thresholds & Out-of-Sample Negative Control Validation
+Overall Pearson correlation across all 37 minor experiments: **`r(live_pick%, dWR) = -0.282`** (`-0.255` across `n=38` including `m2b:pb89_sking50`).
+
+### 2.3 Calibrated `policy-v2` Detection Thresholds, Simpson's Paradox & Out-of-Sample Validation
 
 | Gate Parameter | `policy-v1` (Legacy `729k`) | **`policy-v2` (`SteppedCfPreview 240k` + `CfValuePuct`)** |
 |---|---|---|
-| **Preview Activation Lower Floor** | `>= 25%` (missed fast specialists like `Espeon55` at `6.2%`) | **`>= 10%`** (captures surgical specialists like `pb63-m-esp55` at `12.5%` PanA / `22.7%` v4 census) |
-| **Over-Pick Trap Upper Ceiling** | None (traps ran `45%–75%`) | **`<= 42%`** (`0/11` minors `>42%` passed; mean `dWR = -11.08 pp`) |
-| **Bench-Noise Discriminator** | Overall `dWR > 0` only | **`InWR - OutWR >= +5 pp` AND `dWR > 0`** |
+| **Preview Activation Lower Floor** | `>= 25%` (missed surgical specialists like `Espeon55`) | **`>= 10%`** (captures surgical specialists like `pb63-m-esp55` at `12.5%` PanA / `18.8%` PanB / `22.7%` v4 census / `40.7%` Champs10) |
+| **Over-Pick Trap Upper Ceiling** | None (traps ran `45%–75%`) | **`<= 42%`** (`0/12` minors `>42%` passed naive `In-Out >= +5 pp`; mean `dWR = -9.77 pp`, mean CRN `InΔ = -13.7 pp`) |
+| **Bench-Noise Discriminator** | Overall `dWR > 0` only | **CRN-matched `InΔ >= 0` (primary, Simpson-free)** + naive `InWR - OutWR >= +5 pp` (fast single-run screen) AND `dWR > 0` |
 | **Holdout Requirement** | Single panel + confirmation | **Disjoint Panel-B (`16` unseen shells) `dWR >= 0` + Direct H2H** |
 
-**Out-of-Sample Proof of the `InWR - OutWR` Gate**:
-- **Negative Control (`m2a:pb6_typh50`)**: Passed `[10%, 42%]` (`37.5%`) and Panel-A `dWR = +6.2 pp`, **but failed `InWR - OutWR = -25 pp` (`50%` in vs `75%` out)**. On disjoint Panel B, it **collapsed `-18.8 pp` (`z = -1.57`, `37.5%` WR)**!
-- **Positive Gems Passing ALL Gates (`100%` Panel-B survival!)**:
-  - **`pb84-cln-sking50`** (`Slowking50`): `Pk 21.9%`, `InWR 71% (+17.4 pp)`, S1C `+4.7` / S1D `+9.4` / **Disjoint Panel B `+18.8 pp` (`62.5%`, `z=+1.69`)** → **Pooled `160g` `55.0%` (`+9.4 pp`)**! (Causally beats `Slowbro50` `-18.8 pp` on the identical slot, proving Slowking's 110 SpD is essential.)
-  - **`pb63-m-esp55`** (**NEW `policy-v2` Gem: `Espeon55`**): `Pk 12.5%` (PanA) / `19%` (PanB) / `22.7%` (v4 census), `InWR 75% (+10.7 pp)`, PanA `+6.2 pp` / **Disjoint Panel B `+6.2 pp`** → beat ALL Major L55/L50 upgrades on `#1 pb-63` (`pb63_gar55 +3.1/+3.1`, `pb63_cloy50 -12.5`, `pb63_raik55 -15.6`)!
-  - **`pb6-g2-espeon55`** (`Espeon55` on `pb-6`): `Pk 28.1%`, `InWR 72% (+22.2 pp)`, S1D `+4.7 pp` / **Disjoint Panel B `+3.1 pp`** (pooled `96g` `57.3%`, `+4.2 pp`; omitted from `v4` only because it leaves `s4 Umbreon50` at `0%` while `pb63-m-esp55` already introduces `Espeon55` cleanly!).
-  - **`pb84-cln-pilo50`** (`Piloswine50`): `Pk 34.4%`, `InWR 68% (+22.9 pp)`, S1D `+4.7 pp` / **Disjoint Panel B `+0.0 pp`** (pooled `+3.1 pp`; clearly dominated by `pb84-cln-sking50` `+9.4 pp` on the same shell).
+**Methodological Note — Why CRN-Matched `InΔ` Beats Naive `InWR - OutWR` (Simpson's Paradox)**:
+- Naive `InWR - OutWR` compares a minor's win rate in the matchups where `SteppedCfPreview` chose it against the team's win rate in *different* matchups where it was benched. Because specialists are deliberately brought into harder matchups (lower baseline WR) and also alter opponent Team Preview selections even when benched (`OutΔ`), naive `InWR - OutWR` fluctuates sharply on small `32g–64g` screens (`n_in = 4–16`):
+  - **`m2a:pb6_typh50` (Negative Control)**: Passed `[10%, 42%]` (`37.5%`) and Panel-A `dWR = +6.2 pp`, **but failed BOTH naive `InWR - OutWR = -25.0 pp` AND CRN-matched `InΔ = -16.7 pp` (`OutΔ = +20.0 pp`)**. On disjoint Panel B, its pick rate spiked to `62.5%` and it **collapsed `-18.8 pp` (`z = -1.57`, `InΔ = -20.0 pp`)**.
+  - **`pb84-cln-sking50`** (`Slowking50`): vs clean same-shell `pb84-m-cloysurf` (`S1D`, `64g`): `Pk 21.9%`, `InWR 71.4% (+17.4 pp)`, **`InΔ = +7.1 pp`**, `OutΔ = +10.0 pp`, `dWR = +9.4 pp`; vs raw `pb-84`: `S1C +4.7 pp` (`InWR 31.2%`, `InΔ -6.2 pp`) and **Disjoint Panel B `+18.8 pp` (`62.5%`, `z = +1.70`, `InWR 50.0%`, `OutΔ = +26.9 pp`)** → **Pooled `160g` `55.0%` (`+9.4 pp`)**, and **`50.0%` (`19.1%` exact Nash)** in 10×10 Champs RR (`Slowking` `17.6%` pick, `36.8%` InWR). Causally beats `Slowbro50` (`-18.8 pp`, `InΔ -9.1 pp`) on the identical slot, proving Slowking's 110 SpD is essential.
+  - **`pb63-m-esp55`** (**NEW `policy-v2` Gem: `Espeon55`**): `Pk 12.5%` (PanA, `InWR 75.0%`, `InΔ = 0.0 pp`, `OutΔ = +7.1 pp`) / `18.8%` (PanB, `InWR 33.3%`, `InΔ = -16.7 pp`, `OutΔ = +11.5 pp`) / `22.7%` (v4 census) / **`40.7%` (`44/108`) in 10×10 Champs RR with `52.3%` InWR**! Beat ALL Major upgrades on `#1 pb-63` (`pb63_gar55 +3.1/+3.1`, `pb63_cloy50 -12.5`, `pb63_raik55 -15.6`), combining active Champs10 play (`40.7%`, `52.3%` InWR) with Team Preview deterrence (`+5.0` net games on Panel B when previews shifted vs `0.0` net across PanA+PanB when previews were identical).
+  - **`pb6-g2-espeon55`** (`Espeon55` on `pb-6` `s6`): `S1D` (`64g`) `Pk 42.2%` (`s6`, right at upper boundary), `InWR 48.1%` vs `OutWR 62.2%` (`-14.0 pp` naive gap — failed naive `In-Out` due to matchup selection!), **yet CRN-matched `InΔ = +7.4 pp`**, and on **Disjoint Panel B** (`32g`): `Pk 53.1%`, `dWR = +3.1 pp`, `InWR 70.6% (+23.9 pp)`, **`InΔ = +23.5 pp`** (`+13.6 pp` pooled `InΔ` over `44` picked games; omitted from `v4` only because it leaves `s4 Umbreon50` at `0.0%` while `pb63-m-esp55` already introduces `Espeon55` cleanly).
+  - **`pb84-cln-pilo50`** (`Piloswine50`): `S1D` `Pk 34.4%`, `InWR 68.2% (+22.9 pp)`, **`InΔ = +31.8 pp`**, `dWR = +4.7 pp`; **Disjoint Panel B** `Pk 34.4%`, `dWR = +0.0 pp`, `InWR 54.5% (+16.5 pp)`, `InΔ = 0.0 pp` (pooled `+3.1 pp`; dominated by `pb84-cln-sking50` `+9.4 pp` on the same shell).
 
 ---
 
@@ -104,30 +106,36 @@ Panel B eliminated 5 Panel-A overfits (`ayagen_cloy50 -12.5pp`, `garap-m-cune55 
 
 | Upgraded Shell | Parent | Category | Screen `dWR` | Disjoint PanB `dWR` | H2H (`12g`) | Pooled Field WR (`n`) | `v4` `240k` MinPk |
 |---|---|---|---:|---:|---:|---:|---:|
-| **`pb122-m-lax50`** | `pb-122` | Major okimono | `+21.9 pp` | **`+25.0 pp` (`z=+2.24`)** | `41.7%` | **`62.5%` (`+23.4 pp`, `64g`)** | `24.2%` |
+| **`pb122-m-lax50`** | `pb-122` | Major okimono | `+21.9 pp` | **`+25.0 pp` (`z=+2.24`)** | `41.7%` | **`62.5%` (`+23.4 pp`, `z=+3.30`, `64g`)** | `24.2%` |
 | **`offantom-m-wak50`** | `mjj-2014-offantom` | Major okimono (L50) | `+18.8 pp` | **`+9.4 pp`** | **`83.3%`** | **`53.1%` (`+14.1 pp`, `64g`)** | `14.4%` |
 | **`s02-m-lax-curse`** | `sample-02` | Same-shell opt | `+28.1 pp` | **`+0.0 pp`** | `58.3%` | **`57.8%` (`+14.1 pp`, `64g`)** | `14.1%` |
 | **`ayagen-m-zap50`** | `mjj-2015-ayagen` | Major okimono | `+18.8 pp` | **`+3.1 pp`** | `50.0%` | **`65.6%` (`+10.9 pp`, `64g`)** | `25.8%` |
-| **`pb84-cln-sking50`** | `pb-84` | **Minor Gem (`Slowking50`)** | `+4.7 / +9.4 pp` | **`+18.8 pp` (`z=+1.69`)** | `50.0%` | **`55.0%` (`+9.4 pp`, `160g`)** | `14.8%` (`Sking 23.8%`) |
-| **`pb63-m-esp55`** | `pb-63` | **Minor Gem (`Espeon55`)** | `+6.2 pp` | **`+6.2 pp`** | `50.0%` | **`56.2%` (`+6.2 pp`, `64g`)** | `7.8%` (`Esp 22.7%`) |
-| **`pb85-m-cune50`** | `pb-85` | Major okimono (L50) | `+9.4 pp` | **`+3.1 pp`** | `41.7%` | **`46.9%` (`+6.3 pp`, `64g`)** | `28.1%` |
-| **`rraikou-m-cune50`** | `mjj-2020-rraikou` | Major okimono | `+6.2 pp` | **`+3.1 pp`** | `16.7%` | **`54.2%` (`+5.2 pp`, `96g`)** | **`32.4%`** (#1!) |
+| **`pb84-cln-sking50`** | `pb-84` | **Minor Gem (`Slowking50`)** | `+4.7 / +9.4 pp` | **`+18.8 pp` (`z=+1.70`)** | `50.0%` | **`55.0%` (`+9.4 pp`, `160g`)** | `14.8%` (`Sking 23.8%`) |
+| **`pb63-m-esp55`** | `pb-63` | **Minor Gem (`Espeon55`)** | `+6.25 pp` | **`+6.25 pp`** | `50.0%` | **`56.2%` (`+6.25 pp`, `64g`)** | `7.8%` (`Esp 22.7%`) |
+| **`pb85-m-cune50`** | `pb-85` | Major okimono (L50) | `+9.4 pp` | **`+3.1 pp`** | `41.7%` | **`46.9%` (`+6.25 pp`, `64g`)** | `28.1%` |
+| **`rraikou-m-cune50`** | `mjj-2020-rraikou` | Major okimono | `+6.25 pp` | **`+3.1 pp`** | `16.7%` | **`54.2%` (`+5.2 pp`, `96g`)** | **`32.4%`** (#1!) |
 | **`pb66-m-wak55`** | `pb-66` | Major okimono | `+4.7 pp` | `-3.1 pp` | **`66.7%`** | **`61.5%` (`+2.1 pp`, `96g`)** | `13.3%` |
 
-### 3.2 10×10 Super-Champions Round-Robin & RM+ Nash Equilibrium (`step3b-champs10-rr`, `540g`, `12g/edge`)
+### 3.2 10×10 Super-Champions Round-Robin & Exact Nash Equilibrium (`step3b-champs10-rr`, `540g`, `12g/edge`)
 
-| Champion | `rraik` | `s08` | `sking` | `pb66` | `pb122` | `esp55` | `pb-6` | `ayag` | `s0053` | `pb-89` | RR Mean (`108g`) | RM+ Nash |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| **`rraikou-m-cune50`** | — | 33.3 | 66.7 | 50.0 | 58.3 | 41.7 | 66.7 | 66.7 | **83.3** | 75.0 | **`60.2% ± 5.3`** | **`31.0%`** |
-| **`sample-08`** | 66.7 | — | 50.0 | 16.7 | 58.3 | 58.3 | 33.3 | 16.7 | 50.0 | 58.3 | `45.4% ± 6.2` | **`22.7%`** |
-| **`pb84-cln-sking50`** *(minor)* | 33.3 | 50.0 | — | **75.0** | 58.3 | 50.0 | 33.3 | 33.3 | 58.3 | 58.3 | `50.0% ± 4.8` | **`18.3%`** |
-| **`pb66-m-wak55`** | 50.0 | 83.3 | 25.0 | — | 16.7 | 58.3 | 41.7 | 83.3 | 66.7 | 66.7 | `54.6% ± 7.9` | **`17.8%`** |
-| **`pb122-m-lax50`** | 41.7 | 41.7 | 41.7 | 83.3 | — | 41.7 | **91.7** | 75.0 | 58.3 | 41.7 | **`57.4% ± 6.9`** | **`9.1%`** |
-| **`pb63-m-esp55`** *(minor)* | **58.3** | 41.7 | 50.0 | 41.7 | **58.3** | — | 58.3 | **83.3** | 33.3 | 66.7 | **`54.6% ± 5.0`** | **`0.8%`** |
-| `pb-6` | 33.3 | 66.7 | 66.7 | 58.3 | 8.3 | 41.7 | — | 41.7 | 50.0 | 75.0 | `49.1% ± 6.9` | `0.3%` |
-| `ayagen-m-zap50` | 33.3 | 83.3 | 66.7 | 16.7 | 25.0 | 16.7 | 58.3 | — | 41.7 | 50.0 | `43.5% ± 7.7` | `0.0%` |
-| `s0053-lefties` *(v3 flagship)* | 16.7 | 50.0 | 41.7 | 33.3 | 41.7 | 66.7 | 50.0 | 58.3 | — | 66.7 | `47.2% ± 5.4` | `0.0%` (`EV 34.5%`) |
-| `pb-89` | 25.0 | 41.7 | 41.7 | 33.3 | 58.3 | 33.3 | 25.0 | 50.0 | 33.3 | — | `38.0% ± 3.7` | `0.0%` (`EV 36.4%`) |
+Exact rational solution (`fractions.Fraction`) of the 10×10 skew-symmetric payoff matrix reveals a **1-dimensional exact Nash equilibrium polytope** $(1 - t)\,x_1 + t\,x_2$ ($t \in [0, 1]$) between two extreme 5-support exact equilibria:
+- $x_1 = (\frac{7}{22}, \frac{5}{22}, \frac{2}{11}, \frac{2}{11}, \frac{1}{11}, 0, \dots)$ (`pb63-m-esp55` has EV = `50.000%`),
+- $x_2 = (\frac{3}{10}, \frac{1}{10}, \frac{1}{5}, \frac{1}{5}, 0, \frac{1}{5}, \dots)$ (`pb122-m-lax50` and `pb-6` have EV = `50.000%`).
+
+Every interior point ($0 < t < 1$) is an **exact 6-shell Nash equilibrium** with **`max_BR = 50.000000%`**. (`flagship-mixture.json` ships the exact rational midpoint **$t = \frac{1}{2}$**, within `0.0001` nats of the maximum-entropy equilibrium $t^* = 0.4826$, `eff = 5.271` shells, 6-decimal `max_BR = 50.000008%`; finite-iteration RM+ stopped near $t \approx 0.04$ with `0.27%` unconverged mass on `pb-6` whose EV vs Nash is `< 50%`.)
+
+| Champion | `rraik` | `s08` | `sking` | `pb66` | `pb122` | `esp55` | `pb-6` | `ayag` | `s0053` | `pb-89` | RR Mean (`108g`) | Exact Nash ($t=\frac{1}{2}$) | Nash Range |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **`rraikou-m-cune50`** | — | 33.3 | 66.7 | 50.0 | 58.3 | 41.7 | 66.7 | 66.7 | **83.3** | 75.0 | **`60.2% ± 5.3`** | **`30.91%`** (`17/55`) | `30.0–31.8%` |
+| **`pb84-cln-sking50`** *(minor)* | 33.3 | 50.0 | — | **75.0** | 58.3 | 50.0 | 33.3 | 33.3 | 58.3 | 58.3 | `50.0% ± 4.8` | **`19.09%`** (`21/110`) | `18.2–20.0%` |
+| **`pb66-m-wak55`** | 50.0 | 83.3 | 25.0 | — | 16.7 | 58.3 | 41.7 | 83.3 | 66.7 | 66.7 | `54.6% ± 7.9` | **`19.09%`** (`21/110`) | `18.2–20.0%` |
+| **`sample-08`** | 66.7 | — | 50.0 | 16.7 | 58.3 | 58.3 | 33.3 | 16.7 | 50.0 | 58.3 | `45.4% ± 6.2` | **`16.36%`** (`9/55`) | `10.0–22.7%` |
+| **`pb63-m-esp55`** *(minor)* | **58.3** | 41.7 | 50.0 | 41.7 | **58.3** | — | 58.3 | **83.3** | 33.3 | 66.7 | **`54.6% ± 5.0`** | **`10.00%`** (`1/10`) | `0.0–20.0%` |
+| **`pb122-m-lax50`** | 41.7 | 41.7 | 41.7 | 83.3 | — | 41.7 | **91.7** | 75.0 | 58.3 | 41.7 | **`57.4% ± 6.9`** | **`4.55%`** (`1/22`) | `0.0–9.1%` |
+| `pb-6` | 33.3 | 66.7 | 66.7 | 58.3 | 8.3 | 41.7 | — | 41.7 | 50.0 | 75.0 | `49.1% ± 6.9` | `0.00%` (`EV 49.6%`) | `0.0%` |
+| `ayagen-m-zap50` | 33.3 | 83.3 | 66.7 | 16.7 | 25.0 | 16.7 | 58.3 | — | 41.7 | 50.0 | `43.5% ± 7.7` | `0.00%` (`EV 42.7%`) | `0.0%` |
+| `s0053-lefties` *(v3 flagship)* | 16.7 | 50.0 | 41.7 | 33.3 | 41.7 | 66.7 | 50.0 | 58.3 | — | 66.7 | `47.2% ± 5.4` | `0.00%` (`EV 36.2%`) | `0.0%` |
+| `pb-89` | 25.0 | 41.7 | 41.7 | 33.3 | 58.3 | 33.3 | 25.0 | 50.0 | 33.3 | — | `38.0% ± 3.7` | `0.00%` (`EV 34.8%`) | `0.0%` |
 
 ### 3.3 Self-Referential `240k` `team-pool-v4` Census (`step3b-v4-census-k4`, `4,356` Previews)
 
