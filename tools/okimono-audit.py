@@ -448,7 +448,7 @@ def cmd_preview_screen(args: argparse.Namespace) -> None:
 
 
 def cmd_live_ab(args: argparse.Namespace) -> None:
-    """Run paired CRN strictly NO-CACHE LIVE (243k/729k) A/B evaluation + optional H2H."""
+    """Run paired true-CRN strictly NO-CACHE LIVE (243k/240k) A/B evaluation + optional H2H."""
     spec = json.loads(Path(args.spec).read_text())
     cat_path = Path(args.catalog) if args.catalog else (Path(spec["catalog"]) if spec.get("catalog") else None)
     teams, _, shells = load_v3_catalog(cat_path)
@@ -483,7 +483,8 @@ def cmd_live_ab(args: argparse.Namespace) -> None:
     block = 0
 
     # Group matchups: each group = {"base": orig_name, "mutants": [m1, m2, ...]}
-    # All members in a group share IDENTICAL (opp, opp_realized_id, pair_idx, battleSeed) for CRN pairing!
+    # All members in a group share IDENTICAL (opp, opp_realized_id, pair_idx, battleSeed, seeds)
+    # for true CRN pairing (zero agent-RNG divergence on identical Turn-1 states).
     for grp in spec.get("groups", []):
         gname = grp["name"]
         members = [grp["base"]] + list(grp["mutants"])
@@ -492,6 +493,13 @@ def cmd_live_ab(args: argparse.Namespace) -> None:
             for pi in range(pairs_per_opp):
                 opp_id = opp_mems[(opp_idx + pi) % len(opp_mems)][0]
                 bseed = u32_hash(f"crn-battle:{seed_tag}:{gname}:{opp_sh}:p{pi}")
+                seat_seeds = {
+                    rs: (
+                        u32_hash(f"crn-s0:{seed_tag}:{gname}:{opp_sh}:p{pi}:r{rs}"),
+                        u32_hash(f"crn-s1:{seed_tag}:{gname}:{opp_sh}:p{pi}:r{rs}"),
+                    )
+                    for rs in (0, 1)
+                }
                 for m in members:
                     m_mems, m_mix = resolve_entry(m)
                     m_id = m_mems[(opp_idx + pi) % len(m_mems)][0]
@@ -502,8 +510,7 @@ def cmd_live_ab(args: argparse.Namespace) -> None:
                         else:
                             ids = [opp_id, m_id]
                             mixs = [opp_mix, m_mix]
-                        s0 = u32_hash(f"crn-s0:{seed_tag}:{gname}:{m}:{opp_sh}:p{pi}:r{row_seat}")
-                        s1 = u32_hash(f"crn-s1:{seed_tag}:{gname}:{m}:{opp_sh}:p{pi}:r{row_seat}")
+                        s0, s1 = seat_seeds[row_seat]
                         rows.append({
                             "block": block,
                             "cell": {
@@ -594,6 +601,7 @@ def cmd_live_ab(args: argparse.Namespace) -> None:
         "battle_iters": args.battle_iters,
         "battle_mode": args.battle_mode,
         "strict_no_cache_live": True,
+        "crn_shared_agent_seeds": True,
     }, indent=2))
 
     chunk_games = max(2, args.chunk_games + (args.chunk_games % 2))
@@ -690,8 +698,8 @@ def cmd_live_analyze(args: argparse.Namespace) -> None:
     src_counts: Counter[str] = Counter()
     # Structure: ab[(group, subject)][(opp, pair)] -> [score_seat0, score_seat1]
     ab_pairs: dict[tuple[str, str], dict[tuple[str, int], list[float]]] = defaultdict(lambda: defaultdict(list))
-    # Per-game CRN key: (opp, pair, rowSeat) -> (score, slot_set) for Simpson-free InΔ/OutΔ calculation
-    ab_game_map: dict[tuple[str, str], dict[tuple[str, int, int], tuple[float, set[int]]]] = defaultdict(dict)
+    # Per-game CRN key: (opp, pair, rowSeat) -> (score, slot_set, my_pick_str, opp_pick_str)
+    ab_game_map: dict[tuple[str, str], dict[tuple[str, int, int], tuple[float, set[int], str, str]]] = defaultdict(dict)
     ab_picks: dict[tuple[str, str], list[int]] = defaultdict(lambda: [0] * 6)
     ab_slot_pk_sum: dict[tuple[str, str], list[float]] = defaultdict(lambda: [0.0] * 6)
     ab_slot_unpk_sum: dict[tuple[str, str], list[float]] = defaultdict(lambda: [0.0] * 6)
@@ -711,6 +719,7 @@ def cmd_live_analyze(args: argparse.Namespace) -> None:
         rs = int(r["rowSeat"])
         sc = outcome_score(r["outcome"], rs)
         pstr = r["preview"][rs]["input"]
+        opp_pstr = r["preview"][1 - rs]["input"]
         slots = [int(x.strip()) for x in pstr.replace("team", "").strip().split(",")]
 
         if kind in ("live_ab", "extra"):
@@ -726,7 +735,7 @@ def cmd_live_analyze(args: argparse.Namespace) -> None:
             ab_opp_scores[(g, subj)][opp].append(sc)
             ab_games[(g, subj)] += 1
             slot_set = {sl for sl in slots if 1 <= sl <= 6}
-            ab_game_map[(g, subj)][(opp, pi, rs)] = (sc, slot_set)
+            ab_game_map[(g, subj)][(opp, pi, rs)] = (sc, slot_set, pstr, opp_pstr)
             for idx_s in range(6):
                 if (idx_s + 1) in slot_set:
                     ab_picks[(g, subj)][idx_s] += 1
@@ -776,6 +785,7 @@ def cmd_live_analyze(args: argparse.Namespace) -> None:
             slot_unpk_delta: list[float | None] | None = None
             slot_pk_contrib: list[float | None] | None = None
             slot_unpk_contrib: list[float | None] | None = None
+            slot_unpk_same_both: list[dict[str, Any]] | None = None
             if base and s != base:
                 common = sorted(set(pm.keys()) & set(base_pm.keys()))
                 diffs = [pm[k] - base_pm[k] for k in common]
@@ -791,13 +801,26 @@ def cmd_live_analyze(args: argparse.Namespace) -> None:
                     slot_unpk_delta = []
                     slot_pk_contrib = []
                     slot_unpk_contrib = []
+                    slot_unpk_same_both = []
                     for idx_s in range(6):
                         in_d = [cg_map[k][0] - bg_map[k][0] for k in common_g if (idx_s + 1) in cg_map[k][1]]
-                        out_d = [cg_map[k][0] - bg_map[k][0] for k in common_g if (idx_s + 1) not in cg_map[k][1]]
+                        out_k = [k for k in common_g if (idx_s + 1) not in cg_map[k][1]]
+                        out_d = [cg_map[k][0] - bg_map[k][0] for k in out_k]
+                        sb_d = [cg_map[k][0] - bg_map[k][0] for k in out_k if cg_map[k][2] == bg_map[k][2] and cg_map[k][3] == bg_map[k][3]]
+                        op_d = [cg_map[k][0] - bg_map[k][0] for k in out_k if cg_map[k][2] == bg_map[k][2] and cg_map[k][3] != bg_map[k][3]]
+                        me_d = [cg_map[k][0] - bg_map[k][0] for k in out_k if cg_map[k][2] != bg_map[k][2]]
                         slot_pk_delta.append(round(sum(in_d) / len(in_d), 4) if in_d else None)
                         slot_unpk_delta.append(round(sum(out_d) / len(out_d), 4) if out_d else None)
                         slot_pk_contrib.append(round(sum(in_d) / ng_c, 4))
                         slot_unpk_contrib.append(round(sum(out_d) / ng_c, 4))
+                        slot_unpk_same_both.append({
+                            "same_both_n": len(sb_d),
+                            "same_both_net": round(sum(sb_d), 2),
+                            "opp_shift_n": len(op_d),
+                            "opp_shift_net": round(sum(op_d), 2),
+                            "me_shift_n": len(me_d),
+                            "me_shift_net": round(sum(me_d), 2),
+                        })
 
             h2h_str = ""
             h2h_mu = h2h_se = None
@@ -837,6 +860,7 @@ def cmd_live_analyze(args: argparse.Namespace) -> None:
                 "slot_unpicked_delta": slot_unpk_delta,
                 "slot_picked_contrib": slot_pk_contrib,
                 "slot_unpicked_contrib": slot_unpk_contrib,
+                "slot_unpicked_breakdown": slot_unpk_same_both,
                 "ge50": n_ge50,
                 "lt35": n_lt35,
                 "n_opps": len(opp_wrs),

@@ -1,10 +1,10 @@
 // Generate the `team-pool-v4` (`policy-v2`: CF-V_net v2 PUCT + SteppedCfPreview 240k)
-// strong party catalog and 6-shell RM+ Nash flagship mixture from committed repo
+// strong party catalog and provisional Tier-S flagship mixture from committed repo
 // sources with `training-v3` normalization and strict WASM + JP-NC2000 legality checks.
 //
 // Outputs:
 //   data/team-pool-v4/team-pool.json         33-team (32-shell) policy-v2 Tier-1 catalog
-//   data/team-pool-v4/flagship-mixture.json  6-shell RM+ Nash core mixture (policy-v2)
+//   data/team-pool-v4/flagship-mixture.json  5-shell provisional Tier-S core mixture (policy-v2)
 //
 // Usage:
 //   node tools/build-team-products-v4.js [--out-root DIR]
@@ -40,23 +40,26 @@ const sha256File = rel =>
 	crypto.createHash('sha256').update(fs.readFileSync(path.resolve(REPO, rel))).digest('hex');
 
 // Curated 33-team / 32-shell `policy-v2` Tier-1 roster:
-//   - 9 certified `policy-v2` okimono/minor-gem upgrades (docs/reports/okimono-upgrades-v2.json),
-//     each verified via strict NO-CACHE LIVE (243k/240k) + disjoint Panel-B holdout
-//   - 23 preserved clean/unbeaten `team-pool-v3` shells (including 2-variant `s0053-lefties`)
-//   - Tier S (`nash: true`) reflects the exact rational midpoint (t = 1/2) of the 1D Nash
-//     equilibrium polytope on the 10x10 Super-Champions Round-Robin (540g strict NO-CACHE LIVE,
-//     exact rational max_BR = 50.000000%, 6-decimal max_BR = 50.000008%, eff = 5.271 shells).
+//   - 9 causally verified `policy-v2` upgrades (docs/reports/okimono-upgrades-v2.json),
+//     each showing positive in-battle CRN `InΔ` under strict NO-CACHE LIVE (243k/240k);
+//     both earlier minor-gem candidates (`pb84-cln-sking50` and `pb63-m-esp55`) were retracted
+//     after the 1,840g Step 4 true shared-seed CRN audit exposed hitchhiking/confounding and
+//     replaced by their true-CRN Major winners (`pb84-cln-skarm50` and `pb63-m-gar55`).
+//   - 23 preserved clean/unbeaten `team-pool-v3` shells (including 2-variant `s0053-lefties`).
+//   - Tier S (`nash: true`) is a provisional uniform 5-shell core (NOT a certified policy-v2
+//     Nash equilibrium; >=48g/edge policy-v2 Nash certification including `pb63-m-gar55` and
+//     `pb84-cln-skarm50` is pending).
 const ROSTER_SPEC = [
-	// Tier S: 6-Shell `policy-v2` Exact Nash Core (`nash: true`, ordered by exact Nash midpoint weight)
-	{ id: 'rraikou-m-cune50', tier: 'S', nash: true, nashWeight: 0.309091, evolved: true, score: 0.6019, fromUpgrade: true },
-	{ id: 'pb84-cln-sking50', tier: 'S', nash: true, nashWeight: 0.190909, evolved: true, minorGem: 'Slowking', score: 0.5500, fromUpgrade: true },
-	{ id: 'pb66-m-wak55', tier: 'S', nash: true, nashWeight: 0.190909, evolved: true, score: 0.6146, fromUpgrade: true },
-	{ id: 'sample-08', tier: 'S', nash: true, nashWeight: 0.163636, score: 0.6129 },
-	{ id: 'pb63-m-esp55', tier: 'S', nash: true, nashWeight: 0.100000, evolved: true, minorGem: 'Espeon', score: 0.5625, fromUpgrade: true },
-	{ id: 'pb122-m-lax50', tier: 'S', nash: true, nashWeight: 0.045455, evolved: true, score: 0.6250, fromUpgrade: true },
+	// Tier S: Provisional 5-Shell `policy-v2` Core (uniform 0.200000 each; full >=48g/edge Nash RR pending)
+	{ id: 'rraikou-m-cune50', tier: 'S', nash: true, nashWeight: 0.200000, evolved: true, score: 0.6019, fromUpgrade: true },
+	{ id: 'pb122-m-lax50', tier: 'S', nash: true, nashWeight: 0.200000, evolved: true, score: 0.6250, fromUpgrade: true },
+	{ id: 'pb63-m-gar55', tier: 'S', nash: true, nashWeight: 0.200000, evolved: true, score: 0.5938, fromUpgrade: true },
+	{ id: 'pb66-m-wak55', tier: 'S', nash: true, nashWeight: 0.200000, evolved: true, score: 0.6146, fromUpgrade: true },
+	{ id: 'sample-08', tier: 'S', nash: true, nashWeight: 0.200000, score: 0.6129 },
 
-	// Tier 1A: Certified `policy-v2` Top Contenders & Camouflage Core (12 shells / 13 teams)
+	// Tier 1A: Verified `policy-v2` Top Contenders & Camouflage Core (13 shells / 14 teams)
 	{ id: 'ayagen-m-zap50', tier: '1', evolved: true, score: 0.6562, fromUpgrade: true },
+	{ id: 'pb84-cln-skarm50', tier: '1', evolved: true, score: 0.5391, fromUpgrade: true },
 	{ id: 'pb-6', tier: '1', score: 0.5968 },
 	{ id: 's0053-lefties-hpi', tier: '1', variantCluster: 'vc-s0053-lefties', evolved: true, score: 0.5873 },
 	{ id: 's0053-lefties-dp', tier: '1', variantCluster: 'vc-s0053-lefties', evolved: true, score: 0.5873 },
@@ -279,14 +282,15 @@ function main() {
 		policyEpoch: 'policy-v2',
 		generator: 'tools/build-team-products-v4.js',
 		flagship: {
-			cluster: 'policy-v2-nash-core-6',
+			cluster: 'policy-v2-provisional-core-5',
 			mixture: 'data/team-pool-v4/flagship-mixture.json',
-			verification: '8,312 strict NO-CACHE LIVE games (243k adaptive CF-V_net v2 PUCT / 240k SteppedCfPreview, preview.source=live, cache_hits=0) + 15,432 exact 240k previews (13,032 unique-key) across v3/v4 catalogs, disjoint Panel-B holdout, and 10x10 Super-Champions RR',
-			champs10MaxBr: 0.5000,
-			topChampion: { id: 'rraikou-m-cune50', champs10Wr: 0.6019, nashWeight: 0.309091 },
-			certifiedMinorGems: ['pb84-cln-sking50 (Slowking L50)', 'pb63-m-esp55 (Espeon L55)'],
+			verification: '10,152 strict NO-CACHE LIVE games (243k adaptive CF-V_net v2 PUCT / 240k SteppedCfPreview, preview.source=live, cache_hits=0) + 19,788 exact 240k previews (15,016 unique-key), including the 1,840g Step 4 true shared-seed CRN audit that retracted pb84-cln-sking50 and pb63-m-esp55 in favor of pb84-cln-skarm50 and pb63-m-gar55',
+			provisionalUniformCore: true,
+			certifiedMinorGems: [],
+			retractedMinorCandidates: ['pb84-cln-sking50 (Slowking L50)', 'pb63-m-esp55 (Espeon L55)'],
 			v4CensusZeroOkimonos: 0,
-			v4CensusMeanMinSlotPickRate: 0.1508,
+			v4CensusLt5Okimonos: 2,
+			v4CensusMeanMinSlotPickRate: 0.1539,
 		},
 		condition: {
 			policyEpoch: 'policy-v2',
@@ -317,14 +321,13 @@ function main() {
 	};
 
 	const flagshipDoc = {
-		name: 'team-pool-v4-policy-v2-nash-core-6',
+		name: 'team-pool-v4-policy-v2-provisional-core-5',
 		policyEpoch: 'policy-v2',
 		source_solution: 'data/team-pool-v4/team-pool.json',
 		active_shells: flagshipTeams.length,
 		support_size: flagshipTeams.length,
-		champs10_max_br: 0.5000,
 		trainingPolicy: 'training-v3',
-		measurementStatus: 'Exact rational midpoint (t = 1/2: 17/55, 21/110, 21/110, 9/55, 1/10, 1/22; eff = 5.271) of the 1D exact Nash equilibrium polytope on the 10x10 Super-Champions Round-Robin (540 strictly NO-CACHE LIVE 243k/240k games, 12g/edge; exact rational max_BR = 50.000000%, 6-decimal max_BR = 50.000008%) under policy-v2.',
+		measurementStatus: 'Provisional uniform 5-shell Tier-S core (0.200000 each; NOT a certified policy-v2 Nash equilibrium). The earlier 12g/edge 10x10 RR omitted pb63-m-gar55 and pb84-cln-skarm50 and had 90% bootstrap weight CIs starting at 0%; pb84-cln-sking50 and pb63-m-esp55 were retracted after the 1,840g Step 4 true shared-seed CRN audit. Full >=48g/edge policy-v2 Nash certification pending.',
 		teams: flagshipTeams,
 	};
 

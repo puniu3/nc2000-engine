@@ -1,7 +1,7 @@
 {
  "format": "nc2000-okimono-upgrades-v2",
  "policyEpoch": "policy-v2",
- "verification": "8,312 strictly NO-CACHE LIVE (243k adaptive CF-V_net v2 PUCT / 240k SteppedCfPreview, preview.source=live, cache_hits=0) games + 15,432 exact 240k previews (13,032 unique-key) across all 32 shells of team-pool-v3 & team-pool-v4",
+ "verification": "10,152 strictly NO-CACHE LIVE (243k adaptive CF-V_net v2 PUCT / 240k SteppedCfPreview, preview.source=live, cache_hits=0) games (8,312 Steps 1-3 + 1,840 Step 4 true shared-seed CRN audit) + 19,788 exact 240k previews (15,016 unique-key across 3,754 keys)",
  "trainingPolicy": "training-v3",
  "legality": "WASM Validator PASS + strict Japanese NC2000 cartridge legality",
  "teams": [
@@ -18,11 +18,6 @@
     "panA_or_s1c_delta_pp": 6.2,
     "panB_delta_pp": 3.1,
     "champs10_rr_wr": 0.6019,
-    "champs10_nash_weight": 0.309091,
-    "champs10_nash_range": [
-     0.3,
-     0.318182
-    ],
     "v4_census_min_pick_pct": 32.4
    },
    "sets": [
@@ -234,12 +229,7 @@
     "panB_delta_pp": 25.0,
     "combined_z": 3.3,
     "champs10_rr_wr": 0.5741,
-    "champs10_nash_weight": 0.045455,
-    "champs10_nash_range": [
-     0.0,
-     0.090909
-    ],
-    "v4_census_min_pick_pct": 24.2
+    "v4_census_min_pick_pct": 21.9
    },
    "sets": [
     {
@@ -437,27 +427,26 @@
    ]
   },
   {
-   "id": "pb84-cln-sking50",
+   "id": "pb84-cln-skarm50",
    "parent": "pb-84",
-   "category": "minor-gem",
-   "minor_species": "Slowking",
-   "change": "s4 Cloyster@Gold Berry Surf + s5 Gligar@Bright Powder + s6 Umbreon50 -> Slowking L50 @ Leftovers [Surf/Fire Blast/Rest/Sleep Talk]",
+   "category": "major-okimono",
+   "change": "s4 Cloyster@Gold Berry Surf + s5 Gligar@Bright Powder + s6 Umbreon50 -> Skarmory L50 @ Leftovers [Drill Peck/Curse/Whirlwind/Rest]",
    "metrics": {
     "policy_epoch": "policy-v2",
-    "field_games": 160,
-    "field_wr": 0.55,
-    "field_delta_pp": 9.4,
-    "s1c_delta_pp": 4.7,
-    "s1d_delta_pp": 9.4,
-    "panB_delta_pp": 18.8,
-    "champs10_rr_wr": 0.5,
-    "champs10_nash_weight": 0.190909,
-    "champs10_nash_range": [
-     0.181818,
-     0.2
-    ],
-    "v4_census_min_pick_pct": 14.8,
-    "minor_v4_census_pick_pct": 23.8
+    "true_crn_games": 128,
+    "field_wr": 0.5391,
+    "vs_cloysurf_delta_pp": 7.03,
+    "vs_raw_pb84_delta_pp": 7.81,
+    "vs_sking50_delta_pp": 14.06,
+    "vs_sking50_z_opp": 2.46,
+    "slot6_pick_pct": 27.3,
+    "slot6_in_wr": 0.6571,
+    "slot6_crn_in_delta_pp": 25.7,
+    "slot6_crn_out_delta_pp": 0.0,
+    "h2h_vs_cloysurf_wr": 0.625,
+    "h2h_games": 16,
+    "v4_census_min_pick_pct": 7.8,
+    "skarm50_v4_census_pick_pct": 28.1
    },
    "sets": [
     {
@@ -621,29 +610,29 @@
      "happiness": 255
     },
     {
-     "name": "Slowking",
-     "species": "Slowking",
+     "name": "Skarmory",
+     "species": "Skarmory",
      "item": "Leftovers",
      "ability": "No Ability",
      "moves": [
-      "Surf",
-      "Fire Blast",
-      "Rest",
-      "Sleep Talk"
+      "Drill Peck",
+      "Curse",
+      "Whirlwind",
+      "Rest"
      ],
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 0,
+      "atk": 255,
       "def": 255,
       "spa": 255,
       "spd": 255,
       "spe": 255
      },
-     "gender": "F",
+     "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 2,
+      "atk": 31,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -655,26 +644,28 @@
    ]
   },
   {
-   "id": "pb63-m-esp55",
+   "id": "pb63-m-gar55",
    "parent": "pb-63",
-   "category": "minor-gem",
-   "minor_species": "Espeon",
-   "change": "s2: Venusaur55 (3.9% okimono) -> Espeon L55 @ PRZ Cure Berry [Psychic/Zap Cannon/Charm/Morning Sun]",
+   "category": "major-okimono",
+   "change": "s2: Venusaur55 (3.9% okimono) -> Gengar L55 @ Gold Berry [Thunderbolt/Ice Punch/Explosion/Destiny Bond]",
    "metrics": {
     "policy_epoch": "policy-v2",
-    "field_games": 64,
-    "field_wr": 0.5625,
-    "field_delta_pp": 6.25,
-    "panA_delta_pp": 6.25,
-    "panB_delta_pp": 6.25,
-    "champs10_rr_wr": 0.5463,
-    "champs10_nash_weight": 0.1,
-    "champs10_nash_range": [
-     0.0,
-     0.2
-    ],
-    "v4_census_min_pick_pct": 7.8,
-    "minor_v4_census_pick_pct": 22.7
+    "pooled_field_games": 192,
+    "pooled_field_wr": 0.5729,
+    "pooled_delta_pp": 3.65,
+    "true_crn_games": 128,
+    "true_crn_wr": 0.5938,
+    "true_crn_delta_pp": 3.91,
+    "vs_esp55_delta_pp": 8.59,
+    "vs_esp55_z_opp": 1.73,
+    "slot2_pick_pct": 21.9,
+    "slot2_in_wr": 0.6786,
+    "slot2_crn_in_delta_pp": 17.9,
+    "slot2_crn_out_delta_pp": 0.0,
+    "pooled_h2h_wr": 0.5714,
+    "pooled_h2h_games": 28,
+    "v4_census_min_pick_pct": 10.9,
+    "gar55_v4_census_pick_pct": 15.6
    },
    "sets": [
     {
@@ -710,29 +701,29 @@
      "happiness": 255
     },
     {
-     "name": "Espeon",
-     "species": "Espeon",
-     "item": "PRZ Cure Berry",
+     "name": "Gengar",
+     "species": "Gengar",
+     "item": "Gold Berry",
      "ability": "No Ability",
      "moves": [
-      "Psychic",
-      "Zap Cannon",
-      "Charm",
-      "Morning Sun"
+      "Thunderbolt",
+      "Ice Punch",
+      "Explosion",
+      "Destiny Bond"
      ],
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 0,
+      "atk": 255,
       "def": 255,
       "spa": 255,
       "spd": 255,
       "spe": 255
      },
-     "gender": "F",
+     "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 2,
+      "atk": 31,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -885,12 +876,7 @@
     "panB_delta_pp": -3.1,
     "h2h_wr": 0.6667,
     "champs10_rr_wr": 0.5463,
-    "champs10_nash_weight": 0.190909,
-    "champs10_nash_range": [
-     0.181818,
-     0.2
-    ],
-    "v4_census_min_pick_pct": 13.3
+    "v4_census_min_pick_pct": 14.1
    },
    "sets": [
     {
@@ -1101,8 +1087,7 @@
     "panB_delta_pp": 3.1,
     "h2h_wr": 0.5,
     "champs10_rr_wr": 0.4352,
-    "champs10_nash_weight": 0.0,
-    "v4_census_min_pick_pct": 25.8
+    "v4_census_min_pick_pct": 28.1
    },
    "sets": [
     {
@@ -1312,7 +1297,7 @@
     "panA_delta_pp": 18.8,
     "panB_delta_pp": 9.4,
     "h2h_wr": 0.8333,
-    "v4_census_min_pick_pct": 14.4
+    "v4_census_min_pick_pct": 15.2
    },
    "sets": [
     {
@@ -1522,7 +1507,7 @@
     "panA_delta_pp": 28.1,
     "panB_delta_pp": 0.0,
     "h2h_wr": 0.5833,
-    "v4_census_min_pick_pct": 14.1
+    "v4_census_min_pick_pct": 14.8
    },
    "sets": [
     {
@@ -1928,6 +1913,51 @@
      "happiness": 255
     }
    ]
+  }
+ ],
+ "retracted_after_true_crn_audit": [
+  {
+   "id": "pb84-cln-sking50",
+   "parent": "pb-84",
+   "minor_species": "Slowking",
+   "reason": "Genetic hitchhiker + fake-CRN/missing-control artifact debunked by 1,840g Step 4 true shared-seed CRN audit",
+   "evidence": {
+    "step4_true_crn_128g_wr": 0.3984,
+    "step4_rank_of_9": 9,
+    "step4_vs_cloysurf_pp": -7.03,
+    "step4_vs_skarm50_pp": -14.06,
+    "step4_vs_skarm50_z_opp": -2.46,
+    "step4_vs_cune50_pp": -9.38,
+    "step4_vs_star50_pp": -8.59,
+    "step4_h2h_vs_cloysurf": 0.4375,
+    "pooled_256g_vs_cloysurf_pp": 0.39,
+    "pooled_57g_picked_in_delta_pp": -1.75,
+    "champs10_in_wr": 0.3684,
+    "champs10_out_wr": 0.5281,
+    "champs10_boot_90ci": [
+     0.0,
+     0.43
+    ]
+   }
+  },
+  {
+   "id": "pb63-m-esp55",
+   "parent": "pb-63",
+   "minor_species": "Espeon",
+   "reason": "Failed true shared-seed CRN replication vs parent pb-63 and lost cleanly to Major control pb63-m-gar55",
+   "evidence": {
+    "step4_true_crn_128g_wr": 0.5078,
+    "step4_rank_of_4": 4,
+    "step4_vs_pb63_pp": -4.69,
+    "step4_vs_gar55_pp": -8.59,
+    "step4_vs_gar55_z_opp": -1.73,
+    "pooled_192g_vs_pb63_pp": -1.04,
+    "pooled_35g_picked_in_delta_pp": -5.71,
+    "champs10_boot_90ci": [
+     0.0,
+     0.504
+    ]
+   }
   }
  ]
 }
