@@ -293,6 +293,27 @@ impl EndgameSession {
         Some(value)
     }
 
+    pub fn probe_strategy(
+        &mut self,
+        dex: &Dex,
+        battle: &Battle,
+        side: usize,
+        max_slices: usize,
+        clock: &mut impl FnMut() -> f64,
+    ) -> Option<StrategyCertificate> {
+        for _ in 0..max_slices.max(1) {
+            let before = self.stats.runs;
+            let report = self.probe(dex, battle, Some(side), clock)?;
+            if let Some(cert) = report.strategy(side, self.cfg.strategy_loss) {
+                return Some(cert.clone());
+            }
+            if report.runs == 0 || report.stop == Stop::NodeBudget || self.stats.runs == before {
+                break;
+            }
+        }
+        None
+    }
+
     pub fn leaf(
         &mut self,
         dex: &Dex,

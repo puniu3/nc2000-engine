@@ -435,6 +435,7 @@ fn parse_leaf_rollout_adaptive(rest: &str) -> Option<(TempoLeafMode, u16, u32, b
         "s3log" => TempoLeafMode::Stage3Log,
         "s3mlp" => TempoLeafMode::Stage3Mlp,
         "azv" => TempoLeafMode::AzValue,
+        "cfv" => TempoLeafMode::CfValue,
         "bs" | "blindspot" => TempoLeafMode::EvalBlindspot,
         "eval" => TempoLeafMode::EvalStatic,
         _ => return None,
@@ -1614,6 +1615,11 @@ fn build_blind_arm(
             else if let Some(v) = m.strip_prefix("tau") { cfg.backup_tau = v.parse().unwrap(); }
             else if let Some(v) = m.strip_prefix("gap") { cfg.adaptive_min_gap = v.parse().unwrap(); }
             else if let Some(v) = m.strip_prefix("int") { cfg.adaptive_interval = v.parse().unwrap(); }
+            else if m == "eg" { cfg.endgame_runs = 8_192; }
+            else if let Some(v) = m.strip_prefix("eg") { cfg.endgame_runs = v.parse().unwrap(); }
+            else if m == "ver" { cfg.verify_iters = 24_000; }
+            else if let Some(v) = m.strip_prefix("ver") { cfg.verify_iters = v.parse().unwrap(); }
+            else if m == "cfp" { cfg.use_cf_policy = true; }
             else if let Some(v) = m.strip_prefix('k') { cfg.contested_trees = v.parse().unwrap(); }
             else if let Some(v) = m.strip_prefix('t') { cfg.leaf_temp = v.parse().unwrap(); }
             else if let Some(v) = m.strip_prefix('c') { cfg.c = v.parse().unwrap(); }
@@ -1651,6 +1657,11 @@ fn build_blind_arm(
             else if let Some(v) = m.strip_prefix("tau") { cfg.backup_tau = v.parse().unwrap(); }
             else if let Some(v) = m.strip_prefix("gap") { cfg.adaptive_min_gap = v.parse().unwrap(); }
             else if let Some(v) = m.strip_prefix("int") { cfg.adaptive_interval = v.parse().unwrap(); }
+            else if m == "eg" { cfg.endgame_runs = 8_192; }
+            else if let Some(v) = m.strip_prefix("eg") { cfg.endgame_runs = v.parse().unwrap(); }
+            else if m == "ver" { cfg.verify_iters = 24_000; }
+            else if let Some(v) = m.strip_prefix("ver") { cfg.verify_iters = v.parse().unwrap(); }
+            else if m == "cfp" { cfg.use_cf_policy = true; }
             else if let Some(v) = m.strip_prefix('k') { cfg.contested_trees = v.parse().unwrap(); }
             else if let Some(v) = m.strip_prefix('t') { cfg.leaf_temp = v.parse().unwrap(); }
             else if let Some(v) = m.strip_prefix('c') { cfg.c = v.parse().unwrap(); }
@@ -1732,13 +1743,23 @@ fn run_blind_duel(dex: &Dex, args: &[String]) {
     let preview_cache = flag("--preview-cache").map(PathBuf::from);
     let out_path = flag("--out").map(PathBuf::from);
     let max_turns: u16 = flag("--max-turns").map_or(500, |v| v.parse().unwrap());
+    let catalog_path = flag("--catalog").unwrap_or_else(|| "data/team-pool-v2/team-pool.json".to_string());
+    let unseen_only = args.iter().any(|a| a == "--unseen-only");
     let preview_only = args.iter().any(|a| a == "--preview-only");
     let total_pairs_needed = pair_start + pairs;
 
     let root = repo_root();
-    let cat_txt = std::fs::read_to_string(root.join("data/team-pool-v2/team-pool.json"))
-        .expect("read team-pool-v2");
-    let catalog: WeightedCatalog = serde_json::from_str(&cat_txt).expect("parse team-pool-v2");
+    let cat_txt = std::fs::read_to_string(root.join(&catalog_path))
+        .unwrap_or_else(|e| panic!("read catalog {catalog_path}: {e}"));
+    let mut catalog: WeightedCatalog = serde_json::from_str(&cat_txt)
+        .unwrap_or_else(|e| panic!("parse catalog {catalog_path}: {e}"));
+    if unseen_only {
+        catalog.teams.retain(|t| (canonical_team_hash(&t.sets) % 5) == 0);
+        assert!(
+            !catalog.teams.is_empty(),
+            "unseen-only filter left 0 teams in {catalog_path}"
+        );
+    }
     let pool = Arc::new(load_meta_pool(&root.join("data/belief-pool-v3/belief-pool.json")));
 
     let weights: Vec<f64> = catalog
@@ -2636,7 +2657,7 @@ fn run_collect_az(dex: &Dex, args: &[String]) {
                                 play_acts[side] = res.acts[side][0];
                                 continue;
                             }
-                            if cb.turn <= 16 && grng.next_f64() < 0.12 {
+                            if cb.turn <= 12 && grng.next_f64() < 0.12 {
                                 let noop = nc2000_bot::compact_az::compact_interior_noop_mask(
                                     &cb, &table, side, &res.acts[side], k,
                                 );
@@ -2714,6 +2735,695 @@ fn run_collect_az(dex: &Dex, args: &[String]) {
     );
 }
 
+/// Fast 2-minute calibration probe comparing candidate rule-engine-guaranteed `CF-Oracle`
+/// continuation policies against `V_ref` (`M = 16` full `bs-8r@puct:1500` games to exact `cb.outcome`)
+/// on unseen `belief-pool-v3` states + CRN state-perturbation pairs `(s, do(Δs)(s))`.
+fn run_cf_probe(dex: &Dex, args: &[String]) {
+    let flag = |name: &str| -> Option<String> {
+        args.iter()
+            .position(|a| a == name)
+            .and_then(|i| args.get(i + 1).cloned())
+    };
+    let n_states: usize = flag("--states").map_or(120, |v| v.parse().unwrap());
+    let ref_m: usize = flag("--ref-m").map_or(12, |v| v.parse().unwrap());
+    let ref_iters: u32 = flag("--ref-iters").map_or(1000, |v| v.parse().unwrap());
+    let cand_m: usize = flag("--cand-m").map_or(8, |v| v.parse().unwrap());
+    let seed: u64 = flag("--seed").map_or(2026112601, |v| v.parse().unwrap());
+    let threads: usize = flag("--threads").map_or(10, |v| v.parse().unwrap());
+
+    let root = repo_root();
+    let bpool = load_meta_pool(&root.join("data/belief-pool-v3/belief-pool.json"));
+    let mut rng = SplitMix64::new(seed);
+
+    // 1. Sample `n_states` realistic midgame states (100% belief-pool-v3) + CRN perturbation `s'`.
+    struct ProbeItem {
+        table: nc2000_engine::compact::MatchTable,
+        cb: nc2000_engine::compact::CompactBattle,
+        cb_p: nc2000_engine::compact::CompactBattle,
+        kind: u8,
+        pair_base_seed: u64,
+        is_stall: bool,
+    }
+    let mut items: Vec<ProbeItem> = Vec::with_capacity(n_states);
+    while items.len() < n_states {
+        let ta = rng.below(bpool.teams.len());
+        let tb = rng.below(bpool.teams.len());
+        let bseed = rng.battle_seed();
+        let Ok(mut b) = Battle::from_fixture(dex, &bseed, &bpool.teams[ta].sets, &bpool.teams[tb].sets) else {
+            continue;
+        };
+        b.set_log_enabled(false);
+        let tp0_cs = b.legal_choices(dex, 0);
+        let tp1_cs = b.legal_choices(dex, 1);
+        let tp0 = tp0_cs[rng.below(tp0_cs.len())];
+        let tp1 = tp1_cs[rng.below(tp1_cs.len())];
+        if b.apply_choices(dex, [Some(tp0), Some(tp1)]).is_err()
+            || !nc2000_engine::compact::is_compact_tree_supported(&b, dex)
+        {
+            continue;
+        }
+        let (table, mut cb) = nc2000_engine::compact::CompactBattle::from_battle(&b, dex);
+        let cache = nc2000_bot::tempo::TempoMatchCache::build(&cb, &table);
+        let target_turn = (3 + rng.below(26)) as u16;
+        for _ in 0..80 {
+            if cb.outcome != 0 || cb.turn >= target_turn {
+                break;
+            }
+            let mut a0 = [0u8; 7];
+            let mut a1 = [0u8; 7];
+            let n0 = if cb.sides[0].request > 0 { cb.legal_actions(&table, 0, &mut a0).min(6) } else { 0 };
+            let n1 = if cb.sides[1].request > 0 { cb.legal_actions(&table, 1, &mut a1).min(6) } else { 0 };
+            if n0 == 0 && n1 == 0 {
+                break;
+            }
+            let sseed = rng.next();
+            let res = nc2000_bot::compact_az::search_compact_puct_bs(&cb, &table, &cache, 200, sseed);
+            cb.apply_actions(&table, res.best_acts);
+        }
+        if cb.outcome != 0 || cb.sides[0].request != 1 || cb.sides[1].request != 1 {
+            continue;
+        }
+        let n0 = cb.sides[0].alive_mask.count_ones();
+        let n1 = cb.sides[1].alive_mask.count_ones();
+        if n0 + n1 < 3 {
+            continue;
+        }
+        let Some((cb_p, kind)) = nc2000_bot::compact_az::apply_cf_perturbation(&cb, &table, &mut rng) else {
+            continue;
+        };
+        let (x0, _, _, _) = nc2000_bot::compact_az::extract_value_features(&cb, &table, Some(&cache));
+        let is_stall = x0[91] > 0.30;
+        items.push(ProbeItem {
+            table,
+            cb,
+            cb_p,
+            kind,
+            pair_base_seed: rng.next(),
+            is_stall,
+        });
+    }
+
+    // 2. Evaluate `V_ref`, baselines, and 5 candidate `CF-Oracle` continuation policies in parallel.
+    #[derive(Clone, Default)]
+    struct Row {
+        is_stall: bool,
+        kind: u8,
+        v_ref: f64,
+        vp_ref: f64,
+        hy: f64,
+        hyp: f64,
+        azv: f64,
+        azvp: f64,
+        bs: f64,
+        bsp: f64,
+        // 5 candidates: [pnet_t0.35, pnet_t0.50, pnet_t0.70, two_tier_200_4t_t0.50, puct_bs_200_full]
+        c_v: [f64; 5],
+        c_vp: [f64; 5],
+        c_turns: [f64; 5],
+        c_caps: [u32; 5],
+        c_us: [f64; 5],
+    }
+
+    let cands: [(&str, u16, u32, f32, usize, bool); 5] = [
+        ("pnet_t050_m64", 0, 0, 0.50, 64, false),
+        ("2tier_bs_64x2t_m32", 2, 64, 0.50, 32, false),
+        ("2tier_cfv_64x2t_m32", 2, 64, 0.50, 32, true),
+        ("2tier_cfv_96x4t_m32", 4, 96, 0.50, 32, true),
+        ("puct_cfv_128_full_m16", 200, 128, 0.50, 16, true),
+    ];
+
+    let cursor = AtomicUsize::new(0);
+    let t_start = Instant::now();
+    let rows: Vec<Row> = std::thread::scope(|s| {
+        let mut hs = Vec::new();
+        for _ in 0..threads.min(items.len()).max(1) {
+            let (it_r, cur_r) = (&items, &cursor);
+            hs.push(s.spawn(move || {
+                let mut local = Vec::new();
+                let ew = nc2000_bot::EvalWeights::default();
+                loop {
+                    let idx = cur_r.fetch_add(1, Ordering::Relaxed);
+                    if idx >= it_r.len() {
+                        break;
+                    }
+                    let it = &it_r[idx];
+                    let cache = nc2000_bot::tempo::TempoMatchCache::build(&it.cb, &it.table);
+                    let mut r = Row {
+                        is_stall: it.is_stall,
+                        kind: it.kind,
+                        hy: nc2000_bot::tempo::evaluate_hybrid_golf(&it.cb, &it.table, Some(&cache)),
+                        hyp: nc2000_bot::tempo::evaluate_hybrid_golf(&it.cb_p, &it.table, Some(&cache)),
+                        azv: nc2000_bot::compact_az::evaluate_az_value(&it.cb, &it.table, Some(&cache), 1.0),
+                        azvp: nc2000_bot::compact_az::evaluate_az_value(&it.cb_p, &it.table, Some(&cache), 1.0),
+                        bs: nc2000_bot::eval::compact_eval_leaf_blindspot(&it.cb, &it.table, &ew),
+                        bsp: nc2000_bot::eval::compact_eval_leaf_blindspot(&it.cb_p, &it.table, &ew),
+                        ..Row::default()
+                    };
+                    // Ground-truth reference: `ref_m` CRN-paired full games (`bs-8r@puct:ref_iters`)
+                    let mut sum_r = 0.0;
+                    let mut sum_rp = 0.0;
+                    for m in 0..ref_m {
+                        let pseed = it.pair_base_seed ^ (m as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+                        let (v0, _, _) = nc2000_bot::compact_az::cf_rollout_to_outcome(
+                            &it.cb, &it.table, &cache, 200, ref_iters, 0.35, 200, pseed,
+                        );
+                        let (v1, _, _) = nc2000_bot::compact_az::cf_rollout_to_outcome(
+                            &it.cb_p, &it.table, &cache, 200, ref_iters, 0.35, 200, pseed,
+                        );
+                        sum_r += v0;
+                        sum_rp += v1;
+                    }
+                    r.v_ref = sum_r / (ref_m as f64);
+                    r.vp_ref = sum_rp / (ref_m as f64);
+
+                    for (ci, &(_, st, si, temp, cm, u_cfv)) in cands.iter().enumerate() {
+                        let tc0 = Instant::now();
+                        let mut s0 = 0.0;
+                        let mut s1 = 0.0;
+                        let mut tsum = 0.0;
+                        let mut caps = 0u32;
+                        for m in 0..cm {
+                            let pseed = it.pair_base_seed
+                                ^ ((ci as u64 + 1) * 0xBF58_476D_1CE4_E5B9)
+                                ^ (m as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+                            let (v0, dt0, c0) = nc2000_bot::compact_az::cf_rollout_to_outcome_mode(
+                                &it.cb, &it.table, &cache, st, si, temp, 200, pseed, u_cfv,
+                            );
+                            let (v1, dt1, c1) = nc2000_bot::compact_az::cf_rollout_to_outcome_mode(
+                                &it.cb_p, &it.table, &cache, st, si, temp, 200, pseed, u_cfv,
+                            );
+                            s0 += v0;
+                            s1 += v1;
+                            tsum += f64::from(dt0) + f64::from(dt1);
+                            caps += u32::from(c0) + u32::from(c1);
+                        }
+                        r.c_v[ci] = s0 / (cm as f64);
+                        r.c_vp[ci] = s1 / (cm as f64);
+                        r.c_turns[ci] = tsum / ((2 * cm) as f64);
+                        r.c_caps[ci] = caps;
+                        r.c_us[ci] = tc0.elapsed().as_secs_f64() * 1e6; // total us per CRN pair!
+                    }
+                    local.push(r);
+                }
+                local
+            }));
+        }
+        let mut merged = Vec::with_capacity(items.len());
+        for h in hs {
+            merged.extend(h.join().unwrap());
+        }
+        merged
+    });
+
+    let corr = |xs: &[f64], ys: &[f64]| -> f64 {
+        let n = xs.len() as f64;
+        if n < 2.0 { return 0.0; }
+        let mx = xs.iter().sum::<f64>() / n;
+        let my = ys.iter().sum::<f64>() / n;
+        let (mut num, mut vx, mut vy) = (0.0, 0.0, 0.0);
+        for (&x, &y) in xs.iter().zip(ys.iter()) {
+            let dx = x - mx;
+            let dy = y - my;
+            num += dx * dy;
+            vx += dx * dx;
+            vy += dy * dy;
+        }
+        if vx > 1e-12 && vy > 1e-12 { num / (vx.sqrt() * vy.sqrt()) } else { 0.0 }
+    };
+
+    let summarize = |name: &str, pred: &[(f64, f64)], pair_ms: f64, avg_turns: f64, cap_rate: f64| -> Value {
+        let mut xs = Vec::with_capacity(rows.len() * 2);
+        let mut ys = Vec::with_capacity(rows.len() * 2);
+        let mut d_pred = Vec::with_capacity(rows.len());
+        let mut d_ref = Vec::with_capacity(rows.len());
+        let (mut sig_ok, mut sig_tie, mut sig_tot) = (0usize, 0usize, 0usize);
+        let mut mse = 0.0;
+        for (r, &(p0, p1)) in rows.iter().zip(pred.iter()) {
+            xs.push(p0);
+            xs.push(p1);
+            ys.push(r.v_ref);
+            ys.push(r.vp_ref);
+            mse += (p0 - r.v_ref).powi(2) + (p1 - r.vp_ref).powi(2);
+            let dp = p1 - p0;
+            let dr = r.vp_ref - r.v_ref;
+            d_pred.push(dp);
+            d_ref.push(dr);
+            if dr.abs() >= 0.15 {
+                sig_tot += 1;
+                if (dp > 1e-9 && dr > 0.0) || (dp < -1e-9 && dr < 0.0) {
+                    sig_ok += 1;
+                } else if dp.abs() <= 1e-9 {
+                    sig_tie += 1;
+                }
+            }
+        }
+        let rmse = (mse / (xs.len().max(1) as f64)).sqrt();
+        let non_tie = sig_tot.saturating_sub(sig_tie);
+        json!({
+            "name": name,
+            "r_val": (corr(&xs, &ys) * 10000.0).round() / 10000.0,
+            "r_delta": (corr(&d_pred, &d_ref) * 10000.0).round() / 10000.0,
+            "sign_acc": if non_tie > 0 { ((sig_ok as f64 / non_tie as f64) * 1000.0).round() / 10.0 } else { 0.0 },
+            "sign_ok_tie_tot": [sig_ok, sig_tie, sig_tot],
+            "rmse": (rmse * 10000.0).round() / 10000.0,
+            "pair_ms": (pair_ms * 100.0).round() / 100.0,
+            "avg_turns": (avg_turns * 10.0).round() / 10.0,
+            "cap_pct": (cap_rate * 1000.0).round() / 10.0,
+        })
+    };
+
+    let mut report = Vec::new();
+    let bs_p: Vec<(f64, f64)> = rows.iter().map(|r| (r.bs, r.bsp)).collect();
+    let hy_p: Vec<(f64, f64)> = rows.iter().map(|r| (r.hy, r.hyp)).collect();
+    let az_p: Vec<(f64, f64)> = rows.iter().map(|r| (r.azv, r.azvp)).collect();
+    report.push(summarize("baseline_blindspot", &bs_p, 0.0, 0.0, 0.0));
+    report.push(summarize("baseline_hybrid_golf", &hy_p, 0.0, 0.0, 0.0));
+    report.push(summarize("baseline_gen1_azv", &az_p, 0.0, 0.0, 0.0));
+    for (ci, &(cname, _, _, _, cm, _)) in cands.iter().enumerate() {
+        let cp: Vec<(f64, f64)> = rows.iter().map(|r| (r.c_v[ci], r.c_vp[ci])).collect();
+        let avg_ms = rows.iter().map(|r| r.c_us[ci]).sum::<f64>() / (rows.len().max(1) as f64) / 1000.0;
+        let avg_t = rows.iter().map(|r| r.c_turns[ci]).sum::<f64>() / (rows.len().max(1) as f64);
+        let cap_r = rows.iter().map(|r| r.c_caps[ci] as f64).sum::<f64>() / ((rows.len() * 2 * cm).max(1) as f64);
+        report.push(summarize(cname, &cp, avg_ms, avg_t, cap_r));
+    }
+    let stall_cnt = rows.iter().filter(|r| r.is_stall).count();
+    println!(
+        "{}",
+        json!({
+            "cmd": "cf-probe",
+            "states": rows.len(),
+            "stall_states": stall_cnt,
+            "ref_m": ref_m,
+            "ref_iters": ref_iters,
+            "cand_m": cand_m,
+            "wall_s": (t_start.elapsed().as_secs_f64() * 10.0).round() / 10.0,
+            "results": report,
+        })
+    );
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct CfPairRec {
+    team_hash_0: u64,
+    team_hash_1: u64,
+    game_id: u32,
+    turn: u16,
+    n0: u8,
+    n1: u8,
+    kind: u8,
+    _pad: [u8; 3],
+    v_cf: f32,
+    vp_cf: f32,
+    z_game: f32,
+    x0: [f32; nc2000_bot::compact_az::CF_RAW_VALUE_SIDE_DIM],
+    x1: [f32; nc2000_bot::compact_az::CF_RAW_VALUE_SIDE_DIM],
+    xp0: [f32; nc2000_bot::compact_az::CF_RAW_VALUE_SIDE_DIM],
+    xp1: [f32; nc2000_bot::compact_az::CF_RAW_VALUE_SIDE_DIM],
+}
+const _: () = assert!(std::mem::size_of::<CfPairRec>() == 2344);
+
+/// Counterfactual Rule-Engine-Guaranteed CRN Pair & Action-Intervention Collector (`collect-cf`).
+/// Uses 100% `belief-pool-v3` (ZERO `team-pool-v2` overlap!). Teams with `hash % 5 != 0` are
+/// training data; `hash % 5 == 0` are strictly held out for offline unseen-team certification.
+fn run_collect_cf(dex: &Dex, args: &[String]) {
+    let flag = |name: &str| -> Option<String> {
+        args.iter()
+            .position(|a| a == name)
+            .and_then(|i| args.get(i + 1).cloned())
+    };
+    let games: usize = flag("--games").map_or(2000, |v| v.parse().unwrap());
+    let game_start: usize = flag("--game-start").map_or(0, |v| v.parse().unwrap());
+    let states_per_game: usize = flag("--states-per-game").map_or(6, |v| v.parse().unwrap());
+    let crn_m: usize = flag("--crn-m").map_or(32, |v| v.parse().unwrap());
+    let search_turns: u16 = flag("--search-turns").map_or(4, |v| v.parse().unwrap());
+    let search_iters: u32 = flag("--search-iters").map_or(96, |v| v.parse().unwrap());
+    let pnet_temp: f32 = flag("--pnet-temp").map_or(0.50, |v| v.parse().unwrap());
+    let play_iters: u32 = flag("--play-iters").map_or(200, |v| v.parse().unwrap());
+    let act_m: usize = flag("--act-m").map_or(24, |v| v.parse().unwrap());
+    let use_cfv = args.iter().any(|a| a == "--use-cfv");
+    let seed: u64 = flag("--seed").map_or(2026112701, |v| v.parse().unwrap());
+    let threads: usize = flag("--threads").map_or(10, |v| v.parse().unwrap());
+    let out_prefix = flag("--out").unwrap_or_else(|| "/tmp/cf_data".to_string());
+
+    let root = repo_root();
+    let bpool = load_meta_pool(&root.join("data/belief-pool-v3/belief-pool.json"));
+    let bp_hashes: Vec<u64> = bpool.teams.iter().map(|t| canonical_team_hash(&t.sets)).collect();
+
+    struct Job {
+        g: usize,
+        ta: usize,
+        tb: usize,
+        bseed: String,
+        s_seed: u64,
+    }
+    let total_needed = game_start + games;
+    let mut rng = SplitMix64::new(seed);
+    let mut jobs = Vec::with_capacity(games);
+    for g in 0..total_needed {
+        let ta = rng.below(bpool.teams.len());
+        let tb = rng.below(bpool.teams.len());
+        let bseed = rng.battle_seed();
+        let s_seed = rng.next();
+        if g >= game_start {
+            jobs.push(Job { g, ta, tb, bseed, s_seed });
+        }
+    }
+
+    let t0 = Instant::now();
+    let cursor = AtomicUsize::new(0);
+    let (all_pairs, all_pols, finished_games) = std::thread::scope(|s| {
+        let mut hs = Vec::new();
+        for _ in 0..threads.min(jobs.len()).max(1) {
+            let (bp_r, bph_r, jobs_r, cur_r) = (&bpool, &bp_hashes, &jobs, &cursor);
+            hs.push(s.spawn(move || {
+                let mut pairs_out: Vec<CfPairRec> = Vec::new();
+                let mut pols_out: Vec<AzPolRec> = Vec::new();
+                let mut done_g = 0usize;
+                loop {
+                    let idx = cur_r.fetch_add(1, Ordering::Relaxed);
+                    if idx >= jobs_r.len() {
+                        break;
+                    }
+                    let job = &jobs_r[idx];
+                    let sets_a = &bp_r.teams[job.ta].sets;
+                    let sets_b = &bp_r.teams[job.tb].sets;
+                    let th0 = bph_r[job.ta];
+                    let th1 = bph_r[job.tb];
+                    let Ok(mut b) = Battle::from_fixture(dex, &job.bseed, sets_a, sets_b) else {
+                        continue;
+                    };
+                    b.set_log_enabled(false);
+                    let mut grng = SplitMix64::new(job.s_seed);
+
+                    // Realistic diverse Team Preview (35% uniform, 65% best-of-12 FastGolf).
+                    let tp0_cs = b.legal_choices(dex, 0);
+                    let tp1_cs = b.legal_choices(dex, 1);
+                    let pick_tp = |side: usize, cs: &[SearchChoice], opp_cs: &[SearchChoice], grng: &mut SplitMix64| -> SearchChoice {
+                        if cs.len() <= 1 || grng.next_f64() < 0.35 {
+                            return cs[grng.below(cs.len())];
+                        }
+                        let opp_sample = [opp_cs[grng.below(opp_cs.len())], opp_cs[grng.below(opp_cs.len())]];
+                        let mut best_c = cs[0];
+                        let mut best_sc = f64::NEG_INFINITY;
+                        for _ in 0..10 {
+                            let cand = cs[grng.below(cs.len())];
+                            let mut sum = 0.0;
+                            for &oc in &opp_sample {
+                                let mut sim = b.clone();
+                                let picks = if side == 0 { [Some(cand), Some(oc)] } else { [Some(oc), Some(cand)] };
+                                if sim.apply_choices(dex, picks).is_ok() {
+                                    let (tbl, cb) = nc2000_engine::compact::CompactBattle::from_battle(&sim, dex);
+                                    let fg = nc2000_bot::tempo::evaluate_fast_golf(&cb, &tbl, None);
+                                    sum += if side == 0 { fg.win_prob } else { 1.0 - fg.win_prob };
+                                }
+                            }
+                            if sum > best_sc {
+                                best_sc = sum;
+                                best_c = cand;
+                            }
+                        }
+                        best_c
+                    };
+                    let tp0 = pick_tp(0, &tp0_cs, &tp1_cs, &mut grng);
+                    let tp1 = pick_tp(1, &tp1_cs, &tp0_cs, &mut grng);
+                    if b.apply_choices(dex, [Some(tp0), Some(tp1)]).is_err()
+                        || !nc2000_engine::compact::is_compact_tree_supported(&b, dex)
+                    {
+                        continue;
+                    }
+                    let (table, mut cb) = nc2000_engine::compact::CompactBattle::from_battle(&b, dex);
+                    let cache = nc2000_bot::tempo::TempoMatchCache::build(&cb, &table);
+
+                    // Play out full trajectory with `play_iters` search (`--use-cfv` or `bs-8r@puct`) + early exploration,
+                    // recording candidate idle multi-mon states (including late & stall states; cap raised to 360 turns!).
+                    let mut snapshots: Vec<(nc2000_engine::compact::CompactBattle, bool)> = Vec::with_capacity(64);
+                    let mut outcome_opt: Option<f32> = None;
+                    for _ in 0..900 {
+                        if cb.outcome != 0 {
+                            outcome_opt = Some(match cb.outcome { 1 => 1.0, 2 => 0.0, _ => 0.5 });
+                            break;
+                        }
+                        if let Some(v) = nc2000_bot::eval::compact_turn_limit_outcome(&cb, &table) {
+                            outcome_opt = Some(v as f32);
+                            break;
+                        }
+                        if cb.turn > 360 {
+                            break;
+                        }
+                        let mut a_buf = [[0u8; 7]; 2];
+                        let n0 = if cb.sides[0].request > 0 { cb.legal_actions(&table, 0, &mut a_buf[0]).min(6) } else { 0 };
+                        let n1 = if cb.sides[1].request > 0 { cb.legal_actions(&table, 1, &mut a_buf[1]).min(6) } else { 0 };
+                        if n0 == 0 && n1 == 0 {
+                            break;
+                        }
+                        if n0 <= 1 && n1 <= 1 {
+                            let p0 = if n0 == 1 { a_buf[0][0] } else { 7 };
+                            let p1 = if n1 == 1 { a_buf[1][0] } else { 7 };
+                            cb.apply_actions(&table, [p0, p1]);
+                            continue;
+                        }
+                        let al0 = cb.sides[0].alive_mask.count_ones();
+                        let al1 = cb.sides[1].alive_mask.count_ones();
+                        if cb.sides[0].request == 1 && cb.sides[1].request == 1 && al0 + al1 >= 4 && cb.turn >= 2 {
+                            let is_high_lev = cb.turn >= 25 || (al0 == 2 && al1 == 2);
+                            snapshots.push((cb, is_high_lev));
+                        }
+                        let sseed = grng.next();
+                        let res = if use_cfv {
+                            nc2000_bot::compact_az::search_compact_cfv_puct(&cb, &table, &cache, play_iters, sseed)
+                        } else {
+                            nc2000_bot::compact_az::search_compact_puct_bs(&cb, &table, &cache, play_iters, sseed)
+                        };
+                        let mut play_acts = res.best_acts;
+                        if cb.turn <= 10 && grng.next_f64() < 0.14 {
+                            for side in 0..2usize {
+                                let k = (res.n_acts[side] as usize).min(6);
+                                if k >= 2 {
+                                    let noop = nc2000_bot::compact_az::compact_interior_noop_mask(&cb, &table, side, &res.acts[side], k);
+                                    let mut safe = [0u8; 6];
+                                    let mut ns = 0usize;
+                                    for i in 0..k {
+                                        if ((noop >> i) & 1) == 0 && res.visits[side][i] > 0 {
+                                            safe[ns] = res.acts[side][i];
+                                            ns += 1;
+                                        }
+                                    }
+                                    if ns > 0 {
+                                        play_acts[side] = safe[grng.below(ns)];
+                                    }
+                                }
+                            }
+                        }
+                        cb.apply_actions(&table, play_acts);
+                    }
+                    if snapshots.is_empty() {
+                        continue;
+                    }
+                    done_g += 1;
+
+                    // Prioritize high-leverage stall / late / 2v2 snapshots (up to half of `states_per_game`)
+                    // while keeping uniform midgame diversity!
+                    let mut hi_snaps: Vec<nc2000_engine::compact::CompactBattle> = Vec::new();
+                    let mut lo_snaps: Vec<nc2000_engine::compact::CompactBattle> = Vec::new();
+                    for (scb, hi) in snapshots {
+                        if hi { hi_snaps.push(scb); } else { lo_snaps.push(scb); }
+                    }
+                    for v in [&mut hi_snaps, &mut lo_snaps] {
+                        for i in (1..v.len()).rev() {
+                            let j = grng.below(i + 1);
+                            v.swap(i, j);
+                        }
+                    }
+                    let mut picked: Vec<nc2000_engine::compact::CompactBattle> = Vec::with_capacity(states_per_game);
+                    let hi_quota = (states_per_game / 2).min(hi_snaps.len());
+                    picked.extend_from_slice(&hi_snaps[..hi_quota]);
+                    for &s_cb in &lo_snaps {
+                        if picked.len() >= states_per_game { break; }
+                        picked.push(s_cb);
+                    }
+                    for &s_cb in &hi_snaps[hi_quota..] {
+                        if picked.len() >= states_per_game { break; }
+                        picked.push(s_cb);
+                    }
+
+                    for (s_i, &s_cb) in picked.iter().enumerate() {
+                        let Some((sp_cb, kind)) =
+                            nc2000_bot::compact_az::apply_cf_perturbation(&s_cb, &table, &mut grng)
+                        else {
+                            continue;
+                        };
+                        let base_pseed = grng.next();
+                        let mut sum0 = 0.0;
+                        let mut sum1 = 0.0;
+                        for m in 0..crn_m {
+                            let pseed = base_pseed ^ (m as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+                            let (v0, _, _) = nc2000_bot::compact_az::cf_rollout_to_outcome_mode(
+                                &s_cb, &table, &cache, search_turns, search_iters, pnet_temp, 200, pseed, use_cfv,
+                            );
+                            let (v1, _, _) = nc2000_bot::compact_az::cf_rollout_to_outcome_mode(
+                                &sp_cb, &table, &cache, search_turns, search_iters, pnet_temp, 200, pseed, use_cfv,
+                            );
+                            sum0 += v0;
+                            sum1 += v1;
+                        }
+                        let v_cf = (sum0 / (crn_m as f64)) as f32;
+                        let vp_cf = (sum1 / (crn_m as f64)) as f32;
+                        let z_game = outcome_opt.unwrap_or(v_cf);
+                        let (x0, x1) = nc2000_bot::compact_az::extract_raw_value_features(&s_cb, &table, Some(&cache));
+                        let (xp0, xp1) = nc2000_bot::compact_az::extract_raw_value_features(&sp_cb, &table, Some(&cache));
+                        pairs_out.push(CfPairRec {
+                            team_hash_0: th0,
+                            team_hash_1: th1,
+                            game_id: job.g as u32,
+                            turn: s_cb.turn,
+                            n0: s_cb.sides[0].alive_mask.count_ones() as u8,
+                            n1: s_cb.sides[1].alive_mask.count_ones() as u8,
+                            kind,
+                            _pad: [0; 3],
+                            v_cf,
+                            vp_cf,
+                            z_game,
+                            x0,
+                            x1,
+                            xp0,
+                            xp1,
+                        });
+
+                        // Also run 1-sided CRN action intervention `do(a_i)` on the first 2 sampled states per game!
+                        if act_m > 0 && s_i < 2 {
+                            let side = grng.below(2);
+                            let opp = 1 - side;
+                            let mut my_a = [0u8; 7];
+                            let mut opp_a = [0u8; 7];
+                            let km = s_cb.legal_actions(&table, side, &mut my_a).min(6);
+                            let ko = s_cb.legal_actions(&table, opp, &mut opp_a).min(6);
+                            if km >= 2 && ko >= 1 {
+                                let ((p_me, m_me), (p_op, m_op)) = if side == 0 {
+                                    nc2000_bot::compact_az::policy_priors_both(&s_cb, &table, Some(&cache), &my_a, km, &opp_a, ko, 0.0)
+                                } else {
+                                    let (r0, r1) = nc2000_bot::compact_az::policy_priors_both(&s_cb, &table, Some(&cache), &opp_a, ko, &my_a, km, 0.0);
+                                    (r1, r0)
+                                };
+                                let safe_me: Vec<usize> = (0..km).filter(|&i| ((m_me >> i) & 1) == 0).collect();
+                                let safe_op: Vec<usize> = (0..ko).filter(|&i| ((m_op >> i) & 1) == 0).collect();
+                                if safe_me.len() >= 2 && !safe_op.is_empty() {
+                                    // q_eval = 0.75 * P_net(opp) + 0.25 * Uniform(safe_opp)
+                                    let u_op = 1.0 / (safe_op.len() as f64);
+                                    let mut q_op = [0.0f64; 6];
+                                    let mut q_sum = 0.0;
+                                    for &j in &safe_op {
+                                        let w = 0.75 * f64::from(p_op[j]) + 0.25 * u_op;
+                                        q_op[j] = w;
+                                        q_sum += w;
+                                    }
+                                    let mut q_acc = [0.0f64; 6];
+                                    let mut v_cnt = [0u32; 6];
+                                    let act_base_seed = grng.next();
+                                    for m in 0..act_m {
+                                        let m_seed = act_base_seed ^ (m as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+                                        let mut mrng = SplitMix64::new(m_seed);
+                                        let mut r = mrng.next_f64() * q_sum;
+                                        let mut opp_j = safe_op[0];
+                                        for &j in &safe_op {
+                                            r -= q_op[j];
+                                            if r <= 0.0 {
+                                                opp_j = j;
+                                                break;
+                                            }
+                                        }
+                                        let a_opp = opp_a[opp_j];
+                                        let step_seed = mrng.next();
+                                        let roll_seed = mrng.next();
+                                        for &i in &safe_me {
+                                            let mut sim = s_cb;
+                                            let mut prng = nc2000_engine::prng::Prng::new(step_seed);
+                                            let qc = Battle::roll_quick_claw_with(table.ruleset, &mut prng);
+                                            sim.quick_claw_roll = (qc[0] as u8) | ((qc[1] as u8) << 1);
+                                            sim.prng_seed = prng.seed();
+                                            let acts = if side == 0 { [my_a[i], a_opp] } else { [a_opp, my_a[i]] };
+                                            sim.apply_actions(&table, acts);
+                                            let (v0, _, _) = nc2000_bot::compact_az::cf_rollout_to_outcome_mode(
+                                                &sim, &table, &cache, 2, search_iters, pnet_temp, 200, roll_seed, use_cfv,
+                                            );
+                                            let mine = if side == 0 { v0 } else { 1.0 - v0 };
+                                            q_acc[i] += mine;
+                                            v_cnt[i] += 1;
+                                        }
+                                    }
+                                    let (ctx, af7) = nc2000_bot::compact_az::extract_policy_features(
+                                        &s_cb, &table, Some(&cache), side, &my_a, km,
+                                    );
+                                    let mut af6 = [[0.0f32; nc2000_bot::compact_az::AZ_POLICY_ACT_DIM]; 6];
+                                    af6.copy_from_slice(&af7[..6]);
+                                    let mut q6 = [0.0f32; 6];
+                                    let mut max_q = 0.0f32;
+                                    for &i in &safe_me {
+                                        let qi = (q_acc[i] / f64::from(v_cnt[i].max(1))) as f32;
+                                        q6[i] = qi;
+                                        if qi > max_q {
+                                            max_q = qi;
+                                        }
+                                    }
+                                    let (th_me, th_opp) = if side == 0 { (th0, th1) } else { (th1, th0) };
+                                    pols_out.push(AzPolRec {
+                                        team_hash: th_me,
+                                        opp_hash: th_opp,
+                                        game_id: job.g as u32,
+                                        turn: s_cb.turn,
+                                        n_acts: km as u8,
+                                        noop_mask: m_me,
+                                        req: s_cb.sides[side].request,
+                                        side: side as u8,
+                                        n0: s_cb.sides[0].alive_mask.count_ones() as u8,
+                                        n1: s_cb.sides[1].alive_mask.count_ones() as u8,
+                                        v_root: max_q,
+                                        ctx,
+                                        af: af6,
+                                        visits: v_cnt,
+                                        q: q6,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                (pairs_out, pols_out, done_g)
+            }));
+        }
+        let mut ap = Vec::new();
+        let mut a_pol = Vec::new();
+        let mut dg = 0usize;
+        for h in hs {
+            let (p, pl, d) = h.join().unwrap();
+            ap.extend(p);
+            a_pol.extend(pl);
+            dg += d;
+        }
+        (ap, a_pol, dg)
+    });
+
+    write_pod_slice(&PathBuf::from(format!("{out_prefix}.cfpair.bin")), &all_pairs);
+    if !all_pols.is_empty() {
+        write_pod_slice(&PathBuf::from(format!("{out_prefix}.cfpol.bin")), &all_pols);
+    }
+    println!(
+        "{}",
+        json!({
+            "cmd": "collect-cf",
+            "games": games,
+            "finished_games": finished_games,
+            "game_start": game_start,
+            "crn_m": crn_m,
+            "search_turns": search_turns,
+            "search_iters": search_iters,
+            "pair_rows": all_pairs.len(),
+            "pol_rows": all_pols.len(),
+            "wall_s": (t0.elapsed().as_secs_f64() * 100.0).round() / 100.0,
+        })
+    );
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let dex = load_dex();
@@ -2722,6 +3432,8 @@ fn main() {
         Some("blind-duel") => run_blind_duel(&dex, &args[1..]),
         Some("collect-stage3") => run_collect_stage3(&dex, &args[1..]),
         Some("collect-az") => run_collect_az(&dex, &args[1..]),
+        Some("collect-cf") => run_collect_cf(&dex, &args[1..]),
+        Some("cf-probe") => run_cf_probe(&dex, &args[1..]),
         Some("scale") => run_scale_suite(&dex, &args[1..]),
         Some("v2bench") => run_v2_bench(&dex, &args[1..]),
         Some("rolloutbench") => run_rollout_bench(&dex, &args[1..]),
