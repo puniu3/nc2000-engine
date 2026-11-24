@@ -3290,6 +3290,29 @@ impl BlindSearch {
         Some(DecisionPolicy::pure("legacy", best))
     }
 
+    /// Read-only Turn-0 execution distribution for the active preview searcher.
+    /// When `SteppedCfPreview` is active, exposes its exact `LcbGatedMixed`
+    /// distribution without modifying `best()` or `PolicyMode::Legacy`.
+    pub fn preview_execution_policy(
+        &self,
+    ) -> Option<crate::decision::DecisionPolicy<SearchChoice>> {
+        use crate::decision::DecisionPolicy;
+        if self.is_preview() {
+            if let Some(ref cfp) = self.cf_preview {
+                let entries = cfp.execution_policy(self.done);
+                let source = if entries.len() > 1 {
+                    "cf-preview-mix"
+                } else {
+                    "cf-preview-pure"
+                };
+                if let Ok(policy) = DecisionPolicy::new(source, entries) {
+                    return Some(policy);
+                }
+            }
+        }
+        Some(DecisionPolicy::pure("legacy", self.best()?))
+    }
+
     pub fn root_policy_evidence(&self) -> (Vec<bool>, Vec<crate::root_policy::RootType>) {
         let eligible = self.eligible_flags();
         let types = self

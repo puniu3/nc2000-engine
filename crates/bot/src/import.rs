@@ -3151,6 +3151,36 @@ impl ProtocolAgent {
         Some(DecisionPolicy::pure("request-projected", target))
     }
 
+    /// Read-only Turn-0 execution distribution in PS request syntax.
+    /// When Team Preview uses `SteppedCfPreview`, returns its exact
+    /// `LcbGatedMixed` distribution without changing `best()` or
+    /// `decision_policy(_, PolicyMode::Legacy)`.
+    pub fn preview_execution_policy(
+        &self,
+        dex: &Dex,
+    ) -> Option<crate::decision::DecisionPolicy<String>> {
+        use crate::decision::DecisionPolicy;
+        if let Some(input) = &self.forced {
+            return Some(DecisionPolicy::pure("forced", input.clone()));
+        }
+        if let Some(action) = self.baked {
+            return Some(DecisionPolicy::pure(
+                "preview-sampled",
+                action.to_input(dex),
+            ));
+        }
+        let search = self.search.as_ref()?;
+        let req = self.request.as_ref()?;
+        if req.team_preview {
+            return Some(
+                search
+                    .preview_execution_policy()?
+                    .map(|&action| ps_input(dex, action)),
+            );
+        }
+        self.decision_policy(dex, crate::decision::PolicyMode::Legacy)
+    }
+
     /// JSON belief info (mirrors the wasm `BlindSearcher.beliefInfo`).
     pub fn belief_info(&self) -> String {
         match &self.belief {

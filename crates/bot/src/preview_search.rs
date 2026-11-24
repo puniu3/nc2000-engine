@@ -3157,8 +3157,9 @@ impl SteppedCfPreview {
         (own_orig_idx, opp_choice, val0, val_mine, depth)
     }
 
-    /// Deterministic `LcbGatedMixed` Bayesian RM+ choice readout over the full 100% posterior.
-    pub(crate) fn best_choice(&self, decision_seed: u64, done: u32) -> SearchChoice {
+    /// Solve the `LcbGatedMixed` Bayesian RM+ readout over the full 100% posterior.
+    /// Returns `(use_mix, best_pure_r, p_mix)` without mutating search state.
+    fn solve_execution_mix(&self, done: u32) -> (bool, usize, Vec<f64>) {
         let sweeps = if done >= 4096 {
             self.cfg.rm_sweeps_final
         } else {
@@ -3245,6 +3246,35 @@ impl SteppedCfPreview {
             && mixed_guarantee > pure_guarantee + min_mix_margin
             && mixed_guarantee_lcb > pure_guarantee - 0.005;
 
+        (use_mix, best_pure_r, p_mix)
+    }
+
+    /// Read-only `LcbGatedMixed` execution distribution over canonical legal preview picks.
+    /// Exact match to the distribution sampled by `best_choice(decision_seed, done)`.
+    pub(crate) fn execution_policy(&self, done: u32) -> Vec<(SearchChoice, f64)> {
+        let (use_mix, best_pure_r, p_mix) = self.solve_execution_mix(done);
+        if !use_mix {
+            let choice = self.my_acts[self.own_canon[self.s_me[best_pure_r]].0];
+            return vec![(choice, 1.0)];
+        }
+        let mut out = Vec::with_capacity(p_mix.len());
+        for (r, &pr) in p_mix.iter().enumerate() {
+            if pr > 0.0 {
+                let choice = self.my_acts[self.own_canon[self.s_me[r]].0];
+                out.push((choice, pr));
+            }
+        }
+        if out.is_empty() {
+            let choice = self.my_acts[self.own_canon[self.s_me[best_pure_r]].0];
+            vec![(choice, 1.0)]
+        } else {
+            out
+        }
+    }
+
+    /// Deterministic `LcbGatedMixed` Bayesian RM+ choice readout over the full 100% posterior.
+    pub(crate) fn best_choice(&self, decision_seed: u64, done: u32) -> SearchChoice {
+        let (use_mix, best_pure_r, p_mix) = self.solve_execution_mix(done);
         let picked_r = if use_mix {
             let draw = SplitMix64::new(decision_seed ^ u64::from(done)).next_f64();
             sample_dist(&p_mix, draw)
@@ -3669,5 +3699,116 @@ mod tests {
         let chosen = s_masked.best().unwrap();
         let chosen_idx = s_masked.actions().iter().position(|&c| c == chosen).unwrap();
         assert!(allowed[chosen_idx], "best() returned masked preview action");
+    }
+
+    #[test]
+    fn stepped_cf_preview_execution_policy_matches_best_choice_and_protocol_agent() {
+        use crate::decision::{DecisionPolicy, PolicyMode};
+        use crate::player::PlayerChannel;
+        use crate::ProtocolAgent;
+
+        let dex = conformance::load_dex();
+        let t_a = vec![
+            mk("Snorlax", 55, "Leftovers", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+            mk("Zapdos", 50, "Leftovers", &["Thunderbolt", "Hidden Power Ice", "Rest", "Sleep Talk"]),
+            mk("Cloyster", 50, "Leftovers", &["Surf", "Spikes", "Explosion", "Rapid Spin"]),
+            mk("Marowak", 50, "Thick Club", &["Earthquake", "Rock Slide", "Swords Dance", "Hidden Power Bug"]),
+            mk("Gengar", 50, "Leftovers", &["Thunderbolt", "Ice Punch", "Hypnosis", "Explosion"]),
+            mk("Skarmory", 50, "Leftovers", &["Drill Peck", "Whirlwind", "Rest", "Curse"]),
+        ];
+        let t_b = vec![
+            mk("Raikou", 50, "Leftovers", &["Thunderbolt", "Hidden Power Ice", "Roar", "Rest"]),
+            mk("Suicune", 50, "Leftovers", &["Surf", "Ice Beam", "Rest", "Sleep Talk"]),
+            mk("Exeggutor", 50, "Leftovers", &["Psychic", "Giga Drain", "Sleep Powder", "Explosion"]),
+            mk("Tyranitar", 50, "Leftovers", &["Rock Slide", "Crunch", "Earthquake", "Pursuit"]),
+            mk("Snorlax", 55, "Leftovers", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+            mk("Umbreon", 50, "Leftovers", &["Pursuit", "Charm", "Rest", "Baton Pass"]),
+        ];
+        let pool = MetaPool {
+            teams: vec![MetaTeam { id: "tb".into(), sets: t_b.clone(), weight: Some(1.0) }],
+        };
+        let mut b = Battle::from_fixture(&dex, "1,2,3,4", &t_a, &t_b).unwrap();
+        let (mut lp, mut obs) = LocalPlayer::new_with_own_sets(&b, &dex, 0, t_a.clone()).unwrap();
+        lp.observe(&b, &dex, &mut obs).unwrap();
+        let mut belief = Belief::new(&dex, &pool, &obs);
+        belief.sync(&dex, &obs);
+        let pos = lp.position(&dex, &mut belief, &obs, &mut SplitMix64::new(99)).unwrap();
+
+        let mut rng = SplitMix64::new(4242);
+        let mut model_clone = pos.model().clone();
+        let acts = model_clone.legal_choices(&dex, 0);
+        let mut stepped = SteppedCfPreview::try_new(
+            pos.model(),
+            &dex,
+            &belief,
+            &obs,
+            0,
+            &acts,
+            None,
+            0.4,
+            &mut rng,
+        )
+        .unwrap();
+        for _ in 0..512 {
+            stepped.step_one(&mut rng);
+        }
+
+        // Test both pure gate (high margin) and mixed gate (negative margin) for exact parity.
+        for (min_margin, expect_pure) in [(10.0, true), (-1.0, false)] {
+            stepped.cfg.policy_mode = PreviewPolicyMode::LcbGatedMixed {
+                min_mix_margin: min_margin,
+                dust_ratio: 0.08,
+                lcb_z: 0.0,
+            };
+            let done = 512u32;
+            let entries = stepped.execution_policy(done);
+            assert!(!entries.is_empty());
+            let sum: f64 = entries.iter().map(|(_, p)| *p).sum();
+            assert!((sum - 1.0).abs() < 1e-12, "policy sum {sum} != 1.0");
+            assert!(entries.iter().all(|(_, p)| p.is_finite() && *p > 0.0));
+            if expect_pure {
+                assert_eq!(entries.len(), 1, "high margin must yield pure execution policy");
+            }
+            let dp = DecisionPolicy::new("test", entries.iter().copied()).unwrap();
+            for seed in 0u64..256 {
+                let draw = SplitMix64::new(seed ^ u64::from(done)).next_f64();
+                assert_eq!(
+                    dp.sample(draw),
+                    stepped.best_choice(seed, done),
+                    "execution_policy sample diverged from best_choice at seed={seed}, margin={min_margin}"
+                );
+            }
+        }
+
+        // Verify ProtocolAgent::preview_execution_policy preserves PolicyMode::Legacy untouched.
+        let mut ch = PlayerChannel::new(0);
+        let frame = ch.frame(&mut b, &dex).unwrap();
+        let req_json = serde_json::to_string(&frame.request).unwrap();
+        let mut agent = ProtocolAgent::new(&dex, 0, pool, RmConfig { c: 0.4, ..Default::default() }, 777);
+        agent.set_own_team(t_a);
+        for line in &frame.lines {
+            agent.push_line(&dex, line);
+        }
+        assert!(agent.on_request(&dex, &req_json).unwrap());
+        agent.step(&dex, 256).unwrap();
+
+        let legacy_before = agent.decision_policy(&dex, PolicyMode::Legacy).unwrap();
+        let exec_pol = agent.preview_execution_policy(&dex).unwrap();
+        let legacy_after = agent.decision_policy(&dex, PolicyMode::Legacy).unwrap();
+
+        assert_eq!(legacy_before, legacy_after, "preview_execution_policy must be strictly read-only");
+        assert_eq!(legacy_before.source(), "legacy");
+        assert_eq!(legacy_before.actions().len(), 1);
+        assert!(
+            matches!(exec_pol.source(), "cf-preview-mix" | "cf-preview-pure"),
+            "unexpected source: {}",
+            exec_pol.source()
+        );
+        let legacy_input = &legacy_before.actions()[0].input;
+        assert!(
+            exec_pol.actions().iter().any(|a| &a.input == legacy_input),
+            "legacy best choice {legacy_input} not in execution policy support {:?}",
+            exec_pol.actions()
+        );
     }
 }
