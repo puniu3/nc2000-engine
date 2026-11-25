@@ -4,6 +4,7 @@ Generated deterministically by [`tools/build-team-products-v4.js`](../../tools/b
 
 Full experimental evidence:
 - **6-Round `7,776`-Game `policy-v2` Nash Equilibrium & 32-Shell Closure Certification**: [`docs/reports/policy-v2-nash-certification.md`](../../docs/reports/policy-v2-nash-certification.md)
+- **Round 2.5 Same-Frame Support & Borderline Camouflage Study (`8,016g`, 4-Arm CRN)**: [`docs/reports/policy-v2-camouflage-study.md`](../../docs/reports/policy-v2-camouflage-study.md)
 - **Local Single-Slot Saturation & Decoy Audit (`9,112g`, `cf_party_ab`)**: [`docs/reports/cf-party-ab-v4-exploration.md`](../../docs/reports/cf-party-ab-v4-exploration.md)
 - **Initial `v3 -> v4` Catalog Refresh & Step 4 True-CRN Audit (`10,152g`)**: [`docs/reports/policy-v2-team-pool-refresh.md`](../../docs/reports/policy-v2-team-pool-refresh.md)
 
