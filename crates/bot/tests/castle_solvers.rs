@@ -657,13 +657,15 @@ fn relay_bp_receiver_after_switch_in_burn_poison_and_castle_pursuit_and_turn_lim
         "Castle 2x Pursuit on fast BP receiver ({surp_cs}) must not exceed PS ({surp_ps})"
     );
 
-    // At Castle turn 80 (L_TURN = 80), apply_relay_leaf_lift returns v_base_p0 unchanged (no turns left).
-    cb_cs_p.turn = 80;
+    // Bot 80T adaptation is abolished: relay leaf lift does not damp by turn number.
     let v_base = 0.42;
-    assert_eq!(
-        apply_relay_leaf_lift(&cb_cs_p, &t_cs_p, &w, v_base),
-        v_base,
-        "At L_TURN=80, relay leaf lift must be zero"
+    cb_cs_p.turn = 10;
+    let lift_early = apply_relay_leaf_lift(&cb_cs_p, &t_cs_p, &w, v_base);
+    cb_cs_p.turn = 80;
+    let lift_late = apply_relay_leaf_lift(&cb_cs_p, &t_cs_p, &w, v_base);
+    assert!(
+        (lift_early - lift_late).abs() < 1e-12,
+        "Relay leaf lift must be turn-invariant after abolishing 80T adaptation ({lift_early} vs {lift_late})"
     );
 }
 
@@ -975,7 +977,7 @@ fn turn_limit_80_judge_and_cache_separation_across_solvers_and_compiled_preview(
     b_cs.sides[1].pokemon_left = 1;
     assert_eq!(castle_judge_value_battle(&b_cs), 1.0);
 
-    // Turn-limit proximity scoring in compact_eval01: HP-ratio leader gets stronger score at turn 78 vs turn 10.
+    // Bot 80T proximity adaptation is abolished: compact_eval01 is invariant to turn < lim.
     let mut b_prox = start_battle(
         &dex,
         Ruleset::castle_tournament(),
@@ -990,8 +992,8 @@ fn turn_limit_80_judge_and_cache_separation_across_solvers_and_compiled_preview(
     cb_pr.turn = 78;
     let v_late = compact_eval01(&cb_pr, &t_pr, &w);
     assert!(
-        v_late > v_early,
-        "Castle eval must reward HP-ratio lead more strongly near L_TURN=80 ({v_late} vs {v_early})"
+        (v_late - v_early).abs() < 1e-12,
+        "Castle eval must NOT inject pre-limit 80T proximity shaping ({v_late} vs {v_early})"
     );
 
     // MCTS chooses cleanly at turn = 80 without panicking or assuming 1000-turn cap.
@@ -1308,60 +1310,10 @@ fn audit_fixes_qc_mask_stat_parity_dragon_items_foresight_2v1_lturn_sandstorm_bp
         "Castle Foresight with acc(-2) < eva(+1) must zero both stages (h_no={h_no_fore}, h_yes={h_with_fore}, miss={miss_fore})"
     );
 
-    // 5. 2v1 Castle `L_TURN=80` alive-count judge in `linear.rs` (both non-heal and heal Bellman paths)
-    //    plus cache separation between 2v1 and 1v1 at turns 79 and 80!
-    let low_mon = make_set("Snorlax", 50, "No Item", &["Splash"]);
-    let low_heal = make_set("Starmie", 50, "No Item", &["Splash", "Recover"]);
-    let hi_mon = make_set("Blissey", 50, "No Item", &["Splash"]);
-    let hi_heal = make_set("Blissey", 50, "No Item", &["Splash", "Soft-Boiled"]);
-    for (p1s, p2s) in [
-        (vec![low_mon.clone(), low_mon.clone()], vec![hi_mon.clone()]),
-        (vec![low_heal.clone(), low_heal.clone()], vec![hi_heal.clone()]),
-    ] {
-        for turn in [79u16, 80u16] {
-            let b21 = start_battle(&dex, Ruleset::castle_tournament(), &p1s, &p2s);
-            let (t21, mut cb21) = CompactBattle::from_battle(&b21, &dex);
-            cb21.turn = turn;
-            // At 15% HP, even a 50% Recover only reaches 65% (< 100%) on turn 80,
-            // while at turn 79 with Recover (50%), two Recovers would tie 100% vs 100% -> test 10% HP at turn 80
-            // and 15% HP with Recover disabled/enabled appropriately.
-            cb21.mons[0].hp_pool[0] = (t21.mons[0].maxhp / 5).max(1); // 20% HP
-            cb21.mons[1].hp_pool[0] = (t21.mons[1].maxhp / 5).max(1); // 20% HP
-            cb21.mons[3].hp_pool[0] = t21.mons[3].maxhp; // 100% HP
-            if turn == 79 {
-                // Limit to 1 turn of healing gap on Starmie by setting Recover PP to 1 -> max 70% < 100%
-                cb21.mons[0].pp[1] = 1;
-            }
-            let r21 = toeplitz_coupled_race(&cb21, &t21, 0, 0, 1, 0);
-            assert!(
-                r21 > 0.99,
-                "2v1 Castle turn={turn} must use alive-count judge (+1.0), NOT 1v1 HP ratio, got {r21}"
-            );
-            // Flip to 1v2: Side 0 has 1 mon at 100%, Side 1 has 2 mons at 20% -> Side 0 loses (-1.0)!
-            // Also drop Side 0 bench -> true 1v1 at same turn with identical active mons -> HP ratio gives <= 0!
-            cb21.sides[0].alive_mask = 0b001;
-            cb21.mons[1].hp_pool[0] = 0;
-            if turn == 80 {
-                let r11 = toeplitz_coupled_race(&cb21, &t21, 0, 0, 1, 0);
-                assert!(
-                    r11 < -0.99,
-                    "1v1 Castle turn=80 with 20% (+Recover=70%) vs 100% HP must lose (-1.0) without colliding with 2v1 cache, got {r11}"
-                );
-            } else {
-                // At turn 79 with no heal (Splash vs Splash), 1v1 is -1.0; with Recover (2 turns -> 100% tie) it's 0.0 (< 0.5, strictly != +1.0 from 2v1 cache!).
-                let r11 = toeplitz_coupled_race(&cb21, &t21, 0, 0, 1, 0);
-                assert!(
-                    r11 < 0.01,
-                    "1v1 Castle turn=79 must NOT collide with 2v1 (+1.0) Bellman cache, got {r11}"
-                );
-            }
-        }
-    }
-
-    // 6. Sandstorm + AfterMoveSelf residual priority in `linear.rs::mutual_eot_payoff`.
+    // 5. Sandstorm + AfterMoveSelf residual priority in `linear.rs::mutual_eot_payoff`.
     let fast_s = make_set("Zapdos", 55, "No Item", &["Splash"]);
     let slow_s = make_set("Snorlax", 50, "No Item", &["Splash"]);
-    let b_sand_brn = start_battle(&dex, Ruleset::castle_tournament(), &[fast_s], &[slow_s]);
+    let b_sand_brn = start_battle(&dex, Ruleset::castle_free(), &[fast_s], &[slow_s]);
     let (t_sb, mut cb_sb) = CompactBattle::from_battle(&b_sand_brn, &dex);
     cb_sb.weather_kind = CompactWeather::Sandstorm;
     cb_sb.weather_turns = 5;
@@ -1382,7 +1334,7 @@ fn audit_fixes_qc_mask_stat_parity_dragon_items_foresight_2v1_lturn_sandstorm_bp
         "When both are Burned in Castle Sandstorm, faster mover takes AfterMoveSelf first and loses: {r_both_brn}"
     );
 
-    // 7. Turn-80 directed BP `alive_mask` guard in `relay.rs` & `mcts.rs` + `best_midturn_bp_switch` Pursuit flag.
+    // 6. Directed BP `alive_mask` preservation under explicit `castle-tournament` turn 80 + `best_midturn_bp_switch` Pursuit flag.
     let passer = make_set("Jolteon", 55, "No Item", &["Baton Pass", "Agility", "Substitute", "Thunderbolt"]);
     let recv_weak = make_set("Alakazam", 50, "No Item", &["Psychic"]);
     let recv_bulk = make_set("Skarmory", 50, "No Item", &["Drill Peck"]);
@@ -1402,23 +1354,6 @@ fn audit_fixes_qc_mask_stat_parity_dragon_items_foresight_2v1_lturn_sandstorm_bp
     cb_bp80.mons[2].hp_pool[0] = t_bp80.mons[2].maxhp / 5;
     cb_bp80.mons[3].hp_pool[0] = t_bp80.mons[3].maxhp;
     cb_bp80.mons[4].hp_pool[0] = t_bp80.mons[4].maxhp;
-    let mut piv = [1u8; 2];
-    let mut rng = nc2000_bot::SplitMix64::new(7);
-    let rel_dec = nc2000_bot::relay::rollout_relay_pick(
-        &cb_bp80,
-        &t_bp80,
-        &EvalWeights::default(),
-        0,
-        &[0, 1, 2, 3, 5, 6],
-        0,
-        &mut piv,
-        true,
-        &mut rng,
-    );
-    assert!(
-        matches!(rel_dec, nc2000_bot::relay::RelayRolloutDecision::NotApplicable),
-        "rollout_relay_pick must return NotApplicable at Castle turn == 80"
-    );
     // Directly invoke `apply_compact_actions_with_bp_target` at turn 80 with directed BP code to slot 2 (Skarmory):
     // Side 0 has 3 alive mons vs Side 1's 2 alive mons, so Turn-80 judge MUST keep alive_mask == 0b111 -> P1Win!
     let mut cb_bp_test = cb_bp80;
@@ -1517,5 +1452,114 @@ fn audit_fixes_qc_mask_stat_parity_dragon_items_foresight_2v1_lturn_sandstorm_bp
         sk.mean_depth() <= 1.5,
         "SkuctSearch at Castle turn 80 must clamp turn_cap to L_TURN=80 (depth={})",
         sk.mean_depth()
+    );
+}
+
+#[test]
+fn castle_unlimited_default_no_hidden_cap_and_solver_cycle_safety() {
+    let dex = conformance::load_dex();
+
+    // 1. Default Castle config and generic aliases resolve to unlimited (`castle-free`, `turn_limit: None`).
+    assert_eq!(CastleOverlayConfig::default(), CastleOverlayConfig::free());
+    assert_eq!(CastleOverlayConfig::default().turn_limit, None);
+    for alias in ["castle", "castle-pbs", "pbs", "pbs-nc2000", "castle-free", "pbs-free"] {
+        assert_eq!(
+            Ruleset::parse_id(alias),
+            Some(Ruleset::castle_free()),
+            "alias `{alias}` must resolve to castle-free"
+        );
+    }
+    assert_eq!(
+        Ruleset::parse_id("castle-tournament"),
+        Some(Ruleset::castle_tournament())
+    );
+    assert_eq!(Ruleset::castle_free().canonical_id(), "castle-free");
+    assert_eq!(Ruleset::castle_free().turn_limit(), None);
+
+    // 2. Truly unlimited: no hidden 80-turn or 1000-turn adjudication in Battle, CompactBattle, or eval.
+    let gengar = make_set("Gengar", 50, "No Item", &["Splash"]);
+    let mut b = start_battle(&dex, Ruleset::castle_free(), &[gengar.clone()], &[gengar]);
+    for &t in &[80u16, 81, 1000, 1001, 1076, u16::MAX] {
+        b.turn = t;
+        assert_eq!(turn_limit_outcome_value(&b), None, "castle-free must not adjudicate at turn {t}");
+        let (table, cb) = CompactBattle::from_battle(&b, &dex);
+        assert_eq!(
+            compact_turn_limit_outcome(&cb, &table),
+            None,
+            "compact castle-free must not adjudicate at turn {t}"
+        );
+    }
+
+    // 3. `Battle::end_turn` saturates at `u16::MAX` without panicking or wrapping to 0.
+    b.turn = u16::MAX;
+    b.choose(&dex, 0, "move splash").unwrap();
+    b.choose(&dex, 1, "move splash").unwrap();
+    assert_eq!(b.turn, u16::MAX);
+    assert_eq!(b.outcome(), None);
+
+    // 4. Unlimited-turn cycle safety in `ExactSolver`, `BoundSolver`, and `stall.rs`:
+    //    2v2 Splash-only mirror under `castle-free`: switching costs 0 PP (true infinite cycle)
+    //    and Splash deals 0 damage, so no turn-limit adjudication can ever resolve the game.
+    let g0 = make_set("Gengar", 50, "No Item", &["Splash"]);
+    let b0 = make_set("Blissey", 50, "No Item", &["Splash"]);
+    let mut b_inf = start_battle(
+        &dex,
+        Ruleset::castle_free(),
+        &[g0.clone(), b0.clone()],
+        &[g0, b0],
+    );
+
+    // Normal turn: ExactSolver & BoundSolver must terminate cleanly with full-uncertainty [0, 1].
+    let mut ex = ExactSolver::new(
+        &dex,
+        ExactConfig {
+            horizons: &[1, 2],
+            work_budget: 50_000,
+            ..ExactConfig::default()
+        },
+    );
+    let cert = ex.solve(&b_inf).expect("ExactSolver must terminate on unlimited cycle");
+    assert!((cert.lo - 0.0).abs() < 1e-9 && (cert.hi - 1.0).abs() < 1e-9);
+
+    let mut bs = BoundSolver::new(
+        &dex,
+        BoundConfig {
+            work_budget: 200,
+            node_budget: 200,
+            ..BoundConfig::default()
+        },
+    );
+    let rep = bs.solve(&b_inf, None);
+    assert!((rep.bounds.lo - 0.0).abs() < 1e-9 && (rep.bounds.hi - 1.0).abs() < 1e-9);
+
+    // Near-saturated (`u16::MAX - 1`) and saturated (`u16::MAX`) turns: ExactSolver & BoundSolver
+    // must terminate cleanly without cycling when `turn` stops strictly increasing.
+    for &sat_turn in &[u16::MAX - 1, u16::MAX] {
+        b_inf.turn = sat_turn;
+        let cert_max = ex
+            .solve(&b_inf)
+            .expect("ExactSolver must guard u16::MAX turn saturation under turn_limit: None");
+        assert!((cert_max.lo - 0.0).abs() < 1e-9 && (cert_max.hi - 1.0).abs() < 1e-9);
+    }
+
+    b_inf.turn = u16::MAX;
+    let mut bs_max = BoundSolver::new(
+        &dex,
+        BoundConfig {
+            work_budget: 100,
+            node_budget: 100,
+            ..BoundConfig::default()
+        },
+    );
+    let rep_max = bs_max.solve(&b_inf, None);
+    assert!((rep_max.bounds.lo - 0.0).abs() < 1e-9 && (rep_max.bounds.hi - 1.0).abs() < 1e-9);
+
+    // Stall classifier accepts castle-free healing endgames without fabricating a turn-80 limit.
+    let healer = make_set("Blissey", 50, "Leftovers", &["Soft-Boiled", "Ice Beam"]);
+    let mut b_heal = start_battle(&dex, Ruleset::castle_free(), &[healer.clone()], &[healer]);
+    b_heal.turn = 120;
+    assert!(
+        classify_two_sided_heal(&b_heal, &dex).is_ok(),
+        "stall classifier must accept castle-free beyond turn 80"
     );
 }

@@ -110,52 +110,6 @@ fn is_toxic_residual(ruleset: Ruleset, status_raw: u8, cnt_packed: u8) -> bool {
             || (!ruleset.is_castle() && status_raw == Status::Brn as u8))
 }
 
-/// Castle `L_TURN` terminal adjudication mode when both active mons survive to the turn limit.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u8)]
-enum HorizonJudge {
-    /// True 1v1 (`n0 == n1 == 1`): adjudicate by active HP fraction.
-    HpRatio = 0,
-    /// `n0 > n1`: side `s0` wins unconditionally on survival to `L_TURN` (alive-count judge).
-    Side0AliveWin = 1,
-    /// `n0 < n1`: side `s1` wins unconditionally on survival to `L_TURN` (alive-count judge).
-    Side1AliveWin = 2,
-}
-
-/// Remaining turns including the current turn when Castle has a nearby finite `L_TURN` judge.
-/// Returns `Some((rem, judge))` only when surviving to `L_TURN` has a well-defined outcome:
-/// - `n0 != n1`: alive-count judge (`1.0` if `n0 > n1` else `0.0`).
-/// - `n0 == n1 == 1`: 1v1 HP-ratio judge.
-/// - `n0 == n1 >= 2`: `None` (bench HP ratios are outside the 1v1 Bellman state space).
-#[inline]
-fn finite_turn_horizon(
-    cb: &CompactBattle,
-    table: &MatchTable,
-    s0: usize,
-    s1: usize,
-) -> Option<(u16, HorizonJudge)> {
-    if !table.ruleset.is_castle() {
-        return None;
-    }
-    let lim = table.ruleset.turn_limit()?;
-    let rem = lim.saturating_add(1).saturating_sub(cb.turn);
-    if rem > 12 {
-        return None;
-    }
-    let n0 = cb.sides[s0].alive_mask.count_ones();
-    let n1 = cb.sides[s1].alive_mask.count_ones();
-    let judge = if n0 > n1 {
-        HorizonJudge::Side0AliveWin
-    } else if n0 < n1 {
-        HorizonJudge::Side1AliveWin
-    } else if n0 == 1 {
-        HorizonJudge::HpRatio
-    } else {
-        return None;
-    };
-    Some((rem, judge))
-}
-
 #[inline]
 fn speed_ord_u8(
     cb: &CompactBattle,
@@ -790,10 +744,9 @@ struct SurvivalCurveDetail {
     surv: [f64; 7],
     eot_ko: [f64; 7],
     mean_hp_frac: f64,
-    dist: [f32; B32 + 1],
 }
 
-/// Compute `([S(0)..=S(k)], mean_hp_frac_at_k)` plus per-step EOT KO mass and final bin distribution
+/// Compute `([S(0)..=S(k)], mean_hp_frac_at_k)` plus per-step EOT KO mass
 /// via exact 1D Toeplitz convolution $T^k \mathbf{e}_{h_0}$.
 #[allow(clippy::too_many_arguments)]
 #[inline]
@@ -808,13 +761,11 @@ fn survival_curve_detail(
     max_steps: usize,
     need_mean_hp: bool,
 ) -> SurvivalCurveDetail {
-    let empty_dist = [0.0f32; B32 + 1];
     if start_hp <= 0 {
         return SurvivalCurveDetail {
             surv: [0.0; 7],
             eot_ko: [0.0; 7],
             mean_hp_frac: 0.0,
-            dist: empty_dist,
         };
     }
     let max_steps = max_steps.min(6);
@@ -823,7 +774,6 @@ fn survival_curve_detail(
             surv: [1.0; 7],
             eot_ko: [0.0; 7],
             mean_hp_frac: 0.0,
-            dist: empty_dist,
         };
     }
     let att_idx = att_side * 3 + att_slot;
@@ -1191,7 +1141,6 @@ fn survival_curve_detail(
         surv: out,
         eot_ko,
         mean_hp_frac,
-        dist,
     }
 }
 
@@ -1626,7 +1575,6 @@ fn eval_exact_root_table(
     slot0: usize,
     s1: usize,
     slot1: usize,
-    horizon: Option<(u16, HorizonJudge)>,
 ) -> f64 {
     let idx = [s0 * 3 + slot0, s1 * 3 + slot1];
     let hp = [cb.mons[idx[0]].hp(), cb.mons[idx[1]].hp()];
@@ -1648,8 +1596,6 @@ fn eval_exact_root_table(
         .ruleset
         .castle_overlay()
         .map_or(true, |cfg| cfg.recoil_1v1_attacker_wins);
-    let gamma = if horizon.is_some() { 1.0f32 } else { GAMMA };
-    let final_judge = horizon.and_then(|(rem, judge)| (rem == 1).then_some(judge));
     let spd_ord = speed_ord_u8(cb, table, s0, slot0, s1, slot1);
     let mutual_eot_val = mutual_eot_payoff(cb, table, s0, slot0, s1, slot1, spd_ord);
 
@@ -2156,31 +2102,6 @@ fn eval_exact_root_table(
                 for &(hp_fir_end, f_lo, f_hi, f_w, p_fir) in &fir_end[..fir_len] {
                     let cont = if hp_fir_end <= 0 {
                         win_second
-                    } else if let Some(judge) = final_judge {
-                        match judge {
-                            HorizonJudge::Side0AliveWin => 1.0f32,
-                            HorizonJudge::Side1AliveWin => 0.0f32,
-                            HorizonJudge::HpRatio => {
-                                let (r0, r1) = if first == 0 {
-                                    (
-                                        hp_fir_end as f64 / maxhp[0] as f64,
-                                        hp_sec_end as f64 / maxhp[1] as f64,
-                                    )
-                                } else {
-                                    (
-                                        hp_sec_end as f64 / maxhp[0] as f64,
-                                        hp_fir_end as f64 / maxhp[1] as f64,
-                                    )
-                                };
-                                if (r0 - r1).abs() <= 1e-12 {
-                                    0.5f32
-                                } else if r0 > r1 {
-                                    1.0f32
-                                } else {
-                                    0.0f32
-                                }
-                            }
-                        }
                     } else {
                         let (b0_lo, b0_hi, w0, b1_lo, b1_hi, w1) = if first == 0 {
                             (f_lo, f_hi, f_w, s_lo, s_hi, s_w)
@@ -2194,7 +2115,7 @@ fn eval_exact_root_table(
                         let v0 = v00 + w1 * (v01 - v00);
                         let v1 = v10 + w1 * (v11 - v10);
                         let v_cont = (v0 + w0 * (v1 - v0)).clamp(0.0, 1.0);
-                        gamma * v_cont + (1.0 - gamma) * 0.5
+                        GAMMA * v_cont + (1.0 - GAMMA) * 0.5
                     };
                     branch_val += p_fir * cont;
                 }
@@ -2517,11 +2438,7 @@ fn l1_state_key(
     if ruleset_tag != 0 {
         h.write_u64(ruleset_tag);
         let seat_bit = u64::from(!table.ruleset.is_seat_antisymmetric() && s0 == 0);
-        let (hor, judge_bits) = match finite_turn_horizon(cb, table, s0, s1) {
-            Some((rem, judge)) => (rem as u64, judge as u64),
-            None => (0xFFu64, 0u64),
-        };
-        h.write_u64(seat_bit | (hor << 8) | (judge_bits << 24));
+        h.write_u64(seat_bit);
     }
 
     h.finish()
@@ -2532,7 +2449,6 @@ fn l1_state_key(
 fn l2_operator_key(
     ruleset_tag: u64,
     mutual_eot_val: f32,
-    horizon: Option<(u16, HorizonJudge)>,
     max_s0: usize,
     max_s1: usize,
     spd_ord: u8,
@@ -2557,13 +2473,7 @@ fn l2_operator_key(
     h.write_u64(hdr);
     if ruleset_tag != 0 {
         h.write_u64(ruleset_tag);
-        let (hor, judge_bits) = match horizon {
-            Some((rem, judge)) => (rem as u64, judge as u64),
-            None => (0xFFu64, 0u64),
-        };
-        h.write_u64(
-            (mutual_eot_val.to_bits() as u64) | (hor << 32) | (judge_bits << 48),
-        );
+        h.write_u64(mutual_eot_val.to_bits() as u64);
     }
 
     let pack_16 = |arr: &[u8; B16 + 1]| -> (u64, u64) {
@@ -2881,7 +2791,6 @@ fn solve_bellman_into(
     max_s1: usize,
     spd_ord: u8,
     mutual_eot_val: f32,
-    horizon: Option<(u16, HorizonJudge)>,
     ops: &[Side1DOps; 2],
     out: &mut CachedBellman,
 ) {
@@ -2918,89 +2827,6 @@ fn solve_bellman_into(
 
     let mut heal_mask0 = [0u32; B16 + 1];
     let mut heal_mask1 = [0u32; B16 + 1];
-
-    if let Some((rem, judge)) = horizon {
-        // Finite-horizon Castle `L_TURN` backward induction: alive-count judge when `n0 != n1`,
-        // exact 1v1 HP-ratio judge when `n0 == n1 == 1`.
-        for slp0 in 0..=max_s0 {
-            for slp1 in 0..=max_s1 {
-                for b0 in 1..=B16 {
-                    for b1 in 1..=B16 {
-                        out.v_table[slp0][slp1][b0][b1] = match judge {
-                            HorizonJudge::Side0AliveWin => 1.0,
-                            HorizonJudge::Side1AliveWin => 0.0,
-                            HorizonJudge::HpRatio => {
-                                if b0 > b1 {
-                                    1.0
-                                } else if b0 < b1 {
-                                    0.0
-                                } else {
-                                    0.5
-                                }
-                            }
-                        };
-                    }
-                }
-            }
-        }
-        let steps = rem.saturating_sub(1) as usize;
-        for _step in 0..steps {
-            let prev_vt = out.v_table;
-            let mut next_vt = prev_vt;
-            let mut hm0 = [0u32; B16 + 1];
-            let mut hm1 = [0u32; B16 + 1];
-            for slp0 in 0..=max_s0 {
-                for slp1 in 0..=max_s1 {
-                    if slp0 > 0 && slp1 > 0 && !ops[0].has_st && !ops[1].has_st {
-                        let eot0 = &ops[0].eot_bin[ops[0].has_rest as usize];
-                        let eot1 = &ops[1].eot_bin[ops[1].has_rest as usize];
-                        let prev = &prev_vt[slp0 - 1][slp1 - 1];
-                        let dst = &mut next_vt[slp0][slp1];
-                        for b0 in 1..=B16 {
-                            let e0 = eot0[b0] as usize;
-                            if e0 == 0 {
-                                for b1 in 1..=B16 {
-                                    let e1 = eot1[b1] as usize;
-                                    dst[b0][b1] = if e1 == 0 { mutual_eot_val } else { 0.0 };
-                                }
-                            } else {
-                                for b1 in 1..=B16 {
-                                    let e1 = eot1[b1] as usize;
-                                    dst[b0][b1] = if e1 == 0 { 1.0 } else { prev[e0][e1] };
-                                }
-                            }
-                        }
-                        continue;
-                    }
-                    eval_plane_q(slp0, slp1, &prev_vt, 1.0, &mut q_plane);
-                    let c0 = slp0 == 0 && ops[0].has_heal;
-                    let c1 = slp1 == 0 && ops[1].has_heal;
-                    for b0 in 1..=B16 {
-                        let n0 = if c0 && b0 < B16 { 2 } else { 1 };
-                        for b1 in 1..=B16 {
-                            let n1 = if c1 && b1 < B16 { 2 } else { 1 };
-                            let (val, h0, h1) = solve_stage_game_2x2(&q_plane[b0][b1], n0, n1);
-                            next_vt[slp0][slp1][b0][b1] = val;
-                            if slp0 == 0 && slp1 == 0 {
-                                if h0 {
-                                    hm0[b0] |= 1u32 << b1;
-                                }
-                                if h1 {
-                                    hm1[b1] |= 1u32 << b0;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            out.v_table = next_vt;
-            heal_mask0 = hm0;
-            heal_mask1 = hm1;
-        }
-        out.heal_mask0 = heal_mask0;
-        out.heal_mask1 = heal_mask1;
-        return;
-    }
 
     for _iter in 0..18 {
         // 1. Bottom-up Schur-complement elimination over the sleeping DAG `s_sum = 1..=max_s_sum`.
@@ -3170,11 +2996,9 @@ fn with_solved_bellman<R>(
     let (ops, max_s0, max_s1, spd_ord) = Side1DOps::build_pair(cb, table, s0, slot0, s1, slot1);
     let ruleset_tag = table.ruleset.fingerprint_tag();
     let mutual_eot_val = mutual_eot_payoff(cb, table, s0, slot0, s1, slot1, spd_ord);
-    let horizon = finite_turn_horizon(cb, table, s0, s1);
     let op_key = l2_operator_key(
         ruleset_tag,
         mutual_eot_val,
-        horizon,
         max_s0,
         max_s1,
         spd_ord,
@@ -3236,7 +3060,6 @@ fn with_solved_bellman<R>(
             max_s1,
             spd_ord,
             mutual_eot_val,
-            horizon,
             &ops,
             &mut cache.pool[slot_idx],
         );
@@ -3307,36 +3130,15 @@ pub fn toeplitz_coupled_race(
         return 0.0;
     }
 
-    let horizon = finite_turn_horizon(cb, table, s0, s1);
-    if let Some((0, judge)) = horizon {
-        return match judge {
-            HorizonJudge::Side0AliveWin => 1.0,
-            HorizonJudge::Side1AliveWin => -1.0,
-            HorizonJudge::HpRatio => {
-                let r0 = (hp0 as f64) / (table.mons[idx0].maxhp.max(1) as f64);
-                let r1 = (hp1 as f64) / (table.mons[idx1].maxhp.max(1) as f64);
-                if (r0 - r1).abs() <= 1e-12 {
-                    0.0
-                } else if r0 > r1 {
-                    1.0
-                } else {
-                    -1.0
-                }
-            }
-        };
-    }
-
     if side_has_usable_heal(cb, table, s0, slot0) || side_has_usable_heal(cb, table, s1, slot1) {
         let v = with_solved_bellman(cb, table, s0, slot0, s1, slot1, |cached| {
-            eval_exact_root_table(&cached.v_table, cb, table, s0, slot0, s1, slot1, horizon)
+            eval_exact_root_table(&cached.v_table, cb, table, s0, slot0, s1, slot1)
         });
         return (2.0 * v - 1.0).clamp(-1.0, 1.0);
     }
 
     // Pure stopping-time race from the 1D Toeplitz survival curves S_0(k), S_1(k)
-    let steps = horizon.map_or(6usize, |(rem, _)| (rem as usize).min(6));
-    let turn_limit_judge =
-        horizon.and_then(|(rem, judge)| ((rem as usize) <= steps).then_some(judge));
+    let steps = 6usize;
     let d0 = survival_curve_detail(cb, table, s1, slot1, s0, slot0, hp0, steps, true);
     let d1 = survival_curve_detail(cb, table, s0, slot0, s1, slot1, hp1, steps, true);
 
@@ -3359,41 +3161,7 @@ pub fn toeplitz_coupled_race(
         let sim_atk = (sim_ko - sim_eot).max(0.0);
         margin += f1 * d0.surv[k] - f0 * d1.surv[k] + sim_atk * spd_sign + sim_eot * eot_sign;
     }
-    if let Some(judge) = turn_limit_judge {
-        match judge {
-            HorizonJudge::Side0AliveWin => {
-                margin += d0.surv[steps] * d1.surv[steps];
-            }
-            HorizonJudge::Side1AliveWin => {
-                margin -= d0.surv[steps] * d1.surv[steps];
-            }
-            HorizonJudge::HpRatio => {
-                // Castle `L_TURN` judge on surviving mass: exact P(hp_frac0 > hp_frac1) - P(hp_frac1 > hp_frac0).
-                let mut p_win = 0.0f64;
-                let mut p_loss = 0.0f64;
-                for b0 in 1..=B32 {
-                    let p0 = d0.dist[b0] as f64;
-                    if p0 <= 0.0 {
-                        continue;
-                    }
-                    for b1 in 1..=B32 {
-                        let p1 = d1.dist[b1] as f64;
-                        if p1 <= 0.0 {
-                            continue;
-                        }
-                        if b0 > b1 {
-                            p_win += p0 * p1;
-                        } else if b0 < b1 {
-                            p_loss += p0 * p1;
-                        }
-                    }
-                }
-                margin += p_win - p_loss;
-            }
-        }
-    } else {
-        margin += d0.surv[steps] * d1.surv[steps] * (d0.mean_hp_frac - d1.mean_hp_frac);
-    }
+    margin += d0.surv[steps] * d1.surv[steps] * (d0.mean_hp_frac - d1.mean_hp_frac);
     margin.clamp(-1.0, 1.0)
 }
 
@@ -4018,7 +3786,7 @@ mod tests {
         let (ops, ms0, ms1, spd_ord) = Side1DOps::build_pair(&cba, &ta, 0, 0, 1, 0);
         let mutual_eot_val = mutual_eot_payoff(&cba, &ta, 0, 0, 1, 0, spd_ord);
         let mut fresh = CachedBellman::empty();
-        solve_bellman_into(ms0, ms1, spd_ord, mutual_eot_val, None, &ops, &mut fresh);
+        solve_bellman_into(ms0, ms1, spd_ord, mutual_eot_val, &ops, &mut fresh);
         for s0 in 0..3 {
             for s1 in 0..3 {
                 for b0 in 0..=B16 {

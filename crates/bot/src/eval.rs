@@ -382,47 +382,6 @@ pub(crate) fn compare_speed_with_boost(
     (n0 * d1).cmp(&(n1 * d0))
 }
 
-/// Smooth Castle `L_TURN` proximity differential favoring alive count first, then sum of alive HP ratios.
-#[inline]
-fn castle_turn_limit_proximity_diff(cb: &CompactBattle, table: &MatchTable) -> f64 {
-    if !table.ruleset.is_castle() {
-        return 0.0;
-    }
-    let Some(lim) = table.ruleset.turn_limit() else {
-        return 0.0;
-    };
-    let rem = lim.saturating_sub(cb.turn);
-    if rem > 16 {
-        return 0.0;
-    }
-    let mut alive = [0i32; 2];
-    let mut hp_sum = [0.0f64; 2];
-    for side in 0..2 {
-        let mask = cb.sides[side].alive_mask;
-        for &slot_u8 in &cb.party_order(side) {
-            let slot = slot_u8 as usize;
-            if (mask & (1 << slot)) == 0 {
-                continue;
-            }
-            let idx = side * 3 + slot;
-            let hp = cb.mons[idx].hp();
-            if hp > 0 {
-                alive[side] += 1;
-                hp_sum[side] += (hp as f64) / (table.mons[idx].maxhp.max(1) as f64);
-            }
-        }
-    }
-    let urgency = ((17 - rem) as f64 / 17.0).powi(2);
-    let alive_diff = (alive[0] - alive[1]) as f64;
-    let hp_diff = hp_sum[0] - hp_sum[1];
-    let judge_margin = if alive[0] != alive[1] {
-        alive_diff * 4.0 + hp_diff * 0.5
-    } else {
-        hp_diff * 4.0
-    };
-    urgency * 2.5 * judge_margin
-}
-
 /// Tunable weights. All features are from the owning side's perspective
 /// (penalties are stored positive and subtracted).
 #[derive(Clone, Debug, PartialEq)]
@@ -967,7 +926,6 @@ pub fn compact_eval01_blindspot_norelay(
     if n0 > 1 || n1 > 1 {
         diff += compact_false_boost_refund_diff(cb, table, w);
     }
-    diff += castle_turn_limit_proximity_diff(cb, table);
     let mut old_rm = 0.0;
     if w.race != 0.0 {
         old_rm = compact_race_margin(cb, table);
@@ -1214,7 +1172,6 @@ pub fn compact_eval01(cb: &CompactBattle, table: &MatchTable, w: &EvalWeights) -
     let s0 = compact_side_score(cb, table, w, 0);
     let s1 = compact_side_score(cb, table, w, 1);
     let mut diff = s0 - s1;
-    diff += castle_turn_limit_proximity_diff(cb, table);
     let mut old_rm = 0.0;
     if w.race != 0.0 {
         old_rm = compact_race_margin(cb, table);

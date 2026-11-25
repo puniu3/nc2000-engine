@@ -66,7 +66,7 @@ function padTeam(sets) {
     fx.seed,
     "castle",
   );
-  checkEq(battle.ruleset(), "castle-tournament", "castle alias resolves to castle-tournament");
+  checkEq(battle.ruleset(), "castle-free", "castle alias resolves to castle-free");
 
   let lastView = null;
   let lastRound = -1;
@@ -88,7 +88,7 @@ function padTeam(sets) {
   const code = battle.exportKifu(false, 1);
   check(/^NC2-[A-Za-z0-9_-]+$/.test(code), "Castle replay emits NC2- code");
   const kifu = new wasm.Kifu(dex, code);
-  checkEq(kifu.ruleset(), "castle-tournament", "Kifu preserves castle-tournament ruleset");
+  checkEq(kifu.ruleset(), "castle-free", "Kifu preserves castle-free ruleset");
   check(lastRound >= 0, "recorded at least one Castle decision");
   const scene = JSON.parse(kifu.scene(lastRound));
   checkEq(scene.view, lastView, "Castle Kifu reproduces exact board state");
@@ -187,11 +187,17 @@ function padTeam(sets) {
   checkEq(psSearcher.ruleset(), "gen2stadium2", "default ProtocolSearcher uses gen2stadium2");
   checkEq(psSearcher.compiledPreviewBuild(), "policy-v2", "PS compiledPreviewBuild is policy-v2");
   psSearcher.setRuleset("castle");
-  checkEq(psSearcher.ruleset(), "castle-tournament", "setRuleset switches to castle-tournament");
+  checkEq(psSearcher.ruleset(), "castle-free", "setRuleset switches to castle-free");
   checkEq(
     psSearcher.compiledPreviewBuild(),
     "castle-policy-v2",
     "Castle compiledPreviewBuild is castle-policy-v2",
+  );
+  psSearcher.setRuleset("castle-tournament");
+  checkEq(
+    psSearcher.ruleset(),
+    "castle-tournament",
+    "explicit castle-tournament ruleset remains selectable",
   );
   psSearcher.free();
 
@@ -204,7 +210,7 @@ function padTeam(sets) {
     undefined,
     "castle",
   );
-  checkEq(castleSearcher.ruleset(), "castle-tournament", "ProtocolSearcher.withRuleset sets Castle");
+  checkEq(castleSearcher.ruleset(), "castle-free", "ProtocolSearcher.withRuleset sets Castle unlimited default");
   checkEq(
     castleSearcher.compiledPreviewBuild(),
     "castle-policy-v2",

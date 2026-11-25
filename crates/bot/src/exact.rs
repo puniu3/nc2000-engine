@@ -2,12 +2,15 @@
 //!
 //! Perfect-information subgame value (side-0 win probability; tie = 0.5)
 //! by depth-first backward induction over `enumerate_step`'s exact chance
-//! distributions. The game is finite and acyclic: `state_key` includes the
-//! turn counter and every within-turn step strictly advances the queue, and
-//! finite-turn-limit rulesets terminate past `ruleset.turn_limit()` (1000-turn
-//! auto-tie on PS; `L_TURN` alive-count -> HP-ratio judge on Castle) — so plain
-//! memoized DFS is exact, no cycle handling needed. The memo is shared across
-//! `solve` calls (endgame positions from one game overlap heavily).
+//! distributions. Acyclicity is guaranteed within every iterative-deepening
+//! pass: `state_key` includes `turn`, every within-turn step strictly shrinks
+//! the queue, and lines exceeding `t_max` (or reaching `u16::MAX` under
+//! unlimited `turn_limit: None` rulesets such as `castle-free`) return the
+//! sound full-uncertainty bracket `(0.0, 1.0)`. Exact values (`hi - lo < 1e-12`)
+//! are memoized only when every contributing line terminates genuinely, so
+//! plain memoized DFS remains sound even when `turn_limit` is `None`. The memo
+//! is shared across `solve` calls (endgame positions from one game overlap
+//! heavily).
 //!
 //! Simultaneous decision nodes are zero-sum matrix games, solved by a
 //! compact tableau simplex on the classic positive-shift LP; the returned
@@ -265,8 +268,8 @@ impl<'d> ExactSolver<'d> {
         if let Some(&v) = self.exact_memo.get(&key) {
             return Some((v, v));
         }
-        if b.turn > self.t_max {
-            return Some((0.0, 1.0)); // truncated: full uncertainty
+        if b.turn > self.t_max || b.turn == u16::MAX {
+            return Some((0.0, 1.0)); // truncated or turn counter saturated: full uncertainty
         }
         if let Some(&iv) = self.ival_memo.get(&key) {
             return Some(iv);

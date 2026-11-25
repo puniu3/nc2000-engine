@@ -42,7 +42,7 @@ pub struct CastleOverlayConfig {
 
 impl Default for CastleOverlayConfig {
     fn default() -> Self {
-        Self::tournament()
+        Self::free()
     }
 }
 
@@ -211,14 +211,14 @@ impl Ruleset {
         let lower = s.trim().to_ascii_lowercase();
         match lower.as_str() {
             "ps" | "ps-stadium2" | "gen2stadium2" | "gen2stadium2nc2000" => Some(Self::PsStadium2),
-            "castle" | "castle-pbs" | "castle-tournament" | "pbs" | "pbs-nc2000" => {
-                Some(Self::castle_tournament())
+            "castle" | "castle-pbs" | "castle-free" | "pbs" | "pbs-nc2000" | "pbs-free" => {
+                Some(Self::castle_free())
             }
+            "castle-tournament" => Some(Self::castle_tournament()),
             "castle-raw" | "castle-cgi" | "pbs-raw" => Some(Self::castle_raw_cgi(false)),
             "castle-raw-ovfl" | "castle-cgi-ovfl" | "pbs-raw-ovfl" => {
                 Some(Self::castle_raw_cgi(true))
             }
-            "castle-free" | "pbs-free" => Some(Self::castle_free()),
             _ => lower
                 .strip_prefix("castle-custom-")
                 .and_then(parse_castle_custom),

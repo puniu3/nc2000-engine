@@ -469,7 +469,7 @@ impl Battle {
 
     /// battle.endTurn.
     pub fn end_turn(&mut self, dex: &Dex) {
-        self.turn += 1;
+        self.turn = self.turn.saturating_add(1);
         self.last_successful_move_this_turn = None;
         self.triple_kick_mult = 0;
         self.recoil_ko_side = None;

@@ -33,6 +33,8 @@ const FILES_TO_COPY = [
   'data/live-search.json',
   'data/team-pool-v3/team-pool.json',
   'data/team-pool-v3/flagship-mixture.json',
+  'data/team-pool-v4/team-pool.json',
+  'data/team-pool-v4/flagship-mixture.json',
   'data/belief-pool-v3/belief-pool.json',
   'tools/diagnose-position.js',
 ];

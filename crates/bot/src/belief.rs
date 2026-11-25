@@ -177,7 +177,7 @@ fn community_rental_teams_for(dex: &Dex, ruleset: Ruleset) -> &'static [Vec<Poke
                 .teams
                 .into_iter()
                 .filter(|t| !names_another_ruleset(&t.archetype))
-                .filter(|t| team_is_format_legal(dex, &t.sets, Ruleset::castle_tournament()))
+                .filter(|t| team_is_format_legal(dex, &t.sets, Ruleset::castle_free()))
                 .map(|t| t.sets)
                 .collect()
         });
@@ -204,7 +204,7 @@ fn community_rental_sets_for(dex: &Dex, ruleset: Ruleset) -> &'static [PokemonSe
     if ruleset.learnset_policy() == LearnsetPolicy::CastleJpEvents {
         static CASTLE_SETS: OnceLock<Vec<PokemonSet>> = OnceLock::new();
         return CASTLE_SETS.get_or_init(|| {
-            community_rental_teams_for(dex, Ruleset::castle_tournament())
+            community_rental_teams_for(dex, Ruleset::castle_free())
                 .iter()
                 .flat_map(|sets| sets.iter().cloned())
                 .collect()
@@ -271,7 +271,7 @@ fn supplemental_prior_teams_for(dex: &Dex, ruleset: Ruleset) -> &'static [Supple
                 .filter(|t| {
                     t.weight.is_finite()
                         && t.weight > 0.0
-                        && team_is_format_legal(dex, &t.sets, Ruleset::castle_tournament())
+                        && team_is_format_legal(dex, &t.sets, Ruleset::castle_free())
                 })
                 .collect()
         });

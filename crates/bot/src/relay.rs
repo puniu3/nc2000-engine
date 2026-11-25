@@ -1227,10 +1227,6 @@ fn probe_fast_relay(
         if !table.ruleset.is_seat_antisymmetric() {
             h_lo = hash_mix(h_lo, (side as u64) + 1);
         }
-        if let Some(lim) = table.ruleset.turn_limit() {
-            let rem = lim.saturating_add(1).saturating_sub(cb.turn).min(13);
-            h_hi = hash_mix(h_hi, rem as u64);
-        }
     }
     for r in &recv_arr[..n_recv] {
         h_lo = hash_mix(h_lo, r.static_fp);
@@ -3730,21 +3726,8 @@ pub fn apply_relay_leaf_lift(
         return v_base_p0;
     }
 
-    let mut turn_scale = 1.0f64;
-    if table.ruleset.is_castle() {
-        if let Some(lim) = table.ruleset.turn_limit() {
-            let rem = lim.saturating_add(1).saturating_sub(cb.turn);
-            if rem <= 1 {
-                return v_base_p0;
-            }
-            if rem <= 5 {
-                turn_scale = ((rem - 1) as f64) / 4.0;
-            }
-        }
-    }
-
-    let delta_0 = relay_surplus_for_side(cb, table, w, 0, v_base_p0) * turn_scale;
-    let delta_1 = relay_surplus_for_side(cb, table, w, 1, 1.0 - v_base_p0) * turn_scale;
+    let delta_0 = relay_surplus_for_side(cb, table, w, 0, v_base_p0);
+    let delta_1 = relay_surplus_for_side(cb, table, w, 1, 1.0 - v_base_p0);
 
     if delta_0 == 0.0 && delta_1 == 0.0 {
         return v_base_p0;
@@ -3894,9 +3877,7 @@ pub fn rollout_relay_pick(
     deterministic: bool,
     rng: &mut SplitMix64,
 ) -> RelayRolloutDecision {
-    if cb.sides[side].request != 1
-        || table.ruleset.turn_limit().is_some_and(|lim| cb.turn >= lim)
-    {
+    if cb.sides[side].request != 1 {
         return RelayRolloutDecision::NotApplicable;
     }
     let att_slot = cb.sides[side].active_idx as usize;

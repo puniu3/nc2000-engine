@@ -159,7 +159,7 @@ test('diagnose-position supports Castle ruleset via --ruleset and spec.ruleset',
     ],
   };
 
-  // 1. CLI --ruleset castle alias resolves to canonical castle-tournament
+  // 1. CLI --ruleset castle alias resolves to canonical castle-free (unlimited L_TURN=0 default)
   const cliSpecPath = path.join(tmpDir, 'spec-cli.json');
   fs.writeFileSync(cliSpecPath, JSON.stringify(baseSpec));
   const cliOut = execFileSync(
@@ -179,7 +179,7 @@ test('diagnose-position supports Castle ruleset via --ruleset and spec.ruleset',
   ).trim();
   const cliReport = JSON.parse(cliOut);
   assert.equal(cliReport.spec_valid, true);
-  assert.equal(cliReport.ruleset, 'castle-tournament');
+  assert.equal(cliReport.ruleset, 'castle-free');
 
   // 2. Embedded spec.ruleset is honored without --ruleset flag
   const embeddedSpecPath = path.join(tmpDir, 'spec-embedded.json');

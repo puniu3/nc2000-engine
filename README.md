@@ -40,7 +40,7 @@ Rust battle engine, imperfect-information search bot, and WebAssembly/Preact cli
 - WASM bindings & build script: [`crates/wasm/src/lib.rs`](crates/wasm/src/lib.rs), [`crates/wasm/build.sh`](crates/wasm/build.sh), [`crates/wasm/tests-node/`](crates/wasm/tests-node/)
 - Web application & E2E suites: [`web/src/app.tsx`](web/src/app.tsx), [`web/src/data.ts`](web/src/data.ts), [`web/package.json`](web/package.json), [`web/tests/`](web/tests/)
 - PS local/websocket interop & preview cache helper: [`tools/ps-arena.js`](tools/ps-arena.js), [`tools/ps-client.js`](tools/ps-client.js), [`tools/preview-cache.js`](tools/preview-cache.js)
-- Core Engine SDK builder & deterministic position diagnosis CLI: [`tools/bundle-core-sdk.js`](tools/bundle-core-sdk.js), [`tools/diagnose-position.js`](tools/diagnose-position.js) (downstream environment adapters like Gym Leader's Castle live in the operational fork [`hm0615g/nc2000-engine`](https://github.com/hm0615g/nc2000-engine))
+- Core Engine SDK builder & deterministic position diagnosis CLI: [`tools/bundle-core-sdk.js`](tools/bundle-core-sdk.js), [`tools/diagnose-position.js`](tools/diagnose-position.js) (upstream owns engine correctness, Web client, Core SDK, and playing-strength optimization including Gym Leader's Castle unlimited rules; downstream live Castle connection adapters belong to the operational fork [`hm0615g/nc2000-engine`](https://github.com/hm0615g/nc2000-engine))
 - CI / GitHub Pages deployment contract: [`.github/workflows/pages.yml`](.github/workflows/pages.yml)
 
 ### Specifications & Reference Docs
