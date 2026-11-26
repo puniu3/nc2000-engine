@@ -1567,8 +1567,13 @@ fn one_hot_preview_policy(triple: [u8; 3]) -> Option<Vec<f64>> {
     if triple[2] == 0 {
         return None;
     }
+    let canon = if triple[1] > triple[2] {
+        [triple[0], triple[2], triple[1]]
+    } else {
+        triple
+    };
     let acts = preview_actions();
-    let idx = action_index(&acts, triple)?;
+    let idx = action_index(&acts, canon)?;
     let mut pol = vec![0.0; acts.len()];
     pol[idx] = 1.0;
     Some(pol)
@@ -1592,7 +1597,7 @@ fn build_blind_arm(
             if let Some(pol) = one_hot_preview_policy(preview_triple) {
                 ag = ag.with_own_preview_policy(pol);
             } else {
-                ag = ag.with_preview_iterations(240_000);
+                ag = ag.with_preview_iterations(720_000);
             }
             Box::new(ag)
         } else {
@@ -1602,7 +1607,7 @@ fn build_blind_arm(
             if let Some(pol) = one_hot_preview_policy(preview_triple) {
                 ag = ag.with_own_preview_policy(pol);
             } else {
-                ag = ag.with_preview_iterations(240_000);
+                ag = ag.with_preview_iterations(720_000);
             }
             Box::new(ag)
         }
@@ -3481,20 +3486,35 @@ fn run_collect_cf(dex: &Dex, args: &[String]) {
     );
 }
 
-fn parse_preview_spec(spec: &str) -> Result<Result<u32, nc2000_bot::preview_search::PreviewSearchConfig>, String> {
+enum PreviewSpec {
+    Shipped(u32),
+    Stepped(u32),
+    CfPrev(nc2000_bot::preview_search::PreviewSearchConfig),
+}
+
+fn parse_iters_k(s: &str, spec: &str) -> Result<u32, String> {
+    if let Some(k) = s.strip_suffix('k') {
+        k.parse::<u32>()
+            .map(|n| n * 1000)
+            .map_err(|e| format!("bad iters {spec}: {e}"))
+    } else {
+        s.parse::<u32>()
+            .map_err(|e| format!("bad iters {spec}: {e}"))
+    }
+}
+
+fn parse_preview_spec(spec: &str) -> Result<PreviewSpec, String> {
     use nc2000_bot::preview_search::{PreviewCellReadout, PreviewPolicyMode, PreviewSearchConfig};
     if let Some(rest) = spec.strip_prefix("shipped:") {
-        let iters: u32 = rest.parse().map_err(|e| format!("bad shipped iters {spec}: {e}"))?;
-        return Ok(Ok(iters));
+        return Ok(PreviewSpec::Shipped(parse_iters_k(rest, spec)?));
+    }
+    if let Some(rest) = spec.strip_prefix("stepped:") {
+        return Ok(PreviewSpec::Stepped(parse_iters_k(rest, spec)?));
     }
     if let Some(rest) = spec.strip_prefix("cfprev:") {
         let mut parts = rest.split('@');
         let iters_s = parts.next().unwrap_or("120000");
-        let total_iters: u32 = if let Some(k) = iters_s.strip_suffix('k') {
-            k.parse::<u32>().map_err(|e| format!("bad iters {spec}: {e}"))? * 1000
-        } else {
-            iters_s.parse::<u32>().map_err(|e| format!("bad iters {spec}: {e}"))?
-        };
+        let total_iters = parse_iters_k(iters_s, spec)?;
         let mut cfg = PreviewSearchConfig {
             total_iters,
             ..PreviewSearchConfig::default()
@@ -3535,9 +3555,56 @@ fn parse_preview_spec(spec: &str) -> Result<Result<u32, nc2000_bot::preview_sear
                 lcb_z,
             },
         };
-        return Ok(Err(cfg));
+        return Ok(PreviewSpec::CfPrev(cfg));
     }
-    Err(format!("unknown preview spec: {spec} (expected shipped:N or cfprev:N[@...])"))
+    Err(format!("unknown preview spec: {spec} (expected shipped:N, stepped:N, or cfprev:N[@...])"))
+}
+
+fn solve_stepped_preview(
+    pos: &nc2000_bot::player_state::ObservedPosition,
+    dex: &Dex,
+    belief: &nc2000_bot::belief::Belief,
+    obs: &nc2000_bot::observe::Observer,
+    side: usize,
+    iters: u32,
+    mut rng: SplitMix64,
+) -> (SearchChoice, Vec<([u8; 3], f64)>, bool) {
+    let rm_cfg = RmConfig {
+        iterations: iters,
+        rule: SelRule::Ucb,
+        c: 0.4,
+        ..Default::default()
+    };
+    let mut bs = nc2000_bot::BlindSearch::from_observation(pos, dex, rm_cfg, side, rng.next());
+    bs.prune_preview_aliases(dex);
+    bs.step(dex, belief, obs, iters);
+    let ch = bs.best().expect("BlindSearch stepped preview best");
+    let mut dist: Vec<([u8; 3], f64)> = Vec::new();
+    let mut used_mix = false;
+    if let Some(pol) = bs.preview_execution_policy() {
+        used_mix = pol.source() == "cf-preview-mix";
+        for row in pol.actions() {
+            if row.probability > 1e-6 {
+                if let SearchChoice::Team(tr) = row.input {
+                    dist.push((tr, row.probability));
+                }
+            }
+        }
+    }
+    if dist.is_empty() {
+        if let SearchChoice::Team(tr) = ch {
+            dist.push((tr, 1.0));
+        }
+    } else {
+        let s: f64 = dist.iter().map(|x| x.1).sum();
+        for x in &mut dist {
+            x.1 /= s.max(1e-12);
+        }
+        if !used_mix {
+            used_mix = dist.len() > 1;
+        }
+    }
+    (ch, dist, used_mix)
 }
 
 fn run_single_live_preview(
@@ -3560,7 +3627,7 @@ fn run_single_live_preview(
     let pos = lp.position(dex, &mut belief, &obs, &mut rng).expect("position turn 0");
     let t0 = Instant::now();
     match parsed {
-        Ok(iters) => {
+        PreviewSpec::Shipped(iters) => {
             let ch = nc2000_bot::preview_search::solve_shipped_preview(
                 &pos, dex, &belief, &obs, side, iters, rng,
             );
@@ -3568,7 +3635,13 @@ fn run_single_live_preview(
             let SearchChoice::Team(tr) = ch else { panic!("expected Team choice") };
             (tr, ns, false, 0)
         }
-        Err(cfg) => {
+        PreviewSpec::Stepped(iters) => {
+            let (ch, _, used_mix) = solve_stepped_preview(&pos, dex, &belief, &obs, side, iters, rng);
+            let ns = t0.elapsed().as_nanos() as u64;
+            let SearchChoice::Team(tr) = ch else { panic!("expected Team choice") };
+            (tr, ns, used_mix, 0)
+        }
+        PreviewSpec::CfPrev(cfg) => {
             let res = nc2000_bot::preview_search::solve_cf_preview(
                 &pos, dex, &belief, &obs, side, &cfg, &mut rng,
             );
@@ -4259,7 +4332,7 @@ fn run_preview_exploit(dex: &Dex, args: &[String]) {
                         };
                         let parsed = parse_preview_spec(&eff_spec).unwrap_or_else(|e| panic!("{e}"));
                         match parsed {
-                            Ok(iters) => {
+                            PreviewSpec::Shipped(iters) => {
                                 let mut counts: HashMap<[u8; 3], usize> = HashMap::new();
                                 let mut dt_ms = 0.0;
                                 for sk in 0..n_seeds {
@@ -4281,7 +4354,17 @@ fn run_preview_exploit(dex: &Dex, args: &[String]) {
                                 acc[ai].supp_sizes.push(dist.len() as f64);
                                 arm_dists.push(dist);
                             }
-                            Err(cfg) => {
+                            PreviewSpec::Stepped(iters) => {
+                                let mut lrng = SplitMix64::new(mseed ^ ((ai as u64 + 1) * 0x9E37_79B9));
+                                let pos = lp.position(dex, &mut belief, &obs, &mut lrng).unwrap();
+                                let ts = Instant::now();
+                                let (_, dist, used_mix) = solve_stepped_preview(&pos, dex, &belief, &obs, 0, iters, lrng);
+                                acc[ai].ms.push(ts.elapsed().as_secs_f64() * 1000.0);
+                                if used_mix { acc[ai].mix_cnt += 1; }
+                                acc[ai].supp_sizes.push(dist.len() as f64);
+                                arm_dists.push(dist);
+                            }
+                            PreviewSpec::CfPrev(cfg) => {
                                 let mut lrng = SplitMix64::new(mseed ^ ((ai as u64 + 1) * 0x9E37_79B9));
                                 let pos = lp.position(dex, &mut belief, &obs, &mut lrng).unwrap();
                                 let ts = Instant::now();
@@ -4559,13 +4642,17 @@ fn run_preview_ceiling(dex: &Dex, args: &[String]) {
                         let mut lrng = SplitMix64::new(s_seed);
                         let pos = lp.position(dex, &mut belief, &obs, &mut lrng).unwrap();
                         match parse_preview_spec(spec).unwrap() {
-                            Ok(iters) => {
+                            PreviewSpec::Shipped(iters) => {
                                 let ch = nc2000_bot::preview_search::solve_shipped_preview(
                                     &pos, dex, &belief, &obs, side, iters, lrng,
                                 );
                                 if let SearchChoice::Team(t) = ch { vec![(t, 1.0)] } else { vec![] }
                             }
-                            Err(cfg) => {
+                            PreviewSpec::Stepped(iters) => {
+                                let (_, dist, _) = solve_stepped_preview(&pos, dex, &belief, &obs, side, iters, lrng);
+                                dist
+                            }
+                            PreviewSpec::CfPrev(cfg) => {
                                 let res = nc2000_bot::preview_search::solve_cf_preview(
                                     &pos, dex, &belief, &obs, side, &cfg, &mut lrng,
                                 );
