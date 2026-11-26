@@ -1,11 +1,11 @@
-// Generate the `team-pool-v4` (`policy-v2`: CF-V_net v2 PUCT + SteppedCfPreview 240k)
-// strong party catalog and certified 6-shell Bayes-Minimax flagship equilibrium mixture
+// Generate the `team-pool-v4` strong party catalog (all 32 diverse shells preserved)
+// and certified 7-shell `policy-v4` Bayes-Minimax flagship equilibrium mixture
 // from committed repo sources with `training-v3` normalization and strict WASM + JP-NC2000
 // legality checks.
 //
 // Outputs:
-//   data/team-pool-v4/team-pool.json         33-team (32-shell) policy-v2 Tier-1 catalog
-//   data/team-pool-v4/flagship-mixture.json  6-shell certified policy-v2 Bayes-Minimax mixture
+//   data/team-pool-v4/team-pool.json         33-team (32-shell) diverse Tier-1 catalog
+//   data/team-pool-v4/flagship-mixture.json  7-shell certified policy-v4 Bayes-Minimax mixture
 //
 // Usage:
 //   node tools/build-team-products-v4.js [--out-root DIR]
@@ -40,56 +40,56 @@ const fnv1a64 = rel => {
 const sha256File = rel =>
 	crypto.createHash('sha256').update(fs.readFileSync(path.resolve(REPO, rel))).digest('hex');
 
-// Curated 33-team / 32-shell `policy-v2` Tier-1 roster:
-//   - 9 causally verified `policy-v2` upgrades (docs/reports/okimono-upgrades-v2.json),
-//     each showing positive in-battle CRN `InΔ` under strict NO-CACHE LIVE (243k/240k);
-//     both earlier minor-gem candidates (`pb84-cln-sking50` and `pb63-m-esp55`) were retracted
-//     after the 1,840g Step 4 true shared-seed CRN audit exposed hitchhiking/confounding and
-//     replaced by their true-CRN Major winners (`pb84-cln-skarm50` and `pb63-m-gar55`).
-//   - 23 preserved clean/unbeaten `team-pool-v3` shells (including 2-variant `s0053-lefties`).
-//   - Tier S (`nash: true`) is the certified 6-shell `policy-v2` Bayes-Minimax equilibrium
-//     (docs/reports/policy-v2-nash-certification.md), certified across 7,776 strict NO-CACHE LIVE
-//     games (15,552 live preview sides, 0 cross-round seed overlaps) via 6-round full 32-shell
-//     PSRO closure and a uniform 96g/edge zero-leakage Elite-8 matrix (2,688g).
+// Curated 33-team / 32-shell diverse NC2000 roster (all 32 shells preserved intact):
+//   - 9 causally verified upgrades (docs/reports/okimono-upgrades-v2.json) +
+//     23 preserved clean/unbeaten `team-pool-v3` shells (including 2-variant `s0053-lefties`).
+//   - Tier S (`nash: true`) is the certified 7-shell `policy-v4` Bayes-Minimax equilibrium
+//     (docs/reports/policy-v4-nash-certification.md), certified across 12,844 strict NO-CACHE LIVE
+//     `policy-v4` games (25,688/25,688 live preview sides, 3,083/3,083 verified `policy-v4` manifests,
+//     0 belief mismatches, 0 caps/ties, 0 cross-round seed overlaps, homogeneity chi2=137.49 on 143 df)
+//     via 9-round VoI-tilted PSRO closure with 100.0% direct support coverage on all 32/32 shells.
+//   - All 7 support shells match the unique exact rational 7-shell point-LP equilibrium 1-to-1
+//     (identical on both zero-leakage and pooled matrices), with Bayesian LOO P(in) in 59.8%–95.1%
+//     vs 18.0% for #8 (`pb66-m-wak55`, E[LOO]=-2.27 pp) and 0/25 non-support detections (< 50.0%).
 const ROSTER_SPEC = [
-	// Tier S: Certified 6-Shell `policy-v2` Bayes-Minimax Equilibrium (`p_clean6`, sums to 1.000000)
-	{ id: 'pb66-m-wak55', tier: 'S', nash: true, nashWeight: 0.240000, evolved: true, score: 0.5046, fromUpgrade: true },
-	{ id: 'mjj-2014-thdrcomb', tier: 'S', nash: true, nashWeight: 0.215000, score: 0.5032 },
-	{ id: 'rraikou-m-cune50', tier: 'S', nash: true, nashWeight: 0.210000, evolved: true, score: 0.5020, fromUpgrade: true },
-	{ id: 'pb63-m-gar55', tier: 'S', nash: true, nashWeight: 0.130000, evolved: true, score: 0.4946, fromUpgrade: true },
-	{ id: 'sample-07', tier: 'S', nash: true, nashWeight: 0.130000, score: 0.4946 },
-	{ id: 'pb-6', tier: 'S', nash: true, nashWeight: 0.075000, score: 0.4892 },
+	// Tier S: Certified 7-Shell `policy-v4` Bayes-Minimax Equilibrium (`p_clean7`, sums to 1.000000)
+	{ id: 'pb63-m-gar55', tier: 'S', nash: true, nashWeight: 0.225000, evolved: true, score: 0.5019, fromUpgrade: true },
+	{ id: 'pb-131', tier: 'S', nash: true, nashWeight: 0.220000, score: 0.5026 },
+	{ id: 'pb85-m-cune50', tier: 'S', nash: true, nashWeight: 0.170000, evolved: true, score: 0.5023, fromUpgrade: true },
+	{ id: 'sample-07', tier: 'S', nash: true, nashWeight: 0.170000, score: 0.4995 },
+	{ id: 'apex-c04-bug-3atkstar-boomgen', tier: 'S', nash: true, nashWeight: 0.105000, evolved: true, score: 0.4947 },
+	{ id: 'pb-87', tier: 'S', nash: true, nashWeight: 0.090000, score: 0.4971 },
+	{ id: 'rental-cban-13', tier: 'S', nash: true, nashWeight: 0.020000, score: 0.4758 },
 
-	// Tier 1A: Verified `policy-v2` Elite Contenders & Camouflage Core (12 shells / 13 teams)
-	{ id: 'pb84-cln-skarm50', tier: '1', evolved: true, score: 0.4742, fromUpgrade: true },
-	{ id: 'pb122-m-lax50', tier: '1', evolved: true, score: 0.4410, fromUpgrade: true },
-	{ id: 'apex-c04-bug-3atkstar-boomgen', tier: '1', evolved: true, score: 0.4819 },
-	{ id: 'offantom-m-wak50', tier: '1', evolved: true, score: 0.5204, fromUpgrade: true },
-	{ id: 'pb85-m-cune50', tier: '1', evolved: true, score: 0.4632, fromUpgrade: true },
-	{ id: 's02-m-lax-curse', tier: '1', evolved: true, score: 0.4606, fromUpgrade: true },
-	{ id: 'sample-08', tier: '1', score: 0.4599 },
-	{ id: 's0053-lefties-hpi', tier: '1', variantCluster: 'vc-s0053-lefties', evolved: true, score: 0.4489 },
-	{ id: 's0053-lefties-dp', tier: '1', variantCluster: 'vc-s0053-lefties', evolved: true, score: 0.4489 },
-	{ id: 'rental-cban-8', tier: '1', score: 0.4457 },
-	{ id: 'pb-96', tier: '1', score: 0.4300 },
-	{ id: 'sample-12', tier: '1', score: 0.4267 },
-	{ id: 'sample-06', tier: '1', score: 0.4158 },
+	// Tier 1A: Strong `policy-v4` Non-Support Contenders (11 shells, 44.9%–49.4% vs `p_clean7`)
+	{ id: 'ayagen-m-zap50', tier: '1', evolved: true, score: 0.4939, fromUpgrade: true },
+	{ id: 'pb-89', tier: '1', score: 0.4917 },
+	{ id: 'pb-6', tier: '1', score: 0.4902 },
+	{ id: 'rraikou-m-cune50', tier: '1', evolved: true, score: 0.4808, fromUpgrade: true },
+	{ id: 'offantom-m-wak50', tier: '1', evolved: true, score: 0.4736, fromUpgrade: true },
+	{ id: 'pb66-m-wak55', tier: '1', evolved: true, score: 0.4725, fromUpgrade: true },
+	{ id: 'pb84-cln-skarm50', tier: '1', evolved: true, score: 0.4714, fromUpgrade: true },
+	{ id: 'sample-12', tier: '1', score: 0.4668 },
+	{ id: 'pb-96', tier: '1', score: 0.4653 },
+	{ id: 'sample-06', tier: '1', score: 0.4533 },
+	{ id: 'mjj-2014-thdrcomb', tier: '1', score: 0.4492 },
 
-	// Tier 1B: Strong Diverse NC2000 Archetypes (14 distinct shells)
-	{ id: 'mjj-2010-garap-a', tier: '1', score: 0.3895 },
-	{ id: 'rental-cban-13', tier: '1', score: 0.3872 },
-	{ id: 'pb-87', tier: '1', score: 0.3819 },
-	{ id: 'sample-11', tier: '1', score: 0.3731 },
-	{ id: 'sample-17-orig', tier: '1', score: 0.3709 },
-	{ id: 'pb-131', tier: '1', score: 0.3660 },
-	{ id: 'deme-r1-00-s0030', tier: '1', evolved: true, score: 0.3631 },
-	{ id: 'sample-09', tier: '1', score: 0.3618 },
-	{ id: 'hc75-top8-tsuru', tier: '1', score: 0.3593 },
-	{ id: 'pb-89', tier: '1', score: 0.3584 },
-	{ id: 'sample-14', tier: '1', score: 0.3408 },
-	{ id: 'ayagen-m-zap50', tier: '1', evolved: true, score: 0.3271, fromUpgrade: true },
-	{ id: 'mjj-type-QA-moudoku', tier: '1', score: 0.3145 },
-	{ id: 'sample-22-orig', tier: '1', score: 0.1798 },
+	// Tier 1B: Diverse NC2000 Archetypes & Camouflage Core (14 distinct shells / 15 teams)
+	{ id: 'sample-22-orig', tier: '1', score: 0.4418 },
+	{ id: 'pb122-m-lax50', tier: '1', evolved: true, score: 0.4320, fromUpgrade: true },
+	{ id: 'rental-cban-8', tier: '1', score: 0.4280 },
+	{ id: 's0053-lefties-hpi', tier: '1', variantCluster: 'vc-s0053-lefties', evolved: true, score: 0.4274 },
+	{ id: 's0053-lefties-dp', tier: '1', variantCluster: 'vc-s0053-lefties', evolved: true, score: 0.4274 },
+	{ id: 'sample-17-orig', tier: '1', score: 0.4096 },
+	{ id: 'mjj-2010-garap-a', tier: '1', score: 0.4007 },
+	{ id: 'sample-08', tier: '1', score: 0.3662 },
+	{ id: 'mjj-type-QA-moudoku', tier: '1', score: 0.3638 },
+	{ id: 'hc75-top8-tsuru', tier: '1', score: 0.3592 },
+	{ id: 'sample-09', tier: '1', score: 0.3491 },
+	{ id: 'sample-14', tier: '1', score: 0.3458 },
+	{ id: 's02-m-lax-curse', tier: '1', evolved: true, score: 0.3438, fromUpgrade: true },
+	{ id: 'sample-11', tier: '1', score: 0.3425 },
+	{ id: 'deme-r1-00-s0030', tier: '1', evolved: true, score: 0.2912 },
 ];
 
 function checkJpNc2000Legality(id, sets) {
@@ -281,38 +281,44 @@ function main() {
 
 	const catalogDoc = {
 		format: 'nc2000-team-pool-v4',
-		policyEpoch: 'policy-v2',
+		policyEpoch: 'policy-v4',
 		generator: 'tools/build-team-products-v4.js',
 		flagship: {
-			cluster: 'policy-v2-certified-core-6',
+			cluster: 'policy-v4-certified-core-7',
 			mixture: 'data/team-pool-v4/flagship-mixture.json',
-			report: 'docs/reports/policy-v2-nash-certification.md',
-			verification: '7,776 strict NO-CACHE LIVE games (15,552/15,552 preview.source=live, 0 belief mismatches, 0/15 cross-round seed overlaps) across 6-round full 32-shell PSRO closure (I1 Disclosed / Self-Consistent Shell equilibrium), centered on a uniform 96g/edge zero-leakage Elite-8 matrix (2,688g); plus 10,152g catalog refresh and 9,112g cf_party_ab local saturation audit',
+			report: 'docs/reports/policy-v4-nash-certification.md',
+			verification: '12,844 strict NO-CACHE LIVE policy-v4 games (25,688/25,688 preview.source=live, 3,083/3,083 policy-v4 manifests verified, 0 belief mismatches, 0 caps/ties, 0 cross-round seed overlaps, cross-round homogeneity chi2=137.49 on 143 df) across 9-round VoI-tilted full 32-shell PSRO closure (I1 Disclosed / Self-Consistent Shell equilibrium), with 96g–408g/edge zero-leakage Active-8 matrix and 100.0% direct support coverage across all 32/32 shells',
 			provisionalUniformCore: false,
 			certifiedNash: true,
 			infoRegime: 'I1_disclosed_self_consistent_shell',
-			estimator: 'Bayes-Minimax (argmin_p E_{M~post}[max_i (M p)_i - 0.5], 0.5%-rounded 6-shell global optimum; dual_gap <= 0.012 pp)',
+			estimator: 'Bayes-Minimax (argmin_p E_{M~post}[max_i (M p)_i - 0.5], 0.5%-rounded 7-shell certified support global optimum; dual_gap <= 0.034 pp)',
 			exactRationalPointNash: {
 				unique: true,
-				supportSize: 5,
+				pooledSupportIdentical: true,
+				supportSize: 7,
 				weights: {
-					'pb66-m-wak55': 0.402542,
-					'mjj-2014-thdrcomb': 0.203390,
-					'rraikou-m-cune50': 0.199153,
-					'sample-07': 0.173729,
-					'pb63-m-gar55': 0.021186,
+					'pb85-m-cune50': 0.242603,
+					'sample-07': 0.241335,
+					'pb63-m-gar55': 0.193557,
+					'pb-131': 0.159044,
+					'pb-87': 0.084756,
+					'apex-c04-bug-3atkstar-boomgen': 0.049531,
+					'rental-cban-13': 0.029173,
 				},
 			},
 			exploitabilityCertificate: {
-				inSampleGapPp: 0.46,
-				elite8GaussMeanP90P95Pp: [2.68, 4.13, 4.66],
-				elite8BetaMeanP90P95Pp: [2.64, 4.07, 4.57],
-				full32EbGaussMeanP90P95Pp: [2.75, 4.22, 4.78],
-				full32EbBetaMeanP90P95Pp: [2.73, 4.19, 4.74],
+				inSampleGapPp: 0.26,
+				active8BetaMeanP90P95CvarPp: [1.52, 2.33, 2.64, 3.02],
+				active8BootMeanP90P95CvarPp: [1.56, 2.38, 2.68, 3.10],
+				full32EbMeanP90P95Pp: [1.52, 2.33, 2.64],
 				nonSupportDetections: 0,
-				nonSupportMaxZ: 0.25,
-				nonSupportMinBhQ: 1.0,
-				effectiveSupportSize: 5.34,
+				nonSupportCoverageMin: 1.0,
+				nonSupportMaxEv: 0.4939,
+				nonSupportMaxZ: -0.15,
+				nonSupportMinBhQ: 0.9978,
+				supportMinPosteriorInclusion: 0.598,
+				nextOutPosteriorInclusion: 0.180,
+				effectiveSupportSize: 5.67,
 			},
 			certifiedMinorGems: [],
 			retractedMinorCandidates: ['pb84-cln-sking50 (Slowking L50)', 'pb63-m-esp55 (Espeon L55)'],
@@ -321,14 +327,14 @@ function main() {
 			v4CensusMeanMinSlotPickRate: 0.1539,
 		},
 		condition: {
-			policyEpoch: 'policy-v2',
-			previewIters: 240000,
+			policyEpoch: 'policy-v4',
+			previewIters: 720000,
 			battleIters: 243000,
 			battleMode: 'adaptive',
 			c: 0.4,
 			maxTurns: 500,
-			previewPolicy: 'SteppedCfPreview (CF-V_net v2 + Double-Oracle + LCB-gated Mixed Nash)',
-			battlePolicy: 'CfValuePuct (P_net PUCT + 144-dim Siamese CF-V_net v2 + 8r Hybrid Endgame Guard)',
+			previewPolicy: 'SteppedCfPreview (720k: 65% 128i/128t1 Present19 TrajCalib + 35% Turn-1 Double-Oracle LCB-gated Mixed Nash)',
+			battlePolicy: 'CfValuePuct (P_net PUCT + 192-dim Siamese CF-V_net v3 + 8r Hybrid Endgame Guard)',
 			previewMode: 'strict-live-no-cache',
 			dexSha256: sha256File('data/gen2stadium2.json'),
 		},
@@ -349,15 +355,15 @@ function main() {
 	};
 
 	const flagshipDoc = {
-		name: 'team-pool-v4-policy-v2-certified-core-6',
-		policyEpoch: 'policy-v2',
+		name: 'team-pool-v4-policy-v4-certified-core-7',
+		policyEpoch: 'policy-v4',
 		source_solution: 'data/team-pool-v4/team-pool.json',
-		certification_report: 'docs/reports/policy-v2-nash-certification.md',
+		certification_report: 'docs/reports/policy-v4-nash-certification.md',
 		infoRegime: 'I1_disclosed_self_consistent_shell',
 		active_shells: flagshipTeams.length,
 		support_size: flagshipTeams.length,
 		trainingPolicy: 'training-v3',
-		measurementStatus: 'Certified policy-v2 Bayes-Minimax Nash equilibrium across all 32 team-pool-v4 shells (7,776 strict NO-CACHE LIVE games, 15,552 live preview sides, 0 cross-round seed overlaps, uniform 96g/edge zero-leakage Elite-8 matrix). Held-out 50k posterior exploitability: Elite-8 E[true]=2.68 pp (p95=4.66 pp; Jeffreys Beta 2.64 / 4.57 pp), Full-32 EB E[true]=2.75 pp (p95=4.78 pp; Beta 2.73 / 4.74 pp), 0/26 non-support detections (max z=+0.25, min BH_q=1.000). Exact unique 5-shell rational point-LP Nash (40.25% pb66 / 20.34% mjj-thdrcomb / 19.92% rraikou / 17.37% sample-07 / 2.12% pb63) has higher posterior risk (E=3.11 pp, p95=5.73 pp).',
+		measurementStatus: 'Certified policy-v4 Bayes-Minimax Nash equilibrium across all 32 preserved team-pool-v4 shells (12,844 strict NO-CACHE LIVE games, 25,688 live preview sides, 0 belief mismatches, 0 caps/ties, 0 cross-round seed overlaps, homogeneity chi2=137.49 on 143 df, 100.0% direct support coverage on all 32/32 shells). Held-out 50k posterior exploitability: Active-8 Jeffreys Beta E[true]=1.52 pp (p95=2.64 pp; Bootstrap 1.56 / 2.68 pp), Full-32 EB E[true]=1.52 pp (p95=2.64 pp), 0/25 non-support detections (all 25/25 < 50.0%, max EV=49.39%, max z=-0.15, min BH_q=0.9978). All 7 deployed shells match the unique exact rational 7-shell point-LP support 1-to-1 (Bayesian LOO P(in)=59.8%–95.1% vs 18.0% for #8 pb66-m-wak55).',
 		certification: catalogDoc.flagship.exploitabilityCertificate,
 		exactRationalPointNash: catalogDoc.flagship.exactRationalPointNash,
 		teams: flagshipTeams,
