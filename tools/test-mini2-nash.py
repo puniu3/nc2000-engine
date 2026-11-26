@@ -397,6 +397,140 @@ class Mini2BarnGranularityLoopTests(unittest.TestCase):
             )
             self.assertGreaterEqual(rec, 60)
 
+    def test_ruleset_propagates_to_mini2_local_barn_and_isolates_granularity_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as td_str:
+            td = Path(td_str)
+            fake_bin = td / "nash_refresh"
+            fake_bin.write_text("#!/bin/sh\n", encoding="utf-8")
+            sched = td / "sched.jsonl"
+            sched.write_text('{"block":0,"rowSeat":0}\n', encoding="utf-8")
+            out_dir = td / "out"
+
+            # Profile key preserves exact legacy PS string for None/gen2stadium2 and isolates Castle.
+            pk_none = MINI2._workload_profile_key(
+                preview_iters=720000,
+                battle_iters=243000,
+                battle_mode="adaptive",
+                preview_cache=False,
+                has_dist_file=False,
+                preview_dist_k=None,
+                preview_dist_only=False,
+            )
+            pk_ps = MINI2._workload_profile_key(
+                preview_iters=720000,
+                battle_iters=243000,
+                battle_mode="adaptive",
+                preview_cache=False,
+                has_dist_file=False,
+                preview_dist_k=None,
+                preview_dist_only=False,
+                ruleset="gen2stadium2",
+            )
+            pk_castle_alias = MINI2._workload_profile_key(
+                preview_iters=720000,
+                battle_iters=243000,
+                battle_mode="adaptive",
+                preview_cache=False,
+                has_dist_file=False,
+                preview_dist_k=None,
+                preview_dist_only=False,
+                ruleset="castle",
+            )
+            pk_castle_free = MINI2._workload_profile_key(
+                preview_iters=720000,
+                battle_iters=243000,
+                battle_mode="adaptive",
+                preview_cache=False,
+                has_dist_file=False,
+                preview_dist_k=None,
+                preview_dist_only=False,
+                ruleset="castle-free",
+            )
+            pk_castle_tourn = MINI2._workload_profile_key(
+                preview_iters=720000,
+                battle_iters=243000,
+                battle_mode="adaptive",
+                preview_cache=False,
+                has_dist_file=False,
+                preview_dist_k=None,
+                preview_dist_only=False,
+                ruleset="castle-tournament",
+            )
+            self.assertEqual(pk_none, pk_ps)
+            self.assertEqual(pk_castle_alias, pk_castle_free)
+            self.assertNotEqual(pk_ps, pk_castle_free)
+            self.assertNotEqual(pk_castle_free, pk_castle_tourn)
+
+            # build_mini2_run_cmd omits NASH_RULESET when None and passes it when set.
+            cmd_ps = MINI2.build_mini2_run_cmd(
+                binary=fake_bin,
+                pools_path=None,
+                schedule_path=sched,
+                out_dir=out_dir,
+            )
+            self.assertFalse(any(tok.startswith("NASH_RULESET=") for tok in cmd_ps))
+            cmd_castle = MINI2.build_mini2_run_cmd(
+                binary=fake_bin,
+                pools_path=None,
+                schedule_path=sched,
+                out_dir=out_dir,
+                ruleset="castle-free",
+            )
+            self.assertIn("NASH_RULESET=castle-free", cmd_castle)
+
+            # run_chunk_local sets NASH_RULESET in subprocess env.
+            seen_envs: list[dict[str, str]] = []
+
+            def fake_local_run(_cmd, env=None, **_kwargs):
+                seen_envs.append(dict(env or {}))
+                return mock.Mock(returncode=0, stdout='{"games":1}\n', stderr="")
+
+            with mock.patch.object(MINI2.subprocess, "run", side_effect=fake_local_run):
+                MINI2.run_chunk_local(
+                    binary=fake_bin,
+                    pools_path=None,
+                    schedule_path=sched,
+                    final_out_dir=out_dir,
+                    done_marker=td / "done.json",
+                    ruleset="castle-free",
+                )
+            self.assertEqual(seen_envs[-1].get("NASH_RULESET"), "castle-free")
+
+            # run_chunks_via_barn passes --env NASH_RULESET=castle-free to barn dispatch.
+            (td / "barn_run").mkdir(exist_ok=True)
+            chunks = _make_chunks(td / "barn_run", [2])
+            barn_cmds: list[list[str]] = []
+
+            def fake_barn_castle(cmd: list[str], **_kwargs):
+                barn_cmds.append(list(cmd))
+                tasks_file = Path(_extract_flag(cmd, "--tasks-file") or "")
+                ledger_file = Path(_extract_flag(cmd, "--resume") or "")
+                tasks = [json.loads(line) for line in tasks_file.read_text(encoding="utf-8").splitlines() if line.strip()]
+                ledger_lines = []
+                for t in tasks:
+                    Path(t["out"]).mkdir(parents=True, exist_ok=True)
+                    ledger_lines.append(json.dumps({"task": t["task"], "ok": True, "worker": "mini1", "wall_ms": 1000}))
+                ledger_file.write_text("\n".join(ledger_lines) + "\n", encoding="utf-8")
+                tel = {"cmd": "dispatch", "ok": True, "by_worker": {"mini1": len(tasks)}}
+                return mock.Mock(returncode=0, stdout=json.dumps(tel) + "\n", stderr="")
+
+            with (
+                mock.patch.object(MINI2, "query_barn_targets", return_value=FAKE_HYBRID_TARGETS),
+                mock.patch.object(MINI2.subprocess, "run", side_effect=fake_barn_castle),
+            ):
+                MINI2.run_chunks_via_barn(
+                    chunks,
+                    binary=fake_bin,
+                    colab_binary=None,
+                    pools_path=None,
+                    local_workers=4,
+                    mini2_workers=4,
+                    local_only=True,
+                    ruleset="castle-free",
+                    granularity_state_path=td / "gran.json",
+                )
+            self.assertIn("NASH_RULESET=castle-free", barn_cmds[-1])
+
 
 if __name__ == "__main__":
     unittest.main()

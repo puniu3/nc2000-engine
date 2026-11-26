@@ -5,6 +5,7 @@
 //!
 //! Environment variables (matching `web/tests/nash-refresh.mjs` plus native extensions):
 //!   NASH_POOLS=FILE          Optional extra `{teams, mixtures}` JSON file.
+//!   NASH_RULESET=ID          Optional battle ruleset id (default: `gen2stadium2`; e.g. `castle-free`, `castle-tournament`).
 //!   NASH_SAVE_LOGS=1         Save full battle protocol logs to `NEW_OUTPUT_DIR/logs/<index>.json`.
 //!   NASH_PREVIEW_ITERS=N     Override live preview iterations (default: `live-search.json` `unknownPreview`).
 //!   NASH_BATTLE_ITERS=N      Override battle iteration cap/budget (default: `live-search.json` `battle.adaptive`).
@@ -26,7 +27,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
-use nc2000_bot::compiled_preview::POLICY_EPOCH;
+use nc2000_bot::compiled_preview::{policy_epoch_for, POLICY_EPOCH};
 use nc2000_bot::decision::{DecisionPolicy, DecisionSampler, PolicyMode};
 use nc2000_bot::player::PlayerChannel;
 use nc2000_bot::preview::{MetaPool, MetaTeam};
@@ -34,8 +35,9 @@ use nc2000_bot::smmcts::SelRule;
 use nc2000_bot::{ProtocolAgent, RmConfig, SplitMix64};
 use nc2000_engine::battle::{Outcome, PokemonSet};
 use nc2000_engine::dex::Dex;
+use nc2000_engine::rules::Ruleset;
 use nc2000_engine::state::Battle;
-use nc2000_engine::validate::{validate_team, Learnsets};
+use nc2000_engine::validate::{validate_team_with_ruleset, Learnsets};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -68,6 +70,8 @@ struct Task {
     mixtures: Option<[String; 2]>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     policies: Option<[String; 2]>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    ruleset: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -174,8 +178,31 @@ fn entry_to_policy(entry: &PreviewDistEntry) -> Option<DecisionPolicy<String>> {
     .ok()
 }
 
+fn resolve_ruleset(opt: Option<&str>, fallback: Ruleset) -> Ruleset {
+    match opt.map(str::trim).filter(|s| !s.is_empty()) {
+        None => fallback,
+        Some(id) => Ruleset::parse_id(id).unwrap_or_else(|| {
+            panic!(
+                "invalid ruleset {id:?} (expected e.g. gen2stadium2, castle-free, castle-tournament)"
+            )
+        }),
+    }
+}
+
+/// Cache epoch tag that preserves bit-exact `POLICY_EPOCH` keys on PS Stadium 2
+/// while isolating Castle rulesets and overlays (`castle-policy-v4:<canonical_id>`).
+fn cache_epoch_tag(ruleset: Ruleset) -> String {
+    let base = policy_epoch_for(ruleset);
+    if ruleset.is_ps() {
+        base.to_string()
+    } else {
+        format!("{base}:{}", ruleset.canonical_id())
+    }
+}
+
 fn run_single_preview_sample(
     dex: &Dex,
+    ruleset: Ruleset,
     side: usize,
     prior: MetaPool,
     cfg: RmConfig,
@@ -186,7 +213,7 @@ fn run_single_preview_sample(
     is_current: bool,
     sample_seed: u64,
 ) -> Option<String> {
-    let mut p_agent = ProtocolAgent::new(dex, side, prior, cfg, sample_seed);
+    let mut p_agent = ProtocolAgent::new_with_ruleset(dex, side, prior, cfg, sample_seed, ruleset);
     p_agent.set_own_team(own_sets);
     for line in frame_lines {
         p_agent.push_line(dex, line);
@@ -307,16 +334,21 @@ fn preview_dist_key_with_epoch(
         h.update([1u8]);
         h.update((alive.len() as u64).to_le_bytes());
         for &idx in alive {
-            let cand = &prior.teams[idx];
+            let cand_id = belief.candidate_id(idx);
+            let cand_weight = prior
+                .teams
+                .iter()
+                .find(|t| t.id == cand_id)
+                .and_then(|t| t.weight);
             let sets_json = team_json_map
-                .get(&cand.id)
+                .get(cand_id)
                 .map(String::as_str)
                 .unwrap_or("");
-            h.update((cand.id.len() as u64).to_le_bytes());
-            h.update(cand.id.as_bytes());
+            h.update((cand_id.len() as u64).to_le_bytes());
+            h.update(cand_id.as_bytes());
             h.update((sets_json.len() as u64).to_le_bytes());
             h.update(sets_json.as_bytes());
-            let w_bits = cand.weight.map(f64::to_bits).unwrap_or(u64::MAX);
+            let w_bits = cand_weight.map(f64::to_bits).unwrap_or(u64::MAX);
             h.update(w_bits.to_le_bytes());
         }
     } else {
@@ -325,6 +357,36 @@ fn preview_dist_key_with_epoch(
     h.finalize().into()
 }
 
+fn preview_dist_key_for_ruleset(
+    ruleset: Ruleset,
+    side: usize,
+    preview_iters: u32,
+    blind_c: f64,
+    policy_name: &str,
+    own_sets_json: &str,
+    frame_lines: &[String],
+    req_json: &str,
+    prior: &MetaPool,
+    agent: &ProtocolAgent,
+    team_json_map: &HashMap<String, String>,
+) -> [u8; 32] {
+    let tag = cache_epoch_tag(ruleset);
+    preview_dist_key_with_epoch(
+        &tag,
+        side,
+        preview_iters,
+        blind_c,
+        policy_name,
+        own_sets_json,
+        frame_lines,
+        req_json,
+        prior,
+        agent,
+        team_json_map,
+    )
+}
+
+#[cfg(test)]
 fn preview_dist_key(
     side: usize,
     preview_iters: u32,
@@ -337,8 +399,8 @@ fn preview_dist_key(
     agent: &ProtocolAgent,
     team_json_map: &HashMap<String, String>,
 ) -> [u8; 32] {
-    preview_dist_key_with_epoch(
-        POLICY_EPOCH,
+    preview_dist_key_for_ruleset(
+        Ruleset::PsStadium2,
         side,
         preview_iters,
         blind_c,
@@ -457,16 +519,21 @@ fn preview_cache_key_with_epoch(
         h.update([1u8]);
         h.update((alive.len() as u64).to_le_bytes());
         for &idx in alive {
-            let cand = &prior.teams[idx];
+            let cand_id = belief.candidate_id(idx);
+            let cand_weight = prior
+                .teams
+                .iter()
+                .find(|t| t.id == cand_id)
+                .and_then(|t| t.weight);
             let sets_json = team_json_map
-                .get(&cand.id)
+                .get(cand_id)
                 .map(String::as_str)
                 .unwrap_or("");
-            h.update((cand.id.len() as u64).to_le_bytes());
-            h.update(cand.id.as_bytes());
+            h.update((cand_id.len() as u64).to_le_bytes());
+            h.update(cand_id.as_bytes());
             h.update((sets_json.len() as u64).to_le_bytes());
             h.update(sets_json.as_bytes());
-            let w_bits = cand.weight.map(f64::to_bits).unwrap_or(u64::MAX);
+            let w_bits = cand_weight.map(f64::to_bits).unwrap_or(u64::MAX);
             h.update(w_bits.to_le_bytes());
         }
     } else {
@@ -475,6 +542,38 @@ fn preview_cache_key_with_epoch(
     h.finalize().into()
 }
 
+fn preview_cache_key_for_ruleset(
+    ruleset: Ruleset,
+    side: usize,
+    seed: u32,
+    preview_iters: u32,
+    blind_c: f64,
+    policy_name: &str,
+    own_sets_json: &str,
+    frame_lines: &[String],
+    req_json: &str,
+    prior: &MetaPool,
+    agent: &ProtocolAgent,
+    team_json_map: &HashMap<String, String>,
+) -> [u8; 32] {
+    let tag = cache_epoch_tag(ruleset);
+    preview_cache_key_with_epoch(
+        &tag,
+        side,
+        seed,
+        preview_iters,
+        blind_c,
+        policy_name,
+        own_sets_json,
+        frame_lines,
+        req_json,
+        prior,
+        agent,
+        team_json_map,
+    )
+}
+
+#[cfg(test)]
 fn preview_cache_key(
     side: usize,
     seed: u32,
@@ -488,8 +587,8 @@ fn preview_cache_key(
     agent: &ProtocolAgent,
     team_json_map: &HashMap<String, String>,
 ) -> [u8; 32] {
-    preview_cache_key_with_epoch(
-        POLICY_EPOCH,
+    preview_cache_key_for_ruleset(
+        Ruleset::PsStadium2,
         side,
         seed,
         preview_iters,
@@ -506,6 +605,7 @@ fn preview_cache_key(
 
 struct SharedState {
     dex: Dex,
+    ruleset: Ruleset,
     teams: HashMap<String, Vec<PokemonSet>>,
     team_json_map: HashMap<String, String>,
     disclosed: HashMap<String, MetaPool>,
@@ -559,9 +659,16 @@ fn run_game(shared: &SharedState, index: usize, task: &Task) -> Value {
             .clone(),
     ];
 
+    let ruleset = resolve_ruleset(task.ruleset.as_deref(), shared.ruleset);
     let battle_seed_str = SplitMix64::new(task.battle_seed as u64).battle_seed();
-    let mut battle = Battle::from_fixture(&shared.dex, &battle_seed_str, &sets[0], &sets[1])
-        .expect("Battle::from_fixture");
+    let mut battle = Battle::from_fixture_with_ruleset(
+        &shared.dex,
+        &battle_seed_str,
+        &sets[0],
+        &sets[1],
+        ruleset,
+    )
+    .expect("Battle::from_fixture_with_ruleset");
     let mut channels = [PlayerChannel::new(0), PlayerChannel::new(1)];
 
     let cfg = RmConfig {
@@ -584,12 +691,13 @@ fn run_game(shared: &SharedState, index: usize, task: &Task) -> Value {
     });
 
     let mut agents: [ProtocolAgent; 2] = std::array::from_fn(|side| {
-        let mut agent = ProtocolAgent::new(
+        let mut agent = ProtocolAgent::new_with_ruleset(
             &shared.dex,
             side,
             priors[side].clone(),
             cfg.clone(),
             task.seeds[side] as u64,
+            ruleset,
         );
         agent.set_own_team(sets[side].clone());
         agent
@@ -675,7 +783,8 @@ fn run_game(shared: &SharedState, index: usize, task: &Task) -> Value {
                             .get(&task.ids[side])
                             .map(String::as_str)
                             .unwrap_or("");
-                        let key_bytes = preview_dist_key(
+                        let key_bytes = preview_dist_key_for_ruleset(
+                            ruleset,
                             side,
                             shared.preview_iters,
                             shared.blind_c,
@@ -706,6 +815,7 @@ fn run_game(shared: &SharedState, index: usize, task: &Task) -> Value {
                                 let s = dist_sample_seed(&key_bytes, rep);
                                 if let Some(act) = run_single_preview_sample(
                                     dex,
+                                    ruleset,
                                     side,
                                     prior_clone.clone(),
                                     cfg_clone.clone(),
@@ -749,7 +859,8 @@ fn run_game(shared: &SharedState, index: usize, task: &Task) -> Value {
                             .get(&task.ids[side])
                             .map(String::as_str)
                             .unwrap_or("");
-                        let key = preview_cache_key(
+                        let key = preview_cache_key_for_ruleset(
+                            ruleset,
                             side,
                             preview_seed,
                             shared.preview_iters,
@@ -773,12 +884,13 @@ fn run_game(shared: &SharedState, index: usize, task: &Task) -> Value {
                                 // Isolated agent seeded with `previewSeeds[side]` guarantees
                                 // bit-exact determinism regardless of worker scheduling or cache hit/miss,
                                 // while keeping main battle `agent` RNG strictly independent per game.
-                                let mut p_agent = ProtocolAgent::new(
+                                let mut p_agent = ProtocolAgent::new_with_ruleset(
                                     dex,
                                     side,
                                     prior_clone,
                                     cfg_clone,
                                     pseed as u64,
+                                    ruleset,
                                 );
                                 p_agent.set_own_team(own_sets);
                                 for line in &frame.lines {
@@ -819,12 +931,13 @@ fn run_game(shared: &SharedState, index: usize, task: &Task) -> Value {
                     None => {
                         if first {
                             if let Some(pseed) = separate_preview_seed {
-                                let mut p_agent = ProtocolAgent::new(
+                                let mut p_agent = ProtocolAgent::new_with_ruleset(
                                     &shared.dex,
                                     side,
                                     priors[side].clone(),
                                     cfg.clone(),
                                     pseed as u64,
+                                    ruleset,
                                 );
                                 p_agent.set_own_team(sets[side].clone());
                                 for line in &frame.lines {
@@ -942,6 +1055,9 @@ fn run_game(shared: &SharedState, index: usize, task: &Task) -> Value {
     let mut obj = serde_json::to_value(task).unwrap();
     let map = obj.as_object_mut().unwrap();
     map.insert("index".into(), json!(index));
+    if !ruleset.is_ps() || task.ruleset.is_some() {
+        map.insert("ruleset".into(), json!(ruleset.canonical_id()));
+    }
     map.insert("preview".into(), json!(preview));
     map.insert("outcome".into(), json!(outcome));
     map.insert("turns".into(), json!(battle.turn));
@@ -954,6 +1070,7 @@ fn run_game(shared: &SharedState, index: usize, task: &Task) -> Value {
 }
 
 struct PrecomputeSpec {
+    ruleset: Ruleset,
     key_bytes: [u8; 32],
     key_hex: String,
     side: usize,
@@ -992,6 +1109,7 @@ fn precompute_preview_dists(
         if task.preview_seeds.is_some() {
             continue;
         }
+        let ruleset = resolve_ruleset(task.ruleset.as_deref(), shared.ruleset);
         let policies = task
             .policies
             .clone()
@@ -1001,8 +1119,14 @@ fn precompute_preview_dists(
             shared.teams[&task.ids[1]].clone(),
         ];
         let battle_seed_str = SplitMix64::new(task.battle_seed as u64).battle_seed();
-        let mut battle = Battle::from_fixture(&shared.dex, &battle_seed_str, &sets[0], &sets[1])
-            .expect("Battle::from_fixture");
+        let mut battle = Battle::from_fixture_with_ruleset(
+            &shared.dex,
+            &battle_seed_str,
+            &sets[0],
+            &sets[1],
+            ruleset,
+        )
+        .expect("Battle::from_fixture_with_ruleset");
         let mut channels = [PlayerChannel::new(0), PlayerChannel::new(1)];
         let priors: [MetaPool; 2] = std::array::from_fn(|side| {
             if let Some(mixtures) = &task.mixtures {
@@ -1020,12 +1144,13 @@ fn precompute_preview_dists(
             let frame = channels[side]
                 .frame(&mut battle, &shared.dex)
                 .expect("PlayerChannel::frame");
-            let mut agent = ProtocolAgent::new(
+            let mut agent = ProtocolAgent::new_with_ruleset(
                 &shared.dex,
                 side,
                 priors[side].clone(),
                 cfg.clone(),
                 task.seeds[side] as u64,
+                ruleset,
             );
             agent.set_own_team(sets[side].clone());
             for line in &frame.lines {
@@ -1043,7 +1168,8 @@ fn precompute_preview_dists(
                 .get(&task.ids[side])
                 .map(String::as_str)
                 .unwrap_or("");
-            let key_bytes = preview_dist_key(
+            let key_bytes = preview_dist_key_for_ruleset(
+                ruleset,
                 side,
                 shared.preview_iters,
                 shared.blind_c,
@@ -1065,6 +1191,7 @@ fn precompute_preview_dists(
                     continue;
                 }
                 specs.push(PrecomputeSpec {
+                    ruleset,
                     key_bytes,
                     key_hex,
                     side,
@@ -1080,6 +1207,7 @@ fn precompute_preview_dists(
                 });
             } else {
                 specs.push(PrecomputeSpec {
+                    ruleset,
                     key_bytes,
                     key_hex,
                     side,
@@ -1125,6 +1253,7 @@ fn precompute_preview_dists(
                     let sample_seed = dist_sample_seed(&sp.key_bytes, rep);
                     if let Some(act) = run_single_preview_sample(
                         dex,
+                        sp.ruleset,
                         sp.side,
                         sp.prior.clone(),
                         cfg.clone(),
@@ -1162,7 +1291,7 @@ fn precompute_preview_dists(
 
     let doc = PreviewDistFile {
         format: PREVIEW_DIST_FORMAT.to_string(),
-        policy_epoch: Some(POLICY_EPOCH.to_string()),
+        policy_epoch: Some(policy_epoch_for(shared.ruleset).to_string()),
         entries,
     };
     fs::write(
@@ -1310,6 +1439,15 @@ fn main() {
         );
     }
 
+    let default_ruleset = resolve_ruleset(
+        env::var("NASH_RULESET").ok().as_deref(),
+        Ruleset::PsStadium2,
+    );
+    let task_rulesets: Vec<Ruleset> = tasks
+        .iter()
+        .map(|t| resolve_ruleset(t.ruleset.as_deref(), default_ruleset))
+        .collect();
+
     let pools_text = env::var("NASH_POOLS")
         .ok()
         .filter(|s| !s.is_empty())
@@ -1320,8 +1458,24 @@ fn main() {
         for t in extra.teams {
             assert!(!teams.contains_key(&t.id), "extra team ID already exists: {}", t.id);
             let sets_json = serde_json::to_string(&t.sets).unwrap();
-            let v = validate_team(&dex, &learnsets, &sets_json);
-            assert!(v["ok"].as_bool() == Some(true), "invalid team {}: {v}", t.id);
+            let mut rulesets_for_team: Vec<Ruleset> = Vec::new();
+            for (task, &rs) in tasks.iter().zip(task_rulesets.iter()) {
+                if (task.ids[0] == t.id || task.ids[1] == t.id) && !rulesets_for_team.contains(&rs) {
+                    rulesets_for_team.push(rs);
+                }
+            }
+            if rulesets_for_team.is_empty() {
+                rulesets_for_team.push(default_ruleset);
+            }
+            for rs in rulesets_for_team {
+                let v = validate_team_with_ruleset(&dex, &learnsets, &sets_json, rs);
+                assert!(
+                    v["ok"].as_bool() == Some(true),
+                    "invalid team {} under {}: {v}",
+                    t.id,
+                    rs.canonical_id()
+                );
+            }
             team_json_map.insert(t.id.clone(), sets_json);
             teams.insert(t.id, t.sets);
         }
@@ -1356,16 +1510,20 @@ fn main() {
         }
     }
 
-    // Validate every referenced team once up front (matches nash-refresh.mjs).
-    let mut validated = HashSet::new();
-    for t in &tasks {
+    // Validate every referenced team once up front per active ruleset (matches nash-refresh.mjs).
+    let mut validated: HashSet<(String, Ruleset)> = HashSet::new();
+    for (t, &rs) in tasks.iter().zip(task_rulesets.iter()) {
         for id in &t.ids {
-            if validated.insert(id.clone()) {
+            if validated.insert((id.clone(), rs)) {
                 let sets_json = team_json_map
                     .get(id)
                     .unwrap_or_else(|| panic!("unknown team id: {id}"));
-                let v = validate_team(&dex, &learnsets, sets_json);
-                assert!(v["ok"].as_bool() == Some(true), "invalid {id}: {v}");
+                let v = validate_team_with_ruleset(&dex, &learnsets, sets_json, rs);
+                assert!(
+                    v["ok"].as_bool() == Some(true),
+                    "invalid {id} under {}: {v}",
+                    rs.canonical_id()
+                );
             }
         }
     }
@@ -1462,7 +1620,8 @@ fn main() {
     }
     manifest.insert("tasks".into(), json!(sha256_hex(&task_bytes)));
     manifest.insert("runner".into(), json!("native-rust"));
-    manifest.insert("policyEpoch".into(), json!(POLICY_EPOCH));
+    manifest.insert("ruleset".into(), json!(default_ruleset.canonical_id()));
+    manifest.insert("policyEpoch".into(), json!(policy_epoch_for(default_ruleset)));
     manifest.insert("nativeBinary".into(), json!(sha256_hex(&exe_bytes)));
     if is_custom_budget {
         manifest.insert(
@@ -1500,6 +1659,7 @@ fn main() {
 
     let shared = Arc::new(SharedState {
         dex,
+        ruleset: default_ruleset,
         teams,
         team_json_map,
         disclosed,
@@ -1569,7 +1729,7 @@ fn main() {
         if !new_entries.is_empty() {
             let doc = PreviewDistFile {
                 format: PREVIEW_DIST_FORMAT.to_string(),
-                policy_epoch: Some(POLICY_EPOCH.to_string()),
+                policy_epoch: Some(policy_epoch_for(shared.ruleset).to_string()),
                 entries: new_entries,
             };
             fs::write(
@@ -1620,34 +1780,34 @@ mod tests {
         let d_v1 = preview_dist_key_with_epoch(
             "policy-v1", 0, 240_000, 0.4, "current", "[]", &frame, "{}", &prior, &agent, &team_map,
         );
-        let d_v2 = preview_dist_key_with_epoch(
-            "policy-v2", 0, 240_000, 0.4, "current", "[]", &frame, "{}", &prior, &agent, &team_map,
+        let d_cur = preview_dist_key_with_epoch(
+            POLICY_EPOCH, 0, 240_000, 0.4, "current", "[]", &frame, "{}", &prior, &agent, &team_map,
         );
-        let d_v2_cur81 = preview_dist_key_with_epoch(
-            "policy-v2", 0, 240_000, 0.4, "current81", "[]", &frame, "{}", &prior, &agent, &team_map,
+        let d_cur81 = preview_dist_key_with_epoch(
+            POLICY_EPOCH, 0, 240_000, 0.4, "current81", "[]", &frame, "{}", &prior, &agent, &team_map,
         );
-        let d_v2_default = preview_dist_key(
+        let d_default = preview_dist_key(
             0, 240_000, 0.4, "current", "[]", &frame, "{}", &prior, &agent, &team_map,
         );
-        assert_ne!(d_v1, d_v2, "preview_dist_key must differ across policy epochs");
-        assert_ne!(d_v2, d_v2_cur81, "preview_dist_key must differ across policy names");
-        assert_eq!(d_v2, d_v2_default, "default preview_dist_key must hash POLICY_EPOCH");
+        assert_ne!(d_v1, d_cur, "preview_dist_key must differ across policy epochs");
+        assert_ne!(d_cur, d_cur81, "preview_dist_key must differ across policy names");
+        assert_eq!(d_cur, d_default, "default preview_dist_key must hash POLICY_EPOCH");
 
         let c_v1 = preview_cache_key_with_epoch(
             "policy-v1", 0, 123, 240_000, 0.4, "current", "[]", &frame, "{}", &prior, &agent, &team_map,
         );
-        let c_v2 = preview_cache_key_with_epoch(
-            "policy-v2", 0, 123, 240_000, 0.4, "current", "[]", &frame, "{}", &prior, &agent, &team_map,
+        let c_cur = preview_cache_key_with_epoch(
+            POLICY_EPOCH, 0, 123, 240_000, 0.4, "current", "[]", &frame, "{}", &prior, &agent, &team_map,
         );
-        let c_v2_cur81 = preview_cache_key_with_epoch(
-            "policy-v2", 0, 123, 240_000, 0.4, "current81", "[]", &frame, "{}", &prior, &agent, &team_map,
+        let c_cur81 = preview_cache_key_with_epoch(
+            POLICY_EPOCH, 0, 123, 240_000, 0.4, "current81", "[]", &frame, "{}", &prior, &agent, &team_map,
         );
-        let c_v2_default = preview_cache_key(
+        let c_default = preview_cache_key(
             0, 123, 240_000, 0.4, "current", "[]", &frame, "{}", &prior, &agent, &team_map,
         );
-        assert_ne!(c_v1, c_v2, "preview_cache_key must differ across policy epochs");
-        assert_ne!(c_v2, c_v2_cur81, "preview_cache_key must differ across policy names");
-        assert_eq!(c_v2, c_v2_default, "default preview_cache_key must hash POLICY_EPOCH");
+        assert_ne!(c_v1, c_cur, "preview_cache_key must differ across policy epochs");
+        assert_ne!(c_cur, c_cur81, "preview_cache_key must differ across policy names");
+        assert_eq!(c_cur, c_default, "default preview_cache_key must hash POLICY_EPOCH");
     }
 
     #[test]
@@ -1662,5 +1822,182 @@ mod tests {
         };
         let v: Value = serde_json::to_value(&current).unwrap();
         assert_eq!(v["policyEpoch"], POLICY_EPOCH);
+    }
+
+    #[test]
+    fn castle_ruleset_cache_keys_isolate_overlays_and_handle_filtered_beliefs() {
+        let dex = test_dex();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("workspace root");
+        let tp4: TeamFile = serde_json::from_str(&read_data(root, "team-pool-v4/team-pool")).unwrap();
+        let legal_a = tp4.teams[0].sets.clone();
+        let legal_b = tp4.teams[1].sets.clone();
+        // Put a Castle-illegal (NYPC Lovely Kiss Snorlax) entry BEFORE the legal candidate in `prior`
+        // so `Belief` filters index 0 out under Castle, shifting `belief.alive()` indices relative to `prior.teams`.
+        let mut illegal_nypc = legal_b.clone();
+        if let Some(lax) = illegal_nypc.iter_mut().find(|s| s.species == "Snorlax") {
+            lax.moves[0] = "Lovely Kiss".into();
+        } else {
+            illegal_nypc[0].species = "Snorlax".into();
+            illegal_nypc[0].name = "Snorlax".into();
+            illegal_nypc[0].moves = vec![
+                "Lovely Kiss".into(),
+                "Body Slam".into(),
+                "Rest".into(),
+                "Curse".into(),
+            ];
+        }
+        let prior = MetaPool {
+            teams: vec![
+                MetaTeam { id: "illegal-nypc".into(), sets: illegal_nypc.clone(), weight: Some(0.5) },
+                MetaTeam { id: "legal-b".into(), sets: legal_b.clone(), weight: Some(0.5) },
+            ],
+        };
+        let mut team_map = HashMap::new();
+        team_map.insert("illegal-nypc".into(), serde_json::to_string(&illegal_nypc).unwrap());
+        team_map.insert("legal-b".into(), serde_json::to_string(&legal_b).unwrap());
+        let own_json = serde_json::to_string(&legal_a).unwrap();
+
+        assert_eq!(cache_epoch_tag(Ruleset::PsStadium2), POLICY_EPOCH);
+        assert_eq!(cache_epoch_tag(Ruleset::castle_free()), "castle-policy-v4:castle-free");
+        assert_eq!(
+            cache_epoch_tag(Ruleset::castle_tournament()),
+            "castle-policy-v4:castle-tournament"
+        );
+
+        let make_key = |rs: Ruleset| {
+            let mut b = Battle::from_fixture_with_ruleset(&dex, "1,2,3,4", &legal_a, &legal_b, rs)
+                .unwrap();
+            let mut ch = PlayerChannel::new(0);
+            let frame = ch.frame(&mut b, &dex).unwrap();
+            let req_json = serde_json::to_string(&frame.request).unwrap();
+            let mut agent = ProtocolAgent::new_with_ruleset(
+                &dex,
+                0,
+                prior.clone(),
+                RmConfig::default(),
+                42,
+                rs,
+            );
+            agent.set_own_team(legal_a.clone());
+            for line in &frame.lines {
+                agent.push_line(&dex, line);
+            }
+            assert!(agent.on_request(&dex, &req_json).unwrap());
+            let bel = agent.belief().unwrap();
+            assert!(!bel.is_fallback());
+            if rs.is_castle() {
+                // `illegal-nypc` was filtered out, so `legal-b` sits at `belief.cands[0]`.
+                assert_eq!(bel.alive(), &[0]);
+                assert_eq!(bel.candidate_id(0), "legal-b");
+            }
+            let dk = preview_dist_key_for_ruleset(
+                rs,
+                0,
+                720_000,
+                0.4,
+                "current",
+                &own_json,
+                &frame.lines,
+                &req_json,
+                &prior,
+                &agent,
+                &team_map,
+            );
+            let ck = preview_cache_key_for_ruleset(
+                rs,
+                0,
+                99,
+                720_000,
+                0.4,
+                "current",
+                &own_json,
+                &frame.lines,
+                &req_json,
+                &prior,
+                &agent,
+                &team_map,
+            );
+            (dk, ck)
+        };
+
+        let (dk_ps, ck_ps) = make_key(Ruleset::PsStadium2);
+        let (dk_cf, ck_cf) = make_key(Ruleset::castle_free());
+        let (dk_ct, ck_ct) = make_key(Ruleset::castle_tournament());
+        assert_ne!(dk_ps, dk_cf);
+        assert_ne!(dk_cf, dk_ct);
+        assert_ne!(ck_ps, ck_cf);
+        assert_ne!(ck_cf, ck_ct);
+    }
+
+    #[test]
+    fn run_game_executes_cleanly_under_castle_free() {
+        let dex = test_dex();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("workspace root");
+        let tp4: TeamFile = serde_json::from_str(&read_data(root, "team-pool-v4/team-pool")).unwrap();
+        let t0 = &tp4.teams[0];
+        let t1 = &tp4.teams[1];
+        let mut teams = HashMap::new();
+        let mut team_json_map = HashMap::new();
+        for t in [t0, t1] {
+            team_json_map.insert(t.id.clone(), serde_json::to_string(&t.sets).unwrap());
+            teams.insert(t.id.clone(), t.sets.clone());
+        }
+        let mut disclosed = HashMap::new();
+        for t in [t0, t1] {
+            disclosed.insert(
+                t.id.clone(),
+                MetaPool {
+                    teams: vec![MetaTeam {
+                        id: t.id.clone(),
+                        sets: t.sets.clone(),
+                        weight: Some(1.0),
+                    }],
+                },
+            );
+        }
+        let shared = SharedState {
+            dex,
+            ruleset: Ruleset::castle_free(),
+            teams,
+            team_json_map,
+            disclosed,
+            default_pool: None,
+            preview_iters: 256,
+            battle_iters: 64,
+            battle_mode: BattleMode::Fixed,
+            blind_c: 0.4,
+            log_dir: None,
+            preview_cache: None,
+            preview_dist_cache: None,
+        };
+        let task = Task {
+            block: json!(0),
+            cell: json!("castle-smoke"),
+            row_seat: 0,
+            ids: [t0.id.clone(), t1.id.clone()],
+            seeds: [101, 202],
+            preview_seeds: None,
+            battle_seed: 303,
+            picks: None,
+            mixtures: Some([t0.id.clone(), t1.id.clone()]),
+            policies: Some(["current".into(), "current".into()]),
+            ruleset: None,
+        };
+        let res_a = run_game(&shared, 0, &task);
+        let res_b = run_game(&shared, 0, &task);
+        assert_eq!(res_a["ruleset"], "castle-free");
+        assert_eq!(res_a["preview"][0]["source"], "live");
+        assert_eq!(res_a["preview"][1]["source"], "live");
+        assert!(matches!(
+            res_a["outcome"].as_str(),
+            Some("p1" | "p2" | "tie" | "cap")
+        ));
+        assert_eq!(res_a["actionSha256"], res_b["actionSha256"]);
     }
 }

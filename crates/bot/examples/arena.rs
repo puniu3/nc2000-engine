@@ -73,14 +73,16 @@ use std::sync::Arc;
 
 use conformance::fixture::{corpus_files, repo_root, Fixture};
 use conformance::load_dex;
+use nc2000_bot::duel::run_duel_with_ruleset;
 use nc2000_bot::preview::{load_meta_pool, MetaPool};
 use nc2000_bot::smmcts::SelRule;
 use nc2000_bot::{
-    run_duel, Agent, BakedPreviewAgent, BlindAgent, BrAgent, CounterPickAgent, DuelSpec,
-    EvalWeights, MaxDamageAgent, MctsAgent, MctsConfig, OpenAgent, Playout, PreviewMode,
-    RandomAgent, RmAgent, RmConfig, TableSet,
+    Agent, BakedPreviewAgent, BlindAgent, BrAgent, CounterPickAgent, DuelSpec, EvalWeights,
+    MaxDamageAgent, MctsAgent, MctsConfig, OpenAgent, Playout, PreviewMode, RandomAgent, RmAgent,
+    RmConfig, TableSet,
 };
 use nc2000_engine::battle::PokemonSet;
+use nc2000_engine::rules::Ruleset;
 
 #[derive(Clone, Debug)]
 enum AgentSpec {
@@ -96,8 +98,8 @@ enum AgentSpec {
     Mcts5 { iterations: u32, c: f64 },
     Rm { iterations: u32, probe: f64, threshold: f64, buckets: i64 },
     SkUct { iterations: u32, c: f64, buckets: i64 },
-    Blind { iterations: u32, c: f64, buckets: i64, mixed: bool, relay: bool },
-    Open { iterations: u32, c: f64, buckets: i64, mixed: bool, relay: bool },
+    Blind { iterations: u32, c: f64, buckets: i64, mixed: bool, relay: bool, cf: bool },
+    Open { iterations: u32, c: f64, buckets: i64, mixed: bool, relay: bool, cf: bool },
     Exploit(Box<AgentSpec>),
     ExploitControl(Box<AgentSpec>),
     Baked { inner: Box<AgentSpec>, mode: PreviewMode },
@@ -117,12 +119,14 @@ struct ParsedSearchSpec {
     buckets: i64,
     mixed: bool,
     relay: bool,
+    cf: bool,
 }
 
 fn parse_search_spec(parts: &[&str], kind: &str) -> Result<ParsedSearchSpec, String> {
     let mut nums: Vec<&str> = Vec::new();
     let mut mixed = false;
     let mut relay = true;
+    let mut cf = false;
     for part in &parts[1..] {
         if part.is_empty() {
             return Err(format!("empty field in a {kind} spec"));
@@ -135,6 +139,8 @@ fn parse_search_spec(parts: &[&str], kind: &str) -> Result<ParsedSearchSpec, Str
                     "mix" => mixed = true,
                     "relay" => relay = true,
                     "-relay" | "norelay" => relay = false,
+                    "cf" | "cfpuct" => cf = true,
+                    "-cf" | "nocf" => cf = false,
                     other => return Err(format!("unknown token `{other}` in a {kind} spec")),
                 }
             }
@@ -153,6 +159,7 @@ fn parse_search_spec(parts: &[&str], kind: &str) -> Result<ParsedSearchSpec, Str
         buckets: opt_num(&nums, 2, "buckets")?.unwrap_or(16),
         mixed,
         relay,
+        cf,
     })
 }
 
@@ -164,6 +171,7 @@ fn parse_blind(parts: &[&str]) -> Result<AgentSpec, String> {
         buckets: s.buckets,
         mixed: s.mixed,
         relay: s.relay,
+        cf: s.cf,
     })
 }
 
@@ -175,6 +183,7 @@ fn parse_open(parts: &[&str]) -> Result<AgentSpec, String> {
         buckets: s.buckets,
         mixed: s.mixed,
         relay: s.relay,
+        cf: s.cf,
     })
 }
 
@@ -322,14 +331,16 @@ impl AgentSpec {
                 },
                 seed,
             )),
-            AgentSpec::Blind { iterations, c, buckets, mixed, relay } => {
+            AgentSpec::Blind { iterations, c, buckets, mixed, relay, cf } => {
                 let agent = BlindAgent::new(
                     RmConfig {
                         iterations: *iterations,
                         rule: SelRule::Ucb,
                         c: *c,
                         hp_buckets: *buckets,
-                        settlement: if *relay {
+                        settlement: if *cf {
+                            nc2000_bot::LeafSettlementMode::CfValuePuct
+                        } else if *relay {
                             nc2000_bot::LeafSettlementMode::BlindSpotLeaf
                         } else {
                             nc2000_bot::LeafSettlementMode::BlindSpotLeafNoRelay
@@ -342,14 +353,16 @@ impl AgentSpec {
                 );
                 Box::new(if *mixed {agent.with_adaptive_mixture((u64::from(*iterations) * 2 / 5) as u32)} else {agent})
             },
-            AgentSpec::Open { iterations, c, buckets, mixed, relay } => {
+            AgentSpec::Open { iterations, c, buckets, mixed, relay, cf } => {
                 let agent = OpenAgent::new(
                     RmConfig {
                         iterations: *iterations,
                         rule: SelRule::Ucb,
                         c: *c,
                         hp_buckets: *buckets,
-                        settlement: if *relay {
+                        settlement: if *cf {
+                            nc2000_bot::LeafSettlementMode::CfValuePuct
+                        } else if *relay {
                             nc2000_bot::LeafSettlementMode::BlindSpotLeaf
                         } else {
                             nc2000_bot::LeafSettlementMode::BlindSpotLeafNoRelay
@@ -403,18 +416,20 @@ impl AgentSpec {
             AgentSpec::SkUct { iterations, c, buckets } => {
                 format!("skuct:{iterations}:{c}:{buckets}")
             }
-            AgentSpec::Blind { iterations, c, buckets, mixed, relay } => {
+            AgentSpec::Blind { iterations, c, buckets, mixed, relay, cf } => {
                 let suffix = format!(
-                    "{}{}",
+                    "{}{}{}",
                     if *mixed { ":mix" } else { "" },
+                    if *cf { ":cf" } else { "" },
                     if *relay { "" } else { ":-relay" },
                 );
                 format!("blind:{iterations}:{c}:{buckets}{suffix}")
             }
-            AgentSpec::Open { iterations, c, buckets, mixed, relay } => {
+            AgentSpec::Open { iterations, c, buckets, mixed, relay, cf } => {
                 let suffix = format!(
-                    "{}{}",
+                    "{}{}{}",
                     if *mixed { ":mix" } else { "" },
+                    if *cf { ":cf" } else { "" },
                     if *relay { "" } else { ":-relay" },
                 );
                 format!("open:{iterations}:{c}:{buckets}{suffix}")
@@ -595,7 +610,7 @@ fn main() {
         return;
     }
     if args.len() < 2 {
-        eprintln!("usage: arena <agentA> <agentB> [--games N] [--seed S] [--threads T] [--max-turns M] [--crn-seeds] [--jsonl FILE]\n       arena --validate-jsonl FILE");
+        eprintln!("usage: arena <agentA> <agentB> [--games N] [--seed S] [--threads T] [--max-turns M] [--ruleset ID] [--crn-seeds] [--jsonl FILE]\n       arena --validate-jsonl FILE");
         std::process::exit(2);
     }
     let spec_a = AgentSpec::parse(&args[0]).unwrap();
@@ -603,6 +618,13 @@ fn main() {
     let games: usize = flag(&args, "--games").map(|v| v.parse().unwrap()).unwrap_or(100);
     let base_seed: u64 = flag(&args, "--seed").map(|v| v.parse().unwrap()).unwrap_or(1);
     let max_turns: u16 = flag(&args, "--max-turns").map(|v| v.parse().unwrap()).unwrap_or(500);
+    let ruleset = flag(&args, "--ruleset")
+        .map(|id| {
+            Ruleset::parse_id(&id).unwrap_or_else(|| {
+                panic!("unknown --ruleset {id:?} (expected e.g. gen2stadium2, castle-free, castle-tournament)")
+            })
+        })
+        .unwrap_or(Ruleset::PsStadium2);
     // CRN over agent seeds as well as battle seeds: for an A/B whose arms
     // differ only by config this is what makes the identical-arm null exact
     // (`DuelSpec::crn_agent_seeds`).
@@ -790,7 +812,7 @@ fn main() {
         ts
     });
 
-    let stats = run_duel(
+    let stats = run_duel_with_ruleset(
         &dex,
         &teams,
         &|seed| spec_a.build(seed, tables.as_ref(), meta.as_ref()),
@@ -804,6 +826,7 @@ fn main() {
             log_on: is_blind,
             crn_agent_seeds: crn_seeds,
         },
+        ruleset,
     );
 
     // Hash only after all measured work. Reading the executable and large
@@ -822,10 +845,11 @@ fn main() {
     });
 
     println!(
-        "A={} vs B={}   {} games, seed {base_seed}, {threads} threads",
+        "A={} vs B={}   {} games, seed {base_seed}, {threads} threads, ruleset {}",
         spec_a.label(),
         spec_b.label(),
-        stats.games
+        stats.games,
+        ruleset.canonical_id()
     );
     println!(
         "A: {}W {}L {}T   score {:.3} +/- {:.3} (95% CI)",
@@ -866,6 +890,7 @@ fn main() {
                 "base_seed": base_seed,
                 "threads": threads,
                 "max_turns": max_turns,
+                "ruleset": ruleset.canonical_id(),
                 "agent_a_iterations": spec_a.iterations(),
                 "agent_b_iterations": spec_b.iterations(),
                 "pool": pool_spec,
@@ -975,6 +1000,28 @@ mod artifact_tests {
                 "pool":"fnv1a64:3","tables":"fnv1a64:4"
             }
         })
+    }
+
+    #[test]
+    fn cf_token_roundtrips_for_blind_and_open_specs() {
+        for input in ["blind:9000:0.4:16:cf", "open:3000:0.4:mix,cf"] {
+            let spec = AgentSpec::parse(input).unwrap();
+            match &spec {
+                AgentSpec::Blind { cf, .. } | AgentSpec::Open { cf, .. } => assert!(*cf),
+                other => panic!("unexpected spec {other:?}"),
+            }
+            let label = spec.label();
+            assert!(label.contains(":cf"), "label missing :cf: {label}");
+            let reparsed = AgentSpec::parse(&label).unwrap();
+            match reparsed {
+                AgentSpec::Blind { cf, .. } | AgentSpec::Open { cf, .. } => assert!(cf),
+                other => panic!("unexpected reparsed spec {other:?}"),
+            }
+        }
+        assert!(matches!(
+            AgentSpec::parse("blind:9000:0.4").unwrap(),
+            AgentSpec::Blind { cf: false, .. }
+        ));
     }
 
     #[test]

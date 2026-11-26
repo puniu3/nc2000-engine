@@ -8881,4 +8881,198 @@ mod tests {
             assert_eq!(s_one.best_choice(seed, 4096), s_alt.best_choice(seed, 4096));
         }
     }
+
+    #[test]
+    fn stepped_cf_preview_traj_calib_castle_free_invariance_zero_leak_and_turn_cap() {
+        use crate::decision::DecisionPolicy;
+        use crate::player::PlayerChannel;
+        use crate::preview::{MetaPool, MetaTeam};
+        use crate::{ProtocolAgent, RmConfig};
+        use nc2000_engine::rules::Ruleset;
+
+        let dex = conformance::load_dex();
+        // 100% Castle-legal (no NYPC Lovely Kiss, valid min-levels, distinct items per team) multi-world rosters.
+        let t_a = vec![
+            mk("Snorlax", 55, "Leftovers", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+            mk("Zapdos", 50, "Bright Powder", &["Thunderbolt", "Drill Peck", "Rest", "Sleep Talk"]),
+            mk("Cloyster", 50, "Gold Berry", &["Surf", "Spikes", "Explosion", "Rapid Spin"]),
+            mk("Marowak", 50, "Thick Club", &["Earthquake", "Rock Slide", "Swords Dance", "Body Slam"]),
+            mk("Gengar", 50, "Quick Claw", &["Thunderbolt", "Ice Punch", "Hypnosis", "Explosion"]),
+            mk("Skarmory", 50, "Mint Berry", &["Drill Peck", "Whirlwind", "Rest", "Curse"]),
+        ];
+        let t_b1 = vec![
+            mk("Raikou", 50, "Magnet", &["Thunderbolt", "Protect", "Roar", "Rest"]),
+            mk("Suicune", 50, "Mint Berry", &["Surf", "Ice Beam", "Rest", "Sleep Talk"]),
+            mk("Exeggutor", 50, "Quick Claw", &["Psychic", "Giga Drain", "Sleep Powder", "Explosion"]),
+            mk("Tyranitar", 55, "Miracle Berry", &["Rock Slide", "Crunch", "Earthquake", "Pursuit"]),
+            mk("Snorlax", 50, "Leftovers", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+            mk("Umbreon", 50, "Gold Berry", &["Pursuit", "Charm", "Rest", "Baton Pass"]),
+        ];
+        let t_b2 = vec![
+            mk("Raikou", 50, "Mint Berry", &["Thunder", "Roar", "Rest", "Sleep Talk"]),
+            mk("Suicune", 50, "Leftovers", &["Surf", "Ice Beam", "Toxic", "Rest"]),
+            mk("Exeggutor", 50, "Gold Berry", &["Psychic", "Stun Spore", "Leech Seed", "Explosion"]),
+            mk("Tyranitar", 55, "Quick Claw", &["Rock Slide", "Fire Blast", "Dynamic Punch", "Crunch"]),
+            mk("Snorlax", 50, "Miracle Berry", &["Double-Edge", "Earthquake", "Self-Destruct", "Curse"]),
+            mk("Umbreon", 50, "Bright Powder", &["Mean Look", "Baton Pass", "Charm", "Rest"]),
+        ];
+        let pool = MetaPool {
+            teams: vec![
+                MetaTeam { id: "tb1".into(), sets: t_b1.clone(), weight: Some(0.6) },
+                MetaTeam { id: "tb2".into(), sets: t_b2.clone(), weight: Some(0.4) },
+            ],
+        };
+
+        let make_env = |side: usize, opp_sets: &[PokemonSet], ruleset: Ruleset| {
+            let (p1, p2) = if side == 0 { (&t_a[..], opp_sets) } else { (opp_sets, &t_a[..]) };
+            let b = Battle::from_fixture_with_ruleset(&dex, "1,2,3,4", p1, p2, ruleset).unwrap();
+            let (mut lp, mut obs) = LocalPlayer::new_with_own_sets(&b, &dex, side, t_a.clone()).unwrap();
+            lp.observe(&b, &dex, &mut obs).unwrap();
+            let mut belief = Belief::new(&dex, &pool, &obs);
+            belief.sync(&dex, &obs);
+            assert!(!belief.is_fallback(), "Castle-legal multi-world pool must stay alive");
+            assert_eq!(belief.alive().len(), 2);
+            let pos = lp.position(&dex, &mut belief, &obs, &mut SplitMix64::new(123)).unwrap();
+            assert_eq!(pos.model().ruleset, ruleset);
+            (pos, belief, obs)
+        };
+
+        let mk_calib = |model: &Battle, bel: &Belief, obs: &crate::observe::Observer, side: usize| {
+            let mut rng = SplitMix64::new(2026_1126 ^ (side as u64));
+            let mut model_clone = model.clone();
+            let acts = model_clone.legal_choices(&dex, side);
+            let mut s = SteppedCfPreview::try_new_with_calib(
+                model,
+                &dex,
+                bel,
+                obs,
+                side,
+                &acts,
+                None,
+                0.4,
+                Some(TrajCalibConfig {
+                    turn1_iters: 16,
+                    iters_per_turn: 16,
+                    rb_eval_iters: 16,
+                    support_k: 6,
+                    ..TrajCalibConfig::default()
+                }),
+                &mut rng,
+            )
+            .expect("SteppedCfPreview::try_new_with_calib must activate on Castle");
+            s.cfg.total_iters = 4096;
+            s.cfg.coarse_iters = 16;
+            s.cfg.do_iters = 16;
+            s.cfg.polish_chunk = 32;
+            if let Some(ref mut cal) = s.calib {
+                cal.calib_iters = 1600;
+                cal.explore_iters = 800;
+                cal.traj_cfg.total_iters = 1600;
+            }
+            (s, rng)
+        };
+
+        // 1. Both Side 0 (1P) and Side 1 (2P) under `castle-free`: full phase progression,
+        //    bit-identical slice invariance across TrajCalib -> Stage-2, and zero hidden-info leakage.
+        for side in [0usize, 1usize] {
+            let (pos1, bel1, obs1) = make_env(side, &t_b1, Ruleset::castle_free());
+            let (pos2, bel2, obs2) = make_env(side, &t_b2, Ruleset::castle_free());
+
+            let (mut s_one, mut r_one) = mk_calib(pos1.model(), &bel1, &obs1, side);
+            for _ in 0..4096 {
+                s_one.step_one(&mut r_one);
+            }
+            assert!(s_one.calib.is_none(), "Castle side {side}: TrajCalib must finalize");
+            assert!(!s_one.calib_obs.is_empty(), "Castle side {side}: must collect TrajCalib obs");
+            let v_nash = s_one.nash_value(4096);
+            assert!(v_nash.is_finite() && (0.0..=1.0).contains(&v_nash));
+
+            // Confirm cells preserve `castle-free` ruleset and uncapped horizon (`turn_cap == 101`).
+            assert!(!s_one.cells.is_empty());
+            for cell in s_one.cells.values() {
+                assert_eq!(cell.table.ruleset, Ruleset::castle_free());
+                assert_eq!(cell.turn_cap, 101);
+            }
+
+            let (mut s_chunk, mut r_chunk) = mk_calib(pos1.model(), &bel1, &obs1, side);
+            for _ in 0..64 {
+                for _ in 0..64 {
+                    s_chunk.step_one(&mut r_chunk);
+                }
+            }
+            assert_eq!(s_one.node_count(), s_chunk.node_count());
+            assert_eq!(s_one.nash_value(4096), s_chunk.nash_value(4096));
+            assert_eq!(s_one.execution_policy(4096), s_chunk.execution_policy(4096));
+            let entries = s_one.execution_policy(4096);
+            let dp = DecisionPolicy::new("castle-calib-test", entries.iter().copied()).unwrap();
+            for seed in 0u64..32 {
+                let draw = SplitMix64::new(seed ^ 4096u64).next_f64();
+                assert_eq!(dp.sample(draw), s_one.best_choice(seed, 4096));
+                assert_eq!(s_one.best_choice(seed, 4096), s_chunk.best_choice(seed, 4096));
+            }
+
+            // Zero hidden-info leakage under `castle-free`: swapping true opponent hidden moves/items
+            // produces bit-identical policy and Nash value.
+            let (mut s_alt, mut r_alt) = mk_calib(pos2.model(), &bel2, &obs2, side);
+            for _ in 0..4096 {
+                s_alt.step_one(&mut r_alt);
+            }
+            assert_eq!(s_one.execution_policy(4096), s_alt.execution_policy(4096));
+            assert_eq!(s_one.nash_value(4096), s_alt.nash_value(4096));
+        }
+
+        // 2. Explicit `castle-tournament` (`L_TURN = 80`) clamps CfPreviewCell & TrajTurnScratch `turn_cap` to 80.
+        {
+            let (pos_t, bel_t, obs_t) = make_env(0, &t_b1, Ruleset::castle_tournament());
+            let (mut s_t, mut r_t) = mk_calib(pos_t.model(), &bel_t, &obs_t, 0);
+            for _ in 0..2048 {
+                s_t.step_one(&mut r_t);
+            }
+            assert!(!s_t.cells.is_empty());
+            for cell in s_t.cells.values() {
+                assert_eq!(cell.table.ruleset, Ruleset::castle_tournament());
+                assert_eq!(cell.turn_cap, 80);
+            }
+        }
+
+        // 3. End-to-end `ProtocolAgent::new_with_ruleset(..., Ruleset::castle_free())` activates
+        //    `SteppedCfPreview` (policy-v4) on Turn 0 and returns a legal Castle Team Preview choice.
+        {
+            let mut b = Battle::from_fixture_with_ruleset(
+                &dex,
+                "1,2,3,4",
+                &t_a,
+                &t_b1,
+                Ruleset::castle_free(),
+            )
+            .unwrap();
+            let mut ch = PlayerChannel::new(0);
+            let frame = ch.frame(&mut b, &dex).unwrap();
+            let req_json = serde_json::to_string(&frame.request).unwrap();
+            let mut agent = ProtocolAgent::new_with_ruleset(
+                &dex,
+                0,
+                pool.clone(),
+                RmConfig::default(),
+                777,
+                Ruleset::castle_free(),
+            );
+            agent.set_own_team(t_a.clone());
+            for line in &frame.lines {
+                agent.push_line(&dex, line);
+            }
+            assert!(agent.on_request(&dex, &req_json).unwrap());
+            agent.step(&dex, 256).unwrap();
+            let pol = agent
+                .preview_execution_policy(&dex)
+                .expect("ProtocolAgent under castle-free must activate SteppedCfPreview at Turn 0");
+            assert!(
+                !pol.actions().is_empty(),
+                "Castle SteppedCfPreview execution policy must be non-empty"
+            );
+            let pick = agent.best(&dex).expect("Castle Team Preview pick");
+            assert!(pick.starts_with("team "), "expected team choice, got {pick:?}");
+            b.choose(&dex, 0, &pick).expect("Castle preview choice must be legal in Battle");
+        }
+    }
 }

@@ -58,6 +58,7 @@ def build_mini2_run_cmd(
     preview_dist_cache: Path | None = None,
     preview_dist_k: int | None = None,
     preview_dist_only: bool = False,
+    ruleset: str | None = None,
     timeout: int | None = None,
 ) -> list[str]:
     cmd: list[str] = [
@@ -97,6 +98,8 @@ def build_mini2_run_cmd(
         cmd.extend(["--env", f"NASH_BATTLE_ITERS={battle_iters}"])
     if battle_mode is not None:
         cmd.extend(["--env", f"NASH_BATTLE_MODE={battle_mode}"])
+    if ruleset is not None and ruleset.strip():
+        cmd.extend(["--env", f"NASH_RULESET={ruleset.strip()}"])
     if timeout is not None:
         cmd.extend(["--timeout", str(timeout)])
     cmd.extend([
@@ -127,6 +130,7 @@ def run_chunk_mini2(
     preview_dist_cache: Path | None = None,
     preview_dist_k: int | None = None,
     preview_dist_only: bool = False,
+    ruleset: str | None = None,
     timeout: int | None = None,
 ) -> dict[str, Any]:
     """Execute one chunk on `mini2` and atomically commit `final_out_dir` + `done_marker`."""
@@ -147,6 +151,7 @@ def run_chunk_mini2(
         preview_dist_cache=preview_dist_cache,
         preview_dist_k=preview_dist_k,
         preview_dist_only=preview_dist_only,
+        ruleset=ruleset,
         timeout=timeout,
     )
     proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
@@ -187,6 +192,7 @@ def run_chunk_local(
     preview_dist_cache: Path | None = None,
     preview_dist_k: int | None = None,
     preview_dist_only: bool = False,
+    ruleset: str | None = None,
 ) -> dict[str, Any]:
     """Execute one chunk locally on `mini1`."""
     env = os.environ.copy()
@@ -211,6 +217,10 @@ def run_chunk_local(
         env["NASH_BATTLE_ITERS"] = str(battle_iters)
     if battle_mode is not None:
         env["NASH_BATTLE_MODE"] = battle_mode
+    if ruleset is not None and ruleset.strip():
+        env["NASH_RULESET"] = ruleset.strip()
+    else:
+        env.pop("NASH_RULESET", None)
 
     if final_out_dir.exists():
         shutil.rmtree(final_out_dir)
@@ -261,6 +271,17 @@ def _granularity_state_path() -> Path:
     return Path(raw).expanduser() if raw else DEFAULT_GRANULARITY_STATE_PATH
 
 
+def _canonical_ruleset_profile_tag(ruleset: str | None) -> str | None:
+    if ruleset is None:
+        return None
+    norm = ruleset.strip().lower()
+    if norm in ("", "ps", "ps-stadium2", "gen2stadium2", "gen2stadium2nc2000"):
+        return None
+    if norm in ("castle", "castle-pbs", "castle-free", "pbs", "pbs-nc2000", "pbs-free"):
+        return "castle-free"
+    return norm
+
+
 def _workload_profile_key(
     *,
     preview_iters: int | None,
@@ -270,12 +291,15 @@ def _workload_profile_key(
     has_dist_file: bool,
     preview_dist_k: int | None,
     preview_dist_only: bool,
+    ruleset: str | None = None,
 ) -> str:
     mode = "dist_only" if preview_dist_only else "battle"
-    return (
+    base = (
         f"{mode}|pi={preview_iters}|bi={battle_iters}|bm={battle_mode}|"
         f"pc={int(preview_cache)}|dc={int(has_dist_file)}|dk={preview_dist_k}"
     )
+    rs_tag = _canonical_ruleset_profile_tag(ruleset)
+    return f"{base}|rs={rs_tag}" if rs_tag else base
 
 
 def _align_rows(rows: int, *, pair_aligned: bool, round_up: bool = False) -> int:
@@ -431,6 +455,7 @@ def recommend_chunk_size(
     preview_dist_cache: Path | None = None,
     preview_dist_k: int | None = None,
     preview_dist_only: bool = False,
+    ruleset: str | None = None,
     task_timeout: int | None = None,
     targets_resp: dict[str, Any] | None = None,
     state_path: Path | None = None,
@@ -451,6 +476,7 @@ def recommend_chunk_size(
         has_dist_file=has_dist_file,
         preview_dist_k=preview_dist_k,
         preview_dist_only=preview_dist_only,
+        ruleset=ruleset,
     )
     state = _load_granularity_state(state_path)
     profile = state.get("profiles", {}).get(profile_key)
@@ -679,6 +705,7 @@ def run_chunks_via_barn(
     preview_dist_cache: Path | None = None,
     preview_dist_k: int | None = None,
     preview_dist_only: bool = False,
+    ruleset: str | None = None,
     task_timeout: int | None = None,
     skipped: int = 0,
     auto_adapt_granularity: bool = True,
@@ -701,6 +728,7 @@ def run_chunks_via_barn(
         has_dist_file=has_dist_file,
         preview_dist_k=preview_dist_k,
         preview_dist_only=preview_dist_only,
+        ruleset=ruleset,
     )
     auto_split_env = os.environ.get("NC2000_BARN_AUTO_SPLIT", "1").strip().lower() not in ("0", "false", "off", "no")
     adapt_enabled = bool(auto_adapt_granularity and auto_split_env)
@@ -830,6 +858,8 @@ def run_chunks_via_barn(
             cmd += ["--env", f"NASH_BATTLE_ITERS={battle_iters}"]
         if battle_mode is not None:
             cmd += ["--env", f"NASH_BATTLE_MODE={battle_mode}"]
+        if ruleset is not None and ruleset.strip():
+            cmd += ["--env", f"NASH_RULESET={ruleset.strip()}"]
         cmd += [
             "--",
             "{run}/bin/nash_refresh",
@@ -934,6 +964,7 @@ def run_chunks_dual_node(
     preview_dist_cache: Path | None = None,
     preview_dist_k: int | None = None,
     preview_dist_only: bool = False,
+    ruleset: str | None = None,
     task_timeout: int | None = None,
     auto_adapt_granularity: bool = True,
 ) -> dict[str, Any]:
@@ -986,6 +1017,7 @@ def run_chunks_dual_node(
             preview_dist_cache=preview_dist_cache,
             preview_dist_k=preview_dist_k,
             preview_dist_only=preview_dist_only,
+            ruleset=ruleset,
             task_timeout=task_timeout,
             skipped=skipped,
             auto_adapt_granularity=auto_adapt_granularity,
@@ -1026,6 +1058,7 @@ def run_chunks_dual_node(
                     preview_dist_cache=preview_dist_cache,
                     preview_dist_k=preview_dist_k,
                     preview_dist_only=preview_dist_only,
+                    ruleset=ruleset,
                 )
             else:
                 run_chunk_local(
@@ -1042,6 +1075,7 @@ def run_chunks_dual_node(
                     preview_dist_cache=preview_dist_cache,
                     preview_dist_k=preview_dist_k,
                     preview_dist_only=preview_dist_only,
+                    ruleset=ruleset,
                 )
             with lock:
                 counts[node] += 1
@@ -1066,6 +1100,7 @@ def main() -> None:
     ap.add_argument("--preview-iters", type=int, default=None)
     ap.add_argument("--battle-iters", type=int, default=None)
     ap.add_argument("--battle-mode", choices=["adaptive", "fixed"], default=None)
+    ap.add_argument("--ruleset", type=str, default=None)
     args = ap.parse_args()
 
     meta = json.loads((args.dir / "meta.json").read_text())
@@ -1102,6 +1137,7 @@ def main() -> None:
             preview_iters=args.preview_iters,
             battle_iters=args.battle_iters,
             battle_mode=args.battle_mode,
+            ruleset=args.ruleset,
         )
         ran.append(ci)
 
