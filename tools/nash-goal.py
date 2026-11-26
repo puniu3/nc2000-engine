@@ -1324,8 +1324,21 @@ def cmd_precompute_preview_dist(args: argparse.Namespace) -> None:
     (work_dir / "schedule.jsonl").write_text("\n".join(json.dumps(r, separators=(",", ":")) for r in rows) + "\n")
     chunks_dir = work_dir / "chunks"
     chunks_dir.mkdir(parents=True, exist_ok=True)
-    # Chunk by rows_per_chunk so mini1 + mini2 load-balance cleanly
+    cache_path: Path = args.cache
+    # Chunk by rows_per_chunk so mini1 + mini2 + Colab load-balance cleanly
     step = max(2, int(args.rows_per_chunk) + (int(args.rows_per_chunk) % 2))
+    if not any(chunks_dir.glob("chunk-*.jsonl")):
+        step = ELIM.MINI2.recommend_chunk_size(
+            step,
+            colab_nodes=args.colab or None,
+            preview_iters=args.preview_iters,
+            battle_iters=243000,
+            battle_mode="adaptive",
+            preview_cache=True,
+            preview_dist_cache=cache_path if cache_path.exists() else None,
+            preview_dist_k=args.k,
+            preview_dist_only=True,
+        )
     chunks: list[dict[str, Any]] = []
     for ci, start in enumerate(range(0, len(rows), step)):
         c_rows = rows[start : start + step]
@@ -1341,7 +1354,6 @@ def cmd_precompute_preview_dist(args: argparse.Namespace) -> None:
             "n_rows": len(c_rows),
         })
 
-    cache_path: Path = args.cache
     dispatch = ELIM.MINI2.run_chunks_dual_node(
         chunks,
         binary=args.binary,

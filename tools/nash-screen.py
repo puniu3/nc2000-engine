@@ -216,6 +216,15 @@ def cmd_run(args: argparse.Namespace) -> None:
     run_root = args.dir / args.run_name
     chunks_dir = run_root / "chunks"
     chunks_dir.mkdir(parents=True, exist_ok=True)
+    if not any(chunks_dir.glob("chunk-*.jsonl")):
+        chunk_size = MINI2.recommend_chunk_size(
+            chunk_size,
+            colab_nodes=args.colab or None,
+            preview_iters=args.preview_iters,
+            battle_iters=args.battle_iters,
+            battle_mode=args.battle_mode,
+            preview_cache=True,
+        )
 
     n_chunks = (len(rows) + chunk_size - 1) // chunk_size
     chunk_specs: list[dict[str, Any]] = []

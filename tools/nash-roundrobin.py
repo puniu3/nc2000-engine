@@ -614,6 +614,15 @@ def cmd_run(args: argparse.Namespace) -> None:
 
     chunks_dir = args.dir / "chunks"
     chunks_dir.mkdir(parents=True, exist_ok=True)
+    if not any(chunks_dir.glob("chunk-*.jsonl")):
+        chunk_size = MINI2.recommend_chunk_size(
+            chunk_size,
+            colab_nodes=args.colab or None,
+            preview_iters=args.preview_iters,
+            battle_iters=args.battle_iters,
+            battle_mode=args.battle_mode,
+            preview_cache=not args.no_preview_cache,
+        )
     merged_path = args.dir / "results.jsonl"
 
     env = os.environ.copy()
@@ -691,12 +700,14 @@ def cmd_run(args: argparse.Namespace) -> None:
         "dir": str(args.dir),
         "total_games": total_written,
         "chunks": n_chunks,
+        "chunk_games": chunk_size,
         "ran_chunks": ran_chunks,
         "skipped_chunks": skipped_chunks,
         "elapsed_s": round(elapsed, 2),
         "games_per_hr": round(total_written / max(elapsed, 1e-6) * 3600.0, 1) if ran_chunks > 0 else None,
         "results": str(merged_path),
         "ledger_added": ledger_added,
+        "dispatch": dispatch,
     }))
 
 

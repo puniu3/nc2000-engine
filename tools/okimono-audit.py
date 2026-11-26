@@ -174,6 +174,16 @@ def run_preview_dist_chunks(
 
     chunks_dir = run_dir / "chunks"
     chunks_dir.mkdir(parents=True, exist_ok=True)
+    if not any(chunks_dir.glob("chunk-*.jsonl")):
+        rows_per_chunk = MINI2.recommend_chunk_size(
+            rows_per_chunk,
+            local_only=local_only,
+            preview_iters=preview_iters,
+            preview_cache=False,
+            preview_dist_cache=preloaded_cache,
+            preview_dist_k=k,
+            preview_dist_only=True,
+        )
     chunks: list[dict[str, Any]] = []
     for ci, start in enumerate(range(0, len(rows), rows_per_chunk)):
         batch = rows[start : start + rows_per_chunk]
@@ -607,6 +617,15 @@ def cmd_live_ab(args: argparse.Namespace) -> None:
     chunk_games = max(2, args.chunk_games + (args.chunk_games % 2))
     chunks_dir = run_dir / "chunks"
     chunks_dir.mkdir(parents=True, exist_ok=True)
+    if not any(chunks_dir.glob("chunk-*.jsonl")):
+        chunk_games = MINI2.recommend_chunk_size(
+            chunk_games,
+            local_only=args.local_only,
+            preview_iters=args.preview_iters,
+            battle_iters=args.battle_iters,
+            battle_mode=args.battle_mode,
+            preview_cache=False,
+        )
     chunks: list[dict[str, Any]] = []
     for ci, start in enumerate(range(0, len(rows), chunk_games)):
         batch = rows[start : start + chunk_games]

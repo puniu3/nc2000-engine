@@ -741,6 +741,28 @@ def cmd_run(args: argparse.Namespace) -> None:
     chunks_dir = run_dir / "chunks"
     chunks_dir.mkdir(parents=True, exist_ok=True)
 
+    dist_cache = args.preview_dist_cache
+    if dist_cache is None and meta.get("preview_dist_cache"):
+        dist_cache = Path(meta["preview_dist_cache"])
+    dist_k = args.preview_dist_k
+    if dist_k is None and meta.get("preview_dist_k") is not None:
+        dist_k = int(meta["preview_dist_k"])
+    use_preview_cache = True
+    if meta.get("no_preview_cache") and dist_cache is None and (dist_k is None or dist_k < 2):
+        use_preview_cache = False
+
+    if not any(chunks_dir.glob("chunk-*.jsonl")):
+        chunk_size = MINI2.recommend_chunk_size(
+            chunk_size,
+            colab_nodes=args.colab or None,
+            preview_iters=int(meta["preview_iters"]),
+            battle_iters=int(meta["battle_iters"]),
+            battle_mode=str(meta["battle_mode"]),
+            preview_cache=use_preview_cache,
+            preview_dist_cache=dist_cache,
+            preview_dist_k=dist_k,
+        )
+
     chunks: list[dict[str, Any]] = []
     chunk_breaks = meta.get("chunk_breaks")
     if chunk_breaks and len(chunk_breaks) >= 2 and chunk_breaks[-1] == len(sched_lines):
@@ -765,16 +787,6 @@ def cmd_run(args: argparse.Namespace) -> None:
             "n_rows": len(c_rows),
             "start": start,
         })
-
-    dist_cache = args.preview_dist_cache
-    if dist_cache is None and meta.get("preview_dist_cache"):
-        dist_cache = Path(meta["preview_dist_cache"])
-    dist_k = args.preview_dist_k
-    if dist_k is None and meta.get("preview_dist_k") is not None:
-        dist_k = int(meta["preview_dist_k"])
-    use_preview_cache = True
-    if meta.get("no_preview_cache") and dist_cache is None and (dist_k is None or dist_k < 2):
-        use_preview_cache = False
 
     dispatch = MINI2.run_chunks_dual_node(
         chunks,
