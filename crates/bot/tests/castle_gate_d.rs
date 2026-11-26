@@ -537,8 +537,8 @@ fn gate_d_ditto_hp_mask_dual_claw_observer_belief_preview_validate_replay() {
     let pk_c1 = compiled_preview::key(&prev_c, 1).unwrap();
     assert_ne!(pk_ps, pk_c0);
     assert_ne!(pk_c0, pk_c1, "Castle preview key must distinguish 1P vs 2P seat");
-    assert_eq!(compiled_preview::policy_epoch_for(Ruleset::PsStadium2), "policy-v2");
-    assert_eq!(compiled_preview::policy_epoch_for(Ruleset::castle_tournament()), "castle-policy-v2");
+    assert_eq!(compiled_preview::policy_epoch_for(Ruleset::PsStadium2), "policy-v3");
+    assert_eq!(compiled_preview::policy_epoch_for(Ruleset::castle_tournament()), "castle-policy-v3");
 
     // 4. Castle Validator + Replay roundtrip integration
     let team_json = serde_json::to_string(&team_a).unwrap();

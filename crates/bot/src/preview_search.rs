@@ -49,7 +49,7 @@ fn elapsed_ms(_t: ()) -> f64 {
 use nc2000_engine::battle::SearchChoice;
 use nc2000_engine::compact::{
     is_compact_preview_supported, timer_idx, vol_bit, CompactBattle, CompactPreviewRoster,
-    MatchTable,
+    MatchTable, SpecialMoveKind, VarBpKind,
 };
 use nc2000_engine::dex::Dex;
 use nc2000_engine::fxhash::FxHashMap;
@@ -2097,7 +2097,121 @@ fn sample_dist(p: &[f64], draw: f64) -> usize {
 // 5. Incrementally Steppable `SteppedCfPreview` (Production `BlindSearch`)
 // =========================================================================
 
+/// Configuration for Control-Variate Multi-Turn Horizon Calibration (`TrajCalib`)
+/// running ahead of `SteppedCfPreview`'s persistent Turn-1 Double-Oracle search.
+#[derive(Clone, Debug)]
+pub struct TrajCalibConfig {
+    /// Fraction of `total_iters` spent on CRN-paired multi-turn trajectory calibration (`0.0` = disabled).
+    pub calib_frac: f64,
+    /// Turn-1 PUCT iterations inside each calibration trajectory (for low-variance CRN `V_T1`).
+    pub turn1_iters: u32,
+    /// Subsequent-turn PUCT iterations inside each calibration trajectory.
+    pub iters_per_turn: u32,
+    /// Rao-Blackwellized `SearchVroot` early-exit threshold (`alive_sum <= rb_max_alive`).
+    pub rb_max_alive: u32,
+    /// Rao-Blackwellized `SearchVroot` evaluation iterations.
+    pub rb_eval_iters: u32,
+    /// Ridge feature basis for fitting `(V_traj - V_s1)` and `(V_traj - V_T1)`.
+    pub ridge_basis: TrajRidgeBasis,
+    /// L2 ridge penalty on intercept (`f = 0`).
+    pub ridge_lambda_int: f64,
+    /// L2 ridge penalty on main species presence features.
+    pub ridge_lambda_main: f64,
+    /// L2 ridge penalty on lead-delta and interaction features.
+    pub ridge_lambda_inter: f64,
+    /// Fit shrunk per-world `delta_w` on `W > 1` (`false` pools strictly across all worlds via `theta_shared`).
+    pub per_world_delta: bool,
+    /// GLS weighting pseudo-count `(kappa + 1) * n / (kappa + n)`.
+    pub kappa_gls: f64,
+    /// Scale applied to Stage-1 ridge delta (`V_traj - V_s1`).
+    pub delta_s1_beta: f64,
+    /// Scale applied to Stage-2 Turn-1 control-variate delta (`V_traj - V_T1`).
+    pub delta_t1_beta: f64,
+    /// Stage-2 support width (`support_k`).
+    pub support_k: usize,
+    /// Stage-2 DO rounds (`do_rounds`).
+    pub do_rounds: usize,
+    /// LCB-gated mix parameters (`min_mix_margin`, `dust_ratio`, `lcb_z`).
+    pub min_mix_margin: f64,
+    pub dust_ratio: f64,
+    pub lcb_z: f64,
+    /// Optional Rubin Bayesian Bootstrap draws over CRN calibration blocks (`0` = LcbGatedMixed).
+    pub bootstrap_draws: usize,
+    /// Dust shedding ratio when `bootstrap_draws > 1`.
+    pub bootstrap_dust: f64,
+    /// Union calibrated Stage-1 support with raw `CF-V_net` Stage-1 top picks (prevents seed-drop of tactical cores).
+    pub union_raw_support: bool,
+    /// Evaluate final equilibrium over `s_me x ALL opponent columns` (eliminates outside-support killer blindspots).
+    pub full_opp_readout: bool,
+}
+
+impl Default for TrajCalibConfig {
+    fn default() -> Self {
+        Self {
+            calib_frac: 0.40,
+            turn1_iters: 64,
+            iters_per_turn: 32,
+            rb_max_alive: 3,
+            rb_eval_iters: 64,
+            ridge_basis: TrajRidgeBasis::Present19,
+            ridge_lambda_int: 4.0,
+            ridge_lambda_main: 45.0,
+            ridge_lambda_inter: 70.0,
+            per_world_delta: false,
+            kappa_gls: 12.0,
+            delta_s1_beta: 1.0,
+            delta_t1_beta: 0.85,
+            support_k: 12,
+            do_rounds: 1,
+            min_mix_margin: 0.010,
+            dust_ratio: 0.08,
+            lcb_z: 0.75,
+            bootstrap_draws: 16,
+            bootstrap_dust: 0.15,
+            union_raw_support: true,
+            full_opp_readout: true,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct CalibObs {
+    wi: u16,
+    own_i: u16,
+    opp_j: u16,
+    block_id: u32,
+    r_s1: f32,
+    r_t1: f32,
+    has_t1: bool,
+}
+
+struct TrajCalibState {
+    calib_iters: u32,
+    explore_iters: u32,
+    traj_cfg: TrajPreviewConfig,
+    scratch: TrajTurnScratch,
+    active_slots: Vec<Option<ActiveTrajGame>>,
+    cur_slot: usize,
+    task_queue: std::collections::VecDeque<TrajTask>,
+    s2_metas: Vec<WorldInteractMeta>,
+    tail_metas: Vec<WorldInteractMeta>,
+    obs_s1_n: Vec<Vec<u32>>,
+    obs_s1_sum: Vec<Vec<f64>>,
+    obs_t1_n: Vec<Vec<u32>>,
+    obs_t1_sum: Vec<Vec<f64>>,
+    own_mon_cnt: [u32; 6],
+    own_lead_cnt: [u32; 6],
+    own_bench_pair_cnt: [u32; 15],
+    opp_mon_cnt: Vec<[u32; 6]>,
+    opp_lead_cnt: Vec<[u32; 6]>,
+    opp_bench_pair_cnt: Vec<[u32; 15]>,
+    world_games: Vec<u32>,
+    next_block_id: u32,
+    games_completed: u32,
+}
+
 enum SteppedPreviewPhase {
+    TrajCalib,
     CoarseTier0,
     CoarseTier1,
     CoarseTier2,
@@ -2143,12 +2257,22 @@ enum SteppedPreviewPhase {
 
 /// Incrementally steppable, slice-invariant Two-Stage Persistent-Tree Double-Oracle
 /// Team Preview searcher driven 1 iteration at a time by `BlindSearch`.
-pub(crate) struct SteppedCfPreview {
+/// Supports optional Control-Variate Multi-Turn Horizon Calibration (`TrajCalib`).
+pub struct SteppedCfPreview {
     my_acts: Vec<SearchChoice>,
     side: usize,
     cfg: PreviewSearchConfig,
     own_canon: Vec<(usize, [u8; 3])>,
+    own_tactical: [bool; 6],
     worlds: Vec<PreviewWorldData>,
+    raw_stage1_vals: Vec<Vec<f64>>,
+    delta_t1: Vec<Vec<f64>>,
+    calib_cfg: Option<TrajCalibConfig>,
+    calib: Option<Box<TrajCalibState>>,
+    calib_obs: Vec<CalibObs>,
+    calib_s2_metas: Vec<WorldInteractMeta>,
+    calib_tail_metas: Vec<WorldInteractMeta>,
+    calib_iters_spent: u32,
     s2_world_ids: Vec<usize>,
     tail_world_ids: Vec<usize>,
     s2_alloc_weights: Vec<f64>,
@@ -2171,7 +2295,7 @@ pub(crate) struct SteppedCfPreview {
 }
 
 impl SteppedCfPreview {
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments, dead_code)]
     pub(crate) fn try_new(
         base: &Battle,
         dex: &Dex,
@@ -2181,6 +2305,50 @@ impl SteppedCfPreview {
         my_acts: &[SearchChoice],
         my_mask: Option<&[bool]>,
         c_ucb: f64,
+        rng: &mut SplitMix64,
+    ) -> Option<Self> {
+        Self::try_new_with_calib(
+            base, dex, belief, obs, side, my_acts, my_mask, c_ucb, None, rng,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn try_new_calibrated(
+        base: &Battle,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &crate::observe::Observer,
+        side: usize,
+        my_acts: &[SearchChoice],
+        my_mask: Option<&[bool]>,
+        c_ucb: f64,
+        rng: &mut SplitMix64,
+    ) -> Option<Self> {
+        Self::try_new_with_calib(
+            base,
+            dex,
+            belief,
+            obs,
+            side,
+            my_acts,
+            my_mask,
+            c_ucb,
+            Some(TrajCalibConfig::default()),
+            rng,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_new_with_calib(
+        base: &Battle,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &crate::observe::Observer,
+        side: usize,
+        my_acts: &[SearchChoice],
+        my_mask: Option<&[bool]>,
+        c_ucb: f64,
+        calib_cfg: Option<TrajCalibConfig>,
         rng: &mut SplitMix64,
     ) -> Option<Self> {
         if base.request_state != RequestState::TeamPreview {
@@ -2216,6 +2384,15 @@ impl SteppedCfPreview {
 
         let mut cfg = PreviewSearchConfig::default();
         cfg.c_puct = (1.0 * (c_ucb / 0.4)).clamp(0.25, 4.0);
+        if let Some(ref cc) = calib_cfg {
+            cfg.support_k = cc.support_k.max(4);
+            cfg.do_rounds = cc.do_rounds;
+            cfg.policy_mode = PreviewPolicyMode::LcbGatedMixed {
+                min_mix_margin: cc.min_mix_margin,
+                dust_ratio: cc.dust_ratio,
+                lcb_z: cc.lcb_z,
+            };
+        }
 
         let own_tactical = lead_tactical_flags(dex, base, side);
         let world_plan = belief.preview_world_distribution(cfg.max_stage1_worlds, rng);
@@ -2235,7 +2412,11 @@ impl SteppedCfPreview {
             det_worlds.push((weight, sim_w));
         }
 
+        let calib_active = calib_cfg
+            .as_ref()
+            .is_some_and(|cc| cc.calib_frac > 0.0 && cfg.total_iters >= 1024);
         let mut worlds: Vec<PreviewWorldData> = Vec::with_capacity(det_worlds.len());
+        let mut all_metas: Vec<WorldInteractMeta> = Vec::with_capacity(det_worlds.len());
         for (weight, mut sim_w) in det_worlds {
             let (_, opp_canon) = canonical_preview_actions(dex, &mut sim_w, opp);
             let n_opp = opp_canon.len();
@@ -2243,11 +2424,12 @@ impl SteppedCfPreview {
                 continue;
             }
             let opp_tactical = lead_tactical_flags(dex, &sim_w, opp);
+            let party_lens = [sim_w.sides[0].party.len(), sim_w.sides[1].party.len()];
             let roster = CompactPreviewRoster::from_battle(&sim_w, dex, None);
-            let pcache = PreviewTempoCache::build_for_preview_roster(
-                &roster,
-                [sim_w.sides[0].party.len(), sim_w.sides[1].party.len()],
-            );
+            let pcache = PreviewTempoCache::build_for_preview_roster(&roster, party_lens);
+            if calib_active {
+                all_metas.push(WorldInteractMeta::build(&roster, &pcache, party_lens));
+            }
             let mut stage1_vals = vec![0.5f64; n_own * n_opp];
             for (i, &(_, own_t)) in own_canon.iter().enumerate() {
                 for (j, &(_, opp_t)) in opp_canon.iter().enumerate() {
@@ -2359,6 +2541,104 @@ impl SteppedCfPreview {
             return None;
         }
 
+        let raw_stage1_vals: Vec<Vec<f64>> = if calib_active {
+            worlds.iter().map(|w| w.stage1_vals.clone()).collect()
+        } else {
+            Vec::new()
+        };
+        let delta_t1: Vec<Vec<f64>> = if calib_active {
+            s2_world_ids
+                .iter()
+                .map(|&w_id| vec![0.0f64; n_own * worlds[w_id].opp_canon.len()])
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        let (calib, phase, work_queue) = if calib_active {
+            let cc = calib_cfg.as_ref().unwrap();
+            let calib_iters =
+                ((f64::from(cfg.total_iters) * cc.calib_frac.clamp(0.05, 0.70)).round() as u32)
+                    .max(512);
+            let traj_cfg = TrajPreviewConfig {
+                total_iters: calib_iters,
+                iters_per_turn: cc.iters_per_turn.max(16),
+                turn1_iters: cc.turn1_iters,
+                rb_exit: RbExitMode::CondSearchVroot {
+                    max_alive: cc.rb_max_alive,
+                    eval_iters: cc.rb_eval_iters,
+                },
+                ridge_basis: cc.ridge_basis,
+                ridge_lambda_main: cc.ridge_lambda_main,
+                ridge_lambda_inter: cc.ridge_lambda_inter,
+                ridge_gls: true,
+                ridge_shared_multiworld: true,
+                kappa: cc.kappa_gls,
+                crn_mode: TrajCrnMode::PairedCrnStratified,
+                c_puct: cfg.c_puct,
+                fpu_red: cfg.fpu_red,
+                puct_eps: cfg.puct_eps,
+                use_cf_policy: cfg.use_cf_policy,
+                leaf_temp: cfg.leaf_temp,
+                stepped_slots: 4,
+                ..TrajPreviewConfig::default()
+            };
+            let s2_metas = s2_world_ids.iter().map(|&w_id| all_metas[w_id].clone()).collect();
+            let tail_metas = tail_world_ids.iter().map(|&w_id| all_metas[w_id].clone()).collect();
+            let obs_s1_n: Vec<Vec<u32>> = s2_world_ids
+                .iter()
+                .map(|&w_id| vec![0u32; n_own * worlds[w_id].opp_canon.len()])
+                .collect();
+            let obs_s1_sum: Vec<Vec<f64>> = s2_world_ids
+                .iter()
+                .map(|&w_id| vec![0.0f64; n_own * worlds[w_id].opp_canon.len()])
+                .collect();
+            let obs_t1_n: Vec<Vec<u32>> = s2_world_ids
+                .iter()
+                .map(|&w_id| vec![0u32; n_own * worlds[w_id].opp_canon.len()])
+                .collect();
+            let obs_t1_sum: Vec<Vec<f64>> = s2_world_ids
+                .iter()
+                .map(|&w_id| vec![0.0f64; n_own * worlds[w_id].opp_canon.len()])
+                .collect();
+            let st = TrajCalibState {
+                calib_iters,
+                explore_iters: calib_iters / 2,
+                traj_cfg,
+                scratch: TrajTurnScratch::new(),
+                active_slots: (0..4).map(|_| None).collect(),
+                cur_slot: 0,
+                task_queue: std::collections::VecDeque::with_capacity(16),
+                s2_metas,
+                tail_metas,
+                obs_s1_n,
+                obs_s1_sum,
+                obs_t1_n,
+                obs_t1_sum,
+                own_mon_cnt: [0; 6],
+                own_lead_cnt: [0; 6],
+                own_bench_pair_cnt: [0; 15],
+                opp_mon_cnt: vec![[0; 6]; n_w2],
+                opp_lead_cnt: vec![[0; 6]; n_w2],
+                opp_bench_pair_cnt: vec![[0; 15]; n_w2],
+                world_games: vec![0; n_w2],
+                next_block_id: 0,
+                games_completed: 0,
+            };
+            (
+                Some(Box::new(st)),
+                SteppedPreviewPhase::TrajCalib,
+                std::collections::VecDeque::with_capacity(s_me.len() * 2),
+            )
+        } else {
+            let mut wq = std::collections::VecDeque::with_capacity(s_me.len() * 2);
+            let first_opp = s_opp[0][0];
+            for &own_i in &s_me {
+                wq.push_back((0usize, own_i, first_opp, 1u32));
+            }
+            (None, SteppedPreviewPhase::CoarseTier0, wq)
+        };
+
         let coarse_budget = (u64::from(cfg.total_iters) * 45 / 100) as u32;
         let coarse_cap = (cfg.total_iters / 320).clamp(cfg.coarse_iters.min(640), 640).max(1);
         let mut coarse_per_w = vec![cfg.coarse_iters; n_w2];
@@ -2366,14 +2646,6 @@ impl SteppedCfPreview {
             let w_budget = ((f64::from(coarse_budget) * s2_alloc_weights[wi]).round() as u32).max(1);
             let n_c = (s_me.len() * s_opp[wi].len()).max(1) as u32;
             coarse_per_w[wi] = (w_budget / n_c).clamp(coarse_cap.min(32), coarse_cap);
-        }
-
-        // Tier 0: 1 visit per own support action so small budgets (e.g. visit-sample)
-        // immediately span all candidate actions.
-        let mut work_queue = std::collections::VecDeque::with_capacity(s_me.len() * 2);
-        let first_opp = s_opp[0][0];
-        for &own_i in &s_me {
-            work_queue.push_back((0usize, own_i, first_opp, 1u32));
         }
 
         let eg_weights = EvalWeights::default();
@@ -2389,7 +2661,16 @@ impl SteppedCfPreview {
             side,
             cfg,
             own_canon,
+            own_tactical,
             worlds,
+            raw_stage1_vals,
+            delta_t1,
+            calib_cfg,
+            calib,
+            calib_obs: Vec::new(),
+            calib_s2_metas: Vec::new(),
+            calib_tail_metas: Vec::new(),
+            calib_iters_spent: 0,
             s2_world_ids,
             tail_world_ids,
             s2_alloc_weights,
@@ -2408,12 +2689,761 @@ impl SteppedCfPreview {
             total_nodes: 0,
             current_work: None,
             work_queue,
-            phase: SteppedPreviewPhase::CoarseTier0,
+            phase,
         })
     }
 
-    pub(crate) fn node_count(&self) -> usize {
+    pub fn node_count(&self) -> usize {
         self.total_nodes
+    }
+
+    pub fn iters_done(&self) -> u32 {
+        self.iters_done
+    }
+
+    #[inline]
+    fn cell_val_mine(&self, wi: usize, own_i: usize, opp_j: usize) -> f64 {
+        let w_id = self.s2_world_ids[wi];
+        let m_full = self.worlds[w_id].opp_canon.len();
+        let idx = own_i * m_full + opp_j;
+        if let Some(cell) = self.cells.get(&(wi, own_i, opp_j)) {
+            let v0 = cell.value0(self.cfg.cell_readout);
+            let v_t1 = if self.side == 0 { v0 } else { 1.0 - v0 };
+            let dt = self
+                .delta_t1
+                .get(wi)
+                .and_then(|v| v.get(idx))
+                .copied()
+                .unwrap_or(0.0);
+            (v_t1 + dt).clamp(0.01, 0.99)
+        } else {
+            self.worlds[w_id].stage1_vals[idx]
+        }
+    }
+
+    fn fit_calib_ridge(
+        &self,
+        cc: &TrajCalibConfig,
+        s2_metas: &[WorldInteractMeta],
+        obs_n: &[Vec<u32>],
+        obs_sum: &[Vec<f64>],
+    ) -> ([f64; MAX_RIDGE_DIM], Vec<[f64; MAX_RIDGE_DIM]>) {
+        let n_own = self.own_canon.len();
+        let n_w2 = self.s2_world_ids.len();
+        let basis = cc.ridge_basis;
+        let dim = basis.dim();
+        let main_end = basis.main_end();
+        let kappa = cc.kappa_gls.max(0.5);
+        let mut feats = [(0usize, 0.0f64); MAX_RIDGE_NNZ];
+
+        // 1. Fit shared residual ridge across all Stage-2 worlds.
+        let mut theta_shared = [0.0f64; MAX_RIDGE_DIM];
+        {
+            let mut ata = [[0.0f64; MAX_RIDGE_DIM]; MAX_RIDGE_DIM];
+            let mut atb = [0.0f64; MAX_RIDGE_DIM];
+            let mut any_obs = false;
+            for wi in 0..n_w2 {
+                let w_id = self.s2_world_ids[wi];
+                let wd = &self.worlds[w_id];
+                let m = wd.opp_canon.len();
+                let meta = &s2_metas[wi];
+                for i in 0..n_own {
+                    let own_t = self.own_canon[i].1;
+                    for j in 0..m {
+                        let idx = i * m + j;
+                        let n = obs_n[wi][idx];
+                        if n == 0 {
+                            continue;
+                        }
+                        any_obs = true;
+                        let nf = f64::from(n);
+                        let r_bar = obs_sum[wi][idx] / nf;
+                        let w_cell = (kappa + 1.0) * nf / (kappa + nf);
+                        let nnz = extract_ridge_features(
+                            basis,
+                            self.side,
+                            own_t,
+                            wd.opp_canon[j].1,
+                            meta,
+                            &mut feats,
+                        );
+                        for a in 0..nnz {
+                            let (fa, va) = feats[a];
+                            atb[fa] += w_cell * va * r_bar;
+                            for b in 0..=a {
+                                let (fb, vb) = feats[b];
+                                let prod = w_cell * va * vb;
+                                ata[fa][fb] += prod;
+                                if fa != fb {
+                                    ata[fb][fa] += prod;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if any_obs {
+                theta_shared = solve_spd_cholesky_split(
+                    dim,
+                    main_end,
+                    &ata,
+                    &atb,
+                    cc.ridge_lambda_int,
+                    cc.ridge_lambda_main,
+                    cc.ridge_lambda_inter,
+                );
+            }
+        }
+
+        // 2. Shrunk per-world residual deltas when W > 1 (optional; disabled by default to prevent W=8 overfitting).
+        let mut deltas_w = vec![[0.0f64; MAX_RIDGE_DIM]; n_w2];
+        if n_w2 > 1 && cc.per_world_delta {
+            for wi in 0..n_w2 {
+                let w_id = self.s2_world_ids[wi];
+                let wd = &self.worlds[w_id];
+                let m = wd.opp_canon.len();
+                let meta = &s2_metas[wi];
+                let mut ata = [[0.0f64; MAX_RIDGE_DIM]; MAX_RIDGE_DIM];
+                let mut atb = [0.0f64; MAX_RIDGE_DIM];
+                let mut any_w = false;
+                for i in 0..n_own {
+                    let own_t = self.own_canon[i].1;
+                    for j in 0..m {
+                        let idx = i * m + j;
+                        let n = obs_n[wi][idx];
+                        if n == 0 {
+                            continue;
+                        }
+                        any_w = true;
+                        let nf = f64::from(n);
+                        let nnz = extract_ridge_features(
+                            basis,
+                            self.side,
+                            own_t,
+                            wd.opp_canon[j].1,
+                            meta,
+                            &mut feats,
+                        );
+                        let mut shared_pred = 0.0;
+                        for &(f, v) in &feats[..nnz] {
+                            shared_pred += theta_shared[f] * v;
+                        }
+                        let r_rem = (obs_sum[wi][idx] / nf) - shared_pred;
+                        let w_cell = (kappa + 1.0) * nf / (kappa + nf);
+                        for a in 0..nnz {
+                            let (fa, va) = feats[a];
+                            atb[fa] += w_cell * va * r_rem;
+                            for b in 0..=a {
+                                let (fb, vb) = feats[b];
+                                let prod = w_cell * va * vb;
+                                ata[fa][fb] += prod;
+                                if fa != fb {
+                                    ata[fb][fa] += prod;
+                                }
+                            }
+                        }
+                    }
+                }
+                if any_w {
+                    deltas_w[wi] = solve_spd_cholesky_split(
+                        dim,
+                        main_end,
+                        &ata,
+                        &atb,
+                        2.0,
+                        cc.ridge_lambda_main * 2.0,
+                        cc.ridge_lambda_inter * 2.0,
+                    );
+                }
+            }
+        }
+        (theta_shared, deltas_w)
+    }
+
+    fn enqueue_calib_batch(&mut self, rng: &mut SplitMix64) {
+        let n_own = self.own_canon.len();
+        let n_w2 = self.s2_world_ids.len();
+        let cc = self.calib_cfg.clone().unwrap();
+
+        let (wi, in_explore) = {
+            let cal = self.calib.as_ref().unwrap();
+            let mut best_wi = 0usize;
+            let mut best_ratio = f64::INFINITY;
+            for w in 0..n_w2 {
+                let ratio = f64::from(cal.world_games[w]) / self.s2_alloc_weights[w].max(1e-6);
+                if ratio < best_ratio {
+                    best_ratio = ratio;
+                    best_wi = w;
+                }
+            }
+            (best_wi, self.iters_done < cal.explore_iters)
+        };
+        let w_id = self.s2_world_ids[wi];
+        let m = self.worlds[w_id].opp_canon.len();
+
+        let score_triple = |t: [u8; 3],
+                            mon_cnt: &[u32; 6],
+                            lead_cnt: &[u32; 6],
+                            bp_cnt: &[u32; 15]|
+         -> f64 {
+            let mut sc = 0.0;
+            for (pos, &s) in t.iter().enumerate() {
+                if s >= 1 && (s as usize) <= 6 {
+                    let idx = s as usize - 1;
+                    sc += f64::from(mon_cnt[idx]) * 1.0;
+                    if pos == 0 {
+                        sc += f64::from(lead_cnt[idx]) * 0.7;
+                    }
+                }
+            }
+            if let Some(bp) = SteppedTrajPreview::bench_pair_index(t) {
+                sc += f64::from(bp_cnt[bp]) * 0.5;
+            }
+            sc
+        };
+
+        let mut pairs: Vec<(usize, usize)> = Vec::with_capacity(4);
+        if in_explore {
+            let cal = self.calib.as_ref().unwrap();
+            let mut used_i: Vec<usize> = Vec::with_capacity(4);
+            let mut used_j: Vec<usize> = Vec::with_capacity(4);
+            for _ in 0..4 {
+                let mut best_i = 0usize;
+                let mut best_si = f64::INFINITY;
+                for i in 0..n_own {
+                    if used_i.contains(&i) {
+                        continue;
+                    }
+                    let sc = score_triple(
+                        self.own_canon[i].1,
+                        &cal.own_mon_cnt,
+                        &cal.own_lead_cnt,
+                        &cal.own_bench_pair_cnt,
+                    ) + rng.next_f64() * 0.05;
+                    if sc < best_si {
+                        best_si = sc;
+                        best_i = i;
+                    }
+                }
+                let mut best_j = 0usize;
+                let mut best_sj = f64::INFINITY;
+                for j in 0..m {
+                    if used_j.contains(&j) {
+                        continue;
+                    }
+                    let sc = score_triple(
+                        self.worlds[w_id].opp_canon[j].1,
+                        &cal.opp_mon_cnt[wi],
+                        &cal.opp_lead_cnt[wi],
+                        &cal.opp_bench_pair_cnt[wi],
+                    ) + rng.next_f64() * 0.05;
+                    if sc < best_sj {
+                        best_sj = sc;
+                        best_j = j;
+                    }
+                }
+                used_i.push(best_i);
+                used_j.push(best_j);
+                pairs.push((best_i, best_j));
+            }
+        } else {
+            // Equilibrium-guided DO trajectories on the current calibrated Stage-1 + Ridge matrix!
+            let (theta_s1, dw_s1) = {
+                let cal = self.calib.as_ref().unwrap();
+                self.fit_calib_ridge(&cc, &cal.s2_metas, &cal.obs_s1_n, &cal.obs_s1_sum)
+            };
+            let basis = cc.ridge_basis;
+            let mut feats = [(0usize, 0.0f64); MAX_RIDGE_NNZ];
+            let mut mats: Vec<Vec<f64>> = Vec::with_capacity(n_w2);
+            let mut col_lens: Vec<usize> = Vec::with_capacity(n_w2);
+            {
+                let cal = self.calib.as_ref().unwrap();
+                for w in 0..n_w2 {
+                    let wid = self.s2_world_ids[w];
+                    let wd = &self.worlds[wid];
+                    let mw = wd.opp_canon.len();
+                    let meta = &cal.s2_metas[w];
+                    let mut mat = vec![0.5f64; n_own * mw];
+                    for i in 0..n_own {
+                        let own_t = self.own_canon[i].1;
+                        for j in 0..mw {
+                            let idx = i * mw + j;
+                            let nnz = extract_ridge_features(
+                                basis,
+                                self.side,
+                                own_t,
+                                wd.opp_canon[j].1,
+                                meta,
+                                &mut feats,
+                            );
+                            let mut corr = 0.0;
+                            for &(f, v) in &feats[..nnz] {
+                                corr += (theta_s1[f] + dw_s1[w][f]) * v;
+                            }
+                            mat[idx] = (self.raw_stage1_vals[wid][idx] + cc.delta_s1_beta * corr)
+                                .clamp(0.02, 0.98);
+                        }
+                    }
+                    mats.push(mat);
+                    col_lens.push(mw);
+                }
+            }
+            let slices: Vec<(f64, usize, &[f64])> = (0..n_w2)
+                .map(|w| (self.s2_alloc_weights[w], col_lens[w], mats[w].as_slice()))
+                .collect();
+            let sol = solve_bayesian_rm_plus(n_own, &slices, 250);
+            let cal = self.calib.as_ref().unwrap();
+
+            // 1. Paired own challenger vs incumbent against equilibrium opponent.
+            let j_tgt = sample_dist(&sol.opp_policies[wi], rng.next_f64());
+            let i_inc = sample_dist(&sol.own_policy, rng.next_f64());
+            let mut own_cands: Vec<(usize, f64)> = (0..n_own)
+                .filter(|&i| i != i_inc)
+                .map(|i| {
+                    let n = cal.obs_s1_n[wi][i * m + j_tgt];
+                    (i, sol.row_vs_q[i] + 0.08 / f64::from(n + 1).sqrt())
+                })
+                .collect();
+            own_cands.sort_by(|a, b| b.1.total_cmp(&a.1));
+            let i_ch = own_cands.first().map_or(i_inc, |&(i, _)| i);
+            pairs.push((i_inc, j_tgt));
+            pairs.push((i_ch, j_tgt));
+
+            // 2. Paired opp challenger vs incumbent against equilibrium own pick.
+            let i_tgt = sample_dist(&sol.own_policy, rng.next_f64());
+            let j_inc = sample_dist(&sol.opp_policies[wi], rng.next_f64());
+            let mut opp_cands: Vec<(usize, f64)> = (0..m)
+                .filter(|&j| j != j_inc)
+                .map(|j| {
+                    let n = cal.obs_s1_n[wi][i_tgt * m + j];
+                    (j, (1.0 - sol.col_vs_p[wi][j]) + 0.08 / f64::from(n + 1).sqrt())
+                })
+                .collect();
+            opp_cands.sort_by(|a, b| b.1.total_cmp(&a.1));
+            let j_ch = opp_cands.first().map_or(j_inc, |&(j, _)| j);
+            pairs.push((i_tgt, j_inc));
+            pairs.push((i_tgt, j_ch));
+        }
+
+        let cal = self.calib.as_mut().unwrap();
+        let blk = cal.next_block_id;
+        cal.next_block_id += 1;
+        let shared_seed = rng.next();
+        for &(ri, cj) in &pairs {
+            let own_t = self.own_canon[ri].1;
+            let opp_t = self.worlds[w_id].opp_canon[cj].1;
+            for (pos, &s) in own_t.iter().enumerate() {
+                if s >= 1 && (s as usize) <= 6 {
+                    let idx = s as usize - 1;
+                    cal.own_mon_cnt[idx] += 1;
+                    if pos == 0 {
+                        cal.own_lead_cnt[idx] += 1;
+                    }
+                }
+            }
+            if let Some(bp) = SteppedTrajPreview::bench_pair_index(own_t) {
+                cal.own_bench_pair_cnt[bp] += 1;
+            }
+            for (pos, &s) in opp_t.iter().enumerate() {
+                if s >= 1 && (s as usize) <= 6 {
+                    let idx = s as usize - 1;
+                    cal.opp_mon_cnt[wi][idx] += 1;
+                    if pos == 0 {
+                        cal.opp_lead_cnt[wi][idx] += 1;
+                    }
+                }
+            }
+            if let Some(bp) = SteppedTrajPreview::bench_pair_index(opp_t) {
+                cal.opp_bench_pair_cnt[wi][bp] += 1;
+            }
+            cal.world_games[wi] += 1;
+            let visit_k = cal.obs_s1_n[wi][ri * m + cj];
+            cal.task_queue.push_back(TrajTask {
+                wi,
+                own_i: ri,
+                opp_j: cj,
+                block_id: blk,
+                game_seed: shared_seed,
+                cell_visit_k: visit_k,
+                t1_only_iters: 0,
+            });
+        }
+    }
+
+    fn finalize_calib(&mut self) {
+        let Some(cal) = self.calib.take() else {
+            return;
+        };
+        let cc = self.calib_cfg.clone().unwrap();
+        let n_own = self.own_canon.len();
+        let n_w2 = self.s2_world_ids.len();
+        let basis = cc.ridge_basis;
+        let mut feats = [(0usize, 0.0f64); MAX_RIDGE_NNZ];
+
+        // 1. Fit Stage-1 horizon delta (V_traj - raw_stage1) and update `worlds[*].stage1_vals`.
+        let (theta_s1, dw_s1) =
+            self.fit_calib_ridge(&cc, &cal.s2_metas, &cal.obs_s1_n, &cal.obs_s1_sum);
+        for wi in 0..n_w2 {
+            let w_id = self.s2_world_ids[wi];
+            let m = self.worlds[w_id].opp_canon.len();
+            let meta = &cal.s2_metas[wi];
+            for i in 0..n_own {
+                let own_t = self.own_canon[i].1;
+                for j in 0..m {
+                    let idx = i * m + j;
+                    let nnz = extract_ridge_features(
+                        basis,
+                        self.side,
+                        own_t,
+                        self.worlds[w_id].opp_canon[j].1,
+                        meta,
+                        &mut feats,
+                    );
+                    let mut corr = 0.0;
+                    for &(f, v) in &feats[..nnz] {
+                        corr += (theta_s1[f] + dw_s1[wi][f]) * v;
+                    }
+                    self.worlds[w_id].stage1_vals[idx] =
+                        (self.raw_stage1_vals[w_id][idx] + cc.delta_s1_beta * corr)
+                            .clamp(0.02, 0.98);
+                }
+            }
+        }
+        // Transfer 75% of shared species-level horizon delta to tail belief worlds.
+        for (ti, &w_id) in self.tail_world_ids.iter().enumerate() {
+            let m = self.worlds[w_id].opp_canon.len();
+            let meta = &cal.tail_metas[ti];
+            for i in 0..n_own {
+                let own_t = self.own_canon[i].1;
+                for j in 0..m {
+                    let idx = i * m + j;
+                    let nnz = extract_ridge_features(
+                        basis,
+                        self.side,
+                        own_t,
+                        self.worlds[w_id].opp_canon[j].1,
+                        meta,
+                        &mut feats,
+                    );
+                    let mut corr = 0.0;
+                    for &(f, v) in &feats[..nnz] {
+                        corr += theta_s1[f] * v;
+                    }
+                    self.worlds[w_id].stage1_vals[idx] =
+                        (self.raw_stage1_vals[w_id][idx] + 0.75 * cc.delta_s1_beta * corr)
+                            .clamp(0.02, 0.98);
+                }
+            }
+        }
+
+        // 2. Fit Stage-2 Turn-1 control-variate delta (V_traj - V_T1) for every S2 world.
+        let (theta_t1, dw_t1) =
+            self.fit_calib_ridge(&cc, &cal.s2_metas, &cal.obs_t1_n, &cal.obs_t1_sum);
+        for wi in 0..n_w2 {
+            let w_id = self.s2_world_ids[wi];
+            let m = self.worlds[w_id].opp_canon.len();
+            let meta = &cal.s2_metas[wi];
+            for i in 0..n_own {
+                let own_t = self.own_canon[i].1;
+                for j in 0..m {
+                    let idx = i * m + j;
+                    let nnz = extract_ridge_features(
+                        basis,
+                        self.side,
+                        own_t,
+                        self.worlds[w_id].opp_canon[j].1,
+                        meta,
+                        &mut feats,
+                    );
+                    let mut corr = 0.0;
+                    for &(f, v) in &feats[..nnz] {
+                        corr += (theta_t1[f] + dw_t1[wi][f]) * v;
+                    }
+                    self.delta_t1[wi][idx] = (cc.delta_t1_beta * corr).clamp(-0.35, 0.35);
+                }
+            }
+        }
+
+        // 3. Re-solve calibrated Stage-1 equilibrium and re-select Stage-2 diverse support!
+        let s1_slices: Vec<(f64, usize, &[f64])> = self
+            .worlds
+            .iter()
+            .map(|w| (w.weight, w.opp_canon.len(), w.stage1_vals.as_slice()))
+            .collect();
+        let sol1 = solve_bayesian_rm_plus(n_own, &s1_slices, self.cfg.rm_sweeps_stage1);
+        let k_eff = if n_w2 >= 4 {
+            self.cfg.support_k.min(8)
+        } else {
+            self.cfg.support_k
+        };
+        let k_cal = if cc.union_raw_support {
+            (k_eff * 2 / 3).max(4)
+        } else {
+            k_eff
+        };
+        let mut new_s_me = select_diverse_support(
+            &self.own_canon,
+            &sol1.own_policy,
+            &sol1.row_vs_q,
+            &sol1.row_guarantees,
+            &self.own_tactical,
+            k_cal,
+        );
+        if cc.union_raw_support {
+            for &raw_i in &self.s_me {
+                if new_s_me.len() >= k_eff {
+                    break;
+                }
+                if !new_s_me.contains(&raw_i) {
+                    new_s_me.push(raw_i);
+                }
+            }
+        }
+        let mut new_s_opp: Vec<Vec<usize>> = Vec::with_capacity(n_w2);
+        for (wi, &w_id) in self.s2_world_ids.iter().enumerate() {
+            let wd = &self.worlds[w_id];
+            let m = wd.opp_canon.len();
+            let opp_ev: Vec<f64> = sol1.col_vs_p[w_id].iter().map(|&v| 1.0 - v).collect();
+            let mut opp_guar = vec![1.0f64; m];
+            for j in 0..m {
+                let mut mx = 0.0f64;
+                for i in 0..n_own {
+                    let v = wd.stage1_vals[i * m + j];
+                    if v > mx {
+                        mx = v;
+                    }
+                }
+                opp_guar[j] = 1.0 - mx;
+            }
+            let mut so = select_diverse_support(
+                &wd.opp_canon,
+                &sol1.opp_policies[w_id],
+                &opp_ev,
+                &opp_guar,
+                &wd.opp_tactical,
+                k_cal,
+            );
+            if cc.union_raw_support {
+                for &raw_j in &self.s_opp[wi] {
+                    if so.len() >= k_eff {
+                        break;
+                    }
+                    if !so.contains(&raw_j) {
+                        so.push(raw_j);
+                    }
+                }
+            }
+            new_s_opp.push(so);
+        }
+        if !new_s_me.is_empty() && !new_s_opp.iter().any(Vec::is_empty) {
+            self.s_me = new_s_me;
+            self.s_opp = new_s_opp;
+        }
+        self.sol2 = sol1;
+
+        // 4. Recompute Stage-2 Coarse budget from remaining iterations and kick off CoarseTier0.
+        self.calib_s2_metas = cal.s2_metas;
+        self.calib_tail_metas = cal.tail_metas;
+        self.calib_iters_spent = self.iters_done;
+        let rem_budget = self.cfg.total_iters.saturating_sub(self.iters_done).max(1024);
+        let coarse_budget = (u64::from(rem_budget) * 45 / 100) as u32;
+        let coarse_cap = (rem_budget / 256).clamp(self.cfg.coarse_iters.min(640), 640).max(1);
+        for wi in 0..n_w2 {
+            let w_budget =
+                ((f64::from(coarse_budget) * self.s2_alloc_weights[wi]).round() as u32).max(1);
+            let n_c = (self.s_me.len() * self.s_opp[wi].len()).max(1) as u32;
+            self.coarse_per_w[wi] = (w_budget / n_c).clamp(coarse_cap.min(32), coarse_cap);
+        }
+
+        self.work_queue.clear();
+        let first_opp = self.s_opp[0][0];
+        for &own_i in &self.s_me {
+            self.work_queue.push_back((0usize, own_i, first_opp, 1u32));
+        }
+        self.phase = SteppedPreviewPhase::CoarseTier0;
+    }
+
+    fn step_calib_one(&mut self, rng: &mut SplitMix64) -> (usize, SearchChoice, f64, f64, u32) {
+        let n_slots = self.calib.as_ref().unwrap().active_slots.len();
+        loop {
+            let need_spawn = {
+                let cal = self.calib.as_ref().unwrap();
+                cal.active_slots[cal.cur_slot].is_none()
+            };
+            if need_spawn {
+                if self.calib.as_ref().unwrap().task_queue.is_empty() {
+                    self.enqueue_calib_batch(rng);
+                }
+                let cal = self.calib.as_mut().unwrap();
+                let task = cal.task_queue.pop_front().unwrap();
+                let w_id = self.s2_world_ids[task.wi];
+                let wd = &self.worlds[w_id];
+                let (ref roster, ref pcache) = wd.compact.as_ref().unwrap();
+                let own_t = self.own_canon[task.own_i].1;
+                let opp_t = wd.opp_canon[task.opp_j].1;
+                let picks = if self.side == 0 {
+                    [own_t, opp_t]
+                } else {
+                    [opp_t, own_t]
+                };
+                cal.active_slots[cal.cur_slot] = Some(ActiveTrajGame::new(
+                    task.wi,
+                    task.own_i,
+                    task.opp_j,
+                    task.block_id,
+                    roster,
+                    pcache,
+                    picks,
+                    task.game_seed,
+                    task.cell_visit_k,
+                    cal.traj_cfg.crn_mode,
+                    0,
+                ));
+            }
+
+            let mut slot_game = {
+                let cal = self.calib.as_mut().unwrap();
+                cal.active_slots[cal.cur_slot].take().unwrap()
+            };
+            if !slot_game.turn_ready {
+                let done_opt = {
+                    let cal = self.calib.as_mut().unwrap();
+                    slot_game.prepare_next_turn(&cal.traj_cfg, &mut cal.scratch)
+                };
+                if let Some((v0, _rb)) = done_opt {
+                    let wi = slot_game.wi;
+                    let own_i = slot_game.own_i;
+                    let opp_j = slot_game.opp_j;
+                    let v_mine = if self.side == 0 { v0 } else { 1.0 - v0 };
+                    let w_id = self.s2_world_ids[wi];
+                    let m = self.worlds[w_id].opp_canon.len();
+                    let idx = own_i * m + opp_j;
+                    let cal = self.calib.as_mut().unwrap();
+                    let r_s1 = v_mine - self.raw_stage1_vals[w_id][idx];
+                    cal.obs_s1_n[wi][idx] += 1;
+                    cal.obs_s1_sum[wi][idx] += r_s1;
+                    let (r_t1, has_t1) = if let Some(t1_v0) = slot_game.turn1_v0 {
+                        let t1_mine = if self.side == 0 { t1_v0 } else { 1.0 - t1_v0 };
+                        let d = v_mine - t1_mine;
+                        cal.obs_t1_n[wi][idx] += 1;
+                        cal.obs_t1_sum[wi][idx] += d;
+                        (d as f32, true)
+                    } else {
+                        (0.0, false)
+                    };
+                    cal.games_completed += 1;
+                    cal.cur_slot = (cal.cur_slot + 1) % n_slots;
+                    self.calib_obs.push(CalibObs {
+                        wi: wi as u16,
+                        own_i: own_i as u16,
+                        opp_j: opp_j as u16,
+                        block_id: slot_game.block_id,
+                        r_s1: r_s1 as f32,
+                        r_t1,
+                        has_t1,
+                    });
+                    continue;
+                }
+            }
+
+            let (val0, depth, added) = {
+                let cal = self.calib.as_mut().unwrap();
+                cal.scratch.step_puct_iter(
+                    &slot_game.turn_root_cb,
+                    &slot_game.table,
+                    &slot_game.cache,
+                    slot_game.turn_cap,
+                    cal.traj_cfg.c_puct,
+                    cal.traj_cfg.fpu_red,
+                    cal.traj_cfg.puct_eps,
+                    cal.traj_cfg.use_cf_policy,
+                    cal.traj_cfg.leaf_temp,
+                    &mut slot_game.turn_rng,
+                )
+            };
+            self.total_nodes += added;
+            self.iters_done += 1;
+            slot_game.turn_iters_done += 1;
+            if slot_game.turn1_v0.is_none()
+                && slot_game.cb.turn == 1
+                && slot_game.turn_iters_done.saturating_mul(2) > slot_game.turn_target_iters
+            {
+                slot_game.t1_late_sum += val0;
+                slot_game.t1_late_n += 1;
+            }
+
+            let wi = slot_game.wi;
+            let own_i = slot_game.own_i;
+            let opp_j = slot_game.opp_j;
+            let opp_t = self.worlds[self.s2_world_ids[wi]].opp_canon[opp_j].1;
+
+            if slot_game.turn_iters_done >= slot_game.turn_target_iters {
+                if slot_game.turn1_v0.is_none() && slot_game.cb.turn == 1 {
+                    let cal = self.calib.as_ref().unwrap();
+                    let t1_v0 = if slot_game.t1_late_n > 0 {
+                        (slot_game.t1_late_sum / f64::from(slot_game.t1_late_n)).clamp(0.0, 1.0)
+                    } else {
+                        cal.scratch.readout_turn().1
+                    };
+                    slot_game.turn1_v0 = Some(t1_v0);
+                }
+                let finished = {
+                    let cal = self.calib.as_ref().unwrap();
+                    slot_game.finish_turn(&cal.scratch)
+                };
+                let mut completed_obs: Option<CalibObs> = None;
+                let cal = self.calib.as_mut().unwrap();
+                if let Some((final_v0, _rb)) = finished {
+                    let v_mine = if self.side == 0 {
+                        final_v0
+                    } else {
+                        1.0 - final_v0
+                    };
+                    let w_id = self.s2_world_ids[wi];
+                    let m = self.worlds[w_id].opp_canon.len();
+                    let idx = own_i * m + opp_j;
+                    let r_s1 = v_mine - self.raw_stage1_vals[w_id][idx];
+                    cal.obs_s1_n[wi][idx] += 1;
+                    cal.obs_s1_sum[wi][idx] += r_s1;
+                    let (r_t1, has_t1) = if let Some(t1_v0) = slot_game.turn1_v0 {
+                        let t1_mine = if self.side == 0 { t1_v0 } else { 1.0 - t1_v0 };
+                        let d = v_mine - t1_mine;
+                        cal.obs_t1_n[wi][idx] += 1;
+                        cal.obs_t1_sum[wi][idx] += d;
+                        (d as f32, true)
+                    } else {
+                        (0.0, false)
+                    };
+                    cal.games_completed += 1;
+                    completed_obs = Some(CalibObs {
+                        wi: wi as u16,
+                        own_i: own_i as u16,
+                        opp_j: opp_j as u16,
+                        block_id: slot_game.block_id,
+                        r_s1: r_s1 as f32,
+                        r_t1,
+                        has_t1,
+                    });
+                } else {
+                    cal.active_slots[cal.cur_slot] = Some(slot_game);
+                }
+                cal.cur_slot = (cal.cur_slot + 1) % n_slots;
+                if let Some(obs) = completed_obs {
+                    self.calib_obs.push(obs);
+                }
+            } else {
+                let cal = self.calib.as_mut().unwrap();
+                cal.active_slots[cal.cur_slot] = Some(slot_game);
+            }
+
+            if self.iters_done >= self.calib.as_ref().unwrap().calib_iters {
+                self.finalize_calib();
+            }
+
+            let val_mine = if self.side == 0 { val0 } else { 1.0 - val0 };
+            let own_orig_idx = self.own_canon[own_i].0;
+            return (own_orig_idx, SearchChoice::Team(opp_t), val0, val_mine, depth);
+        }
     }
 
     fn solve_subgame(&self, sweeps: u32) -> (Vec<Vec<f64>>, BayesianRmSolution) {
@@ -2424,20 +3454,11 @@ impl SteppedCfPreview {
         let mut col_lens: Vec<usize> = Vec::with_capacity(n_w2 + n_tail);
         let mut w_list: Vec<f64> = Vec::with_capacity(n_w2 + n_tail);
         for wi in 0..n_w2 {
-            let w_id = self.s2_world_ids[wi];
-            let wd = &self.worlds[w_id];
-            let m_full = wd.opp_canon.len();
             let k_opp = self.s_opp[wi].len();
             let mut mat = vec![0.5f64; k_me * k_opp];
             for (ri, &own_i) in self.s_me.iter().enumerate() {
                 for (cj, &opp_j) in self.s_opp[wi].iter().enumerate() {
-                    let v = if let Some(cell) = self.cells.get(&(wi, own_i, opp_j)) {
-                        let v0 = cell.value0(self.cfg.cell_readout);
-                        if self.side == 0 { v0 } else { 1.0 - v0 }
-                    } else {
-                        wd.stage1_vals[own_i * m_full + opp_j]
-                    };
-                    mat[ri * k_opp + cj] = v;
+                    mat[ri * k_opp + cj] = self.cell_val_mine(wi, own_i, opp_j);
                 }
             }
             mats.push(mat);
@@ -2609,6 +3630,10 @@ impl SteppedCfPreview {
                 SteppedPreviewPhase::Polish { polish_steps: 0 },
             );
             match phase {
+                SteppedPreviewPhase::TrajCalib => {
+                    self.phase = SteppedPreviewPhase::TrajCalib;
+                    return;
+                }
                 SteppedPreviewPhase::CoarseTier0 => {
                     for wi in 0..n_w2 {
                         let target = self.coarse_per_w[wi].min(32);
@@ -2652,7 +3677,11 @@ impl SteppedCfPreview {
                 SteppedPreviewPhase::CoarseTier2 => {
                     let (_, sol2) = self.solve_subgame(600);
                     self.sol2 = sol2;
-                    let do_cap_iters = (u64::from(self.cfg.total_iters) * 65 / 100) as u32;
+                    let rem_after_calib =
+                        self.cfg.total_iters.saturating_sub(self.calib_iters_spent);
+                    let do_cap_iters = self
+                        .calib_iters_spent
+                        .saturating_add((u64::from(rem_after_calib) * 65 / 100) as u32);
                     if self.cfg.do_rounds > 0 && self.iters_done < do_cap_iters {
                         let opp_do_cap = self.iters_done.saturating_add(
                             (do_cap_iters.saturating_sub(self.iters_done)) * 60 / 100,
@@ -2685,10 +3714,7 @@ impl SteppedCfPreview {
                                 } else {
                                     1.0 / (supp_me.len() as f64)
                                 };
-                                let v = self.cells.get(&(wi, own_i, cand_j)).map_or(0.5, |c| {
-                                    let v0 = c.value0(self.cfg.cell_readout);
-                                    if self.side == 0 { v0 } else { 1.0 - v0 }
-                                });
+                                let v = self.cell_val_mine(wi, own_i, cand_j);
                                 ev2 += pw * v;
                             }
                             if ev2 < self.sol2.world_values[wi] - self.cfg.do_margin {
@@ -2830,10 +3856,7 @@ impl SteppedCfPreview {
                                     } else {
                                         1.0 / (supp_opp[wi].len() as f64)
                                     };
-                                    let v = self.cells.get(&(wi, cand_i, opp_j)).map_or(0.5, |c| {
-                                        let v0 = c.value0(self.cfg.cell_readout);
-                                        if self.side == 0 { v0 } else { 1.0 - v0 }
-                                    });
+                                    let v = self.cell_val_mine(wi, cand_i, opp_j);
                                     ev_w += qw * v;
                                 }
                                 ev2 += self.s2_post_weights[wi] * ev_w;
@@ -3006,20 +4029,8 @@ impl SteppedCfPreview {
                         if let Some(pure_r) = pure_r_opt {
                             let own_i = self.s_me[pure_r];
                             if let Some(worst_cj) = (0..self.s_opp[wi].len()).min_by(|&a, &b| {
-                                let va = self
-                                    .cells
-                                    .get(&(wi, own_i, self.s_opp[wi][a]))
-                                    .map_or(0.5, |c| {
-                                        let v0 = c.value0(self.cfg.cell_readout);
-                                        if self.side == 0 { v0 } else { 1.0 - v0 }
-                                    });
-                                let vb = self
-                                    .cells
-                                    .get(&(wi, own_i, self.s_opp[wi][b]))
-                                    .map_or(0.5, |c| {
-                                        let v0 = c.value0(self.cfg.cell_readout);
-                                        if self.side == 0 { v0 } else { 1.0 - v0 }
-                                    });
+                                let va = self.cell_val_mine(wi, own_i, self.s_opp[wi][a]);
+                                let vb = self.cell_val_mine(wi, own_i, self.s_opp[wi][b]);
                                 va.total_cmp(&vb)
                             }) {
                                 if !active_cols.contains(&worst_cj) {
@@ -3098,9 +4109,12 @@ impl SteppedCfPreview {
         }
     }
 
-    /// Execute exactly ONE Turn-1 `cfv-0r@puct@lam0` iteration.
+    /// Execute exactly ONE Turn-1 `cfv-0r@puct@lam0` iteration (or calibration trajectory iter).
     /// Returns `(own_orig_idx, opp_choice, val0, val_mine, depth)`.
-    pub(crate) fn step_one(&mut self, rng: &mut SplitMix64) -> (usize, SearchChoice, f64, f64, u32) {
+    pub fn step_one(&mut self, rng: &mut SplitMix64) -> (usize, SearchChoice, f64, f64, u32) {
+        if self.calib.is_some() {
+            return self.step_calib_one(rng);
+        }
         let (wi, own_i, opp_j) = loop {
             if let Some((wi, own_i, opp_j, ref mut rem)) = self.current_work {
                 if *rem > 0 {
@@ -3119,7 +4133,12 @@ impl SteppedCfPreview {
         let wd = &self.worlds[w_id];
         let (ref roster, ref pcache) = wd.compact.as_ref().unwrap();
         let m = wd.opp_canon.len();
-        let prior_v_mine = wd.stage1_vals[own_i * m + opp_j];
+        let prior_v_mine = self
+            .raw_stage1_vals
+            .get(w_id)
+            .and_then(|v| v.get(own_i * m + opp_j))
+            .copied()
+            .unwrap_or_else(|| wd.stage1_vals[own_i * m + opp_j]);
         let prior_v0 = if self.side == 0 {
             prior_v_mine
         } else {
@@ -3157,17 +4176,25 @@ impl SteppedCfPreview {
         (own_orig_idx, opp_choice, val0, val_mine, depth)
     }
 
-    /// Solve the `LcbGatedMixed` Bayesian RM+ readout over the full 100% posterior.
-    /// Returns `(use_mix, best_pure_r, p_mix)` without mutating search state.
+    /// Solve the execution readout over the full 100% posterior without mutating search state.
+    /// Uses Rubin Bayesian Bootstrap over CRN calibration blocks when `bootstrap_draws > 1`,
+    /// otherwise uses `LcbGatedMixed`.
     fn solve_execution_mix(&self, done: u32) -> (bool, usize, Vec<f64>) {
         let sweeps = if done >= 4096 {
             self.cfg.rm_sweeps_final
         } else {
             self.cfg.rm_sweeps_stage1
         };
-        let (final_mats, final_sol) = self.solve_subgame(sweeps);
+        let use_full_opp = self.calib.is_none()
+            && self.calib_cfg.as_ref().is_some_and(|cc| cc.full_opp_readout);
+        let (final_mats, final_sol) = if use_full_opp {
+            self.solve_subgame_full_opp(sweeps)
+        } else {
+            self.solve_subgame(sweeps)
+        };
         let k_me = self.s_me.len();
         let n_w2 = self.s2_world_ids.len();
+        let n_tail = self.tail_world_ids.len();
         let best_pure_r = (0..k_me)
             .max_by(|&a, &b| {
                 final_sol.row_guarantees[a]
@@ -3175,6 +4202,321 @@ impl SteppedCfPreview {
                     .then_with(|| final_sol.row_vs_q[a].total_cmp(&final_sol.row_vs_q[b]))
             })
             .unwrap_or(0);
+
+        // Early-stop readout while still inside `TrajCalib`: apply interim calibrated Stage-1 ridge
+        // if enough calibration trajectories have completed, without mutating search state.
+        if let (Some(ref cc), Some(ref cal)) = (&self.calib_cfg, &self.calib) {
+            if cal.games_completed >= 8 {
+                let (th_s1, dw_s1) =
+                    self.fit_calib_ridge(cc, &cal.s2_metas, &cal.obs_s1_n, &cal.obs_s1_sum);
+                let basis = cc.ridge_basis;
+                let mut feats = [(0usize, 0.0f64); MAX_RIDGE_NNZ];
+                let mut mats: Vec<Vec<f64>> = Vec::with_capacity(n_w2 + n_tail);
+                let mut col_lens: Vec<usize> = Vec::with_capacity(n_w2 + n_tail);
+                let mut w_list: Vec<f64> = Vec::with_capacity(n_w2 + n_tail);
+                for wi in 0..n_w2 {
+                    let w_id = self.s2_world_ids[wi];
+                    let wd = &self.worlds[w_id];
+                    let m_full = wd.opp_canon.len();
+                    let meta = &cal.s2_metas[wi];
+                    let mut mat = vec![0.5f64; k_me * m_full];
+                    for (ri, &own_i) in self.s_me.iter().enumerate() {
+                        let own_t = self.own_canon[own_i].1;
+                        for j in 0..m_full {
+                            let nnz = extract_ridge_features(
+                                basis,
+                                self.side,
+                                own_t,
+                                wd.opp_canon[j].1,
+                                meta,
+                                &mut feats,
+                            );
+                            let mut corr = 0.0;
+                            for &(f, v) in &feats[..nnz] {
+                                corr += (th_s1[f] + dw_s1[wi][f]) * v;
+                            }
+                            mat[ri * m_full + j] = (self.raw_stage1_vals[w_id][own_i * m_full + j]
+                                + cc.delta_s1_beta * corr)
+                                .clamp(0.02, 0.98);
+                        }
+                    }
+                    mats.push(mat);
+                    col_lens.push(m_full);
+                    w_list.push(self.s2_post_weights[wi]);
+                }
+                for (ti, &w_id) in self.tail_world_ids.iter().enumerate() {
+                    let wd = &self.worlds[w_id];
+                    let m_full = wd.opp_canon.len();
+                    let meta = &cal.tail_metas[ti];
+                    let mut mat = vec![0.5f64; k_me * m_full];
+                    for (ri, &own_i) in self.s_me.iter().enumerate() {
+                        let own_t = self.own_canon[own_i].1;
+                        for j in 0..m_full {
+                            let nnz = extract_ridge_features(
+                                basis,
+                                self.side,
+                                own_t,
+                                wd.opp_canon[j].1,
+                                meta,
+                                &mut feats,
+                            );
+                            let mut corr = 0.0;
+                            for &(f, v) in &feats[..nnz] {
+                                corr += th_s1[f] * v;
+                            }
+                            mat[ri * m_full + j] = (self.raw_stage1_vals[w_id][own_i * m_full + j]
+                                + 0.75 * cc.delta_s1_beta * corr)
+                                .clamp(0.02, 0.98);
+                        }
+                    }
+                    mats.push(mat);
+                    col_lens.push(m_full);
+                    w_list.push(self.tail_post_weights[ti]);
+                }
+                let slices: Vec<(f64, usize, &[f64])> = (0..mats.len())
+                    .map(|idx| (w_list[idx], col_lens[idx], mats[idx].as_slice()))
+                    .collect();
+                let sol = solve_bayesian_rm_plus(k_me, &slices, sweeps);
+                let mut p_mix = sol.own_policy.clone();
+                shed_dust(&mut p_mix, cc.bootstrap_dust);
+                let use_mix = p_mix.iter().filter(|&&x| x > 0.0).count() > 1;
+                let top_r = (0..k_me)
+                    .max_by(|&a, &b| p_mix[a].total_cmp(&p_mix[b]))
+                    .unwrap_or(best_pure_r);
+                return (use_mix, top_r, p_mix);
+            }
+        }
+
+        if let Some(ref cc) = self.calib_cfg {
+            if cc.bootstrap_draws > 1
+                && self.calib.is_none()
+                && self.calib_obs.len() >= 8
+                && self.calib_s2_metas.len() == n_w2
+            {
+                let mut max_blk = 0u32;
+                for o in &self.calib_obs {
+                    if o.block_id > max_blk {
+                        max_blk = o.block_id;
+                    }
+                }
+                let n_blk = (max_blk as usize) + 1;
+                let mut blk_seen = vec![false; n_blk];
+                let mut active_blks = Vec::with_capacity(n_blk);
+                for o in &self.calib_obs {
+                    let b = o.block_id as usize;
+                    if !blk_seen[b] {
+                        blk_seen[b] = true;
+                        active_blks.push(b);
+                    }
+                }
+                let nb_f = active_blks.len().max(1) as f64;
+                let mut brng = SplitMix64::new(
+                    0xB007_57AA_0000_0001u64
+                        ^ (u64::from(done).wrapping_mul(0x9E37_79B9_7F4A_7C15))
+                        ^ ((self.calib_obs.len() as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9)),
+                );
+                let basis = cc.ridge_basis;
+                let dim = basis.dim();
+                let main_end = basis.main_end();
+                let mut feats = [(0usize, 0.0f64); MAX_RIDGE_NNZ];
+                let mut blk_w = vec![0.0f64; n_blk];
+                let mut avg_p = vec![0.0f64; k_me];
+                let draws = cc.bootstrap_draws;
+                let mut col_lens: Vec<usize> = Vec::with_capacity(n_w2 + n_tail);
+                let mut w_list: Vec<f64> = Vec::with_capacity(n_w2 + n_tail);
+                for wi in 0..n_w2 {
+                    col_lens.push(if use_full_opp {
+                        self.worlds[self.s2_world_ids[wi]].opp_canon.len()
+                    } else {
+                        self.s_opp[wi].len()
+                    });
+                    w_list.push(self.s2_post_weights[wi]);
+                }
+                for (ti, &w_id) in self.tail_world_ids.iter().enumerate() {
+                    col_lens.push(self.worlds[w_id].opp_canon.len());
+                    w_list.push(self.tail_post_weights[ti]);
+                }
+
+                for _ in 0..draws {
+                    let mut w_sum = 0.0;
+                    for &b in &active_blks {
+                        let u = brng.next_f64().clamp(1e-12, 1.0 - 1e-12);
+                        let e = -u.ln();
+                        blk_w[b] = e;
+                        w_sum += e;
+                    }
+                    let scale = if w_sum > 0.0 { nb_f / w_sum } else { 1.0 };
+                    for &b in &active_blks {
+                        blk_w[b] *= scale;
+                    }
+
+                    let mut ata_t1 = [[0.0f64; MAX_RIDGE_DIM]; MAX_RIDGE_DIM];
+                    let mut atb_t1 = [0.0f64; MAX_RIDGE_DIM];
+                    let mut any_t1 = false;
+                    let mut ata_s1 = [[0.0f64; MAX_RIDGE_DIM]; MAX_RIDGE_DIM];
+                    let mut atb_s1 = [0.0f64; MAX_RIDGE_DIM];
+                    let mut any_s1 = false;
+                    for o in &self.calib_obs {
+                        let bw = blk_w[o.block_id as usize];
+                        if bw <= 0.0 {
+                            continue;
+                        }
+                        let wi = o.wi as usize;
+                        let w_id = self.s2_world_ids[wi];
+                        let nnz = extract_ridge_features(
+                            basis,
+                            self.side,
+                            self.own_canon[o.own_i as usize].1,
+                            self.worlds[w_id].opp_canon[o.opp_j as usize].1,
+                            &self.calib_s2_metas[wi],
+                            &mut feats,
+                        );
+                        any_s1 = true;
+                        let rs1 = f64::from(o.r_s1);
+                        for a in 0..nnz {
+                            let (fa, va) = feats[a];
+                            atb_s1[fa] += bw * va * rs1;
+                            for b in 0..=a {
+                                let (fb, vb) = feats[b];
+                                let prod = bw * va * vb;
+                                ata_s1[fa][fb] += prod;
+                                if fa != fb {
+                                    ata_s1[fb][fa] += prod;
+                                }
+                            }
+                        }
+                        if o.has_t1 {
+                            any_t1 = true;
+                            let rt1 = f64::from(o.r_t1);
+                            for a in 0..nnz {
+                                let (fa, va) = feats[a];
+                                atb_t1[fa] += bw * va * rt1;
+                                for b in 0..=a {
+                                    let (fb, vb) = feats[b];
+                                    let prod = bw * va * vb;
+                                    ata_t1[fa][fb] += prod;
+                                    if fa != fb {
+                                        ata_t1[fb][fa] += prod;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    let th_t1 = if any_t1 {
+                        solve_spd_cholesky_split(
+                            dim,
+                            main_end,
+                            &ata_t1,
+                            &atb_t1,
+                            cc.ridge_lambda_int,
+                            cc.ridge_lambda_main,
+                            cc.ridge_lambda_inter,
+                        )
+                    } else {
+                        [0.0; MAX_RIDGE_DIM]
+                    };
+                    let th_s1 = if any_s1 {
+                        solve_spd_cholesky_split(
+                            dim,
+                            main_end,
+                            &ata_s1,
+                            &atb_s1,
+                            cc.ridge_lambda_int,
+                            cc.ridge_lambda_main,
+                            cc.ridge_lambda_inter,
+                        )
+                    } else {
+                        [0.0; MAX_RIDGE_DIM]
+                    };
+
+                    let mut bmats: Vec<Vec<f64>> = Vec::with_capacity(n_w2 + n_tail);
+                    for wi in 0..n_w2 {
+                        let w_id = self.s2_world_ids[wi];
+                        let wd = &self.worlds[w_id];
+                        let m_full = wd.opp_canon.len();
+                        let k_opp = if use_full_opp { m_full } else { self.s_opp[wi].len() };
+                        let meta = &self.calib_s2_metas[wi];
+                        let mut mat = vec![0.5f64; k_me * k_opp];
+                        for (ri, &own_i) in self.s_me.iter().enumerate() {
+                            let own_t = self.own_canon[own_i].1;
+                            for cj in 0..k_opp {
+                                let opp_j = if use_full_opp { cj } else { self.s_opp[wi][cj] };
+                                let nnz = extract_ridge_features(
+                                    basis,
+                                    self.side,
+                                    own_t,
+                                    wd.opp_canon[opp_j].1,
+                                    meta,
+                                    &mut feats,
+                                );
+                                let val = if let Some(cell) = self.cells.get(&(wi, own_i, opp_j)) {
+                                    let v0 = cell.value0(self.cfg.cell_readout);
+                                    let v_t1 = if self.side == 0 { v0 } else { 1.0 - v0 };
+                                    let mut corr = 0.0;
+                                    for &(f, v) in &feats[..nnz] {
+                                        corr += th_t1[f] * v;
+                                    }
+                                    (v_t1 + (cc.delta_t1_beta * corr).clamp(-0.35, 0.35))
+                                        .clamp(0.01, 0.99)
+                                } else {
+                                    let mut corr = 0.0;
+                                    for &(f, v) in &feats[..nnz] {
+                                        corr += th_s1[f] * v;
+                                    }
+                                    (self.raw_stage1_vals[w_id][own_i * m_full + opp_j]
+                                        + cc.delta_s1_beta * corr)
+                                        .clamp(0.02, 0.98)
+                                };
+                                mat[ri * k_opp + cj] = val;
+                            }
+                        }
+                        bmats.push(mat);
+                    }
+                    for (ti, &w_id) in self.tail_world_ids.iter().enumerate() {
+                        let wd = &self.worlds[w_id];
+                        let m_full = wd.opp_canon.len();
+                        let meta = &self.calib_tail_metas[ti];
+                        let mut mat = vec![0.5f64; k_me * m_full];
+                        for (ri, &own_i) in self.s_me.iter().enumerate() {
+                            let own_t = self.own_canon[own_i].1;
+                            for j in 0..m_full {
+                                let nnz = extract_ridge_features(
+                                    basis,
+                                    self.side,
+                                    own_t,
+                                    wd.opp_canon[j].1,
+                                    meta,
+                                    &mut feats,
+                                );
+                                let mut corr = 0.0;
+                                for &(f, v) in &feats[..nnz] {
+                                    corr += th_s1[f] * v;
+                                }
+                                mat[ri * m_full + j] = (self.raw_stage1_vals[w_id]
+                                    [own_i * m_full + j]
+                                    + 0.75 * cc.delta_s1_beta * corr)
+                                    .clamp(0.02, 0.98);
+                            }
+                        }
+                        bmats.push(mat);
+                    }
+                    let slices: Vec<(f64, usize, &[f64])> = (0..bmats.len())
+                        .map(|idx| (w_list[idx], col_lens[idx], bmats[idx].as_slice()))
+                        .collect();
+                    let bsol = solve_bayesian_rm_plus(k_me, &slices, 500);
+                    let inv_d = 1.0 / (draws as f64);
+                    for ri in 0..k_me {
+                        avg_p[ri] += bsol.own_policy[ri] * inv_d;
+                    }
+                }
+                shed_dust(&mut avg_p, cc.bootstrap_dust);
+                let use_mix = avg_p.iter().filter(|&&x| x > 0.0).count() > 1;
+                let top_r = (0..k_me)
+                    .max_by(|&a, &b| avg_p[a].total_cmp(&avg_p[b]))
+                    .unwrap_or(best_pure_r);
+                return (use_mix, top_r, avg_p);
+            }
+        }
         let pure_guarantee = final_sol.row_guarantees[best_pure_r];
 
         let mut p_mix = final_sol.own_policy.clone();
@@ -3191,12 +4533,16 @@ impl SteppedCfPreview {
         let mut mixed_guarantee = 0.0;
         let mut mixed_guarantee_lcb = 0.0;
         for wi in 0..n_w2 {
-            let k_opp = self.s_opp[wi].len();
+            let k_opp = if use_full_opp {
+                self.worlds[self.s2_world_ids[wi]].opp_canon.len()
+            } else {
+                self.s_opp[wi].len()
+            };
             let mat = &final_mats[wi];
             let mut min_col = f64::INFINITY;
             let mut min_col_lcb = f64::INFINITY;
             for cj in 0..k_opp {
-                let opp_j = self.s_opp[wi][cj];
+                let opp_j = if use_full_opp { cj } else { self.s_opp[wi][cj] };
                 let mut mean_j = 0.0;
                 let mut var_j = 0.0;
                 for ri in 0..k_me {
@@ -3204,11 +4550,12 @@ impl SteppedCfPreview {
                     if pr > 0.0 {
                         let v = mat[ri * k_opp + cj];
                         mean_j += pr * v;
-                        let n_c = self
-                            .cells
-                            .get(&(wi, self.s_me[ri], opp_j))
-                            .map_or(1, |c| c.total_n.max(1));
-                        var_j += (pr * pr) * (0.25 / f64::from(n_c));
+                        if let Some(c) = self.cells.get(&(wi, self.s_me[ri], opp_j)) {
+                            let n_c = c.total_n.max(1);
+                            var_j += (pr * pr) * (0.25 / f64::from(n_c));
+                        } else if !use_full_opp {
+                            var_j += (pr * pr) * 0.25;
+                        }
                     }
                 }
                 if mean_j < min_col {
@@ -3249,9 +4596,64 @@ impl SteppedCfPreview {
         (use_mix, best_pure_r, p_mix)
     }
 
+    fn solve_subgame_full_opp(&self, sweeps: u32) -> (Vec<Vec<f64>>, BayesianRmSolution) {
+        let k_me = self.s_me.len();
+        let n_w2 = self.s2_world_ids.len();
+        let n_tail = self.tail_world_ids.len();
+        let mut mats: Vec<Vec<f64>> = Vec::with_capacity(n_w2 + n_tail);
+        let mut col_lens: Vec<usize> = Vec::with_capacity(n_w2 + n_tail);
+        let mut w_list: Vec<f64> = Vec::with_capacity(n_w2 + n_tail);
+        for wi in 0..n_w2 {
+            let m_full = self.worlds[self.s2_world_ids[wi]].opp_canon.len();
+            let mut mat = vec![0.5f64; k_me * m_full];
+            for (ri, &own_i) in self.s_me.iter().enumerate() {
+                for opp_j in 0..m_full {
+                    mat[ri * m_full + opp_j] = self.cell_val_mine(wi, own_i, opp_j);
+                }
+            }
+            mats.push(mat);
+            col_lens.push(m_full);
+            w_list.push(self.s2_post_weights[wi]);
+        }
+        for (ti, &w_id) in self.tail_world_ids.iter().enumerate() {
+            let wd = &self.worlds[w_id];
+            let m_full = wd.opp_canon.len();
+            let mut mat = vec![0.5f64; k_me * m_full];
+            for (ri, &own_i) in self.s_me.iter().enumerate() {
+                let src = &wd.stage1_vals[own_i * m_full..(own_i + 1) * m_full];
+                mat[ri * m_full..(ri + 1) * m_full].copy_from_slice(src);
+            }
+            mats.push(mat);
+            col_lens.push(m_full);
+            w_list.push(self.tail_post_weights[ti]);
+        }
+        let slices: Vec<(f64, usize, &[f64])> = (0..mats.len())
+            .map(|idx| (w_list[idx], col_lens[idx], mats[idx].as_slice()))
+            .collect();
+        let sol = solve_bayesian_rm_plus(k_me, &slices, sweeps);
+        (mats, sol)
+    }
+
+    /// Read-only Nash value (from `self.side`'s perspective) over the active Stage-2 posterior.
+    pub fn nash_value(&self, done: u32) -> f64 {
+        let sweeps = if done >= 4096 {
+            self.cfg.rm_sweeps_final
+        } else {
+            self.cfg.rm_sweeps_stage1
+        };
+        let use_full_opp = self.calib.is_none()
+            && self.calib_cfg.as_ref().is_some_and(|cc| cc.full_opp_readout);
+        let (_, final_sol) = if use_full_opp {
+            self.solve_subgame_full_opp(sweeps)
+        } else {
+            self.solve_subgame(sweeps)
+        };
+        final_sol.value
+    }
+
     /// Read-only `LcbGatedMixed` execution distribution over canonical legal preview picks.
     /// Exact match to the distribution sampled by `best_choice(decision_seed, done)`.
-    pub(crate) fn execution_policy(&self, done: u32) -> Vec<(SearchChoice, f64)> {
+    pub fn execution_policy(&self, done: u32) -> Vec<(SearchChoice, f64)> {
         let (use_mix, best_pure_r, p_mix) = self.solve_execution_mix(done);
         if !use_mix {
             let choice = self.my_acts[self.own_canon[self.s_me[best_pure_r]].0];
@@ -3273,7 +4675,7 @@ impl SteppedCfPreview {
     }
 
     /// Deterministic `LcbGatedMixed` Bayesian RM+ choice readout over the full 100% posterior.
-    pub(crate) fn best_choice(&self, decision_seed: u64, done: u32) -> SearchChoice {
+    pub fn best_choice(&self, decision_seed: u64, done: u32) -> SearchChoice {
         let (use_mix, best_pure_r, p_mix) = self.solve_execution_mix(done);
         let picked_r = if use_mix {
             let draw = SplitMix64::new(decision_seed ^ u64::from(done)).next_f64();
@@ -3283,6 +4685,3355 @@ impl SteppedCfPreview {
         };
         let picked_canon_i = self.s_me[picked_r];
         self.my_acts[self.own_canon[picked_canon_i].0]
+    }
+}
+
+// =========================================================================
+// 6. Live Trajectory-DO Team Preview Engine (`TrajPreview` / `SteppedTrajPreview`)
+// =========================================================================
+
+/// Rao-Blackwellized early-exit policy for full-game `CompactBattle` trajectories.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RbExitMode {
+    /// Play every trajectory to terminal battle outcome (or `max_turns`).
+    Terminal,
+    /// Unconditionally exit on any idle turn with `alive_sum <= max_alive`,
+    /// returning `compact_eval_leaf_blindspot` (`linear.rs` stage-game value).
+    UncondBlindspot { max_alive: u32 },
+    /// Conditionally exit on any idle turn with `alive_sum <= max_alive` ONLY when
+    /// no living mon has unmodeled endgame hazards (`Endure`, `Flail`/`Reversal`,
+    /// `Focus Band`, `Destiny Bond`, `Perish Song`, `Explosion`/`Self-Destruct`,
+    /// `Counter`/`Mirror Coat`, or low-PP/mutual-recovery stall).
+    CondBlindspot { max_alive: u32 },
+    /// On an idle turn with `alive_sum <= max_alive`, run one final `eval_iters`
+    /// PUCT turn (with `8r` `compact_playout_with_leaf` + `linear.rs`) and return
+    /// its continuous root value `v_root0`.
+    SearchVroot { max_alive: u32, eval_iters: u32 },
+    /// Same as `SearchVroot`, except skips early exit when `has_tactical_endgame_hazard`
+    /// is active so Endure/Reversal/FocusBand/DBond/Perish endgames play to terminal.
+    CondSearchVroot { max_alive: u32, eval_iters: u32 },
+    /// Conditional fast static exit when hazard-free; otherwise fall back to
+    /// `SearchVroot { eval_iters }` on `alive_sum <= max_alive`.
+    HybridCond { max_alive: u32, eval_iters: u32 },
+}
+
+/// Residual regression feature basis `R(i, j) = Y(i, j) - V_s1(i, j)`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TrajRidgeBasis {
+    /// 25 dims: intercept + lead0[6] + bench0[6] + lead1[6] + bench1[6].
+    Additive25,
+    /// 31 dims: `Additive25` + 6 side-symmetric interaction features:
+    /// `spikes_phaze_grounded` (2), `bp_setup_synergy` (2), `lead_pressure_after_switchin` (2).
+    Interact31,
+    /// 33 dims: `Interact31` + `spikes_grounded` (2).
+    Interact33,
+    /// 19 dims (core-only horizon bias, invariant to Turn-1 lead order):
+    /// intercept + `own_present[6]` + `opp_present[6]` (main) + 6 multi-turn domain interactions
+    /// (`spikes_phaze_grounded` x2, `bp_setup` x2, `spikes_grounded` x2).
+    Present19,
+    /// 33 dims (variance-reduced): intercept + `own_present[6]` + `opp_present[6]` (main)
+    /// + `own_lead_delta[6]` + `opp_lead_delta[6]` + 8 domain interactions (inter).
+    PresentInteract33,
+    /// 39 dims: `Interact33` + 6 side-symmetric Turn-1 lead-vs-lead matchup features:
+    /// `lead_dmg` (2), `faster_lead_dmg` (2), `faster_lead_sleep` (2).
+    Interact39,
+    /// 55 dims: `Additive25` + unordered own pairs (15) + unordered opp pairs (15).
+    Pair55,
+    /// 61 dims: `Additive25` + `mon0 x mon1` presence cross-terms (36, scaled by 1/3).
+    MonCross61,
+    /// 67 dims: `Interact31` + `mon0 x mon1` presence cross-terms (36, scaled by 1/3).
+    Interact67,
+}
+
+impl TrajRidgeBasis {
+    #[inline]
+    pub const fn dim(self) -> usize {
+        match self {
+            Self::Present19 => 19,
+            Self::Additive25 => 25,
+            Self::Interact31 => 31,
+            Self::Interact33 | Self::PresentInteract33 => 33,
+            Self::Interact39 => 39,
+            Self::Pair55 => 55,
+            Self::MonCross61 => 61,
+            Self::Interact67 => 67,
+        }
+    }
+
+    #[inline]
+    pub const fn main_end(self) -> usize {
+        match self {
+            Self::Present19 | Self::PresentInteract33 => 13,
+            _ => 25,
+        }
+    }
+}
+
+/// Common Random Numbers & Turn-1 stratification schedule for trajectory sampling.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TrajCrnMode {
+    /// Independent battle seed per trajectory game.
+    Independent,
+    /// Turn-indexed PRNG + paired challenger-vs-incumbent CRN + synchronized active polish.
+    PairedCrn,
+    /// `PairedCrn` + deterministic Turn-1 Berserk Gene `{2,3,4,5}` & Quick Claw stratification.
+    PairedCrnStratified,
+}
+
+/// Policy extraction rule from the Trajectory-DO posterior payoff matrix.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum TrajPolicyMode {
+    /// Existing LCB-gated mix rule (`use_neff = true` uses `cell_n + kappa` effective samples).
+    LcbGatedMixed {
+        min_mix_margin: f64,
+        dust_ratio: f64,
+        lcb_z: f64,
+        use_neff: bool,
+    },
+    /// Pure Multi-World Bayesian RM+ equilibrium with dust shedding.
+    MixedNash { dust_ratio: f64 },
+    /// L2-regularized Multi-World Bayesian RM+ (`max_p min_q p^T V q - l2_reg * ||p||_2^2`).
+    RegRm { l2_reg: f64, dust_ratio: f64 },
+    /// Rubin Bayesian Bootstrap ensemble over CRN seed blocks (`Exp(1)` block weights).
+    BayesianBootstrapRm { draws: usize, dust_ratio: f64 },
+}
+
+/// Configuration for the live Trajectory-DO Team Preview engine.
+#[derive(Clone, Debug)]
+pub struct TrajPreviewConfig {
+    /// Total PUCT iterations across all trajectory turns (matches `unknownPreview` scale).
+    pub total_iters: u32,
+    /// PUCT iterations per decision turn inside a trajectory game.
+    pub iters_per_turn: u32,
+    /// Optional higher PUCT iteration count specifically on Turn 1 (`0` = use `iters_per_turn`).
+    pub turn1_iters: u32,
+    /// Rao-Blackwellized early-exit mode.
+    pub rb_exit: RbExitMode,
+    /// Residual ridge feature basis.
+    pub ridge_basis: TrajRidgeBasis,
+    /// L2 ridge penalty on main mon effects (`1..25`).
+    pub ridge_lambda_main: f64,
+    /// L2 ridge penalty on interaction / pair / cross effects (`25..D`).
+    pub ridge_lambda_inter: f64,
+    /// Use inverse-variance GLS cell weighting `w = (kappa + 1) * n / (kappa + n)` in ridge fit.
+    pub ridge_gls: bool,
+    /// Share cross-world species-level residual ridge across belief worlds (`theta_shared + delta_w`).
+    pub ridge_shared_multiworld: bool,
+    /// Empirical-Bayes shrinkage pseudo-count toward Stage-1 + ridge prior.
+    pub kappa: f64,
+    /// Common Random Numbers and Turn-1 stratification schedule.
+    pub crn_mode: TrajCrnMode,
+    /// Fraction of `total_iters` spent on roster- & bench-pair-balanced exploration.
+    pub explore_frac: f64,
+    /// Fraction of `total_iters` spent on Paired CRN Double-Oracle rounds (remainder -> Polish).
+    pub do_frac: f64,
+    /// Fraction of `total_iters` reserved at the end for Turn-1 Tactical Lead Polish
+    /// (zero-mean control-variate `V_T1 - V_s1` over active cores and all their lead permutations).
+    pub t1_polish_frac: f64,
+    /// Turn-1 PUCT iterations per active cell in `T1Polish`.
+    pub t1_polish_iters: u32,
+    /// Control-variate blend weight on centered `(V_T1 - V_s1)` (`0.0` = disabled).
+    pub t1_polish_alpha: f64,
+    /// Number of challengers paired per side per DO batch (including reserved bench-coverage probe).
+    pub do_challengers: usize,
+    /// UCB exploration constant for DO challenger selection.
+    pub do_ucb_c: f64,
+    /// Maximum Turn-0 belief worlds screened in Stage 1.
+    pub max_stage1_worlds: usize,
+    /// Maximum highest-weight belief worlds refined with trajectories in Stage 2.
+    pub max_stage2_worlds: usize,
+    /// Maximum turns per trajectory game before blindspot fallback.
+    pub max_turns: u16,
+    /// Bayesian RM+ sweeps during DO rounds and final readout.
+    pub rm_sweeps_do: u32,
+    pub rm_sweeps_final: u32,
+    /// Final policy extraction rule.
+    pub policy_mode: TrajPolicyMode,
+    /// Interior PUCT hyperparameters (aligned with `search_compact_cfv_puct`).
+    pub c_puct: f64,
+    pub fpu_red: f64,
+    pub puct_eps: f32,
+    pub use_cf_policy: bool,
+    pub leaf_temp: f64,
+    /// Number of interleaved active trajectory slots for slice-invariant stepped execution.
+    pub stepped_slots: usize,
+    /// Fallback `BlindSearch` iterations when any belief world is unsupported by `CompactPreviewRoster`.
+    pub fallback_iters: u32,
+}
+
+impl Default for TrajPreviewConfig {
+    fn default() -> Self {
+        Self {
+            total_iters: 240_000,
+            iters_per_turn: 32,
+            turn1_iters: 0,
+            rb_exit: RbExitMode::SearchVroot {
+                max_alive: 3,
+                eval_iters: 64,
+            },
+            ridge_basis: TrajRidgeBasis::Interact33,
+            ridge_lambda_main: 12.0,
+            ridge_lambda_inter: 20.0,
+            ridge_gls: true,
+            ridge_shared_multiworld: true,
+            kappa: 16.0,
+            crn_mode: TrajCrnMode::PairedCrnStratified,
+            explore_frac: 0.30,
+            do_frac: 0.45,
+            t1_polish_frac: 0.0,
+            t1_polish_iters: 320,
+            t1_polish_alpha: 0.0,
+            do_challengers: 4,
+            do_ucb_c: 0.10,
+            max_stage1_worlds: 24,
+            max_stage2_worlds: 8,
+            max_turns: 180,
+            rm_sweeps_do: 350,
+            rm_sweeps_final: 1500,
+            policy_mode: TrajPolicyMode::BayesianBootstrapRm {
+                draws: 16,
+                dust_ratio: 0.15,
+            },
+            c_puct: 1.0,
+            fpu_red: 0.09,
+            puct_eps: 0.02,
+            use_cf_policy: false,
+            leaf_temp: 1.0,
+            stepped_slots: 4,
+            fallback_iters: 27_000,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TrajPreviewResult {
+    pub choice: SearchChoice,
+    /// Probability distribution aligned 1:1 with `base.legal_choices(dex, side)`.
+    pub policy_full: Vec<f64>,
+    /// Opponent equilibrium policy in world 0 (canonical order) for single-world diagnostics.
+    pub opp_policy_w0: Vec<f64>,
+    pub value: f64,
+    pub pure_guarantee: f64,
+    pub mixed_guarantee: f64,
+    pub duality_gap: f64,
+    pub used_mix: bool,
+    pub used_fallback: bool,
+    pub stage1_ms: f64,
+    pub total_ms: f64,
+    pub iters_used: u32,
+    pub games_completed: usize,
+    pub worlds_stage1: usize,
+    pub worlds_stage2: usize,
+}
+
+#[inline]
+fn splitmix_hash(mut x: u64) -> u64 {
+    x = x.wrapping_add(0x9E37_79B9_7F4A_7C15);
+    x = (x ^ (x >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    x = (x ^ (x >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    x ^ (x >> 31)
+}
+
+/// Detect whether any living mon on the board carries an endgame tactical mechanic
+/// that static `compact_eval_leaf_blindspot` / `linear.rs` does not accurately model:
+/// `Endure`, `Flail`/`Reversal`, `Focus Band`, `Destiny Bond`, `Perish Song`,
+/// `Explosion`/`Self-Destruct`, `Counter`/`Mirror Coat`, active `Encore`, or low-PP /
+/// mutual-recovery stall.
+pub fn has_tactical_endgame_hazard(cb: &CompactBattle, table: &MatchTable) -> bool {
+    const HAZARD_VOL: u16 =
+        vol_bit::PERISH_SONG | vol_bit::DESTINY_BOND | vol_bit::ENCORE | vol_bit::ENDURE;
+
+    let mut active_has_recovery = [false; 2];
+    for side in 0..2usize {
+        let mask = cb.sides[side].alive_mask;
+        let act_slot = cb.sides[side].active_idx as usize;
+        for slot in 0..3usize {
+            if (mask & (1 << slot)) == 0 {
+                continue;
+            }
+            let idx = side * 3 + slot;
+            let mon = &cb.mons[idx];
+            if mon.hp() <= 0 {
+                continue;
+            }
+            if (mon.vol_flags & HAZARD_VOL) != 0 {
+                return true;
+            }
+            if mon.item > 0 {
+                let ispec = &table.item_specs[(mon.item as usize - 1).min(table.item_specs.len().saturating_sub(1))];
+                if ispec.is_focus_band {
+                    return true;
+                }
+            }
+            let nm = (table.mons[idx].num_moves as usize).min(4);
+            for m in 0..nm {
+                let pp = mon.pp[m];
+                if pp == 0 {
+                    continue;
+                }
+                let ms = &table.move_specs[idx][m];
+                if ms.is_endure
+                    || ms.is_selfdestruct
+                    || ms.var_bp_kind == VarBpKind::FlailReversal
+                    || matches!(
+                        ms.special_kind,
+                        SpecialMoveKind::FlailReversal
+                            | SpecialMoveKind::DestinyBond
+                            | SpecialMoveKind::PerishSong
+                            | SpecialMoveKind::Counter
+                            | SpecialMoveKind::MirrorCoat
+                    )
+                {
+                    return true;
+                }
+                if ms.is_rest || ms.is_half_heal {
+                    if pp <= 4 {
+                        return true;
+                    }
+                    if slot == act_slot {
+                        active_has_recovery[side] = true;
+                    }
+                }
+            }
+        }
+    }
+    if active_has_recovery[0] && active_has_recovery[1] && cb.turn >= 20 {
+        return true;
+    }
+    false
+}
+
+/// Reusable zero-allocation per-turn PUCT scratchpad (`cfv-0r@puct@lam0` + `n0+n1 <= 3` 8r guard).
+pub struct TrajTurnScratch {
+    nodes: Vec<CfPrevNode>,
+    tt: FxHashMap<u64, usize>,
+    path: Vec<(usize, usize, usize)>,
+    eg_weights: EvalWeights,
+    eg_playout: Playout,
+    rollout_rules: crate::mcts::RolloutRules,
+}
+
+impl Default for TrajTurnScratch {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TrajTurnScratch {
+    pub fn new() -> Self {
+        let eg_weights = EvalWeights::default();
+        let eg_playout = Playout::Heavy {
+            turns: 8,
+            eps: 0.2,
+            weights: eg_weights.clone(),
+        };
+        let rollout_rules = RmConfig::default().rollout_rules();
+        Self {
+            nodes: Vec::with_capacity(64),
+            tt: FxHashMap::default(),
+            path: Vec::with_capacity(64),
+            eg_weights,
+            eg_playout,
+            rollout_rules,
+        }
+    }
+
+    /// Initialize the scratch tree for a new decision turn on `root_cb`.
+    fn reset_for_turn(
+        &mut self,
+        base_cb: &CompactBattle,
+        table: &MatchTable,
+        cache: &TempoMatchCache,
+        puct_eps: f32,
+        use_cf_policy: bool,
+    ) -> (CompactBattle, u16) {
+        let mut turn_cap = base_cb.turn.saturating_add(100);
+        if let Some(lim) = table.ruleset.turn_limit() {
+            turn_cap = turn_cap.min(lim);
+        }
+        let mut root_cb = *base_cb;
+        let root_idle = root_cb.sides[0].request == 1 && root_cb.sides[1].request == 1;
+        if root_idle {
+            root_cb.quick_claw_roll = 0;
+        }
+        let mut rn0 = CfPrevNode::new(&root_cb, table);
+        rn0.ensure_priors(&root_cb, table, cache, puct_eps, use_cf_policy);
+        let omit_qc = root_idle || !root_cb.quick_claw_observable(table);
+        let root_key = root_cb.search_key(table, 16, omit_qc);
+        self.nodes.clear();
+        self.tt.clear();
+        self.nodes.push(rn0);
+        self.tt.insert(root_key, 0);
+        (root_cb, turn_cap)
+    }
+
+    /// Execute one PUCT iteration on the active turn tree; returns `(leaf_val0, depth, added_nodes)`.
+    #[allow(clippy::too_many_arguments)]
+    fn step_puct_iter(
+        &mut self,
+        root_cb: &CompactBattle,
+        table: &MatchTable,
+        cache: &TempoMatchCache,
+        turn_cap: u16,
+        c_puct: f64,
+        fpu_red: f64,
+        puct_eps: f32,
+        use_cf_policy: bool,
+        leaf_temp: f64,
+        rng: &mut SplitMix64,
+    ) -> (f64, u32, usize) {
+        let prev_nodes = self.nodes.len();
+        let mut cb = *root_cb;
+        {
+            let mut prng = nc2000_engine::prng::Prng::new(rng.next());
+            let qc = Battle::roll_quick_claw_with(table.ruleset, &mut prng);
+            cb.quick_claw_roll = (qc[0] as u8) | ((qc[1] as u8) << 1);
+            cb.prng_seed = prng.seed();
+        }
+        let mut cur_id = 0usize;
+        let mut depth = 0u8;
+        self.path.clear();
+
+        let leaf_val = loop {
+            self.nodes[cur_id].ensure_priors(&cb, table, cache, puct_eps, use_cf_policy);
+            let node = &self.nodes[cur_id];
+            let n0_cur = node.n_acts[0] as usize;
+            let n1_cur = node.n_acts[1] as usize;
+            let i0 = node.select_puct(0, c_puct, fpu_red);
+            let i1 = node.select_puct(1, c_puct, fpu_red);
+            let a0 = if n0_cur > 0 { node.acts[0][i0] } else { 7 };
+            let a1 = if n1_cur > 0 { node.acts[1][i1] } else { 7 };
+            if depth == 0 || n0_cur > 1 || n1_cur > 1 {
+                self.path.push((cur_id, i0, i1));
+            }
+            cb.apply_actions(table, [a0, a1]);
+            depth = depth.saturating_add(1);
+            if cb.outcome != 0 {
+                break match cb.outcome {
+                    1 => 1.0,
+                    2 => 0.0,
+                    _ => 0.5,
+                };
+            }
+            if let Some(v) = compact_turn_limit_outcome(&cb, table) {
+                break v;
+            }
+            if depth >= 250 || cb.turn > turn_cap {
+                let alive_sum = cb.sides[0].alive_mask.count_ones()
+                    + cb.sides[1].alive_mask.count_ones();
+                if alive_sum <= 3 {
+                    break compact_eval_leaf_blindspot(&cb, table, &self.eg_weights);
+                }
+                break evaluate_cf_value_resolving_switches(&cb, table, Some(cache), leaf_temp);
+            }
+            let oq = !cb.quick_claw_observable(table);
+            let nk = cb.search_key(table, 16, oq);
+            if let Some(&nid) = self.tt.get(&nk) {
+                cur_id = nid;
+            } else {
+                let nid = self.nodes.len();
+                self.nodes.push(CfPrevNode::new(&cb, table));
+                self.tt.insert(nk, nid);
+                let alive_sum = cb.sides[0].alive_mask.count_ones()
+                    + cb.sides[1].alive_mask.count_ones();
+                if alive_sum <= 3 {
+                    let cutoff = turn_cap.min(cb.turn.saturating_add(7));
+                    break crate::mcts::compact_playout_with_leaf(
+                        &mut cb,
+                        table,
+                        &self.eg_playout,
+                        cutoff,
+                        rng,
+                        self.rollout_rules,
+                        |cb_l, t_l| compact_eval_leaf_blindspot(cb_l, t_l, &self.eg_weights),
+                    );
+                }
+                break evaluate_cf_value_resolving_switches(&cb, table, Some(cache), leaf_temp);
+            }
+        };
+
+        for &(nid, i0, i1) in self.path.iter().rev() {
+            let n = &mut self.nodes[nid];
+            n.total += 1;
+            if n.n_acts[0] > 0 {
+                n.visits[0][i0] += 1;
+                n.sums[0][i0] += leaf_val;
+            }
+            if n.n_acts[1] > 0 {
+                n.visits[1][i1] += 1;
+                n.sums[1][i1] += leaf_val;
+            }
+        }
+        (leaf_val, u32::from(depth), self.nodes.len() - prev_nodes)
+    }
+
+    /// Extract most-visited non-noop actions per side and root value `v_root0`.
+    fn readout_turn(&self) -> ([u8; 2], f64) {
+        let rn = &self.nodes[0];
+        let mut best_acts = [7u8; 2];
+        for s in 0..2usize {
+            let k = rn.n_acts[s] as usize;
+            if k > 0 {
+                let mut best_i = 0usize;
+                let mut best_v = 0u32;
+                let mut best_q = f64::NEG_INFINITY;
+                let mut found = false;
+                for i in 0..k {
+                    if ((rn.noop_mask[s] >> i) & 1) != 0 {
+                        continue;
+                    }
+                    let vi = rn.visits[s][i];
+                    let qi = if vi > 0 {
+                        let raw = rn.sums[s][i] / f64::from(vi);
+                        if s == 0 { raw } else { 1.0 - raw }
+                    } else {
+                        0.5
+                    };
+                    if !found || vi > best_v || (vi == best_v && qi > best_q) {
+                        found = true;
+                        best_i = i;
+                        best_v = vi;
+                        best_q = qi;
+                    }
+                }
+                best_acts[s] = rn.acts[s][best_i];
+            }
+        }
+        let k0 = rn.n_acts[0] as usize;
+        let n0_tot: u32 = rn.visits[0][..k0].iter().sum();
+        let v_root0 = if n0_tot > 0 {
+            let w0: f64 = rn.sums[0][..k0].iter().sum();
+            (w0 / f64::from(n0_tot)).clamp(0.0, 1.0)
+        } else {
+            0.5
+        };
+        (best_acts, v_root0)
+    }
+}
+
+/// Play a single full-game `CompactBattle` trajectory using reusable `TrajTurnScratch`,
+/// returning `(val0, turns_played, iters_used, exited_early_rb)`.
+#[allow(clippy::too_many_arguments)]
+pub fn play_compact_traj_with_rb(
+    roster: &CompactPreviewRoster,
+    pcache: &PreviewTempoCache,
+    picks: [[u8; 3]; 2],
+    iters_per_turn: u32,
+    rb_exit: RbExitMode,
+    crn_mode: TrajCrnMode,
+    game_seed: u64,
+    cell_visit_k: u32,
+    max_turns: u16,
+    scratch: &mut TrajTurnScratch,
+) -> (f64, u16, u32, bool) {
+    let mut cfg = TrajPreviewConfig::default();
+    cfg.iters_per_turn = iters_per_turn;
+    cfg.rb_exit = rb_exit;
+    cfg.crn_mode = crn_mode;
+    cfg.max_turns = max_turns;
+    let mut g = ActiveTrajGame::new(
+        0,
+        0,
+        0,
+        0,
+        roster,
+        pcache,
+        picks,
+        game_seed,
+        cell_visit_k,
+        crn_mode,
+        0,
+    );
+    let mut iters_used = 0u32;
+    loop {
+        if let Some((v0, rb)) = g.prepare_next_turn(&cfg, scratch) {
+            return (v0, g.cb.turn, iters_used, rb);
+        }
+        while g.turn_iters_done < g.turn_target_iters {
+            let _ = scratch.step_puct_iter(
+                &g.turn_root_cb,
+                &g.table,
+                &g.cache,
+                g.turn_cap,
+                cfg.c_puct,
+                cfg.fpu_red,
+                cfg.puct_eps,
+                cfg.use_cf_policy,
+                cfg.leaf_temp,
+                &mut g.turn_rng,
+            );
+            g.turn_iters_done += 1;
+            iters_used += 1;
+        }
+        if let Some((v0, rb)) = g.finish_turn(scratch) {
+            return (v0, g.cb.turn, iters_used, rb);
+        }
+    }
+}
+
+/// Precomputed per-world static metadata for compact interaction features (`Interact31` / `Interact33`).
+#[derive(Clone)]
+struct WorldInteractMeta {
+    has_spikes: [[bool; 6]; 2],
+    has_forced_phaze: [[bool; 6]; 2],
+    is_grounded: [[bool; 6]; 2],
+    has_bp: [[bool; 6]; 2],
+    has_setup: [[bool; 6]; 2],
+    has_sleep: [[bool; 6]; 2],
+    spe: [[i16; 6]; 2],
+    /// Pairwise Turn-1 expected best damage fraction `[att_side][att_slot_0..6][def_slot_0..6]` in `[0, 1]`.
+    dmg_frac: [[[f64; 6]; 6]; 2],
+}
+
+impl WorldInteractMeta {
+    fn build(
+        roster: &CompactPreviewRoster,
+        pcache: &PreviewTempoCache,
+        party_lens: [usize; 2],
+    ) -> Self {
+        let mut meta = Self {
+            has_spikes: [[false; 6]; 2],
+            has_forced_phaze: [[false; 6]; 2],
+            is_grounded: [[true; 6]; 2],
+            has_bp: [[false; 6]; 2],
+            has_setup: [[false; 6]; 2],
+            has_sleep: [[false; 6]; 2],
+            spe: [[0; 6]; 2],
+            dmg_frac: [[[0.0; 6]; 6]; 2],
+        };
+        let make_blocks = |plen: usize| -> ([[u8; 3]; 2], usize) {
+            let p = plen.clamp(1, 6) as u8;
+            let b0 = [1, if p >= 2 { 2 } else { 0 }, if p >= 3 { 3 } else { 0 }];
+            if p <= 3 {
+                ([b0, b0], 1)
+            } else {
+                let b1 = [
+                    4,
+                    if p >= 5 { 5 } else { 1 },
+                    if p >= 6 { 6 } else if p == 5 { 1 } else { 2 },
+                ];
+                ([b0, b1], 2)
+            }
+        };
+        let (blk0, n0) = make_blocks(party_lens[0]);
+        let (blk1, n1) = make_blocks(party_lens[1]);
+        for b0 in 0..n0 {
+            for b1 in 0..n1 {
+                let (table, cb) = roster.build_turn1([blk0[b0], blk1[b1]], 0);
+                let sliced = pcache.slice_for(&cb);
+                let Some(view) = sliced.view_for(&cb) else {
+                    continue;
+                };
+                for s in 0..2usize {
+                    let blk = if s == 0 { blk0[b0] } else { blk1[b1] };
+                    for slot in 0..3usize {
+                        let rslot = blk[slot];
+                        if rslot == 0 || (rslot as usize) > 6 {
+                            continue;
+                        }
+                        let pos = rslot as usize - 1;
+                        let midx = s * 3 + slot;
+                        let sm = view.mon(s, slot);
+                        meta.has_forced_phaze[s][pos] = sm.phaze_slot != 0xFF;
+                        meta.has_bp[s][pos] = sm.bp_slot != 0xFF;
+                        meta.is_grounded[s][pos] =
+                            (table.mons[midx].type_mask & (1u32 << table.flying_type)) == 0;
+                        let mut spikes = false;
+                        let mut setup = sm.setup_mask != 0;
+                        let nm = (table.mons[midx].num_moves as usize).min(4);
+                        for m in 0..nm {
+                            let ms = &table.move_specs[midx][m];
+                            if ms.special_kind == SpecialMoveKind::Spikes {
+                                spikes = true;
+                            }
+                            if ms.is_substitute
+                                || matches!(
+                                    ms.special_kind,
+                                    SpecialMoveKind::Curse | SpecialMoveKind::BellyDrum
+                                )
+                            {
+                                setup = true;
+                            }
+                        }
+                        meta.has_spikes[s][pos] = spikes;
+                        meta.has_setup[s][pos] = setup;
+                        meta.has_sleep[s][pos] = sm.sleep_mask != 0;
+                        meta.spe[s][pos] = table.mons[midx].stored_stats[4];
+                    }
+                }
+                for a_slot in 0..3usize {
+                    let a_r = blk0[b0][a_slot];
+                    if a_r == 0 || (a_r as usize) > 6 {
+                        continue;
+                    }
+                    let a_pos = a_r as usize - 1;
+                    let inv_hp0 = view.mon(0, a_slot).inv_maxhp;
+                    for d_slot in 0..3usize {
+                        let d_r = blk1[b1][d_slot];
+                        if d_r == 0 || (d_r as usize) > 6 {
+                            continue;
+                        }
+                        let d_pos = d_r as usize - 1;
+                        let inv_hp1 = view.mon(1, d_slot).inv_maxhp;
+
+                        let p01 = view.pair(0, a_slot, d_slot);
+                        let mut best01 = 0.0f64;
+                        for mv in &p01.moves {
+                            if (mv.flags & (1 << 6)) != 0 {
+                                continue; // ignore Self-Destruct/Explosion for sustainable pressure
+                            }
+                            let d = f64::from(mv.mean_dmg * mv.p_hit) * inv_hp1;
+                            if d > best01 {
+                                best01 = d;
+                            }
+                        }
+                        meta.dmg_frac[0][a_pos][d_pos] = best01.clamp(0.0, 1.0);
+
+                        let p10 = view.pair(1, d_slot, a_slot);
+                        let mut best10 = 0.0f64;
+                        for mv in &p10.moves {
+                            if (mv.flags & (1 << 6)) != 0 {
+                                continue;
+                            }
+                            let d = f64::from(mv.mean_dmg * mv.p_hit) * inv_hp0;
+                            if d > best10 {
+                                best10 = d;
+                            }
+                        }
+                        meta.dmg_frac[1][d_pos][a_pos] = best10.clamp(0.0, 1.0);
+                    }
+                }
+            }
+        }
+        meta
+    }
+}
+
+const MAX_RIDGE_DIM: usize = 68;
+const MAX_RIDGE_NNZ: usize = 32;
+
+#[inline]
+fn unordered_pair_idx(a: usize, b: usize) -> usize {
+    let (lo, hi) = if a < b { (a, b) } else { (b, a) };
+    // Map 0 <= lo < hi <= 5 into 0..15.
+    let base = lo * 5 - (lo * (lo.saturating_sub(1))) / 2;
+    (base + (hi - lo - 1)).min(14)
+}
+
+/// Extract sparse `(feature_idx, feature_val)` entries for a `(own_triple, opp_triple)` pair
+/// oriented from `side`'s perspective (slots `1..=6`; `0` safely skipped on `< 3`-mon teams).
+fn extract_ridge_features(
+    basis: TrajRidgeBasis,
+    side: usize,
+    own_t: [u8; 3],
+    opp_t: [u8; 3],
+    meta: &WorldInteractMeta,
+    out: &mut [(usize, f64); MAX_RIDGE_NNZ],
+) -> usize {
+    let mut k = 0usize;
+    out[k] = (0, 1.0);
+    k += 1;
+
+    let mut own_slots = [0usize; 3];
+    let mut n_own = 0usize;
+    let mut opp_slots = [0usize; 3];
+    let mut n_opp = 0usize;
+    if basis == TrajRidgeBasis::Present19 {
+        for &s in &own_t {
+            if s >= 1 && (s as usize) <= 6 {
+                let idx = s as usize - 1;
+                own_slots[n_own] = idx;
+                n_own += 1;
+                out[k] = (1 + idx, 1.0);
+                k += 1;
+            }
+        }
+        for &s in &opp_t {
+            if s >= 1 && (s as usize) <= 6 {
+                let idx = s as usize - 1;
+                opp_slots[n_opp] = idx;
+                n_opp += 1;
+                out[k] = (7 + idx, 1.0);
+                k += 1;
+            }
+        }
+    } else if basis == TrajRidgeBasis::PresentInteract33 {
+        for (pos, &s) in own_t.iter().enumerate() {
+            if s >= 1 && (s as usize) <= 6 {
+                let idx = s as usize - 1;
+                own_slots[n_own] = idx;
+                n_own += 1;
+                out[k] = (1 + idx, 1.0);
+                k += 1;
+                if pos == 0 {
+                    out[k] = (13 + idx, 1.0);
+                    k += 1;
+                }
+            }
+        }
+        for (pos, &s) in opp_t.iter().enumerate() {
+            if s >= 1 && (s as usize) <= 6 {
+                let idx = s as usize - 1;
+                opp_slots[n_opp] = idx;
+                n_opp += 1;
+                out[k] = (7 + idx, 1.0);
+                k += 1;
+                if pos == 0 {
+                    out[k] = (19 + idx, 1.0);
+                    k += 1;
+                }
+            }
+        }
+    } else {
+        for (pos, &s) in own_t.iter().enumerate() {
+            if s >= 1 && (s as usize) <= 6 {
+                let idx = s as usize - 1;
+                own_slots[n_own] = idx;
+                n_own += 1;
+                let f = if pos == 0 { 1 + idx } else { 7 + idx };
+                out[k] = (f, 1.0);
+                k += 1;
+            }
+        }
+        for (pos, &s) in opp_t.iter().enumerate() {
+            if s >= 1 && (s as usize) <= 6 {
+                let idx = s as usize - 1;
+                opp_slots[n_opp] = idx;
+                n_opp += 1;
+                let f = if pos == 0 { 13 + idx } else { 19 + idx };
+                out[k] = (f, 1.0);
+                k += 1;
+            }
+        }
+    }
+
+    let s_me = side;
+    let s_op = 1 - side;
+
+    let add_domain_interact = |k: &mut usize,
+                               out: &mut [(usize, f64); MAX_RIDGE_NNZ],
+                               include_spikes_only: bool| {
+        let own_spikes = own_slots[..n_own].iter().any(|&p| meta.has_spikes[s_me][p]);
+        let own_phaze = own_slots[..n_own].iter().any(|&p| meta.has_forced_phaze[s_me][p]);
+        let opp_grounded = opp_slots[..n_opp]
+            .iter()
+            .filter(|&&p| meta.is_grounded[s_op][p])
+            .count() as f64
+            / (n_opp.max(1) as f64);
+
+        let opp_spikes = opp_slots[..n_opp].iter().any(|&p| meta.has_spikes[s_op][p]);
+        let opp_phaze = opp_slots[..n_opp].iter().any(|&p| meta.has_forced_phaze[s_op][p]);
+        let own_grounded = own_slots[..n_own]
+            .iter()
+            .filter(|&&p| meta.is_grounded[s_me][p])
+            .count() as f64
+            / (n_own.max(1) as f64);
+
+        if own_spikes && own_phaze && opp_grounded > 0.0 {
+            out[*k] = (25, opp_grounded);
+            *k += 1;
+        }
+        if opp_spikes && opp_phaze && own_grounded > 0.0 {
+            out[*k] = (26, own_grounded);
+            *k += 1;
+        }
+
+        let own_bp = own_slots[..n_own].iter().any(|&p| meta.has_bp[s_me][p]);
+        let own_setup = own_slots[..n_own].iter().any(|&p| meta.has_setup[s_me][p]);
+        if own_bp && own_setup && n_own >= 2 {
+            out[*k] = (27, 1.0);
+            *k += 1;
+        }
+        let opp_bp = opp_slots[..n_opp].iter().any(|&p| meta.has_bp[s_op][p]);
+        let opp_setup = opp_slots[..n_opp].iter().any(|&p| meta.has_setup[s_op][p]);
+        if opp_bp && opp_setup && n_opp >= 2 {
+            out[*k] = (28, 1.0);
+            *k += 1;
+        }
+
+        // Lead pressure after accounting for opponent's safest switch-in among picked 3.
+        if n_own > 0 && n_opp > 0 {
+            let l_me = own_slots[0];
+            let mut min_p_me = f64::INFINITY;
+            for &d in &opp_slots[..n_opp] {
+                let net = meta.dmg_frac[s_me][l_me][d] - 0.5 * meta.dmg_frac[s_op][d][l_me];
+                if net < min_p_me {
+                    min_p_me = net;
+                }
+            }
+            if min_p_me.is_finite() {
+                out[*k] = (29, min_p_me.clamp(-0.5, 1.0));
+                *k += 1;
+            }
+            let l_op = opp_slots[0];
+            let mut min_p_op = f64::INFINITY;
+            for &d in &own_slots[..n_own] {
+                let net = meta.dmg_frac[s_op][l_op][d] - 0.5 * meta.dmg_frac[s_me][d][l_op];
+                if net < min_p_op {
+                    min_p_op = net;
+                }
+            }
+            if min_p_op.is_finite() {
+                out[*k] = (30, min_p_op.clamp(-0.5, 1.0));
+                *k += 1;
+            }
+        }
+        if include_spikes_only {
+            if own_spikes && opp_grounded > 0.0 {
+                out[*k] = (31, opp_grounded);
+                *k += 1;
+            }
+            if opp_spikes && own_grounded > 0.0 {
+                out[*k] = (32, own_grounded);
+                *k += 1;
+            }
+        }
+    };
+
+    match basis {
+        TrajRidgeBasis::Present19 => {
+            let own_spikes = own_slots[..n_own].iter().any(|&p| meta.has_spikes[s_me][p]);
+            let own_phaze = own_slots[..n_own].iter().any(|&p| meta.has_forced_phaze[s_me][p]);
+            let opp_grounded = opp_slots[..n_opp]
+                .iter()
+                .filter(|&&p| meta.is_grounded[s_op][p])
+                .count() as f64
+                / (n_opp.max(1) as f64);
+            let opp_spikes = opp_slots[..n_opp].iter().any(|&p| meta.has_spikes[s_op][p]);
+            let opp_phaze = opp_slots[..n_opp].iter().any(|&p| meta.has_forced_phaze[s_op][p]);
+            let own_grounded = own_slots[..n_own]
+                .iter()
+                .filter(|&&p| meta.is_grounded[s_me][p])
+                .count() as f64
+                / (n_own.max(1) as f64);
+            if own_spikes && own_phaze && opp_grounded > 0.0 {
+                out[k] = (13, opp_grounded);
+                k += 1;
+            }
+            if opp_spikes && opp_phaze && own_grounded > 0.0 {
+                out[k] = (14, own_grounded);
+                k += 1;
+            }
+            let own_bp = own_slots[..n_own].iter().any(|&p| meta.has_bp[s_me][p]);
+            let own_setup = own_slots[..n_own].iter().any(|&p| meta.has_setup[s_me][p]);
+            if own_bp && own_setup && n_own >= 2 {
+                out[k] = (15, 1.0);
+                k += 1;
+            }
+            let opp_bp = opp_slots[..n_opp].iter().any(|&p| meta.has_bp[s_op][p]);
+            let opp_setup = opp_slots[..n_opp].iter().any(|&p| meta.has_setup[s_op][p]);
+            if opp_bp && opp_setup && n_opp >= 2 {
+                out[k] = (16, 1.0);
+                k += 1;
+            }
+            if own_spikes && opp_grounded > 0.0 {
+                out[k] = (17, opp_grounded);
+                k += 1;
+            }
+            if opp_spikes && own_grounded > 0.0 {
+                out[k] = (18, own_grounded);
+                k += 1;
+            }
+        }
+        TrajRidgeBasis::Additive25 => {}
+        TrajRidgeBasis::Interact31 => {
+            add_domain_interact(&mut k, out, false);
+        }
+        TrajRidgeBasis::Interact33 | TrajRidgeBasis::PresentInteract33 => {
+            add_domain_interact(&mut k, out, true);
+        }
+        TrajRidgeBasis::Interact39 => {
+            add_domain_interact(&mut k, out, true);
+            if n_own > 0 && n_opp > 0 {
+                let l_me = own_slots[0];
+                let l_op = opp_slots[0];
+                let d_me = meta.dmg_frac[s_me][l_me][l_op];
+                let d_op = meta.dmg_frac[s_op][l_op][l_me];
+                if d_me > 0.0 {
+                    out[k] = (33, d_me);
+                    k += 1;
+                }
+                if d_op > 0.0 {
+                    out[k] = (34, d_op);
+                    k += 1;
+                }
+                let spe_me = meta.spe[s_me][l_me];
+                let spe_op = meta.spe[s_op][l_op];
+                let fast_me = if spe_me > spe_op {
+                    1.0
+                } else if spe_me == spe_op {
+                    0.5
+                } else {
+                    0.0
+                };
+                let fast_op = 1.0 - fast_me;
+                if fast_me * d_me > 0.0 {
+                    out[k] = (35, fast_me * d_me);
+                    k += 1;
+                }
+                if fast_op * d_op > 0.0 {
+                    out[k] = (36, fast_op * d_op);
+                    k += 1;
+                }
+                if fast_me > 0.0 && meta.has_sleep[s_me][l_me] {
+                    out[k] = (37, fast_me);
+                    k += 1;
+                }
+                if fast_op > 0.0 && meta.has_sleep[s_op][l_op] {
+                    out[k] = (38, fast_op);
+                    k += 1;
+                }
+            }
+        }
+        TrajRidgeBasis::Pair55 => {
+            for a in 0..n_own {
+                for b in (a + 1)..n_own {
+                    if own_slots[a] != own_slots[b] {
+                        out[k] = (25 + unordered_pair_idx(own_slots[a], own_slots[b]), 1.0);
+                        k += 1;
+                    }
+                }
+            }
+            for a in 0..n_opp {
+                for b in (a + 1)..n_opp {
+                    if opp_slots[a] != opp_slots[b] {
+                        out[k] = (40 + unordered_pair_idx(opp_slots[a], opp_slots[b]), 1.0);
+                        k += 1;
+                    }
+                }
+            }
+        }
+        TrajRidgeBasis::MonCross61 => {
+            for &a in &own_slots[..n_own] {
+                for &b in &opp_slots[..n_opp] {
+                    out[k] = (25 + a * 6 + b, 1.0 / 3.0);
+                    k += 1;
+                }
+            }
+        }
+        TrajRidgeBasis::Interact67 => {
+            add_domain_interact(&mut k, out, false);
+            for &a in &own_slots[..n_own] {
+                for &b in &opp_slots[..n_opp] {
+                    out[k] = (31 + a * 6 + b, 1.0 / 3.0);
+                    k += 1;
+                }
+            }
+        }
+    }
+    k
+}
+
+/// Fast Cholesky SPD solver for `(A + diag(lambda)) w = b` (`dim <= MAX_RIDGE_DIM`).
+fn solve_spd_cholesky(
+    dim: usize,
+    ata: &[[f64; MAX_RIDGE_DIM]; MAX_RIDGE_DIM],
+    atb: &[f64; MAX_RIDGE_DIM],
+    lambda_int: f64,
+    lambda_main: f64,
+    lambda_inter: f64,
+) -> [f64; MAX_RIDGE_DIM] {
+    solve_spd_cholesky_split(dim, 25, ata, atb, lambda_int, lambda_main, lambda_inter)
+}
+
+fn solve_spd_cholesky_split(
+    dim: usize,
+    main_end: usize,
+    ata: &[[f64; MAX_RIDGE_DIM]; MAX_RIDGE_DIM],
+    atb: &[f64; MAX_RIDGE_DIM],
+    lambda_int: f64,
+    lambda_main: f64,
+    lambda_inter: f64,
+) -> [f64; MAX_RIDGE_DIM] {
+    let mut l = [[0.0f64; MAX_RIDGE_DIM]; MAX_RIDGE_DIM];
+    for i in 0..dim {
+        let reg = if i == 0 {
+            lambda_int
+        } else if i < main_end {
+            lambda_main
+        } else {
+            lambda_inter
+        };
+        for j in 0..=i {
+            let mut sum = ata[i][j];
+            if i == j {
+                sum += reg;
+            }
+            for k in 0..j {
+                sum -= l[i][k] * l[j][k];
+            }
+            if i == j {
+                l[i][j] = if sum > 1e-12 { sum.sqrt() } else { 1e-6 };
+            } else {
+                l[i][j] = sum / l[j][j];
+            }
+        }
+    }
+    // Forward substitution: L y = atb.
+    let mut y = [0.0f64; MAX_RIDGE_DIM];
+    for i in 0..dim {
+        let mut sum = atb[i];
+        for k in 0..i {
+            sum -= l[i][k] * y[k];
+        }
+        y[i] = sum / l[i][i];
+    }
+    // Backward substitution: L^T w = y.
+    let mut w = [0.0f64; MAX_RIDGE_DIM];
+    for i in (0..dim).rev() {
+        let mut sum = y[i];
+        for k in (i + 1)..dim {
+            sum -= l[k][i] * w[k];
+        }
+        w[i] = sum / l[i][i];
+    }
+    w
+}
+
+/// L2-regularized Multi-World Bayesian RM+ (`max_p min_q sum_w pi_w p^T V_w q_w - l2_reg * ||p||_2^2`).
+/// When `l2_reg <= 0.0`, delegates directly to exact `solve_bayesian_rm_plus`.
+pub fn solve_bayesian_rm_plus_reg(
+    n_own: usize,
+    worlds: &[(f64, usize, &[f64])],
+    sweeps: u32,
+    l2_reg: f64,
+) -> BayesianRmSolution {
+    if l2_reg <= 0.0 {
+        return solve_bayesian_rm_plus(n_own, worlds, sweeps);
+    }
+    assert!(n_own > 0 && !worlds.is_empty());
+    let n_w = worlds.len();
+    let mut r_own = vec![0.0f64; n_own];
+    let mut avg_own = vec![0.0f64; n_own];
+    let mut p_cur = vec![1.0 / (n_own as f64); n_own];
+
+    let mut r_opp: Vec<Vec<f64>> = worlds.iter().map(|&(_, m, _)| vec![0.0; m]).collect();
+    let mut avg_opp: Vec<Vec<f64>> = worlds.iter().map(|&(_, m, _)| vec![0.0; m]).collect();
+    let mut q_cur: Vec<Vec<f64>> = worlds
+        .iter()
+        .map(|&(_, m, _)| vec![1.0 / (m.max(1) as f64); m])
+        .collect();
+
+    let mut row_ev = vec![0.0f64; n_own];
+    let mut col_ev: Vec<Vec<f64>> = worlds.iter().map(|&(_, m, _)| vec![0.0; m]).collect();
+    let mut weight_sum = 0.0f64;
+
+    let steps = sweeps.max(1);
+    for t in 1..=steps {
+        let tw = f64::from(t);
+        weight_sum += tw;
+
+        let r_sum: f64 = r_own.iter().sum();
+        if r_sum > 1e-15 {
+            let inv = 1.0 / r_sum;
+            for i in 0..n_own {
+                p_cur[i] = r_own[i] * inv;
+            }
+        } else {
+            let u = 1.0 / (n_own as f64);
+            for p in &mut p_cur {
+                *p = u;
+            }
+        }
+        for i in 0..n_own {
+            avg_own[i] += tw * p_cur[i];
+        }
+
+        for w in 0..n_w {
+            let (_, m, vals) = worlds[w];
+            if m == 0 {
+                continue;
+            }
+            let cev = &mut col_ev[w];
+            for x in cev.iter_mut() {
+                *x = 0.0;
+            }
+            for i in 0..n_own {
+                let pi = p_cur[i];
+                if pi > 0.0 {
+                    let row = &vals[i * m..(i + 1) * m];
+                    for j in 0..m {
+                        cev[j] += pi * row[j];
+                    }
+                }
+            }
+            let q = &mut q_cur[w];
+            let mut val_w = 0.0;
+            for j in 0..m {
+                val_w += q[j] * cev[j];
+            }
+            let ro = &mut r_opp[w];
+            let mut ro_sum = 0.0;
+            for j in 0..m {
+                let nr = (ro[j] + (val_w - cev[j])).max(0.0);
+                ro[j] = nr;
+                ro_sum += nr;
+            }
+            if ro_sum > 1e-15 {
+                let inv = 1.0 / ro_sum;
+                for j in 0..m {
+                    q[j] = ro[j] * inv;
+                }
+            } else {
+                let u = 1.0 / (m as f64);
+                for x in q.iter_mut() {
+                    *x = u;
+                }
+            }
+            let ao = &mut avg_opp[w];
+            for j in 0..m {
+                ao[j] += tw * q[j];
+            }
+        }
+
+        for x in &mut row_ev {
+            *x = 0.0;
+        }
+        for w in 0..n_w {
+            let (pi_w, m, vals) = worlds[w];
+            if m == 0 || pi_w <= 0.0 {
+                continue;
+            }
+            let q = &q_cur[w];
+            for i in 0..n_own {
+                let row = &vals[i * m..(i + 1) * m];
+                let mut acc = 0.0;
+                for j in 0..m {
+                    acc += row[j] * q[j];
+                }
+                row_ev[i] += pi_w * acc;
+            }
+        }
+        // Apply L2 concave regularizer gradient `-2 * l2_reg * p_cur[i]`.
+        let mut val_cur = 0.0;
+        for i in 0..n_own {
+            let eff = row_ev[i] - 2.0 * l2_reg * p_cur[i];
+            row_ev[i] = eff;
+            val_cur += p_cur[i] * eff;
+        }
+        for i in 0..n_own {
+            r_own[i] = (r_own[i] + (row_ev[i] - val_cur)).max(0.0);
+        }
+    }
+
+    let inv_w = 1.0 / weight_sum.max(1.0);
+    let mut own_policy: Vec<f64> = avg_own.iter().map(|&v| v * inv_w).collect();
+    let p_sum: f64 = own_policy.iter().sum();
+    if p_sum > 0.0 {
+        for p in &mut own_policy {
+            *p /= p_sum;
+        }
+    }
+    let opp_policies: Vec<Vec<f64>> = avg_opp
+        .iter()
+        .map(|ao| {
+            let mut q: Vec<f64> = ao.iter().map(|&v| v * inv_w).collect();
+            let s: f64 = q.iter().sum();
+            if s > 0.0 {
+                for x in &mut q {
+                    *x /= s;
+                }
+            }
+            q
+        })
+        .collect();
+
+    let mut row_vs_q = vec![0.0f64; n_own];
+    let mut row_guarantees = vec![0.0f64; n_own];
+    let mut col_vs_p: Vec<Vec<f64>> = Vec::with_capacity(n_w);
+    let mut world_values = Vec::with_capacity(n_w);
+    let mut lower_bound = 0.0;
+
+    for w in 0..n_w {
+        let (pi_w, m, vals) = worlds[w];
+        let mut cp = vec![0.0f64; m];
+        for i in 0..n_own {
+            let row = &vals[i * m..(i + 1) * m];
+            let mut rmin = f64::INFINITY;
+            let mut r_q = 0.0;
+            let pi = own_policy[i];
+            for j in 0..m {
+                let v = row[j];
+                if v < rmin {
+                    rmin = v;
+                }
+                r_q += v * opp_policies[w][j];
+                if pi > 0.0 {
+                    cp[j] += pi * v;
+                }
+            }
+            row_guarantees[i] += pi_w * rmin;
+            row_vs_q[i] += pi_w * r_q;
+        }
+        let min_cp = cp.iter().copied().fold(f64::INFINITY, f64::min);
+        let mut vw = 0.0;
+        for j in 0..m {
+            vw += cp[j] * opp_policies[w][j];
+        }
+        lower_bound += pi_w * min_cp;
+        world_values.push(vw);
+        col_vs_p.push(cp);
+    }
+    let upper_bound = row_vs_q.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    let value: f64 = own_policy
+        .iter()
+        .zip(&row_vs_q)
+        .map(|(&p, &u)| p * u)
+        .sum();
+    let duality_gap = (upper_bound - lower_bound).max(0.0);
+
+    BayesianRmSolution {
+        own_policy,
+        opp_policies,
+        value,
+        duality_gap,
+        row_guarantees,
+        row_vs_q,
+        col_vs_p,
+        world_values,
+    }
+}
+
+#[derive(Clone, Copy)]
+struct TrajTask {
+    wi: usize,
+    own_i: usize,
+    opp_j: usize,
+    block_id: u32,
+    game_seed: u64,
+    cell_visit_k: u32,
+    t1_only_iters: u32,
+}
+
+#[derive(Clone, Copy)]
+struct TrajObs {
+    wi: u16,
+    own_i: u16,
+    opp_j: u16,
+    block_id: u32,
+    val_mine: f64,
+}
+
+struct ActiveTrajGame {
+    wi: usize,
+    own_i: usize,
+    opp_j: usize,
+    block_id: u32,
+    game_seed: u64,
+    indep_rng: SplitMix64,
+    table: MatchTable,
+    cb: CompactBattle,
+    cache: TempoMatchCache,
+    turn_root_cb: CompactBattle,
+    turn_cap: u16,
+    turn_rng: SplitMix64,
+    turn_iters_done: u32,
+    turn_target_iters: u32,
+    is_vroot_exit_turn: bool,
+    t1_only_iters: u32,
+    t1_late_sum: f64,
+    t1_late_n: u32,
+    turn1_v0: Option<f64>,
+    steps_taken: u16,
+    turn_ready: bool,
+}
+
+impl ActiveTrajGame {
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        wi: usize,
+        own_i: usize,
+        opp_j: usize,
+        block_id: u32,
+        roster: &CompactPreviewRoster,
+        pcache: &PreviewTempoCache,
+        picks: [[u8; 3]; 2],
+        game_seed: u64,
+        cell_visit_k: u32,
+        crn_mode: TrajCrnMode,
+        t1_only_iters: u32,
+    ) -> Self {
+        let mut indep_rng = SplitMix64::new(game_seed);
+        let init_seed = match crn_mode {
+            TrajCrnMode::Independent => indep_rng.next(),
+            TrajCrnMode::PairedCrn | TrajCrnMode::PairedCrnStratified => {
+                splitmix_hash(game_seed ^ 0xA11C_E001)
+            }
+        };
+        let (table, mut cb) = roster.build_turn1(picks, init_seed);
+        let cache = pcache.slice_for(&cb);
+
+        // Resample Turn-1 Quick Claw and Berserk Gene confusion duration.
+        let t1_seed = match crn_mode {
+            TrajCrnMode::Independent => indep_rng.next(),
+            TrajCrnMode::PairedCrn | TrajCrnMode::PairedCrnStratified => {
+                splitmix_hash(game_seed ^ 0xB22D_F002)
+            }
+        };
+        let mut prng = nc2000_engine::prng::Prng::new(t1_seed);
+        let mut qc = Battle::roll_quick_claw_with(table.ruleset, &mut prng);
+        if crn_mode == TrajCrnMode::PairedCrnStratified {
+            const PHI: f64 = 0.618_033_988_749_894_9;
+            for s in 0..2usize {
+                let item = cb.mons[s * 3].item;
+                if item > 0 {
+                    let ispec = &table.item_specs
+                        [(item as usize - 1).min(table.item_specs.len().saturating_sub(1))];
+                    if ispec.is_quick_claw {
+                        let u0 = (splitmix_hash(game_seed ^ ((s as u64 + 1) * 0x517C_C1B7)) >> 11)
+                            as f64
+                            * (1.0 / ((1u64 << 53) as f64));
+                        let u = (u0 + f64::from(cell_visit_k) * PHI).fract();
+                        qc[s] = u < (60.0 / 256.0);
+                    }
+                }
+            }
+        }
+        cb.quick_claw_roll = (qc[0] as u8) | ((qc[1] as u8) << 1);
+        for s in 0..2usize {
+            if (cb.mons[s * 3].vol_flags & vol_bit::CONFUSION) != 0 {
+                let dur = if crn_mode == TrajCrnMode::PairedCrnStratified {
+                    let perm = (splitmix_hash(game_seed ^ ((s as u64 + 3) * 0x9E37_79B9)) & 3) as u32;
+                    2 + ((cell_visit_k.wrapping_add(perm)) & 3)
+                } else {
+                    2 + prng.random(4)
+                };
+                cb.mons[s * 3].timers[timer_idx::CONFUSION] = dur as u8;
+            }
+        }
+        cb.prng_seed = prng.seed();
+
+        let turn_root_cb = cb;
+        Self {
+            wi,
+            own_i,
+            opp_j,
+            block_id,
+            game_seed,
+            indep_rng,
+            table,
+            cb,
+            cache,
+            turn_root_cb,
+            turn_cap: 101,
+            turn_rng: SplitMix64::new(0),
+            turn_iters_done: 0,
+            turn_target_iters: 0,
+            is_vroot_exit_turn: false,
+            t1_only_iters,
+            t1_late_sum: 0.0,
+            t1_late_n: 0,
+            turn1_v0: None,
+            steps_taken: 0,
+            turn_ready: false,
+        }
+    }
+
+    /// Advance forced/trivial turns until either the game ends (returning `Some((val0, rb_exit))`)
+    /// or the next decision turn is initialized inside `scratch`.
+    fn prepare_next_turn(
+        &mut self,
+        cfg: &TrajPreviewConfig,
+        scratch: &mut TrajTurnScratch,
+    ) -> Option<(f64, bool)> {
+        let max_steps = cfg.max_turns.saturating_mul(3).saturating_add(16);
+        while self.steps_taken < max_steps {
+            if self.cb.outcome != 0 {
+                let v0 = match self.cb.outcome {
+                    1 => 1.0,
+                    2 => 0.0,
+                    _ => 0.5,
+                };
+                return Some((v0, false));
+            }
+            if let Some(v) = compact_turn_limit_outcome(&self.cb, &self.table) {
+                return Some((v, false));
+            }
+            if self.cb.turn > cfg.max_turns {
+                return Some((
+                    compact_eval_leaf_blindspot(&self.cb, &self.table, &scratch.eg_weights),
+                    true,
+                ));
+            }
+
+            let is_idle = self.cb.sides[0].request == 1 && self.cb.sides[1].request == 1;
+            self.is_vroot_exit_turn = false;
+            if is_idle && self.t1_only_iters == 0 {
+                let alive_sum = self.cb.sides[0].alive_mask.count_ones()
+                    + self.cb.sides[1].alive_mask.count_ones();
+                match cfg.rb_exit {
+                    RbExitMode::Terminal => {}
+                    RbExitMode::UncondBlindspot { max_alive } if alive_sum <= max_alive => {
+                        return Some((
+                            compact_eval_leaf_blindspot(&self.cb, &self.table, &scratch.eg_weights),
+                            true,
+                        ));
+                    }
+                    RbExitMode::CondBlindspot { max_alive }
+                        if alive_sum <= max_alive
+                            && !has_tactical_endgame_hazard(&self.cb, &self.table) =>
+                    {
+                        return Some((
+                            compact_eval_leaf_blindspot(&self.cb, &self.table, &scratch.eg_weights),
+                            true,
+                        ));
+                    }
+                    RbExitMode::SearchVroot {
+                        max_alive,
+                        eval_iters,
+                    } if alive_sum <= max_alive => {
+                        self.is_vroot_exit_turn = true;
+                        self.turn_target_iters = eval_iters.max(1);
+                    }
+                    RbExitMode::CondSearchVroot {
+                        max_alive,
+                        eval_iters,
+                    } if alive_sum <= max_alive
+                        && !has_tactical_endgame_hazard(&self.cb, &self.table) =>
+                    {
+                        self.is_vroot_exit_turn = true;
+                        self.turn_target_iters = eval_iters.max(1);
+                    }
+                    RbExitMode::HybridCond {
+                        max_alive,
+                        eval_iters,
+                    } if alive_sum <= max_alive => {
+                        if !has_tactical_endgame_hazard(&self.cb, &self.table) {
+                            return Some((
+                                compact_eval_leaf_blindspot(
+                                    &self.cb,
+                                    &self.table,
+                                    &scratch.eg_weights,
+                                ),
+                                true,
+                            ));
+                        }
+                        self.is_vroot_exit_turn = true;
+                        self.turn_target_iters = eval_iters.max(1);
+                    }
+                    _ => {}
+                }
+
+                // Reseed idle-turn PRNG (turn-indexed for CRN synchronization).
+                let prng_s = match cfg.crn_mode {
+                    TrajCrnMode::Independent => self.indep_rng.next(),
+                    TrajCrnMode::PairedCrn | TrajCrnMode::PairedCrnStratified => splitmix_hash(
+                        self.game_seed
+                            ^ ((u64::from(self.cb.turn)).wrapping_mul(0x9E37_79B9_7F4A_7C15))
+                            ^ 0x1357_9BDF,
+                    ),
+                };
+                let mut prng = nc2000_engine::prng::Prng::new(prng_s);
+                let qc = Battle::roll_quick_claw_with(self.table.ruleset, &mut prng);
+                self.cb.quick_claw_roll = (qc[0] as u8) | ((qc[1] as u8) << 1);
+                self.cb.prng_seed = prng.seed();
+            }
+
+            let mut a0 = [0u8; 7];
+            let mut a1 = [0u8; 7];
+            let n0 = if self.cb.sides[0].request > 0 {
+                self.cb.legal_actions(&self.table, 0, &mut a0).min(6)
+            } else {
+                0
+            };
+            let n1 = if self.cb.sides[1].request > 0 {
+                self.cb.legal_actions(&self.table, 1, &mut a1).min(6)
+            } else {
+                0
+            };
+            if n0 == 0 && n1 == 0 {
+                break;
+            }
+            if !self.is_vroot_exit_turn && self.t1_only_iters == 0 && n0 <= 1 && n1 <= 1 {
+                let p0 = if n0 == 1 { a0[0] } else { 7 };
+                let p1 = if n1 == 1 { a1[0] } else { 7 };
+                self.cb.apply_actions(&self.table, [p0, p1]);
+                self.steps_taken = self.steps_taken.saturating_add(1);
+                continue;
+            }
+
+            let sseed = match cfg.crn_mode {
+                TrajCrnMode::Independent => self.indep_rng.next(),
+                TrajCrnMode::PairedCrn | TrajCrnMode::PairedCrnStratified => splitmix_hash(
+                    self.game_seed
+                        ^ ((u64::from(self.cb.turn)).wrapping_mul(0xBF58_476D_1CE4_E5B9))
+                        ^ (u64::from(self.steps_taken) << 24)
+                        ^ 0x2468_ACE0,
+                ),
+            };
+            let (root_cb, tcap) = scratch.reset_for_turn(
+                &self.cb,
+                &self.table,
+                &self.cache,
+                cfg.puct_eps,
+                cfg.use_cf_policy,
+            );
+            self.turn_root_cb = root_cb;
+            self.turn_cap = tcap;
+            self.turn_rng = SplitMix64::new(sseed ^ 0xA24B_AED4_963E_E407);
+            self.turn_iters_done = 0;
+            if !self.is_vroot_exit_turn {
+                self.turn_target_iters = if self.t1_only_iters > 0 {
+                    self.t1_only_iters
+                } else if self.cb.turn == 1 && cfg.turn1_iters > 0 {
+                    cfg.turn1_iters
+                } else {
+                    cfg.iters_per_turn.max(1)
+                };
+            }
+            self.turn_ready = true;
+            return None;
+        }
+        let v0 = if self.cb.outcome != 0 {
+            match self.cb.outcome {
+                1 => 1.0,
+                2 => 0.0,
+                _ => 0.5,
+            }
+        } else {
+            compact_eval_leaf_blindspot(&self.cb, &self.table, &scratch.eg_weights)
+        };
+        Some((v0, self.cb.outcome == 0))
+    }
+
+    fn finish_turn(&mut self, scratch: &TrajTurnScratch) -> Option<(f64, bool)> {
+        let (best_acts, v_root0) = scratch.readout_turn();
+        self.turn_ready = false;
+        if self.is_vroot_exit_turn {
+            return Some((v_root0, true));
+        }
+        self.cb.apply_actions(&self.table, best_acts);
+        self.steps_taken = self.steps_taken.saturating_add(1);
+        None
+    }
+}
+
+struct TrajWorldStats {
+    cell_n: Vec<u32>,
+    cell_sum: Vec<f64>,
+    t1_n: Vec<u32>,
+    t1_sum: Vec<f64>,
+    meta: WorldInteractMeta,
+    opp_mon_cnt: [u32; 6],
+    opp_lead_cnt: [u32; 6],
+    opp_bench_pair_cnt: [u32; 15],
+    explore_games: u32,
+    do_batches: u32,
+    polish_batches: u32,
+    t1_batches: u32,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TrajPhase {
+    Explore,
+    DoubleOracle,
+    Polish,
+    T1Polish,
+}
+
+/// Incrementally steppable, bit-identically slice-invariant, WASM32-safe
+/// Live Trajectory-DO Team Preview engine.
+pub struct SteppedTrajPreview {
+    my_acts: Vec<SearchChoice>,
+    side: usize,
+    cfg: TrajPreviewConfig,
+    own_canon: Vec<(usize, [u8; 3])>,
+    worlds: Vec<PreviewWorldData>,
+    s2_world_ids: Vec<usize>,
+    tail_world_ids: Vec<usize>,
+    s2_alloc_weights: Vec<f64>,
+    s2_post_weights: Vec<f64>,
+    tail_post_weights: Vec<f64>,
+    world_stats: Vec<TrajWorldStats>,
+    tail_metas: Vec<WorldInteractMeta>,
+    own_mon_cnt: [u32; 6],
+    own_lead_cnt: [u32; 6],
+    own_bench_pair_cnt: [u32; 15],
+    obs_log: Vec<TrajObs>,
+    sol1: BayesianRmSolution,
+    sol_cur: BayesianRmSolution,
+    scratch: TrajTurnScratch,
+    active_slots: Vec<Option<ActiveTrajGame>>,
+    cur_slot: usize,
+    task_queue: std::collections::VecDeque<TrajTask>,
+    phase: TrajPhase,
+    next_block_id: u32,
+    explore_enqueued: u32,
+    iters_done: u32,
+    games_completed: usize,
+    total_nodes: usize,
+    stage1_ms: f64,
+    sol_dirty: bool,
+}
+
+impl SteppedTrajPreview {
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_new(
+        base: &Battle,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &crate::observe::Observer,
+        side: usize,
+        my_acts: &[SearchChoice],
+        my_mask: Option<&[bool]>,
+        cfg: TrajPreviewConfig,
+        rng: &mut SplitMix64,
+    ) -> Option<Self> {
+        let t0 = start_timer();
+        if base.request_state != RequestState::TeamPreview {
+            return None;
+        }
+        let opp = 1 - side;
+        let order_matters = party_order_matters(dex, &base.sides[side].roster);
+        let mut own_canon: Vec<(usize, [u8; 3])> = Vec::with_capacity(my_acts.len());
+        let mut seen: Vec<[u8; 3]> = Vec::with_capacity(60);
+        for (idx, &ch) in my_acts.iter().enumerate() {
+            if my_mask.is_some_and(|m| !m[idx]) {
+                continue;
+            }
+            let SearchChoice::Team(t) = ch else {
+                return None;
+            };
+            if !order_matters && t[2] != 0 {
+                let mut key = t;
+                if key[1] > key[2] {
+                    key.swap(1, 2);
+                }
+                if seen.contains(&key) {
+                    continue;
+                }
+                seen.push(key);
+            }
+            own_canon.push((idx, t));
+        }
+        let n_own = own_canon.len();
+        if n_own <= 1 {
+            return None;
+        }
+
+        let world_plan = belief.preview_world_distribution(cfg.max_stage1_worlds, rng);
+        if world_plan.is_empty() {
+            return None;
+        }
+        let mut det_worlds: Vec<(f64, Battle)> = Vec::with_capacity(world_plan.len());
+        for &(plan_pick, weight) in &world_plan {
+            let mut sim_w = base.clone();
+            sim_w.set_log_enabled(false);
+            belief.determinize_in_place_planned(dex, &mut sim_w, obs, plan_pick, rng);
+            sim_w.quick_claw_rolls = [false, false];
+            if !is_compact_preview_supported(&sim_w, dex) {
+                return None;
+            }
+            det_worlds.push((weight, sim_w));
+        }
+
+        let mut worlds: Vec<PreviewWorldData> = Vec::with_capacity(det_worlds.len());
+        let mut all_metas: Vec<WorldInteractMeta> = Vec::with_capacity(det_worlds.len());
+        for (weight, mut sim_w) in det_worlds {
+            let (_, opp_canon) = canonical_preview_actions(dex, &mut sim_w, opp);
+            let n_opp = opp_canon.len();
+            if n_opp == 0 {
+                continue;
+            }
+            let opp_tactical = lead_tactical_flags(dex, &sim_w, opp);
+            let party_lens = [sim_w.sides[0].party.len(), sim_w.sides[1].party.len()];
+            let roster = CompactPreviewRoster::from_battle(&sim_w, dex, None);
+            let pcache = PreviewTempoCache::build_for_preview_roster(&roster, party_lens);
+            let meta = WorldInteractMeta::build(&roster, &pcache, party_lens);
+            let mut stage1_vals = vec![0.5f64; n_own * n_opp];
+            for (i, &(_, own_t)) in own_canon.iter().enumerate() {
+                for (j, &(_, opp_t)) in opp_canon.iter().enumerate() {
+                    let picks = if side == 0 { [own_t, opp_t] } else { [opp_t, own_t] };
+                    let (table, mut cb) = roster.build_turn1(picks, 0);
+                    if cb.sides[0].request == 1 && cb.sides[1].request == 1 {
+                        cb.quick_claw_roll = 0;
+                    }
+                    let sliced = pcache.slice_for(&cb);
+                    let v0 = evaluate_cf_value(&cb, &table, Some(&sliced), cfg.leaf_temp);
+                    stage1_vals[i * n_opp + j] = if side == 0 { v0 } else { 1.0 - v0 };
+                }
+            }
+            worlds.push(PreviewWorldData {
+                weight,
+                opp_canon,
+                opp_tactical,
+                compact: Some((roster, pcache)),
+                stage1_vals,
+            });
+            all_metas.push(meta);
+        }
+        if worlds.is_empty() {
+            return None;
+        }
+
+        let w_sum: f64 = worlds.iter().map(|w| w.weight).sum();
+        let w_len = worlds.len() as f64;
+        for w in &mut worlds {
+            w.weight = if w_sum > 0.0 {
+                w.weight / w_sum
+            } else {
+                1.0 / w_len
+            };
+        }
+
+        let s1_slices: Vec<(f64, usize, &[f64])> = worlds
+            .iter()
+            .map(|w| (w.weight, w.opp_canon.len(), w.stage1_vals.as_slice()))
+            .collect();
+        let sol1 = solve_bayesian_rm_plus(n_own, &s1_slices, 400);
+        let stage1_ms = elapsed_ms(t0);
+
+        let mut ordered_worlds: Vec<usize> = (0..worlds.len()).collect();
+        ordered_worlds.sort_by(|&a, &b| worlds[b].weight.total_cmp(&worlds[a].weight));
+        let n_w2 = ordered_worlds.len().min(cfg.max_stage2_worlds.max(1));
+        let s2_world_ids: Vec<usize> = ordered_worlds[..n_w2].to_vec();
+        let tail_world_ids: Vec<usize> = ordered_worlds[n_w2..].to_vec();
+
+        let w2_sum: f64 = s2_world_ids.iter().map(|&w| worlds[w].weight).sum();
+        let s2_alloc_weights: Vec<f64> = s2_world_ids
+            .iter()
+            .map(|&w| {
+                if w2_sum > 0.0 {
+                    worlds[w].weight / w2_sum
+                } else {
+                    1.0 / (n_w2 as f64)
+                }
+            })
+            .collect();
+        let w_all_sum: f64 = ordered_worlds.iter().map(|&w| worlds[w].weight).sum();
+        let norm_w = |w_id: usize| -> f64 {
+            if w_all_sum > 0.0 {
+                worlds[w_id].weight / w_all_sum
+            } else {
+                1.0 / (ordered_worlds.len().max(1) as f64)
+            }
+        };
+        let s2_post_weights: Vec<f64> = s2_world_ids.iter().map(|&w| norm_w(w)).collect();
+        let tail_post_weights: Vec<f64> = tail_world_ids.iter().map(|&w| norm_w(w)).collect();
+
+        let mut world_stats = Vec::with_capacity(n_w2);
+        for &w_id in &s2_world_ids {
+            let m = worlds[w_id].opp_canon.len();
+            world_stats.push(TrajWorldStats {
+                cell_n: vec![0u32; n_own * m],
+                cell_sum: vec![0.0f64; n_own * m],
+                t1_n: vec![0u32; n_own * m],
+                t1_sum: vec![0.0f64; n_own * m],
+                meta: all_metas[w_id].clone(),
+                opp_mon_cnt: [0; 6],
+                opp_lead_cnt: [0; 6],
+                opp_bench_pair_cnt: [0; 15],
+                explore_games: 0,
+                do_batches: 0,
+                polish_batches: 0,
+                t1_batches: 0,
+            });
+        }
+        let tail_metas: Vec<WorldInteractMeta> =
+            tail_world_ids.iter().map(|&w_id| all_metas[w_id].clone()).collect();
+
+        let n_slots = cfg.stepped_slots.clamp(1, 8);
+        let mut active_slots = Vec::with_capacity(n_slots);
+        for _ in 0..n_slots {
+            active_slots.push(None);
+        }
+
+        Some(Self {
+            my_acts: my_acts.to_vec(),
+            side,
+            cfg,
+            own_canon,
+            worlds,
+            s2_world_ids,
+            tail_world_ids,
+            s2_alloc_weights,
+            s2_post_weights,
+            tail_post_weights,
+            world_stats,
+            tail_metas,
+            own_mon_cnt: [0; 6],
+            own_lead_cnt: [0; 6],
+            own_bench_pair_cnt: [0; 15],
+            obs_log: Vec::with_capacity(512),
+            sol_cur: sol1.clone(),
+            sol1,
+            scratch: TrajTurnScratch::new(),
+            active_slots,
+            cur_slot: 0,
+            task_queue: std::collections::VecDeque::with_capacity(32),
+            phase: TrajPhase::Explore,
+            next_block_id: 1,
+            explore_enqueued: 0,
+            iters_done: 0,
+            games_completed: 0,
+            total_nodes: 0,
+            stage1_ms,
+            sol_dirty: false,
+        })
+    }
+
+    pub fn node_count(&self) -> usize {
+        self.total_nodes
+    }
+
+    pub fn games_completed(&self) -> usize {
+        self.games_completed
+    }
+
+    pub fn stage1_ms(&self) -> f64 {
+        self.stage1_ms
+    }
+
+    #[inline]
+    fn bench_pair_index(t: [u8; 3]) -> Option<usize> {
+        if t[1] >= 1 && t[1] <= 6 && t[2] >= 1 && t[2] <= 6 && t[1] != t[2] {
+            Some(unordered_pair_idx(t[1] as usize - 1, t[2] as usize - 1))
+        } else {
+            None
+        }
+    }
+
+    fn record_coverage_own(&mut self, t: [u8; 3]) {
+        if t[0] >= 1 && t[0] <= 6 {
+            let l = t[0] as usize - 1;
+            self.own_lead_cnt[l] += 1;
+            self.own_mon_cnt[l] += 1;
+        }
+        if t[1] >= 1 && t[1] <= 6 {
+            self.own_mon_cnt[t[1] as usize - 1] += 1;
+        }
+        if t[2] >= 1 && t[2] <= 6 {
+            self.own_mon_cnt[t[2] as usize - 1] += 1;
+        }
+        if let Some(p) = Self::bench_pair_index(t) {
+            self.own_bench_pair_cnt[p] += 1;
+        }
+    }
+
+    fn record_coverage_opp(&mut self, wi: usize, t: [u8; 3]) {
+        let ws = &mut self.world_stats[wi];
+        if t[0] >= 1 && t[0] <= 6 {
+            let l = t[0] as usize - 1;
+            ws.opp_lead_cnt[l] += 1;
+            ws.opp_mon_cnt[l] += 1;
+        }
+        if t[1] >= 1 && t[1] <= 6 {
+            ws.opp_mon_cnt[t[1] as usize - 1] += 1;
+        }
+        if t[2] >= 1 && t[2] <= 6 {
+            ws.opp_mon_cnt[t[2] as usize - 1] += 1;
+        }
+        if let Some(p) = Self::bench_pair_index(t) {
+            ws.opp_bench_pair_cnt[p] += 1;
+        }
+    }
+
+    /// Build posterior `V_hat` matrices across all refined + tail worlds from weighted cell stats.
+    fn build_posterior_matrices_from_stats(
+        &self,
+        stats_n: &[Vec<f64>],
+        stats_sum: &[Vec<f64>],
+    ) -> Vec<Vec<f64>> {
+        let n_own = self.own_canon.len();
+        let n_w2 = self.s2_world_ids.len();
+        let n_tail = self.tail_world_ids.len();
+        let basis = self.cfg.ridge_basis;
+        let dim = basis.dim();
+        let kappa = self.cfg.kappa.max(0.5);
+        let mut feats = [(0usize, 0.0f64); MAX_RIDGE_NNZ];
+
+        // 1. Fit shared species-level residual ridge across all Stage-2 worlds (when enabled or W == 1).
+        let mut theta_shared = [0.0f64; MAX_RIDGE_DIM];
+        if self.cfg.ridge_shared_multiworld || n_w2 == 1 {
+            let mut ata = [[0.0f64; MAX_RIDGE_DIM]; MAX_RIDGE_DIM];
+            let mut atb = [0.0f64; MAX_RIDGE_DIM];
+            let mut any_obs = false;
+            for wi in 0..n_w2 {
+                let w_id = self.s2_world_ids[wi];
+                let wd = &self.worlds[w_id];
+                let m = wd.opp_canon.len();
+                let meta = &self.world_stats[wi].meta;
+                for i in 0..n_own {
+                    let own_t = self.own_canon[i].1;
+                    for j in 0..m {
+                        let idx = i * m + j;
+                        let n = stats_n[wi][idx];
+                        if n <= 0.0 {
+                            continue;
+                        }
+                        any_obs = true;
+                        let r_bar = (stats_sum[wi][idx] / n) - wd.stage1_vals[idx];
+                        let w_cell = if self.cfg.ridge_gls {
+                            (kappa + 1.0) * n / (kappa + n)
+                        } else {
+                            n
+                        };
+                        let nnz = extract_ridge_features(
+                            basis,
+                            self.side,
+                            own_t,
+                            wd.opp_canon[j].1,
+                            meta,
+                            &mut feats,
+                        );
+                        for a in 0..nnz {
+                            let (fa, va) = feats[a];
+                            atb[fa] += w_cell * va * r_bar;
+                            for b in 0..=a {
+                                let (fb, vb) = feats[b];
+                                let prod = w_cell * va * vb;
+                                ata[fa][fb] += prod;
+                                if fa != fb {
+                                    ata[fb][fa] += prod;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if any_obs {
+                theta_shared = solve_spd_cholesky(
+                    dim,
+                    &ata,
+                    &atb,
+                    1.0,
+                    self.cfg.ridge_lambda_main,
+                    self.cfg.ridge_lambda_inter,
+                );
+            }
+        }
+
+        // 2. Build Stage-2 world matrices (with per-world residual delta when W > 1).
+        let mut mats: Vec<Vec<f64>> = Vec::with_capacity(n_w2 + n_tail);
+        for wi in 0..n_w2 {
+            let w_id = self.s2_world_ids[wi];
+            let wd = &self.worlds[w_id];
+            let m = wd.opp_canon.len();
+            let meta = &self.world_stats[wi].meta;
+
+            let mut delta_w = [0.0f64; MAX_RIDGE_DIM];
+            let dw_dim = if n_w2 > 1 {
+                if self.cfg.ridge_shared_multiworld {
+                    dim.min(39)
+                } else {
+                    dim
+                }
+            } else {
+                0
+            };
+            if dw_dim > 0 {
+                let mut ata = [[0.0f64; MAX_RIDGE_DIM]; MAX_RIDGE_DIM];
+                let mut atb = [0.0f64; MAX_RIDGE_DIM];
+                let mut any_w = false;
+                for i in 0..n_own {
+                    let own_t = self.own_canon[i].1;
+                    for j in 0..m {
+                        let idx = i * m + j;
+                        let n = stats_n[wi][idx];
+                        if n <= 0.0 {
+                            continue;
+                        }
+                        any_w = true;
+                        let nnz = extract_ridge_features(
+                            basis,
+                            self.side,
+                            own_t,
+                            wd.opp_canon[j].1,
+                            meta,
+                            &mut feats,
+                        );
+                        let mut shared_pred = 0.0;
+                        if self.cfg.ridge_shared_multiworld {
+                            for &(f, v) in &feats[..nnz] {
+                                shared_pred += theta_shared[f] * v;
+                            }
+                        }
+                        let r_rem = (stats_sum[wi][idx] / n) - wd.stage1_vals[idx] - shared_pred;
+                        let w_cell = if self.cfg.ridge_gls {
+                            (kappa + 1.0) * n / (kappa + n)
+                        } else {
+                            n
+                        };
+                        for a in 0..nnz {
+                            let (fa, va) = feats[a];
+                            if fa >= dw_dim {
+                                continue;
+                            }
+                            atb[fa] += w_cell * va * r_rem;
+                            for b in 0..=a {
+                                let (fb, vb) = feats[b];
+                                if fb >= dw_dim {
+                                    continue;
+                                }
+                                let prod = w_cell * va * vb;
+                                ata[fa][fb] += prod;
+                                if fa != fb {
+                                    ata[fb][fa] += prod;
+                                }
+                            }
+                        }
+                    }
+                }
+                if any_w {
+                    let mult = if self.cfg.ridge_shared_multiworld { 2.0 } else { 1.0 };
+                    delta_w = solve_spd_cholesky(
+                        dw_dim,
+                        &ata,
+                        &atb,
+                        1.0 * mult,
+                        self.cfg.ridge_lambda_main * mult,
+                        self.cfg.ridge_lambda_inter * mult,
+                    );
+                }
+            }
+
+            let mut mat = vec![0.5f64; n_own * m];
+            for i in 0..n_own {
+                let own_t = self.own_canon[i].1;
+                for j in 0..m {
+                    let idx = i * m + j;
+                    let nnz = extract_ridge_features(
+                        basis,
+                        self.side,
+                        own_t,
+                        wd.opp_canon[j].1,
+                        meta,
+                        &mut feats,
+                    );
+                    let mut corr = 0.0;
+                    if self.cfg.ridge_shared_multiworld || n_w2 == 1 {
+                        for &(f, v) in &feats[..nnz] {
+                            corr += theta_shared[f] * v;
+                        }
+                    }
+                    if dw_dim > 0 {
+                        for &(f, v) in &feats[..nnz] {
+                            if f < dw_dim {
+                                corr += delta_w[f] * v;
+                            }
+                        }
+                    }
+                    let prior = (wd.stage1_vals[idx] + corr).clamp(0.02, 0.98);
+                    let n = stats_n[wi][idx];
+                    mat[idx] = (stats_sum[wi][idx] + kappa * prior) / (n + kappa);
+                }
+            }
+            // Control-variate Turn-1 tactical lead delta (zero-mean per world -> exact zero cardinal drift!).
+            if self.cfg.t1_polish_alpha > 0.0 {
+                let ws = &self.world_stats[wi];
+                let mut d_sum = 0.0f64;
+                let mut d_cnt = 0usize;
+                for idx in 0..(n_own * m) {
+                    if ws.t1_n[idx] > 0 {
+                        let v_t1 = ws.t1_sum[idx] / f64::from(ws.t1_n[idx]);
+                        d_sum += v_t1 - wd.stage1_vals[idx];
+                        d_cnt += 1;
+                    }
+                }
+                if d_cnt > 0 {
+                    let mean_d = d_sum / (d_cnt as f64);
+                    let alpha = self.cfg.t1_polish_alpha;
+                    for idx in 0..(n_own * m) {
+                        if ws.t1_n[idx] > 0 {
+                            let v_t1 = ws.t1_sum[idx] / f64::from(ws.t1_n[idx]);
+                            let centered = (v_t1 - wd.stage1_vals[idx]) - mean_d;
+                            mat[idx] = (mat[idx] + alpha * centered).clamp(0.01, 0.99);
+                        }
+                    }
+                }
+            }
+            mats.push(mat);
+        }
+
+        // 3. Tail worlds (`n_w2..W`): transfer 75% of shared species-level residual when enabled.
+        for (ti, &w_id) in self.tail_world_ids.iter().enumerate() {
+            let wd = &self.worlds[w_id];
+            let m = wd.opp_canon.len();
+            if !self.cfg.ridge_shared_multiworld {
+                mats.push(wd.stage1_vals.clone());
+                continue;
+            }
+            let meta = &self.tail_metas[ti];
+            let mut mat = vec![0.5f64; n_own * m];
+            for i in 0..n_own {
+                let own_t = self.own_canon[i].1;
+                for j in 0..m {
+                    let idx = i * m + j;
+                    let nnz = extract_ridge_features(
+                        basis,
+                        self.side,
+                        own_t,
+                        wd.opp_canon[j].1,
+                        meta,
+                        &mut feats,
+                    );
+                    let mut corr = 0.0;
+                    for &(f, v) in &feats[..nnz] {
+                        corr += theta_shared[f] * v;
+                    }
+                    mat[idx] = (wd.stage1_vals[idx] + 0.75 * corr).clamp(0.02, 0.98);
+                }
+            }
+            mats.push(mat);
+        }
+        mats
+    }
+
+    fn build_current_matrices(&self) -> Vec<Vec<f64>> {
+        let stats_n: Vec<Vec<f64>> = self
+            .world_stats
+            .iter()
+            .map(|ws| ws.cell_n.iter().map(|&n| f64::from(n)).collect())
+            .collect();
+        let stats_sum: Vec<Vec<f64>> = self
+            .world_stats
+            .iter()
+            .map(|ws| ws.cell_sum.clone())
+            .collect();
+        self.build_posterior_matrices_from_stats(&stats_n, &stats_sum)
+    }
+
+    fn solve_full_game_from_mats(
+        &self,
+        mats: &[Vec<f64>],
+        sweeps: u32,
+        l2_reg: f64,
+    ) -> BayesianRmSolution {
+        let n_own = self.own_canon.len();
+        let n_w2 = self.s2_world_ids.len();
+        let mut slices: Vec<(f64, usize, &[f64])> = Vec::with_capacity(mats.len());
+        for wi in 0..n_w2 {
+            let m = self.worlds[self.s2_world_ids[wi]].opp_canon.len();
+            slices.push((self.s2_post_weights[wi], m, mats[wi].as_slice()));
+        }
+        for (ti, &w_id) in self.tail_world_ids.iter().enumerate() {
+            let m = self.worlds[w_id].opp_canon.len();
+            slices.push((self.tail_post_weights[ti], m, mats[n_w2 + ti].as_slice()));
+        }
+        solve_bayesian_rm_plus_reg(n_own, &slices, sweeps, l2_reg)
+    }
+
+    fn refresh_current_solution(&mut self) {
+        if !self.sol_dirty {
+            return;
+        }
+        let mats = self.build_current_matrices();
+        let n_w_tot = self.s2_world_ids.len() + self.tail_world_ids.len();
+        let sweeps = if n_w_tot > 4 {
+            self.cfg.rm_sweeps_do.min(180)
+        } else {
+            self.cfg.rm_sweeps_do
+        };
+        self.sol_cur = self.solve_full_game_from_mats(&mats, sweeps, 0.0);
+        self.sol_dirty = false;
+    }
+
+    /// Pick next world index proportionally to `s2_alloc_weights`.
+    fn pick_world_by_deficit(&self, counts: impl Fn(&TrajWorldStats) -> u32) -> usize {
+        let n_w2 = self.s2_world_ids.len();
+        if n_w2 <= 1 {
+            return 0;
+        }
+        let total: u32 = self.world_stats.iter().map(&counts).sum();
+        let next_tot = f64::from(total + 1);
+        let mut best_wi = 0usize;
+        let mut best_def = f64::NEG_INFINITY;
+        for wi in 0..n_w2 {
+            let def = self.s2_alloc_weights[wi] * next_tot - f64::from(counts(&self.world_stats[wi]));
+            if def > best_def {
+                best_def = def;
+                best_wi = wi;
+            }
+        }
+        best_wi
+    }
+
+    fn pick_balanced_own(&self, rng: &mut SplitMix64) -> usize {
+        let mut best_i = 0usize;
+        let mut best_sc = f64::INFINITY;
+        for (i, &(_, t)) in self.own_canon.iter().enumerate() {
+            let l_c = if t[0] >= 1 && t[0] <= 6 {
+                f64::from(self.own_lead_cnt[t[0] as usize - 1])
+            } else {
+                0.0
+            };
+            let b1_c = if t[1] >= 1 && t[1] <= 6 {
+                f64::from(self.own_mon_cnt[t[1] as usize - 1])
+            } else {
+                0.0
+            };
+            let b2_c = if t[2] >= 1 && t[2] <= 6 {
+                f64::from(self.own_mon_cnt[t[2] as usize - 1])
+            } else {
+                0.0
+            };
+            let bp_c = Self::bench_pair_index(t)
+                .map_or(0.0, |p| f64::from(self.own_bench_pair_cnt[p]));
+            let sc = 2.5 * l_c + b1_c + b2_c + 2.0 * bp_c + rng.next_f64() * 0.75;
+            if sc < best_sc {
+                best_sc = sc;
+                best_i = i;
+            }
+        }
+        best_i
+    }
+
+    fn pick_balanced_opp(&self, wi: usize, rng: &mut SplitMix64) -> usize {
+        let wd = &self.worlds[self.s2_world_ids[wi]];
+        let ws = &self.world_stats[wi];
+        let mut best_j = 0usize;
+        let mut best_sc = f64::INFINITY;
+        for (j, &(_, t)) in wd.opp_canon.iter().enumerate() {
+            let l_c = if t[0] >= 1 && t[0] <= 6 {
+                f64::from(ws.opp_lead_cnt[t[0] as usize - 1])
+            } else {
+                0.0
+            };
+            let b1_c = if t[1] >= 1 && t[1] <= 6 {
+                f64::from(ws.opp_mon_cnt[t[1] as usize - 1])
+            } else {
+                0.0
+            };
+            let b2_c = if t[2] >= 1 && t[2] <= 6 {
+                f64::from(ws.opp_mon_cnt[t[2] as usize - 1])
+            } else {
+                0.0
+            };
+            let bp_c = Self::bench_pair_index(t)
+                .map_or(0.0, |p| f64::from(ws.opp_bench_pair_cnt[p]));
+            let sc = 2.5 * l_c + b1_c + b2_c + 2.0 * bp_c + rng.next_f64() * 0.75;
+            if sc < best_sc {
+                best_sc = sc;
+                best_j = j;
+            }
+        }
+        best_j
+    }
+
+    fn enqueue_next_batch(&mut self, rng: &mut SplitMix64) {
+        let explore_cap = ((f64::from(self.cfg.total_iters) * self.cfg.explore_frac).round() as u32)
+            .min(self.cfg.total_iters);
+        let do_cap = ((f64::from(self.cfg.total_iters) * (self.cfg.explore_frac + self.cfg.do_frac))
+            .round() as u32)
+            .min(self.cfg.total_iters);
+        let t1_enabled = self.cfg.t1_polish_frac > 0.0
+            && self.cfg.t1_polish_alpha > 0.0
+            && self.cfg.t1_polish_iters > 0;
+        let t1_start = if t1_enabled {
+            ((f64::from(self.cfg.total_iters) * (1.0 - self.cfg.t1_polish_frac.clamp(0.0, 0.5)))
+                .round() as u32)
+                .max(do_cap)
+        } else {
+            u32::MAX
+        };
+
+        if self.iters_done < explore_cap {
+            self.phase = TrajPhase::Explore;
+        } else if self.iters_done < do_cap {
+            self.phase = TrajPhase::DoubleOracle;
+        } else if t1_enabled && self.iters_done >= t1_start {
+            self.phase = TrajPhase::T1Polish;
+        } else {
+            self.phase = TrajPhase::Polish;
+        }
+
+        let n_own = self.own_canon.len();
+        match self.phase {
+            TrajPhase::Explore => {
+                // Enqueue a mini-batch of 4 roster- & bench-pair-balanced exploration games
+                // (20% calibrated on Stage-1 Nash support, 80% full-coverage balanced).
+                for _ in 0..4 {
+                    let wi = self.pick_world_by_deficit(|ws| ws.explore_games);
+                    let w_id = self.s2_world_ids[wi];
+                    let m = self.worlds[w_id].opp_canon.len();
+                    let (own_i, opp_j) = if self.explore_enqueued % 5 == 0 {
+                        let i = sample_dist(&self.sol1.own_policy, rng.next_f64());
+                        let j = sample_dist(&self.sol1.opp_policies[w_id], rng.next_f64());
+                        (i, j)
+                    } else {
+                        let i = self.pick_balanced_own(rng);
+                        let j = self.pick_balanced_opp(wi, rng);
+                        (i, j)
+                    };
+                    let own_t = self.own_canon[own_i].1;
+                    let opp_t = self.worlds[w_id].opp_canon[opp_j].1;
+                    self.record_coverage_own(own_t);
+                    self.record_coverage_opp(wi, opp_t);
+                    self.world_stats[wi].explore_games += 1;
+                    self.explore_enqueued += 1;
+
+                    let idx = own_i * m + opp_j;
+                    let visit_k = self.world_stats[wi].cell_n[idx];
+                    let block_id = self.next_block_id;
+                    self.next_block_id += 1;
+                    let gseed = rng.next();
+                    self.task_queue.push_back(TrajTask {
+                        wi,
+                        own_i,
+                        opp_j,
+                        block_id,
+                        game_seed: gseed,
+                        cell_visit_k: visit_k,
+                        t1_only_iters: 0,
+                    });
+                }
+            }
+            TrajPhase::DoubleOracle => {
+                self.refresh_current_solution();
+                let wi = self.pick_world_by_deficit(|ws| ws.do_batches);
+                self.world_stats[wi].do_batches += 1;
+                let w_id = self.s2_world_ids[wi];
+                let m = self.worlds[w_id].opp_canon.len();
+
+                let mut row_n = vec![0u32; n_own];
+                let mut col_n = vec![0u32; m];
+                for i in 0..n_own {
+                    for j in 0..m {
+                        let c = self.world_stats[wi].cell_n[i * m + j];
+                        row_n[i] += c;
+                        col_n[j] += c;
+                    }
+                }
+
+                // 1. Paired CRN Own Challenger-vs-Incumbent batch (same world, opp pick, battle seed!).
+                let j_tgt = sample_dist(&self.sol_cur.opp_policies[wi], rng.next_f64());
+                let i_inc = sample_dist(&self.sol_cur.own_policy, rng.next_f64());
+                let mut own_batch: Vec<usize> = Vec::with_capacity(self.cfg.do_challengers + 2);
+                let paired = self.cfg.crn_mode != TrajCrnMode::Independent;
+                if paired {
+                    own_batch.push(i_inc);
+                }
+                let mut own_ucb: Vec<(usize, f64)> = (0..n_own)
+                    .filter(|&i| !own_batch.contains(&i))
+                    .map(|i| {
+                        let u = self.sol_cur.row_vs_q[i]
+                            + self.cfg.do_ucb_c / f64::from(row_n[i] + 1).sqrt();
+                        (i, u)
+                    })
+                    .collect();
+                own_ucb.sort_by(|a, b| b.1.total_cmp(&a.1));
+                let n_ucb = self.cfg.do_challengers.saturating_sub(1).max(1);
+                for &(ci, _) in own_ucb.iter().take(n_ucb) {
+                    own_batch.push(ci);
+                }
+                // Reserve 1 probe specifically for lowest-coverage zero-mass bench combination!
+                if let Some((bi, _)) = (0..n_own)
+                    .filter(|&i| !own_batch.contains(&i) && self.sol_cur.own_policy[i] < 0.01)
+                    .filter_map(|i| {
+                        let bp_c = Self::bench_pair_index(self.own_canon[i].1)
+                            .map_or(u32::MAX, |p| self.own_bench_pair_cnt[p]);
+                        let u = self.sol_cur.row_vs_q[i]
+                            + self.cfg.do_ucb_c / f64::from(row_n[i] + 1).sqrt();
+                        Some((i, (bp_c, u)))
+                    })
+                    .min_by(|a, b| a.1 .0.cmp(&b.1 .0).then_with(|| b.1 .1.total_cmp(&a.1 .1)))
+                {
+                    own_batch.push(bi);
+                }
+
+                let own_block = self.next_block_id;
+                self.next_block_id += 1;
+                let shared_own_seed = rng.next();
+                for &ci in &own_batch {
+                    let own_t = self.own_canon[ci].1;
+                    let opp_t = self.worlds[w_id].opp_canon[j_tgt].1;
+                    self.record_coverage_own(own_t);
+                    self.record_coverage_opp(wi, opp_t);
+                    let idx = ci * m + j_tgt;
+                    let visit_k = self.world_stats[wi].cell_n[idx];
+                    let (blk, gs) = if paired {
+                        (own_block, shared_own_seed)
+                    } else {
+                        let b = self.next_block_id;
+                        self.next_block_id += 1;
+                        (b, rng.next())
+                    };
+                    self.task_queue.push_back(TrajTask {
+                        wi,
+                        own_i: ci,
+                        opp_j: j_tgt,
+                        block_id: blk,
+                        game_seed: gs,
+                        cell_visit_k: visit_k,
+                        t1_only_iters: 0,
+                    });
+                }
+
+                // 2. Paired CRN Opp Challenger-vs-Incumbent batch (same world, own pick, battle seed!).
+                let i_tgt = sample_dist(&self.sol_cur.own_policy, rng.next_f64());
+                let j_inc = sample_dist(&self.sol_cur.opp_policies[wi], rng.next_f64());
+                let mut opp_batch: Vec<usize> = Vec::with_capacity(self.cfg.do_challengers + 2);
+                if paired {
+                    opp_batch.push(j_inc);
+                }
+                let mut opp_ucb: Vec<(usize, f64)> = (0..m)
+                    .filter(|&j| !opp_batch.contains(&j))
+                    .map(|j| {
+                        let u = (1.0 - self.sol_cur.col_vs_p[wi][j])
+                            + self.cfg.do_ucb_c / f64::from(col_n[j] + 1).sqrt();
+                        (j, u)
+                    })
+                    .collect();
+                opp_ucb.sort_by(|a, b| b.1.total_cmp(&a.1));
+                for &(cj, _) in opp_ucb.iter().take(n_ucb) {
+                    opp_batch.push(cj);
+                }
+                // Reserve 1 probe for lowest-coverage zero-mass opponent bench combination!
+                if let Some((bj, _)) = (0..m)
+                    .filter(|&j| !opp_batch.contains(&j) && self.sol_cur.opp_policies[wi][j] < 0.01)
+                    .filter_map(|j| {
+                        let bp_c = Self::bench_pair_index(self.worlds[w_id].opp_canon[j].1)
+                            .map_or(u32::MAX, |p| self.world_stats[wi].opp_bench_pair_cnt[p]);
+                        let u = (1.0 - self.sol_cur.col_vs_p[wi][j])
+                            + self.cfg.do_ucb_c / f64::from(col_n[j] + 1).sqrt();
+                        Some((j, (bp_c, u)))
+                    })
+                    .min_by(|a, b| a.1 .0.cmp(&b.1 .0).then_with(|| b.1 .1.total_cmp(&a.1 .1)))
+                {
+                    opp_batch.push(bj);
+                }
+
+                let opp_block = self.next_block_id;
+                self.next_block_id += 1;
+                let shared_opp_seed = rng.next();
+                for &cj in &opp_batch {
+                    let own_t = self.own_canon[i_tgt].1;
+                    let opp_t = self.worlds[w_id].opp_canon[cj].1;
+                    self.record_coverage_own(own_t);
+                    self.record_coverage_opp(wi, opp_t);
+                    let idx = i_tgt * m + cj;
+                    let visit_k = self.world_stats[wi].cell_n[idx];
+                    let (blk, gs) = if paired {
+                        (opp_block, shared_opp_seed)
+                    } else {
+                        let b = self.next_block_id;
+                        self.next_block_id += 1;
+                        (b, rng.next())
+                    };
+                    self.task_queue.push_back(TrajTask {
+                        wi,
+                        own_i: i_tgt,
+                        opp_j: cj,
+                        block_id: blk,
+                        game_seed: gs,
+                        cell_visit_k: visit_k,
+                        t1_only_iters: 0,
+                    });
+                }
+            }
+            TrajPhase::Polish => {
+                self.refresh_current_solution();
+                let wi = self.pick_world_by_deficit(|ws| ws.polish_batches);
+                self.world_stats[wi].polish_batches += 1;
+                let w_id = self.s2_world_ids[wi];
+                let m = self.worlds[w_id].opp_canon.len();
+
+                let mut active_rows: Vec<usize> = (0..n_own)
+                    .filter(|&i| {
+                        self.sol_cur.own_policy[i] >= 0.015
+                            || self.sol_cur.row_vs_q[i] >= self.sol_cur.value - 0.025
+                    })
+                    .collect();
+                active_rows.sort_by(|&a, &b| {
+                    self.sol_cur.own_policy[b]
+                        .total_cmp(&self.sol_cur.own_policy[a])
+                        .then_with(|| self.sol_cur.row_vs_q[b].total_cmp(&self.sol_cur.row_vs_q[a]))
+                });
+                active_rows.truncate(6);
+                if active_rows.is_empty() {
+                    active_rows.push(0);
+                }
+
+                let mut active_cols: Vec<usize> = (0..m)
+                    .filter(|&j| {
+                        self.sol_cur.opp_policies[wi][j] >= 0.015
+                            || self.sol_cur.col_vs_p[wi][j] <= self.sol_cur.world_values[wi] + 0.025
+                    })
+                    .collect();
+                active_cols.sort_by(|&a, &b| {
+                    self.sol_cur.opp_policies[wi][b]
+                        .total_cmp(&self.sol_cur.opp_policies[wi][a])
+                        .then_with(|| {
+                            self.sol_cur.col_vs_p[wi][a].total_cmp(&self.sol_cur.col_vs_p[wi][b])
+                        })
+                });
+                active_cols.truncate(6);
+                if active_cols.is_empty() {
+                    active_cols.push(0);
+                }
+
+                let mut scored: Vec<(usize, usize, f64)> =
+                    Vec::with_capacity(active_rows.len() * active_cols.len());
+                for &ri in &active_rows {
+                    let pw = self.sol_cur.own_policy[ri] + 0.05;
+                    for &cj in &active_cols {
+                        let qw = self.sol_cur.opp_policies[wi][cj] + 0.05;
+                        let n_ij = self.world_stats[wi].cell_n[ri * m + cj];
+                        let sc = pw * qw / f64::from(n_ij + 1).sqrt();
+                        scored.push((ri, cj, sc));
+                    }
+                }
+                scored.sort_by(|a, b| b.2.total_cmp(&a.2));
+
+                let paired = self.cfg.crn_mode != TrajCrnMode::Independent;
+                let pol_block = self.next_block_id;
+                self.next_block_id += 1;
+                let shared_pol_seed = rng.next();
+                for &(ri, cj, _) in scored.iter().take(8) {
+                    let idx = ri * m + cj;
+                    let visit_k = self.world_stats[wi].cell_n[idx];
+                    let (blk, gs) = if paired {
+                        (pol_block, shared_pol_seed)
+                    } else {
+                        let b = self.next_block_id;
+                        self.next_block_id += 1;
+                        (b, rng.next())
+                    };
+                    self.task_queue.push_back(TrajTask {
+                        wi,
+                        own_i: ri,
+                        opp_j: cj,
+                        block_id: blk,
+                        game_seed: gs,
+                        cell_visit_k: visit_k,
+                        t1_only_iters: 0,
+                    });
+                }
+            }
+            TrajPhase::T1Polish => {
+                self.refresh_current_solution();
+                let wi = self.pick_world_by_deficit(|ws| ws.t1_batches);
+                self.world_stats[wi].t1_batches += 1;
+                let w_id = self.s2_world_ids[wi];
+                let m = self.worlds[w_id].opp_canon.len();
+
+                let sorted_core = |mut t: [u8; 3]| -> [u8; 3] {
+                    t.sort_unstable();
+                    t
+                };
+
+                // Rank own rows and expand all canonical lead permutations of the top 3 active cores
+                // so Turn-1 tactical lead order (e.g. Snorlax vs Marowak lead into Cloyster) is directly evaluated!
+                let mut own_ranked: Vec<usize> = (0..n_own).collect();
+                own_ranked.sort_by(|&a, &b| {
+                    self.sol_cur.own_policy[b]
+                        .total_cmp(&self.sol_cur.own_policy[a])
+                        .then_with(|| self.sol_cur.row_vs_q[b].total_cmp(&self.sol_cur.row_vs_q[a]))
+                });
+                let mut active_rows: Vec<usize> = Vec::with_capacity(12);
+                let mut own_cores: Vec<[u8; 3]> = Vec::with_capacity(4);
+                for &ri in &own_ranked {
+                    let core = sorted_core(self.own_canon[ri].1);
+                    if !own_cores.contains(&core) && own_cores.len() < 3 {
+                        own_cores.push(core);
+                        for i2 in 0..n_own {
+                            if sorted_core(self.own_canon[i2].1) == core && !active_rows.contains(&i2) {
+                                active_rows.push(i2);
+                            }
+                        }
+                    }
+                    if !active_rows.contains(&ri) && active_rows.len() < 10 {
+                        active_rows.push(ri);
+                    }
+                    if active_rows.len() >= 10 && own_cores.len() >= 3 {
+                        break;
+                    }
+                }
+                active_rows.truncate(10);
+                if active_rows.is_empty() {
+                    active_rows.push(0);
+                }
+
+                let mut opp_ranked: Vec<usize> = (0..m).collect();
+                opp_ranked.sort_by(|&a, &b| {
+                    self.sol_cur.opp_policies[wi][b]
+                        .total_cmp(&self.sol_cur.opp_policies[wi][a])
+                        .then_with(|| {
+                            self.sol_cur.col_vs_p[wi][a].total_cmp(&self.sol_cur.col_vs_p[wi][b])
+                        })
+                });
+                let mut active_cols: Vec<usize> = Vec::with_capacity(12);
+                let mut opp_cores: Vec<[u8; 3]> = Vec::with_capacity(4);
+                for &cj in &opp_ranked {
+                    let core = sorted_core(self.worlds[w_id].opp_canon[cj].1);
+                    if !opp_cores.contains(&core) && opp_cores.len() < 3 {
+                        opp_cores.push(core);
+                        for j2 in 0..m {
+                            if sorted_core(self.worlds[w_id].opp_canon[j2].1) == core
+                                && !active_cols.contains(&j2)
+                            {
+                                active_cols.push(j2);
+                            }
+                        }
+                    }
+                    if !active_cols.contains(&cj) && active_cols.len() < 10 {
+                        active_cols.push(cj);
+                    }
+                    if active_cols.len() >= 10 && opp_cores.len() >= 3 {
+                        break;
+                    }
+                }
+                active_cols.truncate(10);
+                if active_cols.is_empty() {
+                    active_cols.push(0);
+                }
+
+                let mut scored: Vec<(usize, usize, u32, f64)> =
+                    Vec::with_capacity(active_rows.len() * active_cols.len());
+                for &ri in &active_rows {
+                    let pw = self.sol_cur.own_policy[ri]
+                        + (self.sol_cur.row_vs_q[ri] - self.sol_cur.value + 0.10).max(0.01);
+                    for &cj in &active_cols {
+                        let qw = self.sol_cur.opp_policies[wi][cj]
+                            + (self.sol_cur.world_values[wi] - self.sol_cur.col_vs_p[wi][cj] + 0.10)
+                                .max(0.01);
+                        let tn = self.world_stats[wi].t1_n[ri * m + cj];
+                        scored.push((ri, cj, tn, pw * qw));
+                    }
+                }
+                scored.sort_by(|a, b| a.2.cmp(&b.2).then_with(|| b.3.total_cmp(&a.3)));
+
+                let t1_iters = self.cfg.t1_polish_iters.max(64);
+                let blk = self.next_block_id;
+                self.next_block_id += 1;
+                let shared_seed = rng.next();
+                for &(ri, cj, tn, _) in scored.iter().take(8) {
+                    self.task_queue.push_back(TrajTask {
+                        wi,
+                        own_i: ri,
+                        opp_j: cj,
+                        block_id: blk,
+                        game_seed: shared_seed,
+                        cell_visit_k: tn,
+                        t1_only_iters: t1_iters,
+                    });
+                }
+            }
+        }
+    }
+
+    fn record_completed_game(
+        &mut self,
+        wi: usize,
+        own_i: usize,
+        opp_j: usize,
+        block_id: u32,
+        val0: f64,
+    ) {
+        let val_mine = if self.side == 0 { val0 } else { 1.0 - val0 };
+        let m = self.worlds[self.s2_world_ids[wi]].opp_canon.len();
+        let idx = own_i * m + opp_j;
+        self.world_stats[wi].cell_n[idx] += 1;
+        self.world_stats[wi].cell_sum[idx] += val_mine;
+        self.obs_log.push(TrajObs {
+            wi: wi as u16,
+            own_i: own_i as u16,
+            opp_j: opp_j as u16,
+            block_id,
+            val_mine,
+        });
+        self.games_completed += 1;
+        self.sol_dirty = true;
+    }
+
+    /// Execute exactly ONE PUCT iteration across the interleaved Trajectory-DO engine.
+    /// Bit-identically slice-invariant (`step_one` × N == chunked calls).
+    /// Returns `(own_orig_idx, opp_choice, val0, val_mine, depth)`.
+    pub fn step_one(&mut self, rng: &mut SplitMix64) -> (usize, SearchChoice, f64, f64, u32) {
+        let n_slots = self.active_slots.len();
+        loop {
+            if self.active_slots[self.cur_slot].is_none() {
+                if self.task_queue.is_empty() {
+                    self.enqueue_next_batch(rng);
+                }
+                let task = self.task_queue.pop_front().unwrap();
+                let w_id = self.s2_world_ids[task.wi];
+                let wd = &self.worlds[w_id];
+                let (ref roster, ref pcache) = wd.compact.as_ref().unwrap();
+                let own_t = self.own_canon[task.own_i].1;
+                let opp_t = wd.opp_canon[task.opp_j].1;
+                let picks = if self.side == 0 {
+                    [own_t, opp_t]
+                } else {
+                    [opp_t, own_t]
+                };
+                self.active_slots[self.cur_slot] = Some(ActiveTrajGame::new(
+                    task.wi,
+                    task.own_i,
+                    task.opp_j,
+                    task.block_id,
+                    roster,
+                    pcache,
+                    picks,
+                    task.game_seed,
+                    task.cell_visit_k,
+                    self.cfg.crn_mode,
+                    task.t1_only_iters,
+                ));
+            }
+
+            let mut slot_game = self.active_slots[self.cur_slot].take().unwrap();
+            if !slot_game.turn_ready {
+                if let Some((v0, _rb)) = slot_game.prepare_next_turn(&self.cfg, &mut self.scratch) {
+                    let wi = slot_game.wi;
+                    let own_i = slot_game.own_i;
+                    let opp_j = slot_game.opp_j;
+                    let blk = slot_game.block_id;
+                    self.record_completed_game(wi, own_i, opp_j, blk, v0);
+                    self.cur_slot = (self.cur_slot + 1) % n_slots;
+                    // Game ended on forced turn / RB exit without spending a PUCT iter; keep looping
+                    // until we perform 1 real PUCT iteration (guaranteed bounded).
+                    continue;
+                }
+            }
+
+            let (val0, depth, added) = self.scratch.step_puct_iter(
+                &slot_game.turn_root_cb,
+                &slot_game.table,
+                &slot_game.cache,
+                slot_game.turn_cap,
+                self.cfg.c_puct,
+                self.cfg.fpu_red,
+                self.cfg.puct_eps,
+                self.cfg.use_cf_policy,
+                self.cfg.leaf_temp,
+                &mut slot_game.turn_rng,
+            );
+            self.total_nodes += added;
+            self.iters_done += 1;
+            slot_game.turn_iters_done += 1;
+            if slot_game.t1_only_iters > 0
+                && slot_game.turn_iters_done.saturating_mul(2) > slot_game.turn_target_iters
+            {
+                slot_game.t1_late_sum += val0;
+                slot_game.t1_late_n += 1;
+            }
+
+            let wi = slot_game.wi;
+            let own_i = slot_game.own_i;
+            let opp_j = slot_game.opp_j;
+            let opp_t = self.worlds[self.s2_world_ids[wi]].opp_canon[opp_j].1;
+
+            if slot_game.turn_iters_done >= slot_game.turn_target_iters {
+                if slot_game.t1_only_iters > 0 {
+                    let final_v0 = if slot_game.t1_late_n > 0 {
+                        (slot_game.t1_late_sum / f64::from(slot_game.t1_late_n)).clamp(0.0, 1.0)
+                    } else {
+                        self.scratch.readout_turn().1
+                    };
+                    let val_mine_t1 = if self.side == 0 { final_v0 } else { 1.0 - final_v0 };
+                    let m = self.worlds[self.s2_world_ids[wi]].opp_canon.len();
+                    let idx = own_i * m + opp_j;
+                    self.world_stats[wi].t1_n[idx] += 1;
+                    self.world_stats[wi].t1_sum[idx] += val_mine_t1;
+                    self.sol_dirty = true;
+                } else if let Some((final_v0, _rb)) = slot_game.finish_turn(&self.scratch) {
+                    self.record_completed_game(wi, own_i, opp_j, slot_game.block_id, final_v0);
+                } else {
+                    self.active_slots[self.cur_slot] = Some(slot_game);
+                }
+                // Switch to next slot strictly at a turn boundary so `self.scratch` stays single-instance.
+                self.cur_slot = (self.cur_slot + 1) % n_slots;
+            } else {
+                self.active_slots[self.cur_slot] = Some(slot_game);
+            }
+
+            let val_mine = if self.side == 0 { val0 } else { 1.0 - val0 };
+            let own_orig_idx = self.own_canon[own_i].0;
+            return (own_orig_idx, SearchChoice::Team(opp_t), val0, val_mine, depth);
+        }
+    }
+
+    /// Solve the final execution policy over the full 100% posterior (read-only).
+    /// Returns `(sub_pol, final_sol, pure_guarantee, mixed_guarantee, used_mix)`.
+    fn solve_final_policy(
+        &self,
+        done: u32,
+    ) -> (Vec<f64>, BayesianRmSolution, f64, f64, bool) {
+        self.solve_final_policy_with_mode(done, self.cfg.policy_mode)
+    }
+
+    /// Read-only execution distribution over canonical legal preview picks.
+    /// Exact match to the distribution sampled by `best_choice(decision_seed, done)`.
+    pub fn execution_policy(&self, done: u32) -> Vec<(SearchChoice, f64)> {
+        let (sub_pol, _, _, _, _) = self.solve_final_policy(done);
+        let mut out = Vec::with_capacity(sub_pol.len());
+        for (i, &pr) in sub_pol.iter().enumerate() {
+            if pr > 0.0 {
+                out.push((self.my_acts[self.own_canon[i].0], pr));
+            }
+        }
+        if out.is_empty() {
+            vec![(self.my_acts[self.own_canon[0].0], 1.0)]
+        } else {
+            out
+        }
+    }
+
+    /// Deterministic choice readout over the full 100% posterior.
+    pub fn best_choice(&self, decision_seed: u64, done: u32) -> SearchChoice {
+        let (sub_pol, _, _, _, _) = self.solve_final_policy(done);
+        let draw = SplitMix64::new(decision_seed ^ u64::from(done)).next_f64();
+        let picked = sample_dist(&sub_pol, draw);
+        self.my_acts[self.own_canon[picked].0]
+    }
+
+    /// Read-only diagnostic readout under an alternative `TrajPolicyMode` without re-running trajectories.
+    /// Returns `(policy_entries, nash_value, pure_guarantee, mixed_guarantee, used_mix)`.
+    pub fn readout_with_policy_mode(
+        &self,
+        done: u32,
+        mode: TrajPolicyMode,
+    ) -> (Vec<(SearchChoice, f64)>, f64, f64, f64, bool) {
+        let (sub_pol, final_sol, pure_g, mix_g, used_mix) =
+            self.solve_final_policy_with_mode(done, mode);
+        let mut out = Vec::with_capacity(sub_pol.len());
+        for (i, &pr) in sub_pol.iter().enumerate() {
+            if pr > 0.0 {
+                out.push((self.my_acts[self.own_canon[i].0], pr));
+            }
+        }
+        if out.is_empty() {
+            out.push((self.my_acts[self.own_canon[0].0], 1.0));
+        }
+        (out, final_sol.value, pure_g, mix_g, used_mix)
+    }
+
+    /// Public diagnostic accessor for the solved posterior value matrices (one per world).
+    pub fn posterior_matrices(&self) -> Vec<Vec<f64>> {
+        self.build_current_matrices()
+    }
+
+    /// Public diagnostic accessor for the canonical own triples.
+    pub fn own_triples(&self) -> Vec<[u8; 3]> {
+        self.own_canon.iter().map(|&(_, t)| t).collect()
+    }
+
+    /// Public diagnostic accessor for world 0's canonical opponent triples.
+    pub fn opp_triples_w0(&self) -> Vec<[u8; 3]> {
+        self.worlds[self.s2_world_ids[0]]
+            .opp_canon
+            .iter()
+            .map(|&(_, t)| t)
+            .collect()
+    }
+
+    /// Public diagnostic accessor for `iters_done`.
+    pub fn iters_done(&self) -> u32 {
+        self.iters_done
+    }
+
+    /// Public diagnostic accessor for `(worlds_stage1, worlds_stage2)`.
+    pub fn world_counts(&self) -> (usize, usize) {
+        (self.worlds.len(), self.s2_world_ids.len())
+    }
+
+    fn solve_final_policy_with_mode(
+        &self,
+        done: u32,
+        mode: TrajPolicyMode,
+    ) -> (Vec<f64>, BayesianRmSolution, f64, f64, bool) {
+        let n_own = self.own_canon.len();
+        let n_w2 = self.s2_world_ids.len();
+        let sweeps = if done >= 4096 {
+            self.cfg.rm_sweeps_final
+        } else {
+            self.cfg.rm_sweeps_do
+        };
+        let mats = self.build_current_matrices();
+        let l2_reg = match mode {
+            TrajPolicyMode::RegRm { l2_reg, .. } => l2_reg,
+            _ => 0.0,
+        };
+        let final_sol = self.solve_full_game_from_mats(&mats, sweeps, l2_reg);
+
+        let best_pure = (0..n_own)
+            .max_by(|&a, &b| {
+                final_sol.row_guarantees[a]
+                    .total_cmp(&final_sol.row_guarantees[b])
+                    .then_with(|| final_sol.row_vs_q[a].total_cmp(&final_sol.row_vs_q[b]))
+            })
+            .unwrap_or(0);
+        let pure_guarantee = final_sol.row_guarantees[best_pure];
+
+        let mut p_mix = match mode {
+            TrajPolicyMode::BayesianBootstrapRm { draws, dust_ratio }
+                if draws > 1 && self.obs_log.len() >= 8 =>
+            {
+                let mut max_blk = 0u32;
+                for o in &self.obs_log {
+                    if o.block_id > max_blk {
+                        max_blk = o.block_id;
+                    }
+                }
+                let n_blk = (max_blk as usize) + 1;
+                let mut blk_seen = vec![false; n_blk];
+                let mut active_blks = Vec::new();
+                for o in &self.obs_log {
+                    let b = o.block_id as usize;
+                    if !blk_seen[b] {
+                        blk_seen[b] = true;
+                        active_blks.push(b);
+                    }
+                }
+                let mut brng = SplitMix64::new(
+                    0xB007_57AA_0000_0001u64
+                        ^ (u64::from(done).wrapping_mul(0x9E37_79B9_7F4A_7C15))
+                        ^ ((self.games_completed as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9)),
+                );
+                let mut blk_w = vec![0.0f64; n_blk];
+                let mut avg_p = vec![0.0f64; n_own];
+                let mut b_n: Vec<Vec<f64>> = self
+                    .world_stats
+                    .iter()
+                    .map(|ws| vec![0.0f64; ws.cell_n.len()])
+                    .collect();
+                let mut b_sum: Vec<Vec<f64>> = self
+                    .world_stats
+                    .iter()
+                    .map(|ws| vec![0.0f64; ws.cell_sum.len()])
+                    .collect();
+                let nb_f = active_blks.len().max(1) as f64;
+                let n_w_tot = n_w2 + self.tail_world_ids.len();
+                // Restrict multi-world / large bootstrap solves to the union of equilibrium support
+                // + top near-optimal rows & columns (keeps W = 24 bootstrap under ~25 ms!).
+                let use_sub = n_w_tot > 1 || n_own > 20;
+                let (sub_rows, sub_cols): (Vec<usize>, Vec<Vec<usize>>) = if use_sub {
+                    let mut rows: Vec<usize> = (0..n_own)
+                        .filter(|&i| final_sol.own_policy[i] >= 0.005)
+                        .collect();
+                    let mut by_q: Vec<usize> = (0..n_own).collect();
+                    by_q.sort_by(|&a, &b| final_sol.row_vs_q[b].total_cmp(&final_sol.row_vs_q[a]));
+                    for i in by_q.into_iter().take(16) {
+                        if !rows.contains(&i) {
+                            rows.push(i);
+                        }
+                    }
+                    let mut by_g: Vec<usize> = (0..n_own).collect();
+                    by_g.sort_by(|&a, &b| {
+                        final_sol.row_guarantees[b].total_cmp(&final_sol.row_guarantees[a])
+                    });
+                    for i in by_g.into_iter().take(4) {
+                        if !rows.contains(&i) {
+                            rows.push(i);
+                        }
+                    }
+                    if rows.is_empty() {
+                        rows.push(0);
+                    }
+                    let mut cols_all = Vec::with_capacity(n_w_tot);
+                    for w in 0..n_w_tot {
+                        let m = final_sol.opp_policies[w].len();
+                        let mut cols: Vec<usize> = (0..m)
+                            .filter(|&j| final_sol.opp_policies[w][j] >= 0.005)
+                            .collect();
+                        let mut by_p: Vec<usize> = (0..m).collect();
+                        by_p.sort_by(|&a, &b| {
+                            final_sol.col_vs_p[w][a].total_cmp(&final_sol.col_vs_p[w][b])
+                        });
+                        for j in by_p.into_iter().take(14) {
+                            if !cols.contains(&j) {
+                                cols.push(j);
+                            }
+                        }
+                        if cols.is_empty() && m > 0 {
+                            cols.push(0);
+                        }
+                        cols_all.push(cols);
+                    }
+                    (rows, cols_all)
+                } else {
+                    (Vec::new(), Vec::new())
+                };
+                let boot_sweeps = if use_sub { 240u32 } else { 320u32 };
+                for _ in 0..draws {
+                    let mut wsum = 0.0;
+                    for &b in &active_blks {
+                        let u = brng.next_f64().clamp(1e-12, 1.0 - 1e-12);
+                        let e = -u.ln();
+                        blk_w[b] = e;
+                        wsum += e;
+                    }
+                    let scale = nb_f / wsum.max(1e-12);
+                    for &b in &active_blks {
+                        blk_w[b] *= scale;
+                    }
+                    for wi in 0..n_w2 {
+                        b_n[wi].fill(0.0);
+                        b_sum[wi].fill(0.0);
+                    }
+                    for o in &self.obs_log {
+                        let wi = o.wi as usize;
+                        let m = self.worlds[self.s2_world_ids[wi]].opp_canon.len();
+                        let idx = (o.own_i as usize) * m + (o.opp_j as usize);
+                        let w = blk_w[o.block_id as usize];
+                        b_n[wi][idx] += w;
+                        b_sum[wi][idx] += w * o.val_mine;
+                    }
+                    let bmats = self.build_posterior_matrices_from_stats(&b_n, &b_sum);
+                    if use_sub {
+                        let kr = sub_rows.len();
+                        let mut sub_mats: Vec<Vec<f64>> = Vec::with_capacity(n_w_tot);
+                        let mut sub_lens: Vec<usize> = Vec::with_capacity(n_w_tot);
+                        let mut sub_ws: Vec<f64> = Vec::with_capacity(n_w_tot);
+                        for w in 0..n_w_tot {
+                            let m_full = if w < n_w2 {
+                                self.worlds[self.s2_world_ids[w]].opp_canon.len()
+                            } else {
+                                self.worlds[self.tail_world_ids[w - n_w2]].opp_canon.len()
+                            };
+                            let kc = sub_cols[w].len();
+                            let mut sm = vec![0.5f64; kr * kc];
+                            for (ri, &orig_i) in sub_rows.iter().enumerate() {
+                                for (cj, &orig_j) in sub_cols[w].iter().enumerate() {
+                                    sm[ri * kc + cj] = bmats[w][orig_i * m_full + orig_j];
+                                }
+                            }
+                            sub_mats.push(sm);
+                            sub_lens.push(kc);
+                            sub_ws.push(if w < n_w2 {
+                                self.s2_post_weights[w]
+                            } else {
+                                self.tail_post_weights[w - n_w2]
+                            });
+                        }
+                        let slices: Vec<(f64, usize, &[f64])> = (0..n_w_tot)
+                            .map(|w| (sub_ws[w], sub_lens[w], sub_mats[w].as_slice()))
+                            .collect();
+                        let bsol = solve_bayesian_rm_plus(kr, &slices, boot_sweeps);
+                        for (ri, &orig_i) in sub_rows.iter().enumerate() {
+                            avg_p[orig_i] += bsol.own_policy[ri] / (draws as f64);
+                        }
+                    } else {
+                        let bsol = self.solve_full_game_from_mats(&bmats, boot_sweeps, 0.0);
+                        for i in 0..n_own {
+                            avg_p[i] += bsol.own_policy[i] / (draws as f64);
+                        }
+                    }
+                }
+                shed_dust(&mut avg_p, dust_ratio);
+                avg_p
+            }
+            TrajPolicyMode::MixedNash { dust_ratio }
+            | TrajPolicyMode::RegRm { dust_ratio, .. }
+            | TrajPolicyMode::LcbGatedMixed { dust_ratio, .. }
+            | TrajPolicyMode::BayesianBootstrapRm { dust_ratio, .. } => {
+                let mut p = final_sol.own_policy.clone();
+                shed_dust(&mut p, dust_ratio);
+                p
+            }
+        };
+
+        let psum: f64 = p_mix.iter().sum();
+        if psum <= 0.0 {
+            p_mix = vec![0.0; n_own];
+            p_mix[best_pure] = 1.0;
+        } else {
+            for x in &mut p_mix {
+                *x /= psum;
+            }
+        }
+
+        let (lcb_z, use_neff) = match mode {
+            TrajPolicyMode::LcbGatedMixed {
+                lcb_z, use_neff, ..
+            } => (lcb_z, use_neff),
+            _ => (0.0, true),
+        };
+        let mut mixed_guarantee = 0.0;
+        let mut mixed_guarantee_lcb = 0.0;
+        for wi in 0..n_w2 {
+            let m = self.worlds[self.s2_world_ids[wi]].opp_canon.len();
+            let mat = &mats[wi];
+            let mut min_col = f64::INFINITY;
+            let mut min_col_lcb = f64::INFINITY;
+            for j in 0..m {
+                let mut mean_j = 0.0;
+                let mut var_j = 0.0;
+                for i in 0..n_own {
+                    let pr = p_mix[i];
+                    if pr > 0.0 {
+                        mean_j += pr * mat[i * m + j];
+                        let n_raw = f64::from(self.world_stats[wi].cell_n[i * m + j]);
+                        let n_c = if use_neff {
+                            (n_raw + self.cfg.kappa).max(1.0)
+                        } else {
+                            n_raw.max(1.0)
+                        };
+                        var_j += (pr * pr) * (0.12 / n_c);
+                    }
+                }
+                if mean_j < min_col {
+                    min_col = mean_j;
+                }
+                let lcb_j = mean_j - lcb_z * var_j.sqrt();
+                if lcb_j < min_col_lcb {
+                    min_col_lcb = lcb_j;
+                }
+            }
+            mixed_guarantee += self.s2_post_weights[wi] * min_col;
+            mixed_guarantee_lcb += self.s2_post_weights[wi] * min_col_lcb;
+        }
+        for (ti, &w_id) in self.tail_world_ids.iter().enumerate() {
+            let m = self.worlds[w_id].opp_canon.len();
+            let mat = &mats[n_w2 + ti];
+            let mut min_col = f64::INFINITY;
+            for j in 0..m {
+                let mut mean_j = 0.0;
+                for i in 0..n_own {
+                    let pr = p_mix[i];
+                    if pr > 0.0 {
+                        mean_j += pr * mat[i * m + j];
+                    }
+                }
+                if mean_j < min_col {
+                    min_col = mean_j;
+                }
+            }
+            mixed_guarantee += self.tail_post_weights[ti] * min_col;
+            mixed_guarantee_lcb += self.tail_post_weights[ti] * min_col;
+        }
+
+        let n_supp = p_mix.iter().filter(|&&x| x > 0.0).count();
+        let use_mix = match mode {
+            TrajPolicyMode::LcbGatedMixed { min_mix_margin, .. } => {
+                n_supp > 1
+                    && mixed_guarantee > pure_guarantee + min_mix_margin
+                    && mixed_guarantee_lcb > pure_guarantee - 0.005
+            }
+            TrajPolicyMode::MixedNash { .. }
+            | TrajPolicyMode::RegRm { .. }
+            | TrajPolicyMode::BayesianBootstrapRm { .. } => n_supp > 1,
+        };
+
+        let mut sub_pol = vec![0.0f64; n_own];
+        if use_mix {
+            sub_pol.copy_from_slice(&p_mix);
+        } else {
+            sub_pol[best_pure] = 1.0;
+        }
+        (sub_pol, final_sol, pure_guarantee, mixed_guarantee, use_mix)
+    }
+}
+
+/// Solve Turn-0 Team Preview using the Live Trajectory-DO engine (`SteppedTrajPreview`).
+/// Guarantees bit-for-bit parity with stepped execution and zero hidden-information leakage.
+pub fn solve_traj_preview(
+    position: &ObservedPosition,
+    dex: &Dex,
+    belief: &Belief,
+    obs: &crate::observe::Observer,
+    side: usize,
+    cfg: &TrajPreviewConfig,
+    rng: &mut SplitMix64,
+) -> TrajPreviewResult {
+    let t_total = start_timer();
+    let mut base = position.model().clone();
+    assert_eq!(base.request_state, RequestState::TeamPreview);
+    let own_legal = base.legal_choices(dex, side);
+    let n_legal = own_legal.len();
+    let (_, own_canon) = canonical_preview_actions(dex, &mut base, side);
+    if own_canon.len() <= 1 {
+        let mut pol = vec![0.0; n_legal];
+        let ch = if let Some(&(idx, _)) = own_canon.first() {
+            pol[idx] = 1.0;
+            own_legal[idx]
+        } else {
+            pol[0] = 1.0;
+            own_legal[0]
+        };
+        return TrajPreviewResult {
+            choice: ch,
+            policy_full: pol,
+            opp_policy_w0: Vec::new(),
+            value: 0.5,
+            pure_guarantee: 0.5,
+            mixed_guarantee: 0.5,
+            duality_gap: 0.0,
+            used_mix: false,
+            used_fallback: false,
+            stage1_ms: 0.0,
+            total_ms: elapsed_ms(t_total),
+            iters_used: 0,
+            games_completed: 0,
+            worlds_stage1: 0,
+            worlds_stage2: 0,
+        };
+    }
+
+    let Some(mut stepped) = SteppedTrajPreview::try_new(
+        &base,
+        dex,
+        belief,
+        obs,
+        side,
+        &own_legal,
+        None,
+        cfg.clone(),
+        rng,
+    ) else {
+        let choice = solve_shipped_preview(
+            position,
+            dex,
+            belief,
+            obs,
+            side,
+            cfg.fallback_iters,
+            SplitMix64::new(rng.next()),
+        );
+        let mut pol = vec![0.0; n_legal];
+        if let Some(pos) = own_legal.iter().position(|&c| c == choice) {
+            pol[pos] = 1.0;
+        }
+        return TrajPreviewResult {
+            choice,
+            policy_full: pol,
+            opp_policy_w0: Vec::new(),
+            value: 0.5,
+            pure_guarantee: 0.5,
+            mixed_guarantee: 0.5,
+            duality_gap: 0.0,
+            used_mix: false,
+            used_fallback: true,
+            stage1_ms: 0.0,
+            total_ms: elapsed_ms(t_total),
+            iters_used: cfg.fallback_iters,
+            games_completed: 0,
+            worlds_stage1: 0,
+            worlds_stage2: 0,
+        };
+    };
+
+    for _ in 0..cfg.total_iters {
+        stepped.step_one(rng);
+    }
+    let (sub_pol, final_sol, pure_guarantee, mixed_guarantee, used_mix) =
+        stepped.solve_final_policy(stepped.iters_done);
+    let draw = rng.next_f64();
+    let picked = sample_dist(&sub_pol, draw);
+    let mut policy_full = vec![0.0f64; n_legal];
+    for (i, &pr) in sub_pol.iter().enumerate() {
+        policy_full[stepped.own_canon[i].0] = pr;
+    }
+    let choice = stepped.my_acts[stepped.own_canon[picked].0];
+    let opp_policy_w0 = final_sol.opp_policies.first().cloned().unwrap_or_default();
+
+    TrajPreviewResult {
+        choice,
+        policy_full,
+        opp_policy_w0,
+        value: final_sol.value,
+        pure_guarantee,
+        mixed_guarantee,
+        duality_gap: final_sol.duality_gap,
+        used_mix,
+        used_fallback: false,
+        stage1_ms: stepped.stage1_ms,
+        total_ms: elapsed_ms(t_total),
+        iters_used: stepped.iters_done,
+        games_completed: stepped.games_completed,
+        worlds_stage1: stepped.worlds.len(),
+        worlds_stage2: stepped.s2_world_ids.len(),
     }
 }
 
@@ -3810,5 +8561,324 @@ mod tests {
             "legacy best choice {legacy_input} not in execution policy support {:?}",
             exec_pol.actions()
         );
+    }
+
+    #[test]
+    fn traj_do_slice_invariance_zero_leak_hazards_multiworld_and_parity() {
+        use crate::decision::DecisionPolicy;
+
+        let dex = conformance::load_dex();
+        let t_own = vec![
+            mk("Snorlax", 55, "Leftovers", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+            mk("Zapdos", 55, "Leftovers", &["Thunderbolt", "Hidden Power Ice", "Whirlwind", "Rest"]),
+            mk("Cloyster", 50, "Leftovers", &["Surf", "Spikes", "Explosion", "Rapid Spin"]),
+            mk("Heracross", 50, "Focus Band", &["Megahorn", "Endure", "Curse", "Reversal"]),
+            mk("Gengar", 50, "Leftovers", &["Thunderbolt", "Ice Punch", "Destiny Bond", "Explosion"]),
+            mk("Skarmory", 50, "Leftovers", &["Drill Peck", "Whirlwind", "Rest", "Curse"]),
+        ];
+        let t_opp_a = vec![
+            mk("Raikou", 50, "Leftovers", &["Thunderbolt", "Hidden Power Ice", "Roar", "Rest"]),
+            mk("Suicune", 50, "Leftovers", &["Surf", "Ice Beam", "Rest", "Sleep Talk"]),
+            mk("Exeggutor", 50, "Leftovers", &["Psychic", "Giga Drain", "Sleep Powder", "Explosion"]),
+            mk("Tyranitar", 50, "Leftovers", &["Rock Slide", "Crunch", "Earthquake", "Pursuit"]),
+            mk("Snorlax", 55, "Leftovers", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+            mk("Umbreon", 50, "Leftovers", &["Mean Look", "Charm", "Rest", "Baton Pass"]),
+        ];
+        let mut t_opp_b = t_opp_a.clone();
+        t_opp_b[0] = mk("Raikou", 50, "Magnet", &["Thunder", "Crunch", "Reflect", "Rest"]);
+        t_opp_b[2] = mk("Exeggutor", 50, "Mint Berry", &["Psychic", "Stun Spore", "Leech Seed", "Rest"]);
+
+        // 1. Tactical endgame hazard detector catches Endure+Reversal+FocusBand & Destiny Bond,
+        //    and returns false on a clean non-hazard endgame.
+        {
+            let b_haz = Battle::from_fixture(&dex, "1,2,3,4", &t_own, &t_opp_a).unwrap();
+            let r_haz = CompactPreviewRoster::from_battle(&b_haz, &dex, None);
+            let (tbl_h, cb_h) = r_haz.build_turn1([[4, 1, 2], [1, 2, 4]], 0);
+            assert!(
+                has_tactical_endgame_hazard(&cb_h, &tbl_h),
+                "Heracross Endure+Reversal+FocusBand must trigger tactical hazard guard"
+            );
+            let (tbl_c, mut cb_c) = r_haz.build_turn1([[1, 2, 6], [1, 2, 4]], 0);
+            // Eliminate bench slots except clean non-hazard Tyranitar (slot 2) vs Snorlax (slot 0) on turn 1.
+            cb_c.sides[0].alive_mask = 1 << 0;
+            cb_c.sides[1].alive_mask = 1 << 2;
+            cb_c.sides[1].active_idx = 2;
+            assert!(
+                !has_tactical_endgame_hazard(&cb_c, &tbl_c),
+                "Clean Snorlax (Rest 16PP) vs Tyranitar on turn 1 should be hazard-free"
+            );
+        }
+
+        // 2. Cholesky SPD solver & L2-regularized RM+ sanity checks.
+        {
+            let mut ata = [[0.0f64; MAX_RIDGE_DIM]; MAX_RIDGE_DIM];
+            let mut atb = [0.0f64; MAX_RIDGE_DIM];
+            ata[0][0] = 4.0;
+            ata[0][1] = 1.0;
+            ata[1][0] = 1.0;
+            ata[1][1] = 3.0;
+            atb[0] = 6.0;
+            atb[1] = 5.0;
+            let w = solve_spd_cholesky(2, &ata, &atb, 1.0, 2.0, 4.0);
+            // System: 5*w0 + 1*w1 = 6, 1*w0 + 5*w1 = 5 => w0 = 25/24, w1 = 19/24.
+            assert!((w[0] - 25.0 / 24.0).abs() < 1e-10);
+            assert!((w[1] - 19.0 / 24.0).abs() < 1e-10);
+
+            let rps = [0.5, 0.0, 1.0, 1.0, 0.5, 0.0, 0.0, 1.0, 0.5];
+            let sol = solve_bayesian_rm_plus_reg(3, &[(1.0, 3, &rps)], 800, 0.02);
+            for &p in &sol.own_policy {
+                assert!((p - 1.0 / 3.0).abs() < 0.02, "RegRm RPS drift: {:?}", sol.own_policy);
+            }
+        }
+
+        // 3. Multi-world (W = 2) zero hidden-info leakage, level-cap compliance, and exact slice invariance!
+        let pool = Arc::new(MetaPool {
+            teams: vec![
+                MetaTeam { id: "opp-a".into(), sets: t_opp_a.clone(), weight: Some(0.65) },
+                MetaTeam { id: "opp-b".into(), sets: t_opp_b.clone(), weight: Some(0.35) },
+            ],
+        });
+        let test_cfg = TrajPreviewConfig {
+            total_iters: 1024,
+            iters_per_turn: 16,
+            rb_exit: RbExitMode::SearchVroot { max_alive: 3, eval_iters: 16 },
+            ridge_basis: TrajRidgeBasis::Interact33,
+            policy_mode: TrajPolicyMode::BayesianBootstrapRm { draws: 8, dust_ratio: 0.12 },
+            max_stage2_worlds: 2,
+            ..Default::default()
+        };
+
+        let run_batch = |opp_sets: &[PokemonSet]| {
+            let mut b = Battle::from_fixture(&dex, "1,2,3,4", &t_own, opp_sets).unwrap();
+            let (mut lp, mut obs) = LocalPlayer::new_with_own_sets(&b, &dex, 0, t_own.clone()).unwrap();
+            lp.observe(&b, &dex, &mut obs).unwrap();
+            let mut belief = Belief::new(&dex, &pool, &obs);
+            belief.sync(&dex, &obs);
+            let mut rng = SplitMix64::new(20261126);
+            let pos = lp.position(&dex, &mut belief, &obs, &mut rng).unwrap();
+            let res = solve_traj_preview(&pos, &dex, &belief, &obs, 0, &test_cfg, &mut rng);
+            let legal = b.legal_choices(&dex, 0);
+            assert!(legal.contains(&res.choice), "illegal Traj-DO choice {:?}", res.choice);
+            if let SearchChoice::Team(t) = res.choice {
+                let sum_lv: u32 = t.iter().filter(|&&s| s != 0).map(|&s| u32::from(t_own[s as usize - 1].level)).sum();
+                assert!(sum_lv <= 155, "exceeded 155 cap: {t:?} -> {sum_lv}");
+            }
+            assert!(!res.used_fallback);
+            assert_eq!(res.worlds_stage1, 2);
+            assert_eq!(res.worlds_stage2, 2);
+            res
+        };
+        let ra = run_batch(&t_opp_a);
+        let rb = run_batch(&t_opp_b);
+        assert_eq!(ra.choice, rb.choice, "Traj-DO leaked hidden opponent moves/items");
+        assert_eq!(ra.policy_full, rb.policy_full, "Traj-DO policy must be bit-identical under hidden mutation");
+
+        // 4. Bit-identical slice invariance (`step(1)*256 == step(64)*4 == step(256)`),
+        //    early action diversity, mask_actions, and execution_policy == best_choice parity!
+        let b = Battle::from_fixture(&dex, "1,2,3,4", &t_own, &t_opp_a).unwrap();
+        let (mut lp, mut obs) = LocalPlayer::new_with_own_sets(&b, &dex, 0, t_own.clone()).unwrap();
+        lp.observe(&b, &dex, &mut obs).unwrap();
+        let mut belief = Belief::new(&dex, &pool, &obs);
+        belief.sync(&dex, &obs);
+        let pos = lp.position(&dex, &mut belief, &obs, &mut SplitMix64::new(99)).unwrap();
+        let mut mclone = pos.model().clone();
+        let acts = mclone.legal_choices(&dex, 0);
+
+        let mk_stepped = |mask: Option<&[bool]>| -> (SteppedTrajPreview, SplitMix64) {
+            let mut rng = SplitMix64::new(7777);
+            let st = SteppedTrajPreview::try_new(
+                pos.model(),
+                &dex,
+                &belief,
+                &obs,
+                0,
+                &acts,
+                mask,
+                test_cfg.clone(),
+                &mut rng,
+            )
+            .unwrap();
+            (st, rng)
+        };
+
+        let (mut s1, mut r1) = mk_stepped(None);
+        let mut visited_acts = std::collections::HashSet::new();
+        for _ in 0..256 {
+            let (idx, _, _, _, _) = s1.step_one(&mut r1);
+            visited_acts.insert(idx);
+        }
+        assert!(visited_acts.len() >= 2, "must span >= 2 actions within 256 steps");
+        assert!(s1.node_count() > 0);
+
+        let (mut s2, mut r2) = mk_stepped(None);
+        for _ in 0..4 {
+            for _ in 0..64 {
+                s2.step_one(&mut r2);
+            }
+        }
+        assert_eq!(s1.node_count(), s2.node_count());
+        assert_eq!(s1.execution_policy(256), s2.execution_policy(256));
+        for seed in 0u64..128 {
+            assert_eq!(s1.best_choice(seed, 256), s2.best_choice(seed, 256));
+        }
+        let entries = s1.execution_policy(256);
+        let dp = DecisionPolicy::new("traj-test", entries.iter().copied()).unwrap();
+        for seed in 0u64..128 {
+            let draw = SplitMix64::new(seed ^ 256u64).next_f64();
+            assert_eq!(dp.sample(draw), s1.best_choice(seed, 256));
+        }
+
+        // Mask legality check: masked actions never visited or chosen.
+        let mut allowed = vec![false; acts.len()];
+        allowed[0] = true;
+        allowed[3] = true;
+        allowed[7] = true;
+        let (mut sm, mut rm) = mk_stepped(Some(&allowed));
+        for _ in 0..128 {
+            let (idx, _, _, _, _) = sm.step_one(&mut rm);
+            assert!(allowed[idx], "stepped Traj-DO visited masked action {idx}");
+        }
+        let chosen = sm.best_choice(42, 128);
+        let cidx = acts.iter().position(|&c| c == chosen).unwrap();
+        assert!(allowed[cidx], "best_choice returned masked action");
+
+        // 5. 2-mon team edge case (`triple[2] == 0`).
+        let small = vec![t_own[2].clone(), t_own[4].clone()];
+        let mut b_sm = Battle::from_fixture(&dex, "1,2,3,4", &small, &small).unwrap();
+        let (mut lp_s, mut obs_s) = LocalPlayer::new_with_own_sets(&b_sm, &dex, 0, small.clone()).unwrap();
+        lp_s.observe(&b_sm, &dex, &mut obs_s).unwrap();
+        let mut bel_s = Belief::new(&dex, &pool, &obs_s);
+        bel_s.sync(&dex, &obs_s);
+        let mut rng_s = SplitMix64::new(88);
+        let pos_s = lp_s.position(&dex, &mut bel_s, &obs_s, &mut rng_s).unwrap();
+        let cfg_s = TrajPreviewConfig {
+            total_iters: 128,
+            iters_per_turn: 16,
+            ..test_cfg
+        };
+        let res_s = solve_traj_preview(&pos_s, &dex, &bel_s, &obs_s, 0, &cfg_s, &mut rng_s);
+        assert!(b_sm.legal_choices(&dex, 0).contains(&res_s.choice));
+    }
+
+    #[test]
+    fn stepped_calib_preview_phase_boundary_slice_invariance_and_zero_leak() {
+        use crate::decision::DecisionPolicy;
+        let dex = conformance::load_dex();
+        let t_a = vec![
+            mk("Snorlax", 55, "Leftovers", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+            mk("Zapdos", 50, "Leftovers", &["Thunderbolt", "Hidden Power Ice", "Rest", "Sleep Talk"]),
+            mk("Cloyster", 50, "Leftovers", &["Surf", "Spikes", "Explosion", "Rapid Spin"]),
+            mk("Marowak", 50, "Thick Club", &["Earthquake", "Rock Slide", "Swords Dance", "Hidden Power Bug"]),
+            mk("Gengar", 50, "Leftovers", &["Thunderbolt", "Ice Punch", "Hypnosis", "Explosion"]),
+            mk("Skarmory", 50, "Leftovers", &["Drill Peck", "Whirlwind", "Rest", "Curse"]),
+        ];
+        let t_b1 = vec![
+            mk("Raikou", 50, "Leftovers", &["Thunderbolt", "Hidden Power Ice", "Roar", "Rest"]),
+            mk("Suicune", 50, "Leftovers", &["Surf", "Ice Beam", "Rest", "Sleep Talk"]),
+            mk("Exeggutor", 50, "Leftovers", &["Psychic", "Giga Drain", "Sleep Powder", "Explosion"]),
+            mk("Tyranitar", 50, "Leftovers", &["Rock Slide", "Crunch", "Earthquake", "Pursuit"]),
+            mk("Snorlax", 55, "Leftovers", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+            mk("Umbreon", 50, "Leftovers", &["Pursuit", "Charm", "Rest", "Baton Pass"]),
+        ];
+        let t_b2 = vec![
+            mk("Raikou", 50, "Leftovers", &["Thunder", "Crunch", "Rest", "Sleep Talk"]),
+            mk("Suicune", 50, "Leftovers", &["Hydro Pump", "Ice Beam", "Toxic", "Rest"]),
+            mk("Exeggutor", 50, "Leftovers", &["Psychic", "Stun Spore", "Leech Seed", "Explosion"]),
+            mk("Tyranitar", 50, "Leftovers", &["Rock Slide", "Fire Blast", "Dynamic Punch", "Crunch"]),
+            mk("Snorlax", 55, "Leftovers", &["Double-Edge", "Belly Drum", "Earthquake", "Lovely Kiss"]),
+            mk("Umbreon", 50, "Leftovers", &["Mean Look", "Baton Pass", "Charm", "Rest"]),
+        ];
+        let pool = MetaPool {
+            teams: vec![
+                MetaTeam { id: "tb1".into(), sets: t_b1.clone(), weight: Some(0.6) },
+                MetaTeam { id: "tb2".into(), sets: t_b2.clone(), weight: Some(0.4) },
+            ],
+        };
+
+        let make_env = |opp_sets: &[PokemonSet]| {
+            let b = Battle::from_fixture(&dex, "1,2,3,4", &t_a, opp_sets).unwrap();
+            let (mut lp, mut obs) = LocalPlayer::new_with_own_sets(&b, &dex, 0, t_a.clone()).unwrap();
+            lp.observe(&b, &dex, &mut obs).unwrap();
+            let mut belief = Belief::new(&dex, &pool, &obs);
+            belief.sync(&dex, &obs);
+            let pos = lp.position(&dex, &mut belief, &obs, &mut SplitMix64::new(123)).unwrap();
+            (pos, belief, obs)
+        };
+        let (pos1, bel1, obs1) = make_env(&t_b1);
+        let (pos2, bel2, obs2) = make_env(&t_b2);
+
+        let mk_calib = |model: &Battle, bel: &Belief, obs: &crate::observe::Observer| {
+            let mut rng = SplitMix64::new(2026_0303);
+            let mut model_clone = model.clone();
+            let acts = model_clone.legal_choices(&dex, 0);
+            let mut s = SteppedCfPreview::try_new_with_calib(
+                model,
+                &dex,
+                bel,
+                obs,
+                0,
+                &acts,
+                None,
+                0.4,
+                Some(TrajCalibConfig {
+                    turn1_iters: 16,
+                    iters_per_turn: 16,
+                    rb_eval_iters: 16,
+                    support_k: 6,
+                    ..TrajCalibConfig::default()
+                }),
+                &mut rng,
+            )
+            .unwrap();
+            // Compact total budget so `4096` steps cross `TrajCalib -> Coarse -> DO -> Polish`.
+            s.cfg.total_iters = 4096;
+            s.cfg.coarse_iters = 16;
+            s.cfg.do_iters = 16;
+            s.cfg.polish_chunk = 32;
+            if let Some(ref mut cal) = s.calib {
+                cal.calib_iters = 1600;
+                cal.explore_iters = 800;
+                cal.traj_cfg.total_iters = 1600;
+            }
+            (s, rng)
+        };
+
+        // 1. Exact bit-identical slice invariance across the TrajCalib -> Stage-2 phase boundary.
+        let (mut s_one, mut r_one) = mk_calib(pos1.model(), &bel1, &obs1);
+        for _ in 0..4096 {
+            s_one.step_one(&mut r_one);
+        }
+        assert!(s_one.calib.is_none(), "TrajCalib must finalize and drop scratch state");
+        assert!(!s_one.calib_obs.is_empty(), "TrajCalib must collect CRN calibration observations");
+
+        let (mut s_chunk, mut r_chunk) = mk_calib(pos1.model(), &bel1, &obs1);
+        for _ in 0..64 {
+            for _ in 0..64 {
+                s_chunk.step_one(&mut r_chunk);
+            }
+        }
+        assert_eq!(s_one.node_count(), s_chunk.node_count());
+        assert_eq!(s_one.nash_value(4096), s_chunk.nash_value(4096));
+        assert_eq!(s_one.execution_policy(4096), s_chunk.execution_policy(4096));
+        for seed in 0u64..64 {
+            assert_eq!(s_one.best_choice(seed, 4096), s_chunk.best_choice(seed, 4096));
+        }
+        let entries = s_one.execution_policy(4096);
+        let dp = DecisionPolicy::new("calib-test", entries.iter().copied()).unwrap();
+        for seed in 0u64..64 {
+            let draw = SplitMix64::new(seed ^ 4096u64).next_f64();
+            assert_eq!(dp.sample(draw), s_one.best_choice(seed, 4096));
+        }
+
+        // 2. Zero hidden-info leakage: swapping true opponent hidden moves/items gives bit-identical output.
+        let (mut s_alt, mut r_alt) = mk_calib(pos2.model(), &bel2, &obs2);
+        for _ in 0..4096 {
+            s_alt.step_one(&mut r_alt);
+        }
+        assert_eq!(s_one.execution_policy(4096), s_alt.execution_policy(4096));
+        assert_eq!(s_one.nash_value(4096), s_alt.nash_value(4096));
+        for seed in 0u64..32 {
+            assert_eq!(s_one.best_choice(seed, 4096), s_alt.best_choice(seed, 4096));
+        }
     }
 }

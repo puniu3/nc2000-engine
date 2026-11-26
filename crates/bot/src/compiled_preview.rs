@@ -74,10 +74,10 @@ pub fn castle_key_from_flags(
 }
 
 /// Bump manually ONLY when PS team-preview / search policy intentionally changes.
-pub const POLICY_EPOCH: &str = "policy-v2";
+pub const POLICY_EPOCH: &str = "policy-v3";
 
 /// Bump manually ONLY when Castle PBS team-preview / search policy intentionally changes.
-pub const CASTLE_POLICY_EPOCH: &str = "castle-policy-v2";
+pub const CASTLE_POLICY_EPOCH: &str = "castle-policy-v3";
 
 #[inline]
 pub const fn policy_epoch_for(ruleset: Ruleset) -> &'static str {

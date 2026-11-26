@@ -2080,7 +2080,7 @@ impl BlindSearch {
         {
             if self.cf_preview.is_none() {
                 if self.done == 0 {
-                    self.cf_preview = crate::preview_search::SteppedCfPreview::try_new(
+                    self.cf_preview = crate::preview_search::SteppedCfPreview::try_new_calibrated(
                         &self.base,
                         dex,
                         belief,
