@@ -138,7 +138,7 @@ pub struct PreviewSearchConfig {
 impl Default for PreviewSearchConfig {
     fn default() -> Self {
         Self {
-            total_iters: 240_000,
+            total_iters: 720_000,
             support_k: 12,
             coarse_iters: 128,
             do_rounds: 1,
@@ -2148,9 +2148,9 @@ pub struct TrajCalibConfig {
 impl Default for TrajCalibConfig {
     fn default() -> Self {
         Self {
-            calib_frac: 0.40,
-            turn1_iters: 64,
-            iters_per_turn: 32,
+            calib_frac: 0.65,
+            turn1_iters: 128,
+            iters_per_turn: 128,
             rb_max_alive: 3,
             rb_eval_iters: 64,
             ridge_basis: TrajRidgeBasis::Present19,
@@ -4864,7 +4864,7 @@ pub struct TrajPreviewConfig {
 impl Default for TrajPreviewConfig {
     fn default() -> Self {
         Self {
-            total_iters: 240_000,
+            total_iters: 720_000,
             iters_per_turn: 32,
             turn1_iters: 0,
             rb_exit: RbExitMode::SearchVroot {

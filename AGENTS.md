@@ -14,7 +14,7 @@
 
 - **2-axis epoch tracking**:
   - `ENGINE_EPOCH = 1` in `crates/engine/src/replay.rs` governs compact replay (`NC2-…`) and kifu structural compatibility; bump only on breaking mechanics or replay format changes.
-  - `POLICY_EPOCH = "policy-v3"` (`CASTLE_POLICY_EPOCH = "castle-policy-v3"`) in `crates/bot/src/compiled_preview.rs` governs server-side preview cache identity (`crates/wasm/src/preview_cache.rs`, `tools/preview-cache.js`) and evaluator build versioning (`web/vite.config.ts`). Browser Team Preview runs live search directly (no pre-baked preview table).
+  - `POLICY_EPOCH = "policy-v4"` (`CASTLE_POLICY_EPOCH = "castle-policy-v4"`) in `crates/bot/src/compiled_preview.rs` governs server-side preview cache identity (`crates/wasm/src/preview_cache.rs`, `tools/preview-cache.js`) and evaluator build versioning (`web/vite.config.ts`). Browser Team Preview runs live search directly (no pre-baked preview table).
 - `tools/bundle-core-sdk.js` writes `dist/nc2000-core-sdk/engine-manifest.json` (untracked).
 
 ## 3. Research & Strength Roadmap

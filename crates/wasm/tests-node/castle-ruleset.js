@@ -185,13 +185,13 @@ function padTeam(sets) {
 
   const psSearcher = new wasm.ProtocolSearcher(dex, 0, poolJson, 1, 1.4);
   checkEq(psSearcher.ruleset(), "gen2stadium2", "default ProtocolSearcher uses gen2stadium2");
-  checkEq(psSearcher.compiledPreviewBuild(), "policy-v3", "PS compiledPreviewBuild is policy-v3");
+  checkEq(psSearcher.compiledPreviewBuild(), "policy-v4", "PS compiledPreviewBuild is policy-v4");
   psSearcher.setRuleset("castle");
   checkEq(psSearcher.ruleset(), "castle-free", "setRuleset switches to castle-free");
   checkEq(
     psSearcher.compiledPreviewBuild(),
-    "castle-policy-v3",
-    "Castle compiledPreviewBuild is castle-policy-v3",
+    "castle-policy-v4",
+    "Castle compiledPreviewBuild is castle-policy-v4",
   );
   psSearcher.setRuleset("castle-tournament");
   checkEq(
@@ -213,8 +213,8 @@ function padTeam(sets) {
   checkEq(castleSearcher.ruleset(), "castle-free", "ProtocolSearcher.withRuleset sets Castle unlimited default");
   checkEq(
     castleSearcher.compiledPreviewBuild(),
-    "castle-policy-v3",
-    "ProtocolSearcher.withRuleset reports castle-policy-v3",
+    "castle-policy-v4",
+    "ProtocolSearcher.withRuleset reports castle-policy-v4",
   );
   castleSearcher.free();
 

@@ -22,7 +22,7 @@ const cache = createPreviewCache({
     './crates/wasm/pkg-node/nc2000_wasm_bg.wasm'
   )).digest('hex'),
   dexJson: wasm.embeddedDexJson(), // for new Dex(); pass actual JSON for Dex.fromJson
-  iterations: 240000,
+  iterations: 720000,
   formatId: 'gen2nintendocup2000noohkostadium2strict',
 });
 
