@@ -3312,6 +3312,13 @@ pub(crate) struct StaticMonCache {
     pub(crate) meanlook_slot: u8,
     pub(crate) pursuit_slot: u8,
     pub(crate) healbell_slot: u8,
+    pub(crate) spikes_slot: u8,
+    pub(crate) spin_slot: u8,
+    pub(crate) leech_seed_slot: u8,
+    pub(crate) endure_slot: u8,
+    pub(crate) reversal_slot: u8,
+    pub(crate) screen_mask: u8,
+    pub(crate) weather_mask: u8,
     pub(crate) setup_mask: u8,
     pub(crate) sleep_mask: u8,
     pub(crate) toxic_mask: u8,
@@ -3344,6 +3351,13 @@ impl Default for StaticMonCache {
             meanlook_slot: 0xFF,
             pursuit_slot: 0xFF,
             healbell_slot: 0xFF,
+            spikes_slot: 0xFF,
+            spin_slot: 0xFF,
+            leech_seed_slot: 0xFF,
+            endure_slot: 0xFF,
+            reversal_slot: 0xFF,
+            screen_mask: 0,
+            weather_mask: 0,
             setup_mask: 0,
             sleep_mask: 0,
             toxic_mask: 0,
@@ -3469,6 +3483,13 @@ impl TempoMatchCache {
             let mut meanlook_slot = 0xFFu8;
             let mut pursuit_slot = 0xFFu8;
             let mut healbell_slot = 0xFFu8;
+            let mut spikes_slot = 0xFFu8;
+            let mut spin_slot = 0xFFu8;
+            let mut leech_seed_slot = 0xFFu8;
+            let mut endure_slot = 0xFFu8;
+            let mut reversal_slot = 0xFFu8;
+            let mut screen_mask = 0u8;
+            let mut weather_mask = 0u8;
             let mut setup_mask = 0u8;
             let mut sleep_mask = 0u8;
             let mut toxic_mask = 0u8;
@@ -3515,6 +3536,37 @@ impl TempoMatchCache {
                 if ms.special_kind == SpecialMoveKind::HealBell && healbell_slot == 0xFF {
                     healbell_slot = m as u8;
                 }
+                if ms.special_kind == SpecialMoveKind::Spikes && spikes_slot == 0xFF {
+                    spikes_slot = m as u8;
+                }
+                if ms.special_kind == SpecialMoveKind::RapidSpin && spin_slot == 0xFF {
+                    spin_slot = m as u8;
+                }
+                if (ms.primary_vol & vol_bit::LEECH_SEED) != 0 && leech_seed_slot == 0xFF {
+                    leech_seed_slot = m as u8;
+                }
+                if ms.is_endure && endure_slot == 0xFF {
+                    endure_slot = m as u8;
+                }
+                if ms.special_kind == SpecialMoveKind::FlailReversal && reversal_slot == 0xFF {
+                    reversal_slot = m as u8;
+                }
+                if matches!(
+                    ms.special_kind,
+                    SpecialMoveKind::Reflect
+                        | SpecialMoveKind::LightScreen
+                        | SpecialMoveKind::Safeguard
+                ) {
+                    screen_mask |= 1u8 << m;
+                }
+                if matches!(
+                    ms.special_kind,
+                    SpecialMoveKind::Sandstorm
+                        | SpecialMoveKind::RainDance
+                        | SpecialMoveKind::SunnyDay
+                ) {
+                    weather_mask |= 1u8 << m;
+                }
                 let is_ghost = (table.mons[i].type_mask & (1u32 << (table.ghost_type & 31))) != 0;
                 if (ms.special_kind == SpecialMoveKind::Curse && !is_ghost)
                     || ms.special_kind == SpecialMoveKind::BellyDrum
@@ -3553,6 +3605,13 @@ impl TempoMatchCache {
                 meanlook_slot,
                 pursuit_slot,
                 healbell_slot,
+                spikes_slot,
+                spin_slot,
+                leech_seed_slot,
+                endure_slot,
+                reversal_slot,
+                screen_mask,
+                weather_mask,
                 setup_mask,
                 sleep_mask,
                 toxic_mask,

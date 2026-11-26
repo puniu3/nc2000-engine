@@ -7,7 +7,8 @@
 //! `linear.rs` Schur-Bellman valuation and outer `relay.rs` Baton-Pass Bellman subgame.
 
 use nc2000_engine::compact::{
-    ext_vol_bit, vol_bit, CompactBattle, CompactWeather, ItemStatKind, MatchTable, SpecialMoveKind,
+    ext_vol_bit, get_damage_base_branchless, timer_idx, vol_bit, CompactBattle, CompactWeather,
+    ItemStatKind, MatchTable, SpecialMoveKind, NO_TYPE_ID,
 };
 use nc2000_engine::fxhash::FxHashMap;
 use nc2000_engine::state::Status;
@@ -38,6 +39,33 @@ pub use crate::compact_az_weights::{
     VALUE_SIDE_DIM as AZ_VALUE_SIDE_DIM,
 };
 pub use crate::compact_cf_weights::CF_VALUE_SIDE_DIM as CF_RAW_VALUE_SIDE_DIM;
+
+/// Zero-copy binary record for `CF-V_net v3` CRN counterfactual pairs (`192`-dim/side).
+/// `kind`: `0..=8` = midgame CF perturbations (`apply_cf_perturbation`),
+///         `10` = Turn-1 1-bench-slot compositional swap,
+///         `11` = Turn-1 lead swap.
+/// `is_blind`: `0` = open 3v3 full-game `cfv-0r` label, `1` = 6v6 `BlindAgent` label.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct CfPairRecV3 {
+    pub team_hash_0: u64,
+    pub team_hash_1: u64,
+    pub game_id: u32,
+    pub turn: u16,
+    pub n0: u8,
+    pub n1: u8,
+    pub kind: u8,
+    pub is_blind: u8,
+    pub _pad: [u8; 2],
+    pub v_cf: f32,
+    pub vp_cf: f32,
+    pub z_game: f32,
+    pub x0: [f32; CF_RAW_VALUE_SIDE_DIM],
+    pub x1: [f32; CF_RAW_VALUE_SIDE_DIM],
+    pub xp0: [f32; CF_RAW_VALUE_SIDE_DIM],
+    pub xp1: [f32; CF_RAW_VALUE_SIDE_DIM],
+}
+const _: () = assert!(std::mem::size_of::<CfPairRecV3>() == 40 + 4 * 4 * CF_RAW_VALUE_SIDE_DIM);
 
 #[inline(always)]
 fn relu(x: f32) -> f32 {
@@ -2848,6 +2876,158 @@ pub fn cf_rollout_to_outcome_mode(
     (v, cb.turn.saturating_sub(start_turn), cb.outcome == 0)
 }
 
+/// True when `cb` is an idle `n0 + n1 <= 3` state safe for Rao-Blackwellized `linear.rs` exit
+/// (excludes live `Endure`, `Flail/Reversal`, `Focus Band`, `Destiny Bond`, and `Perish Song`,
+/// where static stage-game valuation can misprice low-HP/probabilistic/sudden-death lines).
+#[inline]
+pub fn can_rb_linear_exit(cb: &CompactBattle, table: &MatchTable) -> bool {
+    if cb.outcome != 0 || cb.sides[0].request != 1 || cb.sides[1].request != 1 {
+        return false;
+    }
+    let n0 = cb.sides[0].alive_mask.count_ones();
+    let n1 = cb.sides[1].alive_mask.count_ones();
+    if n0 + n1 > 3 || n0 == 0 || n1 == 0 {
+        return false;
+    }
+    for s in 0..2usize {
+        let mask = cb.sides[s].alive_mask;
+        for sl in 0..3usize {
+            if (mask & (1 << sl)) == 0 {
+                continue;
+            }
+            let idx = s * 3 + sl;
+            let m = &cb.mons[idx];
+            if m.hp() <= 0 {
+                continue;
+            }
+            if (m.vol_flags & (vol_bit::DESTINY_BOND | vol_bit::PERISH_SONG | vol_bit::ENDURE)) != 0
+            {
+                return false;
+            }
+            if table.item_spec(m.item).is_focus_band {
+                return false;
+            }
+            let nm = table.mons[idx].num_moves as usize;
+            for mi in 0..nm {
+                if m.pp[mi] == 0 {
+                    continue;
+                }
+                let ms = &table.move_specs[idx][mi];
+                if ms.is_endure
+                    || matches!(
+                        ms.special_kind,
+                        SpecialMoveKind::FlailReversal
+                            | SpecialMoveKind::DestinyBond
+                            | SpecialMoveKind::PerishSong
+                    )
+                {
+                    return false;
+                }
+            }
+        }
+    }
+    true
+}
+
+/// Full-game CRN `cfv-0r` rollout teacher (`CF-V_net v3` data generator):
+/// plays `search_compact_cfv_puct` on every non-trivial decision turn (ZERO `P_net` fallback)
+/// with turn-keyed CRN reseeding and conditional Rao-Blackwellized `n0 + n1 <= 3` `linear.rs` exit.
+/// Returns `(outcome_p1, elapsed_turns, hit_turn_cap, used_rb_exit)`.
+pub fn cf_full_game_rollout(
+    start_cb: &CompactBattle,
+    table: &MatchTable,
+    cache: &TempoMatchCache,
+    iters_per_turn: u32,
+    max_delta_turns: u16,
+    pair_seed: u64,
+    use_rb_exit: bool,
+) -> (f64, u16, bool, bool) {
+    let mut cb = *start_cb;
+    let start_turn = cb.turn;
+    let turn_cap = start_turn.saturating_add(max_delta_turns);
+    let eg_w = EvalWeights::default();
+
+    // Re-roll Turn-1 Berserk Gene confusion durations with pair_seed so Turn-1 CRN stays unbiased.
+    if start_turn == 1 {
+        let mut prng = nc2000_engine::prng::Prng::new(cf_mix64(pair_seed, 0));
+        for s in 0..2usize {
+            if (cb.mons[s * 3].vol_flags & vol_bit::CONFUSION) != 0 {
+                cb.mons[s * 3].timers[timer_idx::CONFUSION] = (2 + prng.random(4)) as u8;
+            }
+        }
+    }
+
+    for step in 0..(max_delta_turns as usize * 3 + 12) {
+        if cb.outcome != 0 {
+            let v = match cb.outcome {
+                1 => 1.0,
+                2 => 0.0,
+                _ => 0.5,
+            };
+            return (v, cb.turn.saturating_sub(start_turn), false, false);
+        }
+        if let Some(v) = compact_turn_limit_outcome(&cb, table) {
+            return (v, cb.turn.saturating_sub(start_turn), false, false);
+        }
+        if use_rb_exit && can_rb_linear_exit(&cb, table) {
+            let v = compact_eval01_blindspot_norelay(&cb, table, &eg_w);
+            return (v, cb.turn.saturating_sub(start_turn), false, true);
+        }
+        if cb.turn >= turn_cap {
+            let v = crate::eval::compact_eval01_blindspot(&cb, table, &eg_w);
+            return (v, cb.turn.saturating_sub(start_turn), true, false);
+        }
+
+        let is_idle = cb.sides[0].request == 1 && cb.sides[1].request == 1;
+        if is_idle {
+            let turn_seed = cf_mix64(pair_seed, u64::from(cb.turn));
+            let mut prng = nc2000_engine::prng::Prng::new(turn_seed);
+            let qc = nc2000_engine::state::Battle::roll_quick_claw_with(table.ruleset, &mut prng);
+            cb.quick_claw_roll = (qc[0] as u8) | ((qc[1] as u8) << 1);
+            cb.prng_seed = prng.seed();
+        }
+
+        let mut a_buf = [[0u8; 7]; 2];
+        let n0 = if cb.sides[0].request > 0 {
+            cb.legal_actions(table, 0, &mut a_buf[0]).min(6)
+        } else {
+            0
+        };
+        let n1 = if cb.sides[1].request > 0 {
+            cb.legal_actions(table, 1, &mut a_buf[1]).min(6)
+        } else {
+            0
+        };
+        if n0 == 0 && n1 == 0 {
+            break;
+        }
+        if n0 <= 1 && n1 <= 1 {
+            let p0 = if n0 == 1 { a_buf[0][0] } else { 7 };
+            let p1 = if n1 == 1 { a_buf[1][0] } else { 7 };
+            cb.apply_actions(table, [p0, p1]);
+            continue;
+        }
+
+        let sseed = cf_mix64(
+            pair_seed ^ 0xBF58_476D_1CE4_E5B9,
+            u64::from(cb.turn) * 4 + u64::from(!is_idle) + ((step as u64 & 3) << 16),
+        );
+        let res = search_compact_cfv_puct(&cb, table, cache, iters_per_turn, sseed);
+        cb.apply_actions(table, res.best_acts);
+    }
+
+    let v = if cb.outcome != 0 {
+        match cb.outcome {
+            1 => 1.0,
+            2 => 0.0,
+            _ => 0.5,
+        }
+    } else {
+        crate::eval::compact_eval01_blindspot(&cb, table, &eg_w)
+    };
+    (v, cb.turn.saturating_sub(start_turn), cb.outcome == 0, false)
+}
+
 /// Apply one strictly legal `CompactBattle` counterfactual state perturbation `do(Δs)` to an
 /// idle non-terminal state, preserving all `CompactBattle` & `TempoMatchCache` invariants.
 /// Returns `Some((perturbed_cb, kind_code))` where `kind_code`:
@@ -3318,7 +3498,7 @@ fn fast_raw_pair_stats(
     (best_d_max, best_d_cur, best_ko, boom_d)
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy)]
 struct RawMonRoles {
     hpp: f32,
     rpp: f32,
@@ -3329,8 +3509,56 @@ struct RawMonRoles {
     has_boom: f32,
     has_setup: f32,
     has_phaze: f32,
+    has_true_phaze: f32,
     has_disrupt: f32,
     has_cnt_purs: f32,
+    has_spikes: f32,
+    has_spin: f32,
+    has_bp: f32,
+    has_sleep: f32,
+    has_par_tox: f32,
+    has_dbond: f32,
+    has_leech_seed: f32,
+    has_endure: f32,
+    reversal_slot: u8,
+    has_weather_or_screen: f32,
+    sum_pp: u32,
+    sum_max: u32,
+    min_rec_frac: f32,
+    any_rec: bool,
+}
+
+impl Default for RawMonRoles {
+    fn default() -> Self {
+        Self {
+            hpp: 0.0,
+            rpp: 0.0,
+            min_atk_pp: 0.0,
+            tot_pp: 0.0,
+            has_st: 0.0,
+            has_hb: 0.0,
+            has_boom: 0.0,
+            has_setup: 0.0,
+            has_phaze: 0.0,
+            has_true_phaze: 0.0,
+            has_disrupt: 0.0,
+            has_cnt_purs: 0.0,
+            has_spikes: 0.0,
+            has_spin: 0.0,
+            has_bp: 0.0,
+            has_sleep: 0.0,
+            has_par_tox: 0.0,
+            has_dbond: 0.0,
+            has_leech_seed: 0.0,
+            has_endure: 0.0,
+            reversal_slot: 0xFF,
+            has_weather_or_screen: 0.0,
+            sum_pp: 0,
+            sum_max: 0,
+            min_rec_frac: 1.0,
+            any_rec: false,
+        }
+    }
 }
 
 #[inline]
@@ -3361,6 +3589,13 @@ fn extract_mon_roles(
             let frac = f32::from(pp) / f32::from(mpp);
             if frac < min_atk {
                 min_atk = frac;
+            }
+        }
+        if ms.is_rest || ms.is_half_heal || ms.special_kind == SpecialMoveKind::WeatherHeal {
+            r.any_rec = true;
+            let rf = f32::from(pp) / f32::from(mpp);
+            if rf < r.min_rec_frac {
+                r.min_rec_frac = rf;
             }
         }
         if pp == 0 {
@@ -3398,7 +3633,10 @@ fn extract_mon_roles(
             {
                 r.has_setup = 1.0;
             }
-            if matches!(ms.special_kind, SpecialMoveKind::Phaze | SpecialMoveKind::Haze) {
+            if ms.special_kind == SpecialMoveKind::Phaze {
+                r.has_phaze = 1.0;
+                r.has_true_phaze = 1.0;
+            } else if ms.special_kind == SpecialMoveKind::Haze {
                 r.has_phaze = 1.0;
             }
             if matches!(ms.primary_status, 1 | 4 | 6)
@@ -3408,6 +3646,37 @@ fn extract_mon_roles(
                 )
             {
                 r.has_disrupt = 1.0;
+            }
+            match ms.special_kind {
+                SpecialMoveKind::Spikes => r.has_spikes = 1.0,
+                SpecialMoveKind::RapidSpin => r.has_spin = 1.0,
+                SpecialMoveKind::BatonPass => r.has_bp = 1.0,
+                SpecialMoveKind::DestinyBond => r.has_dbond = 1.0,
+                SpecialMoveKind::FlailReversal => {
+                    if r.reversal_slot == 0xFF && !m.is_slot_disabled(mi) {
+                        r.reversal_slot = mi as u8;
+                    }
+                }
+                SpecialMoveKind::Reflect
+                | SpecialMoveKind::LightScreen
+                | SpecialMoveKind::Safeguard
+                | SpecialMoveKind::Sandstorm
+                | SpecialMoveKind::RainDance
+                | SpecialMoveKind::SunnyDay => r.has_weather_or_screen = 1.0,
+                _ => {}
+            }
+            if ms.primary_status == Status::Slp as u8 {
+                r.has_sleep = 1.0;
+            } else if ms.primary_status == Status::Par as u8
+                || ms.primary_status == Status::Tox as u8
+            {
+                r.has_par_tox = 1.0;
+            }
+            if (ms.primary_vol & vol_bit::LEECH_SEED) != 0 {
+                r.has_leech_seed = 1.0;
+            }
+            if ms.is_endure {
+                r.has_endure = 1.0;
             }
         }
     }
@@ -3430,20 +3699,61 @@ fn extract_mon_roles(
         {
             r.has_setup = 1.0;
         }
-        if ((cm.phaze_slot as usize) < 4 && m.pp[cm.phaze_slot as usize] > 0)
-            || ((cm.haze_slot as usize) < 4 && m.pp[cm.haze_slot as usize] > 0)
-        {
+        if (cm.phaze_slot as usize) < 4 && m.pp[cm.phaze_slot as usize] > 0 {
+            r.has_phaze = 1.0;
+            r.has_true_phaze = 1.0;
+        }
+        if (cm.haze_slot as usize) < 4 && m.pp[cm.haze_slot as usize] > 0 {
             r.has_phaze = 1.0;
         }
-        let st_mask = cm.sleep_mask | cm.toxic_mask | cm.twave_mask;
-        if (st_mask != 0 && (0..nm).any(|mi| ((st_mask >> mi) & 1) != 0 && m.pp[mi] > 0))
+        if cm.sleep_mask != 0
+            && (0..nm).any(|mi| ((cm.sleep_mask >> mi) & 1) != 0 && m.pp[mi] > 0)
+        {
+            r.has_sleep = 1.0;
+        }
+        let ptox_mask = cm.toxic_mask | cm.twave_mask;
+        if ptox_mask != 0 && (0..nm).any(|mi| ((ptox_mask >> mi) & 1) != 0 && m.pp[mi] > 0) {
+            r.has_par_tox = 1.0;
+        }
+        if r.has_sleep > 0.0
+            || r.has_par_tox > 0.0
             || ((cm.encore_slot as usize) < 4 && m.pp[cm.encore_slot as usize] > 0)
             || ((cm.meanlook_slot as usize) < 4 && m.pp[cm.meanlook_slot as usize] > 0)
             || ((cm.perish_slot as usize) < 4 && m.pp[cm.perish_slot as usize] > 0)
         {
             r.has_disrupt = 1.0;
         }
+        if (cm.spikes_slot as usize) < 4 && m.pp[cm.spikes_slot as usize] > 0 {
+            r.has_spikes = 1.0;
+        }
+        if (cm.spin_slot as usize) < 4 && m.pp[cm.spin_slot as usize] > 0 {
+            r.has_spin = 1.0;
+        }
+        if (cm.bp_slot as usize) < 4 && m.pp[cm.bp_slot as usize] > 0 {
+            r.has_bp = 1.0;
+        }
+        if (cm.dbond_slot as usize) < 4 && m.pp[cm.dbond_slot as usize] > 0 {
+            r.has_dbond = 1.0;
+        }
+        if (cm.leech_seed_slot as usize) < 4 && m.pp[cm.leech_seed_slot as usize] > 0 {
+            r.has_leech_seed = 1.0;
+        }
+        if (cm.endure_slot as usize) < 4 && m.pp[cm.endure_slot as usize] > 0 {
+            r.has_endure = 1.0;
+        }
+        if (cm.reversal_slot as usize) < 4
+            && m.pp[cm.reversal_slot as usize] > 0
+            && !m.is_slot_disabled(cm.reversal_slot as usize)
+        {
+            r.reversal_slot = cm.reversal_slot;
+        }
+        let ws_mask = cm.screen_mask | cm.weather_mask;
+        if ws_mask != 0 && (0..nm).any(|mi| ((ws_mask >> mi) & 1) != 0 && m.pp[mi] > 0) {
+            r.has_weather_or_screen = 1.0;
+        }
     }
+    r.sum_pp = sum_pp;
+    r.sum_max = sum_max;
     r.hpp = (r.hpp / 16.0).clamp(0.0, 1.0);
     r.rpp = (r.rpp / 10.0).clamp(0.0, 1.0);
     r.min_atk_pp = if any_atk { min_atk.clamp(0.0, 1.0) } else { 0.0 };
@@ -3455,8 +3765,80 @@ fn extract_mon_roles(
     r
 }
 
+/// O(1) max 200-BP low-HP Flail/Reversal threat vs all living opposing mons (clamped `[0.0, 1.5]`).
+/// Only executes when `rev_slot < 4` (zero cost for the ~98% of mons without Flail/Reversal).
+#[inline]
+fn reversal_threat_200bp(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    side: usize,
+    slot: usize,
+    rev_slot: u8,
+    alive_opp: &[bool; 3],
+) -> f32 {
+    let rs = rev_slot as usize;
+    if rs >= 4 {
+        return 0.0;
+    }
+    let att_idx = side * 3 + slot;
+    let opp = 1 - side;
+    let att_mon = &cb.mons[att_idx];
+    let att_spec = &table.mons[att_idx];
+    let ms = &table.move_specs[att_idx][rs];
+    let is_castle = table.ruleset.is_castle();
+    let mut atk = cb.mon_stat(table, side, slot, 0, false, false);
+    let att_is_active = cb.sides[side].active_idx as usize == slot;
+    if !is_castle && !att_is_active && att_mon.status_raw() == Status::Brn as u8 {
+        atk = (atk / 2).max(1);
+    }
+    let ispec = table.item_spec(att_mon.item);
+    let boost_type = if is_castle { ispec.castle_boost_type } else { ispec.boost_type };
+    let has_type_boost = ms.move_type != NO_TYPE_ID && boost_type == ms.move_type;
+
+    let mut best = 0.0f32;
+    for e in 0..3usize {
+        if !alive_opp[e] {
+            continue;
+        }
+        let def_idx = opp * 3 + e;
+        let def_spec = &table.mons[def_idx];
+        let foresight = (cb.mons[def_idx].vol_flags & vol_bit::FORESIGHT) != 0;
+        let (type_mod, is_immune) = table.effectiveness_ext(ms.move_type, def_spec, foresight);
+        if is_immune {
+            continue;
+        }
+        let def = cb.mon_stat(table, opp, e, 1, false, false);
+        let raw = get_damage_base_branchless(
+            att_spec.level as i32,
+            200,
+            atk,
+            def,
+            true,
+            false,
+            false,
+            has_type_boost,
+            CompactWeather::None,
+            false,
+            false,
+            false,
+            ms.move_type,
+            att_spec.type_mask,
+            type_mod,
+            false,
+        );
+        let frac = (raw as f32 / def_spec.maxhp.max(1) as f32).clamp(0.0, 1.5);
+        if frac > best {
+            best = frac;
+        }
+    }
+    best
+}
+
 /// Extract strictly 0-ULP side-swap symmetric & 0-ULP bench-permutation invariant direct raw-board
-/// value features `(x0[144], x1[144])` with ZERO `FastGolf` / ZERO `Blindspot` calls.
+/// value features `(x0[192], x1[192])` with ZERO `FastGolf` / ZERO `Blindspot` calls.
+/// Channels `0..144` are bit-identical to `CF-V_net v2`; channels `144..192` add bench roles/items/speed,
+/// active items/moves (`Focus Band`, `BrightPowder`, `Scope Lens`, `Destiny Bond`, `Leech Seed`,
+/// `Endure`, 200-BP `Flail/Reversal`, weather/screen), and Turn-1 team interactions.
 #[inline]
 pub fn extract_raw_value_features(
     cb: &CompactBattle,
@@ -3554,9 +3936,15 @@ pub fn extract_raw_value_features(
         let a_ok = alive[side][act];
         let a_r = roles[side][act];
 
-        // 1. Active mon (28 floats: 0..28)
+        // 1. Active mon (28 floats: 0..28) + Active v3 extra (8 floats: 176..184)
         let mut rec_sum = 0.0f32;
         let mut team_hb = 0.0f32;
+        let mut team_spikes = 0.0f32;
+        let mut team_forced_phaze = 0.0f32;
+        let mut team_spin = 0.0f32;
+        let mut team_sleep = 0.0f32;
+        let mut team_dbond = 0.0f32;
+        let mut team_leech = 0.0f32;
         if a_ok {
             let a_maxhp = table.mons[a_idx].maxhp.max(1) as f32;
             let st = a_mon.status_raw();
@@ -3564,6 +3952,12 @@ pub fn extract_raw_value_features(
             let ispec = table.item_spec(a_mon.item);
             rec_sum += a_r.hpp * 16.0 + 2.0 * a_r.rpp * 10.0;
             team_hb = team_hb.max(a_r.has_hb);
+            team_spikes = team_spikes.max(a_r.has_spikes);
+            team_forced_phaze = team_forced_phaze.max(a_r.has_true_phaze);
+            team_spin = team_spin.max(a_r.has_spin);
+            team_sleep = team_sleep.max(a_r.has_sleep);
+            team_dbond = team_dbond.max(a_r.has_dbond);
+            team_leech = team_leech.max(a_r.has_leech_seed);
             x[0] = 1.0;
             x[1] = (a_mon.hp() as f32 / a_maxhp).clamp(0.0, 1.0);
             x[2] = ((a_mon.sub_hp() as f32 / a_maxhp) * 4.0).clamp(0.0, 1.0);
@@ -3624,11 +4018,21 @@ pub fn extract_raw_value_features(
             } else {
                 0.0
             };
+            // v3 Active extra (8 floats: 176..184)
+            x[176] = if ispec.is_focus_band { 1.0 } else { 0.0 };
+            x[177] = if ispec.is_brightpowder { 1.0 } else { 0.0 };
+            x[178] = if ispec.is_scope_lens { 1.0 } else { 0.0 };
+            x[179] = a_r.has_dbond;
+            x[180] = a_r.has_leech_seed;
+            x[181] = a_r.has_endure;
+            x[182] = reversal_threat_200bp(cb, table, side, act, a_r.reversal_slot, &alive[opp]);
+            x[183] = a_r.has_weather_or_screen;
         }
 
-        // 2. Canonical Bench 1 & 2 (2 * 20 = 40 floats: 28..68)
+        // 2. Canonical Bench 1 & 2 (2 * 20 = 40 floats: 28..68) + v3 Bench extra (2 * 16 = 32 floats: 144..176)
         for bi in 0..2usize {
             let base = 28 + bi * 20;
+            let v3_base = 144 + bi * 16;
             let sl = ord[side][bi + 1];
             if !alive[side][sl] {
                 continue;
@@ -3642,6 +4046,12 @@ pub fn extract_raw_value_features(
             let mr = roles[side][sl];
             rec_sum += mr.hpp * 16.0 + 2.0 * mr.rpp * 10.0;
             team_hb = team_hb.max(mr.has_hb);
+            team_spikes = team_spikes.max(mr.has_spikes);
+            team_forced_phaze = team_forced_phaze.max(mr.has_true_phaze);
+            team_spin = team_spin.max(mr.has_spin);
+            team_sleep = team_sleep.max(mr.has_sleep);
+            team_dbond = team_dbond.max(mr.has_dbond);
+            team_leech = team_leech.max(mr.has_leech_seed);
             x[base] = 1.0;
             x[base + 1] = (m.hp() as f32 / maxhp).clamp(0.0, 1.0);
             x[base + 2] = (ehp / maxhp).clamp(0.0, 1.0);
@@ -3675,6 +4085,32 @@ pub fn extract_raw_value_features(
             x[base + 17] = mr.has_setup;
             x[base + 18] = mr.has_phaze;
             x[base + 19] = mr.has_disrupt;
+
+            // v3 Bench extra (16 floats per bench slot: 144..160 and 160..176)
+            x[v3_base] = mr.has_spikes;
+            x[v3_base + 1] = mr.has_spin;
+            x[v3_base + 2] = mr.has_bp;
+            x[v3_base + 3] = mr.has_sleep;
+            x[v3_base + 4] = mr.has_par_tox;
+            x[v3_base + 5] = mr.has_dbond;
+            x[v3_base + 6] = mr.has_leech_seed;
+            x[v3_base + 7] = mr.has_endure;
+            x[v3_base + 8] = reversal_threat_200bp(cb, table, side, sl, mr.reversal_slot, &alive[opp]);
+            x[v3_base + 9] = mr.has_weather_or_screen;
+            x[v3_base + 10] = if ispec.is_mintberry || ispec.is_miracleberry { 1.0 } else { 0.0 };
+            x[v3_base + 11] = if ispec.is_goldberry || ispec.is_berry_juice || ispec.is_berry {
+                1.0
+            } else {
+                0.0
+            };
+            x[v3_base + 12] = if ispec.is_focus_band { 1.0 } else { 0.0 };
+            x[v3_base + 13] = if ispec.is_brightpowder || ispec.is_scope_lens || ispec.is_quick_claw {
+                1.0
+            } else {
+                0.0
+            };
+            x[v3_base + 14] = if ispec.is_berserk_gene { 1.0 } else { 0.0 };
+            x[v3_base + 15] = (f32::from(table.mons[idx].stored_stats[4]) / 350.0).clamp(0.0, 2.0);
         }
 
         // 3. Ordered 3x3 Matchup Tensor (9 * 5 = 45 floats: 68..113)
@@ -3711,20 +4147,50 @@ pub fn extract_raw_value_features(
                 off += 5;
             }
         }
-        // Hardest living foe to break (stall signal without FastGolf).
+        // Hardest living foe to break + unwalled threats (0-ULP bench-invariant min/max over pairs).
+        let mut worst_unwalled_foe = 0.0f32;
         for e in 0..3usize {
             if !alive[opp][e] {
                 continue;
             }
             let mut best_dm = 0.0f32;
+            let mut min_foe_d = f32::INFINITY;
             for a in 0..3usize {
-                if alive[side][a] && pairs[side][a][e].0 > best_dm {
-                    best_dm = pairs[side][a][e].0;
+                if alive[side][a] {
+                    let d_me = pairs[side][a][e].0;
+                    if d_me > best_dm {
+                        best_dm = d_me;
+                    }
+                    let d_foe = pairs[opp][e][a].0;
+                    if d_foe < min_foe_d {
+                        min_foe_d = d_foe;
+                    }
                 }
             }
             let hard = (1.0 / (best_dm + 0.12)).min(8.0) / 8.0;
             if hard > max_wall_hard {
                 max_wall_hard = hard;
+            }
+            if min_foe_d.is_finite() && min_foe_d > worst_unwalled_foe {
+                worst_unwalled_foe = min_foe_d;
+            }
+        }
+        let mut best_unwalled_own = 0.0f32;
+        for a in 0..3usize {
+            if !alive[side][a] {
+                continue;
+            }
+            let mut min_own_d = f32::INFINITY;
+            for e in 0..3usize {
+                if alive[opp][e] {
+                    let d_me = pairs[side][a][e].0;
+                    if d_me < min_own_d {
+                        min_own_d = d_me;
+                    }
+                }
+            }
+            if min_own_d.is_finite() && min_own_d > best_unwalled_own {
+                best_unwalled_own = min_own_d;
             }
         }
 
@@ -3771,42 +4237,15 @@ pub fn extract_raw_value_features(
         x[126] = max_wall_hard;
         x[127] = turn_prog;
 
-        // 5. v2 High-Signal Mechanical Extension (16 floats: 128..144, single-pass reusing `pairs` & `alive`)
+        // 5. v2 High-Signal Mechanical Extension (16 floats: 128..144, O(1) reusing `roles` & `pairs`)
         let o_ok = alive[opp][opp_act];
         if a_ok {
-            let nm = table.mons[a_idx].num_moves as usize;
-            let mut has_bp = 0.0f32;
-            let mut has_spk = 0.0f32;
-            let mut has_spin = 0.0f32;
-            let mut has_hb = 0.0f32;
-            let mut has_slp = 0.0f32;
-            let mut has_ptox = 0.0f32;
-            for mi in 0..nm {
-                if a_mon.pp[mi] == 0 {
-                    continue;
-                }
-                let ms = &table.move_specs[a_idx][mi];
-                match ms.special_kind {
-                    SpecialMoveKind::BatonPass => has_bp = 1.0,
-                    SpecialMoveKind::Spikes => has_spk = 1.0,
-                    SpecialMoveKind::RapidSpin => has_spin = 1.0,
-                    SpecialMoveKind::HealBell => has_hb = 1.0,
-                    _ => {}
-                }
-                if ms.primary_status == Status::Slp as u8 {
-                    has_slp = 1.0;
-                } else if ms.primary_status == Status::Par as u8
-                    || ms.primary_status == Status::Tox as u8
-                {
-                    has_ptox = 1.0;
-                }
-            }
-            x[128] = has_bp;
-            x[129] = has_spk;
-            x[130] = has_spin;
-            x[131] = has_hb;
-            x[132] = has_slp;
-            x[133] = has_ptox;
+            x[128] = a_r.has_bp;
+            x[129] = a_r.has_spikes;
+            x[130] = a_r.has_spin;
+            x[131] = a_r.has_hb;
+            x[132] = a_r.has_sleep;
+            x[133] = a_r.has_par_tox;
 
             // Active Boom threat vs foe active (when alive >= 2)
             if o_ok && my_alive_cnt >= 2 {
@@ -3846,26 +4285,17 @@ pub fn extract_raw_value_features(
             if !alive[side][sl] {
                 continue;
             }
-            let idx = side * 3 + sl;
-            let nm = table.mons[idx].num_moves as usize;
-            for mi in 0..nm {
-                let pp = cb.mons[idx].pp[mi];
-                let mpp = table.mons[idx].max_pp[mi].max(1);
-                team_pp_sum += u32::from(pp);
-                team_max_sum += u32::from(mpp);
-                let ms = &table.move_specs[idx][mi];
-                if ms.is_rest
-                    || ms.is_half_heal
-                    || ms.special_kind == SpecialMoveKind::WeatherHeal
-                {
-                    any_rec = true;
-                    let rf = f32::from(pp) / f32::from(mpp);
-                    if rf < min_rec_frac {
-                        min_rec_frac = rf;
-                    }
+            let mr = roles[side][sl];
+            team_pp_sum += mr.sum_pp;
+            team_max_sum += mr.sum_max;
+            if mr.any_rec {
+                any_rec = true;
+                if mr.min_rec_frac < min_rec_frac {
+                    min_rec_frac = mr.min_rec_frac;
                 }
             }
             if sl != act && o_ok {
+                let idx = side * 3 + sl;
                 let maxhp = table.mons[idx].maxhp.max(1) as f32;
                 let ehp_frac = (entry_hp(cb, table, side, sl).max(0) as f32 / maxhp).clamp(0.0, 1.0);
                 if ehp_frac > 0.05 {
@@ -3888,43 +4318,30 @@ pub fn extract_raw_value_features(
             0.0
         };
         x[137] = if any_rec { min_rec_frac.clamp(0.0, 1.0) } else { 0.0 };
+
+        // 6. v3 Team-level Turn-1 Interactions (8 floats: 184..192)
+        let opp_grounded_frac = (opp_grounded as f32) / 3.0;
+        x[184] = if opp_alive_cnt >= 2 { team_spikes * opp_grounded_frac } else { 0.0 };
+        x[185] = if opp_alive_cnt >= 2 { team_spikes * team_forced_phaze } else { 0.0 };
+        x[186] = team_spin;
+        x[187] = team_sleep;
+        x[188] = team_dbond;
+        x[189] = team_leech;
+        x[190] = worst_unwalled_foe;
+        x[191] = best_unwalled_own;
         x
     };
 
     (encode_side(0), encode_side(1))
 }
 
-/// Evaluate embedded Direct Raw-Board Siamese `CF-V_net` (`144 -> 128 -> 64 -> 1`, 0-ULP antisymmetry).
-/// Preserves exact terminals, `n0 + n1 <= 3` `EvalBlindspot + linear.rs`, and outer `relay.rs` lift.
+/// Pure forward logit of the embedded Direct Raw-Board Siamese `CF-V_net` (`192 -> 128 -> 64 -> 1`,
+/// exact 0-ULP antisymmetry: `f(x0, x1) == -f(x1, x0)`).
 #[inline]
-pub fn evaluate_cf_value(
-    cb: &CompactBattle,
-    table: &MatchTable,
-    cache: Option<&TempoMatchCache>,
-    leaf_temp: f64,
-) -> f64 {
-    if cb.outcome != 0 {
-        return match cb.outcome {
-            1 => 1.0,
-            2 => 0.0,
-            _ => 0.5,
-        };
-    }
-    if let Some(v) = compact_turn_limit_outcome(cb, table) {
-        return v;
-    }
-    let w = EvalWeights::default();
-    let n0 = cb.sides[0].alive_mask.count_ones();
-    let n1 = cb.sides[1].alive_mask.count_ones();
-    if n0 + n1 <= 3 {
-        return compact_eval01_blindspot_norelay(cb, table, &w);
-    }
-    if !CF_VALUE_WEIGHTS_LOADED {
-        return compact_eval01_blindspot_norelay(cb, table, &w);
-    }
-
-    let (x0, x1) = extract_raw_value_features(cb, table, cache);
-
+pub fn eval_cf_value_logit_from_features(
+    x0: &[f32; CF_VALUE_SIDE_DIM],
+    x1: &[f32; CF_VALUE_SIDE_DIM],
+) -> f32 {
     let mut a1 = CF_V_B1;
     let mut b1 = [0.0f32; CF_VALUE_H1];
     for k in 0..CF_VALUE_SIDE_DIM {
@@ -3970,6 +4387,40 @@ pub fn evaluate_cf_value(
         let d = relu(a2[j] + b2[j]) - relu(a2[j] - b2[j]);
         z += CF_V_W_OUT[j] * d;
     }
+    z
+}
+
+/// Evaluate embedded Direct Raw-Board Siamese `CF-V_net` (`192 -> 128 -> 64 -> 1`, 0-ULP antisymmetry).
+/// Preserves exact terminals, `n0 + n1 <= 3` `EvalBlindspot + linear.rs`, and outer `relay.rs` lift.
+#[inline]
+pub fn evaluate_cf_value(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    cache: Option<&TempoMatchCache>,
+    leaf_temp: f64,
+) -> f64 {
+    if cb.outcome != 0 {
+        return match cb.outcome {
+            1 => 1.0,
+            2 => 0.0,
+            _ => 0.5,
+        };
+    }
+    if let Some(v) = compact_turn_limit_outcome(cb, table) {
+        return v;
+    }
+    let w = EvalWeights::default();
+    let n0 = cb.sides[0].alive_mask.count_ones();
+    let n1 = cb.sides[1].alive_mask.count_ones();
+    if n0 + n1 <= 3 {
+        return compact_eval01_blindspot_norelay(cb, table, &w);
+    }
+    if !CF_VALUE_WEIGHTS_LOADED {
+        return compact_eval01_blindspot_norelay(cb, table, &w);
+    }
+
+    let (x0, x1) = extract_raw_value_features(cb, table, cache);
+    let z = eval_cf_value_logit_from_features(&x0, &x1);
 
     let z64 = (f64::from(z) / leaf_temp.max(0.1)).clamp(-20.0, 20.0);
     let v_base = 1.0 / (1.0 + (-z64).exp());
@@ -4618,5 +5069,158 @@ mod tests {
             assert!((0.0..=1.0).contains(&v_out));
         }
         assert!(seen_kinds.count_ones() >= 7, "expected >= 7 perturbation kinds, saw mask {seen_kinds:#b}");
+    }
+
+    #[test]
+    fn cf_v3_192_features_symmetry_preview_parity_activations_and_rb_guard() {
+        use crate::tempo::PreviewTempoCache;
+        use nc2000_engine::compact::CompactPreviewRoster;
+
+        let dex = conformance::load_dex();
+        assert_eq!(CF_VALUE_SIDE_DIM, 192);
+
+        // Team A: 6-mon roster exercising ALL new v3 bench/active mechanics:
+        //   1: Raikou (Roar -> forced phaze, Reflect -> screen, BrightPowder)
+        //   2: Cloyster (Spikes, Rapid Spin, Explosion, Surf)
+        //   3: Gengar (Destiny Bond, Hypnosis, Thunderbolt, Explosion, Scope Lens)
+        //   4: Venusaur (Leech Seed, Sleep Powder, Razor Leaf, Synthesis, MiracleBerry)
+        //   5: Heracross (Endure, Reversal, Megahorn, Earthquake, Focus Band)
+        //   6: Tauros (Double-Edge, Earthquake, Rest, Sleep Talk, Berserk Gene)
+        let team_a = vec![
+            mk("Raikou", 55, "BrightPowder", &["Thunderbolt", "Hidden Power Ice", "Roar", "Reflect"]),
+            mk("Cloyster", 50, "Leftovers", &["Surf", "Spikes", "Rapid Spin", "Explosion"]),
+            mk("Gengar", 50, "Scope Lens", &["Thunderbolt", "Ice Punch", "Hypnosis", "Destiny Bond"]),
+            mk("Venusaur", 50, "MiracleBerry", &["Razor Leaf", "Leech Seed", "Sleep Powder", "Synthesis"]),
+            mk("Heracross", 50, "Focus Band", &["Endure", "Reversal", "Megahorn", "Earthquake"]),
+            mk("Tauros", 50, "Berserk Gene", &["Double-Edge", "Earthquake", "Rest", "Sleep Talk"]),
+        ];
+        // Team B: Vaporeon (Haze - NOT forced phaze!), Snorlax, Tyranitar (Sandstorm), Skarmory, Zapdos, Starmie
+        let team_b = vec![
+            mk("Vaporeon", 50, "Leftovers", &["Surf", "Haze", "Rest", "Acid Armor"]),
+            mk("Cloyster", 50, "Gold Berry", &["Surf", "Spikes", "Ice Beam", "Explosion"]),
+            mk("Snorlax", 55, "Leftovers", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+            mk("Tyranitar", 50, "Quick Claw", &["Rock Slide", "Crunch", "Sandstorm", "Earthquake"]),
+            mk("Zapdos", 50, "Mint Berry", &["Thunderbolt", "Hidden Power Ice", "Rest", "Whirlwind"]),
+            mk("Gengar", 50, "Leftovers", &["Thunderbolt", "Ice Punch", "Destiny Bond", "Explosion"]),
+        ];
+
+        // 1. Exact 0-ULP PreviewTempoCache::slice_for parity vs TempoMatchCache::build across multiple picks!
+        let b_tp = Battle::from_fixture(&dex, "1,2,3,4", &team_a, &team_b).unwrap();
+        let roster = CompactPreviewRoster::from_battle(&b_tp, &dex, None);
+        let pcache = PreviewTempoCache::build_for_preview_roster(&roster, [team_a.len(), team_b.len()]);
+
+        for &(pa, pb) in &[
+            ([1u8, 2, 5], [1u8, 2, 3]), // Raikou/Cloyster/Heracross vs Vaporeon/Cloyster/Snorlax
+            ([4u8, 3, 6], [4u8, 5, 6]), // Venusaur/Gengar/Tauros vs TTar/Zapdos/Gengar
+            ([5u8, 2, 4], [3u8, 4, 5]), // Heracross lead vs Snorlax/TTar/Zapdos
+        ] {
+            let (tbl, mut cb) = roster.build_turn1([pa, pb], 0);
+            cb.quick_claw_roll = 0;
+            let built = TempoMatchCache::build(&cb, &tbl);
+            let sliced = pcache.slice_for(&cb);
+            let (xb0, xb1) = extract_raw_value_features(&cb, &tbl, Some(&built));
+            let (xs0, xs1) = extract_raw_value_features(&cb, &tbl, Some(&sliced));
+            let (xn0, xn1) = extract_raw_value_features(&cb, &tbl, None);
+            assert_eq!(xb0, xs0, "slice_for must match TempoMatchCache::build 0-ULP on x0");
+            assert_eq!(xb1, xs1, "slice_for must match TempoMatchCache::build 0-ULP on x1");
+            assert_eq!(xb0[144..190], xn0[144..190], "cache=Some vs cache=None must match 0-ULP on 144..190 x0");
+            assert_eq!(xb1[144..190], xn1[144..190], "cache=Some vs cache=None must match 0-ULP on 144..190 x1");
+            assert!(
+                (xb0[190] - xn0[190]).abs() < 0.08 && (xb0[191] - xn0[191]).abs() < 0.08,
+                "unwalled threat cache=Some vs None drift too large: ({}, {}) vs ({}, {})",
+                xb0[190], xb0[191], xn0[190], xn0[191]
+            );
+            assert!(
+                (xb1[190] - xn1[190]).abs() < 0.08 && (xb1[191] - xn1[191]).abs() < 0.08,
+                "unwalled threat cache=Some vs None drift too large on x1"
+            );
+            let vb = evaluate_cf_value(&cb, &tbl, Some(&built), 1.0);
+            let vs = evaluate_cf_value(&cb, &tbl, Some(&sliced), 1.0);
+            assert_eq!(vb.to_bits(), vs.to_bits(), "evaluate_cf_value slice_for parity must be 0-ULP");
+        }
+
+        // 2. Exact 0-ULP side-swap symmetry & bench-permutation invariance on all 192 features!
+        let p_a = vec![team_a[0].clone(), team_a[1].clone(), team_a[4].clone()]; // Raikou, Cloyster, Heracross
+        let p_a_perm = vec![team_a[0].clone(), team_a[4].clone(), team_a[1].clone()];
+        let p_b = vec![team_b[0].clone(), team_b[1].clone(), team_b[2].clone()]; // Vaporeon, Cloyster, Snorlax
+        let p_b_perm = vec![team_b[0].clone(), team_b[2].clone(), team_b[1].clone()];
+
+        let (tab, cb_ab) = CompactBattle::from_battle(&start_b(&dex, &p_a, &p_b), &dex);
+        let (tba, cb_ba) = CompactBattle::from_battle(&start_b(&dex, &p_b, &p_a), &dex);
+        let (tap, cb_ap) = CompactBattle::from_battle(&start_b(&dex, &p_a_perm, &p_b_perm), &dex);
+        let cab = TempoMatchCache::build(&cb_ab, &tab);
+        let cba = TempoMatchCache::build(&cb_ba, &tba);
+        let cap = TempoMatchCache::build(&cb_ap, &tap);
+
+        let (x0_ab, x1_ab) = extract_raw_value_features(&cb_ab, &tab, Some(&cab));
+        let (x0_ba, x1_ba) = extract_raw_value_features(&cb_ba, &tba, Some(&cba));
+        let (x0_ap, x1_ap) = extract_raw_value_features(&cb_ap, &tap, Some(&cap));
+        assert_eq!(x0_ab, x1_ba, "192-dim x0(A,B) must equal x1(B,A) 0-ULP");
+        assert_eq!(x1_ab, x0_ba, "192-dim x1(A,B) must equal x0(B,A) 0-ULP");
+        assert_eq!(x0_ab, x0_ap, "192-dim bench swap must leave x0 0-ULP identical");
+        assert_eq!(x1_ab, x1_ap, "192-dim bench swap must leave x1 0-ULP identical");
+
+        // 3. Verify non-zero mechanical activations on benched & active mons!
+        // Side 0 = Raikou(@BrightPowder, Roar, Reflect) + benched Cloyster(Spikes, Rapid Spin) + Heracross(@Focus Band, Endure, Reversal)
+        // Side 1 = Vaporeon(Haze) + benched Cloyster(@Gold Berry, Spikes) + Snorlax (all 3 grounded!)
+        assert_eq!(x0_ab[177], 1.0, "active Raikou BrightPowder");
+        assert_eq!(x0_ab[183], 1.0, "active Raikou Reflect screen move");
+        assert_eq!(x0_ab[184], 1.0, "team_has_spikes * opp_grounded_frac = 1.0 * 3/3");
+        assert_eq!(x0_ab[185], 1.0, "Raikou(Roar) + Cloyster(Spikes) must activate forced_phaze*spikes");
+        assert_eq!(x0_ab[186], 1.0, "benched Cloyster Rapid Spin must activate team_has_spin");
+        assert_eq!(x1_ab[184], 1.0, "Side 1 Cloyster Spikes vs 3 grounded foes = 1.0");
+        assert_eq!(x1_ab[185], 0.0, "Vaporeon Haze + Cloyster Spikes must NOT activate forced_phaze*spikes");
+        // Verify Cloyster & Heracross bench slots activated (one of bench 0/1 has Spikes+Spin, other has Focus Band+Endure+Reversal!)
+        let b0 = &x0_ab[144..160];
+        let b1 = &x0_ab[160..176];
+        assert!((b0[0] + b1[0]) == 1.0, "benched Cloyster has_spikes");
+        assert!((b0[1] + b1[1]) == 1.0, "benched Cloyster has_spin");
+        assert!((b0[7] + b1[7]) == 1.0, "benched Heracross has_endure");
+        assert!((b0[8] + b1[8]) > 0.9, "benched Heracross 200-BP Reversal threat vs Snorlax must be > 0.9, got {}", b0[8] + b1[8]);
+        assert!((b0[12] + b1[12]) == 1.0, "benched Heracross Focus Band");
+        assert!(b0[15] > 0.3 && b1[15] > 0.3, "bench_spe_norm populated for both bench slots");
+        assert!(x0_ab[190] > 0.0 && x0_ab[191] > 0.0, "unwalled threat features populated");
+
+        // Second check: benched Gengar(Destiny Bond, Hypnosis, Scope Lens), Venusaur(Leech Seed, MiracleBerry), Tauros(@Berserk Gene)
+        let p_c = vec![team_a[3].clone(), team_a[2].clone(), team_a[5].clone()]; // Venusaur lead, Gengar + Tauros bench
+        let p_d = vec![team_b[5].clone(), team_b[3].clone(), team_b[4].clone()]; // Gengar, TTar, Zapdos
+        let (tcd, cb_cd) = CompactBattle::from_battle(&start_b(&dex, &p_c, &p_d), &dex);
+        let ccd = TempoMatchCache::build(&cb_cd, &tcd);
+        let (xc0, _) = extract_raw_value_features(&cb_cd, &tcd, Some(&ccd));
+        assert_eq!(xc0[180], 1.0, "active Venusaur has_leech_seed_move");
+        assert_eq!(xc0[187], 1.0, "team_has_sleep (Venusaur/Gengar)");
+        assert_eq!(xc0[188], 1.0, "benched Gengar Destiny Bond activates team_has_dbond");
+        assert_eq!(xc0[189], 1.0, "Venusaur activates team_has_leech_seed");
+        let cb0 = &xc0[144..160];
+        let cb1 = &xc0[160..176];
+        assert_eq!(cb0[3] + cb1[3], 1.0, "benched Gengar has_sleep");
+        assert_eq!(cb0[5] + cb1[5], 1.0, "benched Gengar has_dbond");
+        assert_eq!(cb0[13] + cb1[13], 1.0, "benched Gengar Scope Lens item_rng_or_crit");
+        assert_eq!(cb0[14] + cb1[14], 1.0, "benched Tauros untriggered Berserk Gene");
+
+        // Ghost immunity check for Reversal threat: Heracross vs Gengar-only -> reversal_threat == 0.0!
+        let hera_only = vec![team_a[4].clone()];
+        let gar_only = vec![team_b[5].clone()];
+        let (thg, cbhg) = CompactBattle::from_battle(&start_b(&dex, &hera_only, &gar_only), &dex);
+        let chg = TempoMatchCache::build(&cbhg, &thg);
+        let (xhg0, _) = extract_raw_value_features(&cbhg, &thg, Some(&chg));
+        assert_eq!(xhg0[176], 1.0, "active Heracross Focus Band");
+        assert_eq!(xhg0[181], 1.0, "active Heracross Endure");
+        assert_eq!(xhg0[182], 0.0, "Heracross Reversal vs Gengar-only must be 0.0 (Ghost immune!)");
+
+        // 4. Conditional `can_rb_linear_exit` safety guard:
+        // Clean 2v1 (Snorlax+Zapdos vs Vaporeon) -> true; adding Heracross(@Focus Band/Endure/Reversal) or Gengar(Destiny Bond) -> false!
+        let clean2 = vec![team_b[2].clone(), team_b[4].clone()];
+        let clean1 = vec![team_b[0].clone()];
+        let (t21, cb21) = CompactBattle::from_battle(&start_b(&dex, &clean2, &clean1), &dex);
+        assert!(can_rb_linear_exit(&cb21, &t21), "clean 2v1 must allow RB linear exit");
+
+        let hera2 = vec![team_a[4].clone(), team_b[2].clone()];
+        let (th21, cbh21) = CompactBattle::from_battle(&start_b(&dex, &hera2, &clean1), &dex);
+        assert!(!can_rb_linear_exit(&cbh21, &th21), "2v1 with Focus Band/Endure/Reversal must NOT early-exit linear.rs");
+
+        let db2 = vec![team_b[5].clone(), team_b[2].clone()];
+        let (td21, cbd21) = CompactBattle::from_battle(&start_b(&dex, &db2, &clean1), &dex);
+        assert!(!can_rb_linear_exit(&cbd21, &td21), "2v1 with Destiny Bond must NOT early-exit linear.rs");
     }
 }
