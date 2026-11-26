@@ -38,7 +38,7 @@ const config: EvaluationConfig = {
   player: team,
   opponents: [{ ...team, id: "one", weight: 1 }],
   iterations: 3000,
-  previewIterations: 240000,
+  previewIterations: 720000,
   c: 0.4,
   turnLimit: 500,
 };

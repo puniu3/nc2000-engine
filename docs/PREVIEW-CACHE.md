@@ -79,7 +79,7 @@ entries even if the policy happens to be unchanged.
 The current interface supports blind selection only. Pinned/open sheets,
 `fromFork`, hand-entered positions, endgame sessions and in-battle decisions
 return no usable key. It caches final choices, not search trees/checkpoints;
-it cannot resume a partial search. The 240k default matches `data/live-search.json`
+it cannot resume a partial search. The 720k default matches `data/live-search.json`
 (`SteppedCfPreview` live preview search) and is independent of the adaptive battle cap.
 The same interface can generate a record offline or on the first live miss;
 storage and distribution remain entirely with the fork.
