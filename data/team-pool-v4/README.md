@@ -1,55 +1,41 @@
-# `team-pool-v4` (Preserved 32-Shell Diverse Catalog & Certified `policy-v4` 7-Shell Nash Equilibrium)
+# `team-pool-v4` (Curated 10-Shell Equal-Weight Strong Generalist Bot Pool & Preserved 32-Shell Environment Knowledge)
 
-Generated deterministically by [`tools/build-team-products-v4.js`](../../tools/build-team-products-v4.js) from committed repo sources ([`data/team-pool-v3/team-pool.json`](../team-pool-v3/team-pool.json) + [`docs/reports/okimono-upgrades-v2.json`](../../docs/reports/okimono-upgrades-v2.json)). All **32 pairwise-distinct shells (`33` teams)** are preserved unchanged as a diverse playable catalog, while the flagship Nash equilibrium mixture is certified under production **`policy-v4`** (`CF-V_net v3` 192-dim PUCT adaptive `243k` + `SteppedCfPreview 720k` [`65%` `128i/128t1` `Present19` `TrajCalib`], `c = 0.4`, strict `NASH_PREVIEW_CACHE=0` LIVE).
+Generated deterministically by [`tools/build-team-products-v4.js`](../../tools/build-team-products-v4.js) from committed repo sources ([`data/team-pool-v3/team-pool.json`](../team-pool-v3/team-pool.json), [`docs/reports/okimono-upgrades-v2.json`](../../docs/reports/okimono-upgrades-v2.json), and [`docs/reports/policy-v4-strong-pool-variants.json`](../../docs/reports/policy-v4-strong-pool-variants.json)).
+
+## Product Architecture
+
+Rather than shipping brittle self-play exact-Nash support weights (where narrow specialist assassins such as `rental-cban-13` can enter at 2% solely to counter one shell, and marginal support weights swing sharply with self-play meta composition), `team-pool-v4` cleanly separates **the bot's playable strong pool** from **metagame environment knowledge**:
+
+- **Bot Playable Pool**: [`data/team-pool-v4/team-pool.json`](./team-pool.json) and matching [`data/team-pool-v4/flagship-mixture.json`](./flagship-mixture.json) — **10 broadly strong NC2000 generalist shells** drawn with **equal probability (`1/10 = 10.0%` per shell, `15` total teams, exact weight sum `1.000000`)**. Every shell in this pool is empirically verified broadly strong under production **`policy-v4`** (`CF-V_net v3` 192-dim PUCT adaptive `243k` + `SteppedCfPreview 720k` [`65%` `128i/128t1` `Present19` `TrajCalib`], `c = 0.4`, strict `NASH_PREVIEW_CACHE=0` LIVE). Targeted **low-poison `6/6`-same-item camouflage** is applied **exclusively** to the 4 shells where shared-seed CRN proved net positive rent without weak-twin drag; 3 shells deploy CRN-verified upgraded singletons where camouflage proved null or negative; 3 shells preserve their verified clean bases.
+- **Preserved 32-Shell Environment Knowledge**: [`data/team-pool-v4/environment-pool-32.json`](./environment-pool-32.json) preserves all **32 pairwise-distinct baseline shells (`33` teams)** intact (retaining all 22 cut shells — including narrow specialist `rental-cban-13` and lower-tier archetypes — as permanent metagame evaluation knowledge alongside untouched [`data/belief-pool-v3/`](../belief-pool-v3/) and [`data/team-pool-v3/`](../team-pool-v3/)).
 
 Full experimental evidence:
-- **9-Round `12,844`-Game `policy-v4` Nash Equilibrium & Full 32-Shell Support Certification**: [`docs/reports/policy-v4-nash-certification.md`](../../docs/reports/policy-v4-nash-certification.md)
-- **Historical `policy-v2` 6-Shell Certification (`7,776g`)**: [`docs/reports/policy-v2-nash-certification.md`](../../docs/reports/policy-v2-nash-certification.md)
-- **Historical `policy-v2` Same-Frame Camouflage Study (`8,016g`, 4-Arm CRN)**: [`docs/reports/policy-v2-camouflage-study.md`](../../docs/reports/policy-v2-camouflage-study.md)
-- **Local Single-Slot Saturation & Decoy Audit (`9,112g`, `cf_party_ab`)**: [`docs/reports/cf-party-ab-v4-exploration.md`](../../docs/reports/cf-party-ab-v4-exploration.md)
-- **Initial `v3 -> v4` Catalog Refresh & Step 4 True-CRN Audit (`10,152g`)**: [`docs/reports/policy-v2-team-pool-refresh.md`](../../docs/reports/policy-v2-team-pool-refresh.md)
+- **51,556-Game `policy-v4` Camouflage, Poison-Pill Optimization & 10-Shell Strong Pool Certification**: [`docs/reports/policy-v4-strong-pool-camo.md`](../../docs/reports/policy-v4-strong-pool-camo.md)
+- **Prior 12,844-Game `policy-v4` Plain 32-Shell Nash Certification (`p_clean7`)**: [`docs/reports/policy-v4-nash-certification.md`](../../docs/reports/policy-v4-nash-certification.md)
+- **Historical `policy-v2` Reports**: [`policy-v2-nash-certification.md`](../../docs/reports/policy-v2-nash-certification.md), [`policy-v2-camouflage-study.md`](../../docs/reports/policy-v2-camouflage-study.md), [`cf-party-ab-v4-exploration.md`](../../docs/reports/cf-party-ab-v4-exploration.md), [`policy-v2-team-pool-refresh.md`](../../docs/reports/policy-v2-team-pool-refresh.md)
 
-## Summary
+## Frozen Zero-Leakage Certification (`Stage 6d`, `2,400` Strict LIVE `policy-v4` Games)
 
-- **Catalog**: [`data/team-pool-v4/team-pool.json`](./team-pool.json) (`format: "nc2000-team-pool-v4"`, `policyEpoch: "policy-v4"`, all 32 shells / 33 teams preserved byte-identically)
-- **Certified Flagship Mixture**: [`data/team-pool-v4/flagship-mixture.json`](./flagship-mixture.json) (**7-shell certified `policy-v4` Bayes-Minimax Nash equilibrium**, `I1` Disclosed / Self-Consistent Shell regime, **`12,844` strict NO-CACHE LIVE games / `25,688` live preview sides**, `3,083/3,083` verified `policy-v4` manifests, `0` belief mismatches, `0` caps/ties, `0` cross-round seed overlaps, cross-round homogeneity $\chi^2 = 137.49$ on `143 df`, **`100.0%` direct support coverage across all `32/32` shells**, `0/25` non-support detections [`25/25 < 50.0%`, `max EV = 49.39%`, `max z = -0.15`, `min BH_q = 0.9978`])
-- **Support Rigor**: All `7` deployed shells match the **unique exact rational 7-shell point-LP equilibrium 1-to-1** (identical on both zero-leakage and pooled matrices), with `10,000`-draw True Bayesian Leave-One-Out inclusion probabilities **`59.8%–95.1%`** and positive `E[LOO]` (`+0.76 pp` to `+5.14 pp`) for all `7/7`, separated by a **`41.8 pp` cliff** from #8 (`pb66-m-wak55`, `18.0%`, `E[LOO] = -2.27 pp`, `p_LP = 0.00%`).
-- **Exploitability Certificate (`50k` held-out posterior draws)**:
-  - Active-8 Zero-Leakage (`96g–408g/edge`): Jeffreys Beta **`E[true] = 1.52 pp`**, `p90 = 2.33 pp`, **`p95 = 2.64 pp`**, `CVaR95 = 3.02 pp` (Mirrored-Pair Bootstrap: **`1.56 / 2.38 / 2.68 / 3.10 pp`**; in-sample gap `0.26 pp`, `N_eff = 5.67`)
-  - Full 32-Shell Empirical-Bayes Closure (`100%` direct coverage, zero uncovered imputation): **`E[true] = 1.52 pp`**, `p90 = 2.33 pp`, **`p95 = 2.64 pp`**
-- **Selected teams**: `33` across **`32` pairwise-distinct public Turn-0 shells** (`9` causally verified upgrades + `23` preserved `v3` shells including 2-variant `vc-s0053-lefties`)
-- **Distinct Level-55 Aces**: `22` (`Zapdos`, `Suicune`, `Marowak`, `Snorlax`, `Raikou`, `Porygon2`, `Tauros`, `Tyranitar`, `Miltank`, `Machamp`, `Gengar`, `Victreebel`, `Nidoking`, `Crobat`, `Heracross`, `Electabuzz`, `Alakazam`, `Kingdra`, `Dragonite`, `Entei`, `Poliwrath`, `Rhydon`)
-- **Draw Weight Sum**: `1.000000` exact (`1/32 = 0.03125` per shell; `s0053-lefties` split `0.015625 + 0.015625`)
-- **Legality & Training**: `33/33` WASM `Validator` PASS, strict Japanese NC2000 cartridge legality, `training-v3` normalized (`changedTeams: 0`).
+Evaluated under brand-new cryptographic domain `nc2000-policy-v4-strong10-v2-20261128::stage6d-final-cert` (`4,800/4,800` `preview.source == "live"`, `0` belief mismatches, `0` caps/ties, exact `I1` disclosed shell mixtures):
 
-## Certified 7-Shell `policy-v4` Flagship Equilibrium (`flagship-mixture.json`)
+- **`P_strong10` vs Uncamouflaged `Plain10` (`1,200` mirrored games, complete `10×10` matrix)**: **`52.50% ± 1.37%`** (**`+2.50 pp`, `z = +1.82`, one-sided `p = 0.0343`**) — all three buckets beat `Plain10` (`camouflaged-4`: `52.29%`, `upgraded-3`: `52.78%`, `base-3`: `52.50%`).
+- **`P_strong10` vs Certified 7-Shell Plain Nash `p_clean7` (`1,200` mirrored games, exact `STRAT60`)**: **`49.34% ± 1.45%`** (`z = -0.46`; `modified-7` = **`50.17%`**) — equal-weight 10-shell diversity matches the exact optimized 7-shell plain Nash within noise.
+- **Legality & Cross-Ruleset Stealth**: `15/15` bot teams and `33/33` preserved environment teams pass BOTH `gen2stadium2` and `castle` WASM `Validator`, strict JP NC2000 cartridge blacklist, `training-v3` (`changedTeams: 0`), exact `6/6` Turn-0 `(species, level, gender, has_item)` signatures, exact `6/6` `HP_IV` Castle stealth, exact `6/6` intra-cluster identical items, and a 16-game live `castle-tournament` `nash_refresh` smoke (`32/32` live sides, `0` belief errors, `0` caps/ties).
 
-> [!NOTE]
-> Under `policy-v4`, the unique exact rational point-LP Nash equilibrium has exact odd support size **7**, matching the deployed Bayes-Minimax support (`p_clean7`) **1-to-1**. Using `p_clean7` (`0.5%`-rounded Bayes-Minimax optimum, `dual_gap = 0.034 pp`) cuts held-out `p95` exploitability from `3.55 pp` (point-LP) down to **`2.64 pp`** at only `0.26 pp` in-sample gap.
+## Curated 10-Shell Equal-Weight Bot Pool (`15` Teams, `1/10` per Shell)
 
-| Rank | Shell | Certified Weight (`p_clean7`) | Exact Point-LP | Bayesian `P(in)` | `E[LOO]` | Active-7 RR | EV vs `p_clean7` | Archetype / Role |
-|---:|---|---:|---:|---:|---:|---:|---:|---|
-| 1 | **`pb63-m-gar55`** | **`22.50%`** | `19.36%` | **`95.1%`** | **`+5.14 pp`** | `51.62%` | `50.19%` | Lax55/Gengar55/Blissey/Endure-Rev Hera; crushes `pb-131` (`58.0%`) & `rental-cban-13` (`66.7%`) |
-| 2 | **`pb-131`** | **`22.00%`** | `15.90%` | **`94.3%`** | **`+4.36 pp`** | **`53.32%`** | `50.26%` | #1 RR; Zapdos55/TTar55/Spikes+Dual-Phaze Steelix/Hera; crushes `apex` (`62.0%`), `cban-13` (`60.4%`), `s07` (`58.0%`) |
-| 3 | **`pb85-m-cune50`** | **`17.00%`** | `24.26%` | **`81.8%`** | **`+2.29 pp`** | `44.99%` | `50.23%` | Lax55/Steelix/Machamp/Cloy/Zap/Suicune50; anti-TTar/Spikes wall beating `pb-131` (`56.8%`), `pb-87` (`56.7%`), `pb63` (`52.5%`) |
-| 4 | **`sample-07`** | **`17.00%`** | `24.13%` | **`71.1%`** | **`+1.25 pp`** | `51.66%` | `49.95%` | Triple-L55 Boom HO (`BG-Tauros55/Wak55/Zapdos55`); crushes `apex` (`61.7%`), `cban-13` (`59.4%`), beats `pb63` (`52.8%`) & `pb85` (`52.4%`) |
-| 5 | **`apex-c04-bug-3atkstar-boomgen`** | **`10.50%`** | `4.95%` | **`71.3%`** | **`+2.03 pp`** | `48.63%` | `49.47%` | RestTalk Lax55/Cloy/4-Atk Gar/Hera/Wak55/Starmie; polices `pb85` (`63.3%`) & `pb63` (`59.4%`) |
-| 6 | **`pb-87`** | **`9.00%`** | `8.48%` | **`60.5%`** | **`+0.76 pp`** | `50.81%` | `49.71%` | Zapdos55/TTar55/BP-Miltank/Cloy/Lax/Wak; polices `sample-07` (`58.2%`), beats `cban-13` (`55.2%`) & `apex` (`52.1%`) |
-| 7 | **`rental-cban-13`** | **`2.00%`** | `2.92%` | **`59.8%`** | **`+1.40 pp`** | `48.96%` | `47.58%` | P2-55/Drum-Poliwrath55/Gar55/Eggy/Lax/Roar-Golem; nuclear `pb85` policeman (`80.2%`!) locking `pb63` into the equilibrium |
-
-*(Catalog `score` values record each shell's exact `policy-v4` expected win rate against `p_clean7` across `100%` of the certified support.)*
-
-## All 9 Causally Verified Catalog Upgrades (Preserved in `team-pool-v4`)
-
-1. `pb-63` → **`pb63-m-gar55`** (`s2 Venusaur55 -> Gengar55@Gold Berry`) — **Certified `policy-v4` Tier-S (`22.5%`, #1)**
-2. `pb-85` → **`pb85-m-cune50`** (`s6 Umbreon50 -> Suicune50@Bright Powder`) — **Certified `policy-v4` Tier-S (`17.0%`, #3)**
-3. `mjj-2015-ayagen` → **`ayagen-m-zap50`** (`s5 Umbreon50 -> Zapdos50@Mint Berry`)
-4. `mjj-2020-rraikou` → **`rraikou-m-cune50`** (`s2 Cloyster@BJ -> Suicune50@Bright Powder`)
-5. `mjj-2014-offantom` → **`offantom-m-wak50`** (`s2 Charizard55 -> Marowak50@Thick Club`)
-6. `pb-66` → **`pb66-m-wak55`** (`s6 Gengar50 -> Marowak55@Thick Club`)
-7. `pb-84` → **`pb84-cln-skarm50`** (clean `Cloyster@Gold Berry Surf` + `Gligar@Bright Powder` + `s6 Skarmory50@Leftovers`)
-8. `pb-122` → **`pb122-m-lax50`** (`s3 Electrode50 -> Snorlax50@Quick Claw`)
-9. `sample-02` → **`s02-m-lax-curse`** (same shell: `s5 Snorlax50` `[Rest/Flame] -> [Curse/Self-Destruct]`)
+| Rank | Shell (`variantCluster`) | Mode | Members & Exact Weights (`drawWeight`) | `s6d` vs `p_clean7` | `s6d` vs `Plain10` | `Plain10` Opp EV | Key Design & CRN Evidence |
+|---:|---|---|---|---:|---:|---:|---|
+| 1 | **`pb-131`** | Upgraded Singleton | `pb131-c3r-fbhera-magzap-refcloy` (`0.100`) | `60.63%` | `57.50%` | `45.83%` | FocusBand EndRev Hera + Magnet Zap55 + Reflect Cloy (`+11.7 pp` over plain `pb-131`; camo proved null `+0.32 pp`) |
+| 2 | **`pb-6`** | Clean Base Singleton | `pb-6` (`0.100`) | `50.69%` | `59.17%` | `55.83%` | Zap55/Machamp55/SD Lax/TrapPass Umb/Curse Cloy/Perish Gar; camo hurt `-2.60 pp` |
+| 3 | **`sample-07`** | Upgraded Singleton | `s07-c8-mcoatrode-fbwak-delax-thunzap` (`0.100`) | `52.22%` | `53.33%` | `49.17%` | Mirror Coat Electrode + Fire Blast Wak55 + DE Lax + Thunder Zap55 (`58.3%` in `s2c+s4b`; camo hurt `-4.72 pp`) |
+| 4 | **`apex-c04-bug-3atkstar-boomgen`** | **Camouflaged `50/50`** (`6/6` items) | `apex-c3r` (`0.050`) + `apex-c5` (`0.050`) | `51.23%` | `53.33%` | `47.50%` | **Lv55 RestTalk Snorlax fixed!** 4-Atk Boom Gar/Reflect Cloy/Bug Wak/TWave Star vs Perish Gar/Curse Cloy/FB Wak/3-Atk Star (`s6c` `D_CAMO = +8.75 ± 3.87 pp, z = +2.262, p = 0.012`, `frag = 3.33 pp`; `s6d` `c3r 51.7%` vs `c5 52.5%`) |
+| 5 | **`ayagen-m-zap50`** | Clean Base Singleton | `ayagen-m-zap50` (`0.100`) | `48.93%` | `54.17%` | `42.50%` | Dual-Special-Ace Gengar55/Alakazam55/Eggy/Lax/Cune/Zap (`#8` overall vs `p_clean7`, `58.3%` vs `P_strong12`) |
+| 6 | **`pb63-m-gar55`** | **Camouflaged `50/50`** (`6/6` items) | `pb63-c3` (`0.050`) + `pb63-c3b` (`0.050`) | `51.19%` | `50.83%` | `46.67%` | Rest/Curse Lax55 + WW Zap vs DE/Curse/SD Lax55 + DP Zap (both 4-Atk Boom Gar55; `+6.7` to `+7.5 pp` over base, `54.4%` in `s6`) |
+| 7 | **`rraikou-m-cune50`** | **Camouflaged `80/20`** (`6/6` items & `HP_IV`) | `rraikou-m-cune50` (`0.080`) + `rraikou-c1` (`0.020`) | `42.24%` | `55.83%` | `50.00%` | Low-poison 20% Roar Raikou/Roar Cune/FB Lax ambush twin (`s3c+s3d` pooled `D_CAMO = +6.87 ± 3.18 pp, z = +2.16`) |
+| 8 | **`pb85-m-cune50`** | **Camouflaged `50/35/15`** (`6/6` items) | `pb85-m-cune50` (`0.050`) + `pb85-c5` (`0.035`) + `pb85-c3r` (`0.015`) | `48.23%` | `49.17%` | `42.50%` | Weak `c1` eliminated, `A0` promoted to 50% anchor, SD Lax/Reflect Cloy `c3r` capped at 15% (`s2a+s2b` `D_CAMO = +6.63 ± 2.38 pp, z = +2.79`; `s4b` `+3.58 pp`; `s6d` `c3r = 50.0%` both benchmarks) |
+| 9 | **`pb-87`** | Upgraded Singleton | `pb87-c5-fblax-dpzap-crunchttar` (`0.100`) | `45.45%` | `47.50%` | `51.67%` | Fire Blast Lax50 + DP Zap55 + Crunch TTar55 (`+6.49 pp` CRN in `s2b+s2c`, `65.0%` vs `Cut20`; camo hurt `-4.80 ± 2.29 pp, z = -2.09`) |
+| 10 | **`sample-12`** | Clean Base Singleton | `sample-12` (`0.100`) | `42.58%` | `44.17%` | `43.33%` | Perish/DBond Gar/Spin-or-HPump Star/Reflect Cloy/Toxic Umb/FB Wak/RestTalk Lax55 (`57.3%` in `s5`, `50.0%` over `296g` in `s6`) |
 
 ## Reproduction
 
