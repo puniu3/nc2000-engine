@@ -315,6 +315,7 @@ impl CompactPreviewRoster {
                             && p.hp_type == cm.guard_hp_type
                             && p.hp_power == cm.guard_hp_power
                             && p.happiness == cm.guard_happiness
+                            && battle.is_castle() == cm.guard_is_castle
                             && num_moves == cm.spec.num_moves
                             && (0..num_moves as usize).all(|m_i| {
                                 let sl = p.move_slots[m_i];
@@ -324,7 +325,7 @@ impl CompactPreviewRoster {
                 let (spec, ms) = if let Some(cm) = cached_hit {
                     (cm.spec, cm.move_specs)
                 } else {
-                    build_static_mon_spec(p, dex, dt)
+                    build_static_mon_spec(p, dex, dt, battle.ruleset)
                 };
                 mons[side_n][r_slot] = spec;
                 move_specs[side_n][r_slot] = ms;
@@ -2691,6 +2692,7 @@ pub struct CachedRosterMon {
     guard_hp_type: crate::dex::TypeId,
     guard_hp_power: i32,
     guard_happiness: u8,
+    guard_is_castle: bool,
     guard_maxpp: [i32; 4],
 }
 
@@ -2704,13 +2706,14 @@ impl RosterCompactCache {
         side: &crate::state::Side,
         dex: &Dex,
         dt: &CompactDexTables,
+        ruleset: crate::rules::Ruleset,
     ) -> [Option<CachedRosterMon>; 6] {
         let mut out = [None; 6];
         for (slot, p) in side.roster.iter().take(6).enumerate() {
             if p.transformed {
                 continue;
             }
-            let (spec, move_specs) = build_static_mon_spec(p, dex, dt);
+            let (spec, move_specs) = build_static_mon_spec(p, dex, dt, ruleset);
             let mut guard_maxpp = [0i32; 4];
             for m_i in 0..(spec.num_moves as usize) {
                 guard_maxpp[m_i] = p.move_slots[m_i].maxpp;
@@ -2725,6 +2728,7 @@ impl RosterCompactCache {
                 guard_hp_type: p.hp_type,
                 guard_hp_power: p.hp_power,
                 guard_happiness: p.happiness,
+                guard_is_castle: ruleset.is_castle(),
                 guard_maxpp,
             });
         }
@@ -2734,8 +2738,8 @@ impl RosterCompactCache {
     pub fn from_battle(battle: &Battle, dex: &Dex) -> Self {
         let dt = dex_tables(dex);
         let entries = [
-            Self::build_side_entries(&battle.sides[0], dex, dt),
-            Self::build_side_entries(&battle.sides[1], dex, dt),
+            Self::build_side_entries(&battle.sides[0], dex, dt, battle.ruleset),
+            Self::build_side_entries(&battle.sides[1], dex, dt, battle.ruleset),
         ];
         Self { entries }
     }
@@ -2753,7 +2757,7 @@ impl RosterCompactCache {
         let mut entries = [[None; 6]; 2];
         entries[template_side] = template.entries[template_side];
         let other = 1 - template_side;
-        entries[other] = Self::build_side_entries(&battle.sides[other], dex, dt);
+        entries[other] = Self::build_side_entries(&battle.sides[other], dex, dt, battle.ruleset);
         Self { entries }
     }
 }
@@ -2763,6 +2767,7 @@ fn build_static_mon_spec(
     p: &crate::state::Pokemon,
     dex: &Dex,
     dt: &CompactDexTables,
+    ruleset: crate::rules::Ruleset,
 ) -> (StaticMonSpec, [CompactMoveSpec; 4]) {
     let maxhp = p.maxhp.max(1) as i16;
     let mut type_mask = 0u32;
@@ -2777,7 +2782,17 @@ fn build_static_mon_spec(
             ..CompactItemSpec::default()
         });
 
-    let return_bp = (p.happiness as i32 * 10 / 25) as i16;
+    let is_castle = ruleset.is_castle();
+    let return_bp = if is_castle {
+        102
+    } else {
+        (p.happiness as i32 * 10 / 25) as i16
+    };
+    let frustration_bp = if is_castle {
+        102
+    } else {
+        ((255 - p.happiness as i32) * 10 / 25) as i16
+    };
     let mut moves = [MoveId(0); 4];
     let mut max_pp = [0u8; 4];
     let mut move_specs = [CompactMoveSpec::default(); 4];
@@ -2791,7 +2806,7 @@ fn build_static_mon_spec(
         let mut cm = dt.move_specs[slot.id.0 as usize];
         match cm.var_bp_kind {
             VarBpKind::Return => cm.base_power = return_bp,
-            VarBpKind::Frustration => cm.base_power = ((255 - p.happiness as i32) * 10 / 25) as i16,
+            VarBpKind::Frustration => cm.base_power = frustration_bp,
             VarBpKind::HiddenPower => {
                 let hpt = p.hp_type.0;
                 cm.move_type = hpt;
@@ -3030,6 +3045,7 @@ impl CompactBattle {
                             && p.hp_type == cm.guard_hp_type
                             && p.hp_power == cm.guard_hp_power
                             && p.happiness == cm.guard_happiness
+                            && battle.is_castle() == cm.guard_is_castle
                             && num_moves == cm.spec.num_moves
                             && (0..num_moves as usize).all(|m_i| {
                                 let sl = p.move_slots[m_i];
@@ -3040,7 +3056,7 @@ impl CompactBattle {
                     static_mons[c_idx] = cm.spec;
                     move_specs[c_idx] = cm.move_specs;
                 } else {
-                    let (spec, ms) = build_static_mon_spec(p, dex, dt);
+                    let (spec, ms) = build_static_mon_spec(p, dex, dt, battle.ruleset);
                     static_mons[c_idx] = spec;
                     move_specs[c_idx] = ms;
                 }

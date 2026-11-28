@@ -460,6 +460,7 @@ mod tests {
                             item: ItemObs::default(),
                             appeared: true,
                             observed_maxhp: None,
+                            sketch_overlay: None,
                         };
                         let corrected = project(&dex, p, &obs, &mut SplitMix64::new(1))
                             .unwrap_or_else(|| p.clone());
@@ -512,6 +513,7 @@ mod tests {
             item: ItemObs::default(),
             appeared: true,
             observed_maxhp: None,
+            sketch_overlay: None,
         };
         for mask in [u16::MAX, 1 << 15] {
             obs.hp_type_mask = mask;
@@ -617,6 +619,7 @@ mod tests {
             item: ItemObs::default(),
             appeared: true,
             observed_maxhp: Some(215),
+            sketch_overlay: None,
         };
         let proj_215 = project(&dex, p_fire, &obs, &mut SplitMix64::new(7)).unwrap();
         assert_eq!(modeled_type(&dex, &proj_215), Some(ice_idx));

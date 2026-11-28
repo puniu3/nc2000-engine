@@ -571,7 +571,11 @@ pub fn best_hit_fraction(b: &Battle, dex: &Dex, att: PokeId, def: PokeId) -> f64
                 TypeId(mspec.move_type),
                 mspec.is_physical,
                 mspec.is_status,
-                a.happiness as i32 * 10 / 25,
+                if b.is_castle() {
+                    102
+                } else {
+                    a.happiness as i32 * 10 / 25
+                },
             ),
             nc2000_engine::compact::VarBpKind::Frustration => (
                 TypeId(mspec.move_type),
@@ -752,7 +756,11 @@ pub fn expected_hit_fraction(
             TypeId(mspec.move_type),
             mspec.is_physical,
             mspec.is_status,
-            a.happiness as i32 * 10 / 25,
+            if b.is_castle() {
+                102
+            } else {
+                a.happiness as i32 * 10 / 25
+            },
         ),
         nc2000_engine::compact::VarBpKind::Frustration => (
             TypeId(mspec.move_type),

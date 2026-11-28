@@ -498,7 +498,9 @@ impl DmgKernel1D {
                 att_mon.hp()
             };
             crate::eval::ruleset_flail_bp(table.ruleset, att_hp as i32, att_spec.maxhp as i32)
-        } else if table.ruleset.is_castle() && mspec.var_bp_kind == VarBpKind::Frustration {
+        } else if table.ruleset.is_castle()
+            && matches!(mspec.var_bp_kind, VarBpKind::Return | VarBpKind::Frustration)
+        {
             102
         } else {
             mspec.base_power as i32

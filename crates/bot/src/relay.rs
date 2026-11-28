@@ -809,7 +809,9 @@ fn best_move_profile(
         let bp = if mspec.var_bp_kind == VarBpKind::FlailReversal {
             let att_hp = (att_hp_frac * (att_spec.maxhp.max(1) as f32)).round() as i32;
             crate::eval::ruleset_flail_bp(table.ruleset, att_hp, att_spec.maxhp as i32)
-        } else if is_castle && mspec.var_bp_kind == VarBpKind::Frustration {
+        } else if is_castle
+            && matches!(mspec.var_bp_kind, VarBpKind::Return | VarBpKind::Frustration)
+        {
             102
         } else if pursuit_2x && is_pursuit_move(mspec) {
             80

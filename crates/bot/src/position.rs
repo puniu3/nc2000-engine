@@ -316,6 +316,9 @@ pub struct MonSpec {
     /// The move Mimic wrote into its slot.
     #[serde(default)]
     pub mimic_overlay: Option<String>,
+    /// Castle PBS: the move Sketch permanently wrote into its slot.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sketch_overlay: Option<String>,
     #[serde(default)]
     pub last_move: Option<String>,
     /// Protect/Endure consecutive-use counter.
@@ -392,6 +395,7 @@ impl Default for MonSpec {
             transformed_into: None,
             transformed_uses: Vec::new(),
             mimic_overlay: None,
+            sketch_overlay: None,
             last_move: None,
             stall_streak: 0,
             last_protect_turn: 0,
@@ -430,7 +434,7 @@ impl PositionSpec {
         if self.schema != SCHEMA {
             return Err(format!("schema: expected {SCHEMA}, got {}", self.schema));
         }
-        let _ = self.resolved_ruleset()?;
+        let ruleset = self.resolved_ruleset()?;
         if self.side > 1 {
             return Err(format!("side: {} (must be 0 or 1)", self.side));
         }
@@ -443,6 +447,9 @@ impl PositionSpec {
             ));
         }
         for (s, side) in self.sides.iter().enumerate() {
+            if !ruleset.is_castle() && side.mons.iter().any(|m| m.sketch_overlay.is_some()) {
+                return Err(format!("sides[{s}]: sketch_overlay is only valid on Castle rulesets"));
+            }
             if side.mons.is_empty() {
                 return Err(format!("sides[{s}].mons is empty"));
             }
@@ -668,13 +675,27 @@ impl PositionSpec {
         let ruleset = self.resolved_ruleset()?;
         let encore = mon.volatile("encore").and_then(|v| v.move_key.clone());
         let disable = mon.volatile("disable").and_then(|v| v.move_key.clone());
+        let sketch_ov = if ruleset.is_castle() {
+            mon.sketch_overlay.as_deref()
+        } else {
+            None
+        };
         let mut out = Vec::new();
         for name in &set.moves {
             if name.is_empty() {
                 continue;
             }
-            let key = toid(name);
-            let id = dex.moves.id(&key).ok_or_else(|| format!("unknown move `{name}`"))?;
+            let raw_key = toid(name);
+            let (eff_name, key) = if raw_key == "sketch" {
+                if let Some(ov) = sketch_ov {
+                    (ov.to_string(), toid(ov))
+                } else {
+                    (name.clone(), raw_key)
+                }
+            } else {
+                (name.clone(), raw_key)
+            };
+            let id = dex.moves.id(&key).ok_or_else(|| format!("unknown move `{eff_name}`"))?;
             let maxpp = max_pp_for_ruleset(dex, id, ruleset);
             let disabled = match (&encore, &disable) {
                 (Some(em), _) => plain(&toid(em)) != plain(&key),
@@ -685,7 +706,7 @@ impl PositionSpec {
                 pp: Some((maxpp - mon.uses_of(dex, &key)).max(0)),
                 maxpp: Some(maxpp),
                 disabled,
-                move_key: name.clone(),
+                move_key: eff_name,
             });
         }
         if out.is_empty() || out.iter().all(|r| r.disabled || r.pp == Some(0)) {

@@ -311,9 +311,115 @@ fn verdict_has_errors(verdict: &serde_json::Value, ignore_team_size: bool) -> bo
     })
 }
 
+/// Cached Castle validation error classification for an exact team definition.
+#[derive(Clone, Copy, Debug)]
+struct CastleTeamLegality {
+    has_team_size_error: bool,
+    has_other_error: bool,
+}
+
+struct CastleLegalityEntry {
+    dex_fingerprint: [u8; 16],
+    ruleset: Ruleset,
+    sets: Vec<PokemonSet>,
+    legality: CastleTeamLegality,
+}
+
+fn castle_legality_hash(
+    dex_fingerprint: [u8; 16],
+    ruleset: Ruleset,
+    sets: &[PokemonSet],
+) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    dex_fingerprint.hash(&mut h);
+    ruleset.hash(&mut h);
+    sets.hash(&mut h);
+    h.finish()
+}
+
+fn classify_verdict_errors(verdict: &serde_json::Value) -> CastleTeamLegality {
+    let Some(findings) = verdict["findings"].as_array() else {
+        return CastleTeamLegality {
+            has_team_size_error: true,
+            has_other_error: true,
+        };
+    };
+    let mut has_team_size_error = false;
+    let mut has_other_error = false;
+    for f in findings {
+        if f["severity"].as_str() == Some("error") {
+            if f["code"].as_str() == Some("team-size") {
+                has_team_size_error = true;
+            } else {
+                has_other_error = true;
+            }
+        }
+    }
+    CastleTeamLegality {
+        has_team_size_error,
+        has_other_error,
+    }
+}
+
+fn cached_castle_team_legality(
+    dex: &Dex,
+    sets: &[PokemonSet],
+    ruleset: Ruleset,
+) -> CastleTeamLegality {
+    const MAX_CACHE_BUCKETS: usize = 4096;
+    static CACHE: OnceLock<std::sync::RwLock<HashMap<u64, Vec<CastleLegalityEntry>>>> =
+        OnceLock::new();
+    let cache = CACHE.get_or_init(|| std::sync::RwLock::new(HashMap::new()));
+    let fp = dex.replay_fingerprint;
+    let h = castle_legality_hash(fp, ruleset, sets);
+    if let Ok(guard) = cache.read() {
+        if let Some(bucket) = guard.get(&h) {
+            if let Some(entry) = bucket.iter().find(|e| {
+                e.dex_fingerprint == fp
+                    && e.ruleset == ruleset
+                    && e.sets.as_slice() == sets
+            }) {
+                return entry.legality;
+            }
+        }
+    }
+    let legality = match serde_json::to_string(sets) {
+        Ok(json) => {
+            let verdict = validate_team_with_ruleset(dex, format_learnsets(), &json, ruleset);
+            classify_verdict_errors(&verdict)
+        }
+        Err(_) => CastleTeamLegality {
+            has_team_size_error: true,
+            has_other_error: true,
+        },
+    };
+    if let Ok(mut guard) = cache.write() {
+        if guard.len() >= MAX_CACHE_BUCKETS {
+            guard.clear();
+        }
+        let bucket = guard.entry(h).or_default();
+        if !bucket.iter().any(|e| {
+            e.dex_fingerprint == fp && e.ruleset == ruleset && e.sets.as_slice() == sets
+        }) {
+            bucket.push(CastleLegalityEntry {
+                dex_fingerprint: fp,
+                ruleset,
+                sets: sets.to_vec(),
+                legality,
+            });
+        }
+    }
+    legality
+}
+
 /// Does the played regulation accept this team as entered? `fix`-severity
 /// and `warning`-severity findings keep a team legal; `error`s do not.
 fn team_is_format_legal(dex: &Dex, sets: &[PokemonSet], ruleset: Ruleset) -> bool {
+    if ruleset.is_castle() {
+        let leg = cached_castle_team_legality(dex, sets, ruleset);
+        return !leg.has_other_error && !leg.has_team_size_error;
+    }
     let Ok(json) = serde_json::to_string(sets) else { return false };
     let verdict = validate_team_with_ruleset(dex, format_learnsets(), &json, ruleset);
     !verdict_has_errors(&verdict, false)
@@ -324,12 +430,11 @@ fn pool_team_legal_for_obs(dex: &Dex, sets: &[PokemonSet], obs: &Observer) -> bo
     if !ruleset.is_castle() {
         return true;
     }
-    let Ok(json) = serde_json::to_string(sets) else { return false };
-    let verdict = validate_team_with_ruleset(dex, format_learnsets(), &json, ruleset);
+    let leg = cached_castle_team_legality(dex, sets, ruleset);
     // Allow sub-6-mon synthetic unit-test fixtures when pool team size matches obs roster size,
     // while strictly enforcing full 6-mon validation (including team-size) on real 6-mon games.
     let ignore_team_size = obs.mons().len() < 6 && sets.len() == obs.mons().len();
-    !verdict_has_errors(&verdict, ignore_team_size)
+    !leg.has_other_error && (ignore_team_size || !leg.has_team_size_error)
 }
 
 pub(crate) fn format_learnsets() -> &'static Learnsets {
@@ -2744,8 +2849,18 @@ impl Belief {
         let carriers = self.bayesian_prior_carriers(dex, mo, slot, obs_mons);
         let species_key = dex.species.key(mo.species);
         let prior_sp = self.active_prior().and_then(|p| p.species(species_key));
-        let poss_hp =
-            mo.hp_type_mask & crate::hp_evidence::possible_types(dex, mo.species, mo.gender);
+        let poss_hp = mo.hp_type_mask
+            & if self.ruleset.is_castle() {
+                crate::hp_evidence::possible_types_with_maxhp(
+                    dex,
+                    mo.species,
+                    mo.level,
+                    mo.gender,
+                    mo.observed_maxhp,
+                )
+            } else {
+                crate::hp_evidence::possible_types(dex, mo.species, mo.gender)
+            };
         let matches_moves = |s: &PokemonSet| {
             !s.moves
                 .iter()
@@ -2962,7 +3077,20 @@ impl Belief {
             let mut max_overlap = 0usize;
             let mut total_carrier_w = 0.0f64;
             let mut max_overlap_w = 0.0f64;
+            let castle_filter_hp_carriers = self.ruleset.is_castle()
+                && carriers.iter().any(|(s, _)| {
+                    !s.moves
+                        .iter()
+                        .any(|m| explicit_hp_contradicted(dex, m, poss_hp, mo.hp_type_mask))
+                });
             for &(s, w) in &carriers {
+                if castle_filter_hp_carriers
+                    && s.moves
+                        .iter()
+                        .any(|m| explicit_hp_contradicted(dex, m, poss_hp, mo.hp_type_mask))
+                {
+                    continue;
+                }
                 total_carrier_w += w;
                 let ov = mo
                     .revealed_moves
@@ -2982,6 +3110,13 @@ impl Belief {
                 }
             }
             for &(s, w) in &carriers {
+                if castle_filter_hp_carriers
+                    && s.moves
+                        .iter()
+                        .any(|m| explicit_hp_contradicted(dex, m, poss_hp, mo.hp_type_mask))
+                {
+                    continue;
+                }
                 let ov = mo
                     .revealed_moves
                     .iter()
@@ -3937,7 +4072,20 @@ impl Belief {
             let mut max_overlap = 0usize;
             let mut total_carrier_w = 0.0f64;
             let mut max_overlap_w = 0.0f64;
+            let castle_filter_hp_carriers = self.ruleset.is_castle()
+                && carriers.iter().any(|(s, _)| {
+                    !s.moves
+                        .iter()
+                        .any(|m| explicit_hp_contradicted(dex, m, poss_hp, mo.hp_type_mask))
+                });
             for &(s, w) in &carriers {
+                if castle_filter_hp_carriers
+                    && s.moves
+                        .iter()
+                        .any(|m| explicit_hp_contradicted(dex, m, poss_hp, mo.hp_type_mask))
+                {
+                    continue;
+                }
                 total_carrier_w += w;
                 let ov = mo
                     .revealed_moves
@@ -3960,6 +4108,13 @@ impl Belief {
             // (MoveId, display_name, co_occurrence_score, w_in_max_overlap, w_in_all)
             let mut move_scores: Vec<(MoveId, String, f64, f64, f64)> = Vec::new();
             for &(s, w) in &carriers {
+                if castle_filter_hp_carriers
+                    && s.moves
+                        .iter()
+                        .any(|m| explicit_hp_contradicted(dex, m, poss_hp, mo.hp_type_mask))
+                {
+                    continue;
+                }
                 let ov = mo
                     .revealed_moves
                     .iter()
@@ -5026,6 +5181,11 @@ fn consistent(dex: &Dex, refs: &[Pokemon], mons: &[MonObs]) -> bool {
                 .revealed_moves
                 .iter()
                 .all(|m| r.base_move_slots.iter().any(|s| move_matches(dex, s.id, *m)))
+            && mo.sketch_overlay.is_none_or(|copied| {
+                // Castle Sketch fails if the user already knew the copied move (moveexec.rs:1290),
+                // so any submitted candidate carrying the sketched move is impossible.
+                !r.base_move_slots.iter().any(|s| move_matches(dex, s.id, copied))
+            })
     })
 }
 
@@ -5172,6 +5332,29 @@ fn impute_mon(dst: &mut Pokemon, refm: &Pokemon, mo: &MonObs, dex: &Dex, exact_h
             .all(|m| nb.iter().any(|s| move_matches(dex, s.id, *m))),
         "revealed move missing from imputation source (filter drift)"
     );
+    // Castle Sketch overlay (public, permanent across switches): preserve the
+    // copied move's live PP/disabled slot instead of restoring spent Sketch.
+    if let Some(sketched) = mo.sketch_overlay {
+        if let Some(sketch_id) = dex.moves.id("sketch") {
+            if let Some(pos) = (0..nb.len()).find(|&i| nb[i].id == sketch_id) {
+                if let Some(live) = old_base.iter().find(|s| s.id == sketched) {
+                    nb[pos] = MoveSlot { shared: true, ..*live };
+                } else {
+                    let ms = dex.move_static(sketched);
+                    let pp_ups = if ms.no_pp_boosts { 0 } else { 3 };
+                    let maxpp = ms.pp * (5 + pp_ups) / 5;
+                    nb[pos] = MoveSlot {
+                        id: sketched,
+                        pp: maxpp,
+                        maxpp,
+                        disabled: false,
+                        used: false,
+                        shared: true,
+                    };
+                }
+            }
+        }
+    }
     *base_move_slots = nb;
     if was_transformed {
         // move_slots are 5-PP copies of a public mon: keep
@@ -5337,6 +5520,7 @@ mod fallback_tests {
             excluded_items: 0,
             appeared: false,
             observed_maxhp: None,
+            sketch_overlay: None,
         }
     }
 

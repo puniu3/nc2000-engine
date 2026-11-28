@@ -117,6 +117,7 @@ struct TrackMon {
     transformed_into: Option<(usize, usize)>,
     transformed_uses: Vec<(MoveId, i32)>,
     mimic_overlay: Option<MoveId>,
+    sketch_overlay: Option<MoveId>,
     last_move: Option<MoveId>,
     stall_streak: i32,
     last_protect_turn: u16,
@@ -155,6 +156,7 @@ impl TrackMon {
             transformed_into: None,
             transformed_uses: Vec::new(),
             mimic_overlay: None,
+            sketch_overlay: None,
             last_move: None,
             stall_streak: 0,
             last_protect_turn: 0,
@@ -376,6 +378,7 @@ impl ProtocolTracker {
                     excluded_items: 0,
                     appeared: m.appeared,
                     observed_maxhp,
+                    sketch_overlay: if is_castle { m.sketch_overlay } else { None },
                 }
             })
             .collect()
@@ -1292,6 +1295,14 @@ impl ProtocolTracker {
                 }
                 return;
             }
+            if self.ruleset.is_castle() && key == "sketch" {
+                if let Some(overlay) =
+                    parts.get(3).and_then(|n| dex.moves.id(&toid(n)))
+                {
+                    self.sides[s].mons[m].sketch_overlay = Some(overlay);
+                }
+                return;
+            }
             if BIND_CLASS.contains(&key.as_str()) {
                 let mid = dex.moves.id(&key);
                 let source = parts
@@ -1849,6 +1860,30 @@ impl ProtocolTracker {
             for (slot, tm) in self.sides[s].mons.iter().enumerate() {
                 let id = PokeId { side: s as u8, slot: slot as u8 };
                 let p = b.poke_mut(id);
+                // Castle Sketch overlay (permanent across switches): replace the Sketch
+                // slot in base_move_slots before applying PP deductions so post-Sketch
+                // uses deduct from the copied move rather than failing to match.
+                if self.ruleset.is_castle() {
+                    if let Some(overlay) = tm.sketch_overlay {
+                        if let Some(sketch) = dex.moves.id("sketch") {
+                            if let Some(i) = (0..p.base_move_slots.len())
+                                .find(|&i| p.base_move_slots[i].id == sketch)
+                            {
+                                let ms = dex.move_static(overlay);
+                                let pp_ups = if ms.no_pp_boosts { 0 } else { 3 };
+                                let maxpp = ms.pp * (5 + pp_ups) / 5;
+                                p.base_move_slots[i] = MoveSlot {
+                                    id: overlay,
+                                    pp: maxpp,
+                                    maxpp,
+                                    disabled: false,
+                                    used: false,
+                                    shared: true,
+                                };
+                            }
+                        }
+                    }
+                }
                 for &(mid, n) in &tm.uses {
                     for ms in p.base_move_slots.iter_mut() {
                         // move_matches: PS reveals plain `hiddenpower`
@@ -4656,6 +4691,7 @@ impl TrackMon {
                 .map(|&(m, n)| UseSpec { move_key: move_key(dex, m), n })
                 .collect(),
             mimic_overlay: self.mimic_overlay.map(|m| move_key(dex, m)),
+            sketch_overlay: self.sketch_overlay.map(|m| move_key(dex, m)),
             last_move: self.last_move.map(|m| move_key(dex, m)),
             stall_streak: self.stall_streak,
             last_protect_turn: self.last_protect_turn,
@@ -4723,6 +4759,7 @@ impl TrackMon {
             tm.transformed_uses.push((move_id_of(dex, &u.move_key)?, u.n));
         }
         tm.mimic_overlay = m.mimic_overlay.as_deref().map(|k| move_id_of(dex, k)).transpose()?;
+        tm.sketch_overlay = m.sketch_overlay.as_deref().map(|k| move_id_of(dex, k)).transpose()?;
         tm.last_move = m.last_move.as_deref().map(|k| move_id_of(dex, k)).transpose()?;
         tm.stall_streak = m.stall_streak;
         tm.last_protect_turn = m.last_protect_turn;

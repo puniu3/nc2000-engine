@@ -530,6 +530,7 @@ fn move_dmg_stats(
                     def_ls,
                     cb.weather_kind,
                     weather_active,
+                    table.ruleset.is_castle(),
                 );
             }
             let p_ko = fast_ko_prob(&md, def_hp) as f32;
@@ -3427,6 +3428,7 @@ fn fast_raw_pair_stats(
                         def_ls,
                         cb.weather_kind,
                         weather_active,
+                        table.ruleset.is_castle(),
                     );
                 }
                 if ms.is_selfdestruct {

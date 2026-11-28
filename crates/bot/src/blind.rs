@@ -482,10 +482,11 @@ impl ImperfectInfoCore {
                     }
                 }
             }
-            if !self
-                .game
-                .as_ref()
-                .is_some_and(|g| g.belief.has_active_pick_draws(&g.observer))
+            if !battle.is_castle()
+                && !self
+                    .game
+                    .as_ref()
+                    .is_some_and(|g| g.belief.has_active_pick_draws(&g.observer))
             {
                 if let Some(c) = self.preview_table_pick(dex) {
                     debug_assert!(choices.contains(&c), "preview pick outside legal set");
@@ -510,6 +511,7 @@ impl ImperfectInfoCore {
             return policy.clone();
         }
         if matches!(choices[0], SearchChoice::Team(_))
+            && !battle.is_castle()
             && !self
                 .game
                 .as_ref()

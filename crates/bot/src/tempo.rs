@@ -3271,9 +3271,43 @@ const GEN2_STAGE_MULT: [f32; 13] = [
     0.25, 0.28, 0.33, 0.40, 0.50, 0.66, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0,
 ];
 
+/// Castle PBS exact rational stat-stage multipliers `2/(2-s)` / `(2+s)/2` for stages `-6..=+6`.
+const CASTLE_STAGE_MULT: [f32; 13] = [
+    2.0 / 8.0,
+    2.0 / 7.0,
+    2.0 / 6.0,
+    2.0 / 5.0,
+    2.0 / 4.0,
+    2.0 / 3.0,
+    1.0,
+    1.5,
+    2.0,
+    2.5,
+    3.0,
+    3.5,
+    4.0,
+];
+
 /// Gen 2 exact accuracy / evasion stage multipliers for stages `-6..=+6` (`3/(3-s)` / `(3+s)/3`).
 const GEN2_ACC_STAGE_MULT: [f32; 13] = [
     0.33, 0.36, 0.43, 0.50, 0.60, 0.75, 1.0, 1.33, 1.66, 2.0, 2.33, 2.66, 3.0,
+];
+
+/// Castle PBS exact rational accuracy / evasion stage multipliers `3/(3-s)` / `(3+s)/3`.
+const CASTLE_ACC_STAGE_MULT: [f32; 13] = [
+    3.0 / 9.0,
+    3.0 / 8.0,
+    3.0 / 7.0,
+    3.0 / 6.0,
+    3.0 / 5.0,
+    3.0 / 4.0,
+    1.0,
+    4.0 / 3.0,
+    5.0 / 3.0,
+    6.0 / 3.0,
+    7.0 / 3.0,
+    8.0 / 3.0,
+    9.0 / 3.0,
 ];
 
 const MOVE_FLAG_USABLE: u16 = 1 << 0;
@@ -3889,13 +3923,15 @@ pub(crate) fn scale_cached_move(
     def_lightscreen_turns: u8,
     weather_kind: CompactWeather,
     weather_active: bool,
+    is_castle: bool,
 ) -> CachedMoveDmg {
     let mut out = md;
     let acc_b = att_boosts[5];
     let eva_b = def_boosts[6];
+    let acc_lut = if is_castle { &CASTLE_ACC_STAGE_MULT } else { &GEN2_ACC_STAGE_MULT };
     if (md.flags & MOVE_FLAG_ALWAYS_HIT) == 0 && (acc_b != 0 || eva_b != 0) {
-        let ratio = GEN2_ACC_STAGE_MULT[(acc_b + 6).clamp(0, 12) as usize]
-            / GEN2_ACC_STAGE_MULT[(eva_b + 6).clamp(0, 12) as usize];
+        let ratio = acc_lut[(acc_b + 6).clamp(0, 12) as usize]
+            / acc_lut[(eva_b + 6).clamp(0, 12) as usize];
         let old_h = out.p_hit.max(1e-4);
         let new_h = (out.p_hit * ratio).clamp(0.05, 1.0);
         out.mean_dmg *= new_h / old_h;
@@ -3910,9 +3946,10 @@ pub(crate) fn scale_cached_move(
     } else {
         (att_boosts[2], def_boosts[3])
     };
+    let stage_lut = if is_castle { &CASTLE_STAGE_MULT } else { &GEN2_STAGE_MULT };
     let stat_mult = if atk_b != 0 || def_b != 0 {
-        GEN2_STAGE_MULT[(atk_b + 6).clamp(0, 12) as usize]
-            / GEN2_STAGE_MULT[(def_b + 6).clamp(0, 12) as usize]
+        stage_lut[(atk_b + 6).clamp(0, 12) as usize]
+            / stage_lut[(def_b + 6).clamp(0, 12) as usize]
     } else {
         1.0
     };
@@ -4231,6 +4268,7 @@ fn compute_fast_pair(
                         def_lightscreen_turns,
                         cb.weather_kind,
                         weather_active,
+                        table.ruleset.is_castle(),
                     )
                 } else {
                     raw

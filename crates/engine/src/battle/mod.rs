@@ -39,7 +39,7 @@ pub enum EngineError {
 }
 
 /// A player's team as delivered by the fixture (canonical validated sets).
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]
 pub struct PokemonSet {
     pub name: String,
     pub species: String,

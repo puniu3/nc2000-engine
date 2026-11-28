@@ -180,6 +180,11 @@ pub struct MonObs {
     /// Exact max HP observed from a non-percentage/non-pixel denominator or
     /// Castle PBS exact-HP feed (`None` on standard PS `/100` or `/48` feeds).
     pub observed_maxhp: Option<i32>,
+    /// Castle PBS: permanent move copied into this mon's `Sketch` slot (`None` on PS
+    /// or before Sketch succeeds). Kept on `MonObs` so `Belief::consistent` and
+    /// `impute_mon` reject duplicate-move candidates and preserve the live copied slot
+    /// during search determinization.
+    pub sketch_overlay: Option<MoveId>,
 }
 
 /// Observation tracker for one side of one battle. Construct at battle
@@ -330,6 +335,20 @@ impl Observer {
             } else {
                 None
             };
+            let sketch_overlay = if is_castle {
+                match m.sketch_overlay.as_deref() {
+                    Some(key) => Some(
+                        dex.moves
+                            .id(&toid(key))
+                            .ok_or_else(|| format!("unknown move `{key}`"))?,
+                    ),
+                    None => None,
+                }
+            } else if m.sketch_overlay.is_some() {
+                return Err("sketch_overlay is only valid on Castle rulesets".into());
+            } else {
+                None
+            };
             mons.push(MonObs {
                 species,
                 level: m.level,
@@ -346,6 +365,7 @@ impl Observer {
                 excluded_items: m.excluded_items,
                 appeared: m.appeared,
                 observed_maxhp,
+                sketch_overlay,
             });
         }
         let mut obs = Observer::from_mons_with_ruleset(spec.side, mons, ruleset);
@@ -470,6 +490,7 @@ impl Observer {
                 excluded_items: 0,
                 appeared: false,
                 observed_maxhp: None,
+                sketch_overlay: None,
             })
             .collect::<Vec<_>>();
         let prev_item = battle.sides[opp].roster.iter().map(|p| p.item).collect();
@@ -574,6 +595,39 @@ impl Observer {
 
         // ---- channel 1: state diff over public-equivalent fields
         let is_castle = self.ruleset.is_castle();
+        if is_castle && battle.log.len() > self.log_pos {
+            let mut split_st = self.split_state;
+            for line in &battle.log[self.log_pos..] {
+                if let Some((owner, secret)) = split_st {
+                    split_st = secret.then_some((owner, false));
+                    if (owner == self.side) != secret {
+                        continue;
+                    }
+                }
+                if let Some(body) = line.strip_prefix('|') {
+                    let parts: Vec<&str> = body.split('|').collect();
+                    match parts.first().copied().unwrap_or("") {
+                        "split" => {
+                            let p = parts.get(1).copied().unwrap_or("");
+                            if let Some(o) = if p == "p1" { Some(0) } else if p == "p2" { Some(1) } else { None } {
+                                split_st = Some((o, true));
+                            }
+                        }
+                        "-activate" if parts.get(2) == Some(&"move: Sketch") => {
+                            if let Some(m) = self.opp_subject(parts.get(1).copied().unwrap_or("")) {
+                                if let Some(copied) = parts.get(3).and_then(|n| dex.moves.id(&toid(n))) {
+                                    if self.mons[m].sketch_overlay != Some(copied) {
+                                        self.mons[m].sketch_overlay = Some(copied);
+                                        dirty = true;
+                                    }
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
         for (slot, p) in battle.sides[opp].roster.iter().enumerate() {
             let mo = &mut self.mons[slot];
             if !mo.appeared && (p.previously_switched_in > 0 || p.is_active) {
@@ -585,8 +639,12 @@ impl Observer {
                 dirty = true;
             }
             // moves: base-slot usage marks (every path is a public |move|;
-            // Castle Mystery Berry can restore PP above maxpp without clamping)
+            // Castle Mystery Berry can restore PP above maxpp without clamping,
+            // and Castle Sketch permanently overwrites base_move_slots with a copied move)
             for s in p.base_move_slots.iter() {
+                if is_castle && mo.sketch_overlay == Some(s.id) {
+                    continue;
+                }
                 let pp_changed = if is_castle { s.pp != s.maxpp } else { s.pp < s.maxpp };
                 if (pp_changed || s.used) && !mo.revealed_moves.contains(&s.id) {
                     mo.revealed_moves.push(s.id);
@@ -774,12 +832,30 @@ impl Observer {
                                         ITEM_BERRY | ITEM_GOLD_BERRY | ITEM_BERRY_JUICE,
                                     );
                                 }
+                                let mut status_bits = 0u16;
                                 if self.opp_status[m] == Status::Slp {
-                                    dirty |=
-                                        self.exclude_items(m, ITEM_MINT_BERRY | ITEM_MIRACLE_BERRY);
+                                    status_bits |= ITEM_MINT_BERRY | ITEM_MIRACLE_BERRY;
                                 } else if self.opp_status[m] != Status::None || self.opp_confused {
-                                    dirty |= self.exclude_items(m, ITEM_MIRACLE_BERRY);
+                                    status_bits |= ITEM_MIRACLE_BERRY;
                                 }
+                                if self.ruleset.is_castle() {
+                                    // Castle EOT item phase checks all 6 status berries (ID 81
+                                    // iceberry cures both Burn and Confusion; ID 84 bitterberry
+                                    // is completely inert and must NEVER be excluded).
+                                    match self.opp_status[m] {
+                                        Status::Par => status_bits |= ITEM_PRZCUREBERRY,
+                                        Status::Psn | Status::Tox => {
+                                            status_bits |= ITEM_PSNCUREBERRY;
+                                        }
+                                        Status::Brn => status_bits |= ITEM_ICE_BERRY,
+                                        Status::Frz => status_bits |= ITEM_BURNT_BERRY,
+                                        _ => {}
+                                    }
+                                    if self.opp_confused {
+                                        status_bits |= ITEM_ICE_BERRY;
+                                    }
+                                }
+                                dirty |= self.exclude_items(m, status_bits);
                             }
                         }
                     }
@@ -935,6 +1011,16 @@ impl Observer {
                             Some(copied) => self.mimic_overlay[m] = Some(copied),
                             None => self.log_suppress[m] = true,
                         }
+                    } else if self.ruleset.is_castle() && what == "move: Sketch" {
+                        match parts.get(3).and_then(|n| dex.moves.id(&toid(n))) {
+                            Some(copied) => {
+                                if self.mons[m].sketch_overlay != Some(copied) {
+                                    self.mons[m].sketch_overlay = Some(copied);
+                                    dirty = true;
+                                }
+                            }
+                            None => self.log_suppress[m] = true,
+                        }
                     } else if what == "confusion" {
                         dirty |= self.exclude_items(m, ITEM_MIRACLE_BERRY);
                     } else if let Some(item_name) = what.strip_prefix("item: ") {
@@ -1039,6 +1125,11 @@ impl Observer {
             // rules, not only for plain lines.
             return dirty;
         }
+        if self.ruleset.is_castle() && self.mons[m].sketch_overlay == Some(id) {
+            // Castle Sketch permanently replaces the Sketch slot with the copied move;
+            // using it later is not evidence that the submitted set contained it.
+            return dirty;
+        }
         if let Some(from) = from {
             let from_id = dex.moves.id(&toid(from));
             let self_named = from_id.is_some_and(|f| move_matches(dex, id, f));
@@ -1117,19 +1208,19 @@ impl Observer {
             return false;
         }
         let mut bits = ITEM_BERSERK_GENE;
-        match self.opp_status[m] {
-            Status::Par => bits |= ITEM_PRZCUREBERRY,
-            Status::Psn | Status::Tox => bits |= ITEM_PSNCUREBERRY,
-            Status::Brn => bits |= ITEM_ICE_BERRY,
-            Status::Frz => bits |= ITEM_BURNT_BERRY,
-            _ => {}
-        }
-        if self.opp_confused {
-            if self.ruleset.is_castle() {
-                // Castle ID 81 (iceberry) cures BOTH Burn and Confusion;
-                // ID 84 (bitterberry) is completely inert and must NEVER be excluded.
-                bits |= ITEM_ICE_BERRY;
-            } else {
+        // In Castle PBS, PRZCure/PSNCure/Ice/Burnt berries do NOT trigger on Update
+        // (they fire only on immediate living-foe check after an opposing action and
+        // during EOT item phase); excluding them on Update/move/cant/turn falsely
+        // eliminates Ice Berry after self-confusion (e.g. Outrage) followed by a KO.
+        if !self.ruleset.is_castle() {
+            match self.opp_status[m] {
+                Status::Par => bits |= ITEM_PRZCUREBERRY,
+                Status::Psn | Status::Tox => bits |= ITEM_PSNCUREBERRY,
+                Status::Brn => bits |= ITEM_ICE_BERRY,
+                Status::Frz => bits |= ITEM_BURNT_BERRY,
+                _ => {}
+            }
+            if self.opp_confused {
                 bits |= ITEM_BITTER_BERRY;
             }
         }
@@ -1264,6 +1355,7 @@ mod tests {
             excluded_items: 0,
             appeared: true,
             observed_maxhp: None,
+            sketch_overlay: None,
         }];
         // side 0 observes side 1 (`p2a:` subjects).
         Observer::from_mons(0, mons)
@@ -1344,6 +1436,7 @@ mod tests {
                 excluded_items: 0,
                 appeared: true,
                 observed_maxhp: None,
+                sketch_overlay: None,
             },
             MonObs {
                 species: dex.species.id("zapdos").unwrap(),
@@ -1357,6 +1450,7 @@ mod tests {
                 excluded_items: 0,
                 appeared: false,
                 observed_maxhp: None,
+                sketch_overlay: None,
             },
         ];
         let mut obs = Observer::from_mons(0, mons);

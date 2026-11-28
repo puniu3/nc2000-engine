@@ -83,7 +83,9 @@ fn observer_castle_iceberry_dual_cure_and_bitterberry_inert() {
     assert!(Observer::is_item_excluded_for_slot(&dex, obs_ps.mons(), 0, dex.items.id("bitterberry")));
     assert!(!Observer::is_item_excluded_for_slot(&dex, obs_ps.mons(), 0, dex.items.id("iceberry")));
 
-    // Castle mode: confusion excludes iceberry (ID 81) and NEVER excludes bitterberry (ID 84)
+    // Castle mode: confusion does NOT exclude iceberry on |turn| without |upkeep|
+    // (Castle status berries do not trigger on Update), and DOES exclude iceberry
+    // on non-faint |upkeep| while NEVER excluding inert bitterberry (ID 84).
     let b_castle = Battle::from_fixture_with_ruleset(
         &dex,
         "1,2,3,4",
@@ -102,15 +104,21 @@ fn observer_castle_iceberry_dual_cure_and_bitterberry_inert() {
     ] {
         obs_castle.ingest_line(line, &dex);
     }
+    assert!(
+        !Observer::is_item_excluded_for_slot(&dex, obs_castle.mons(), 0, dex.items.id("iceberry")),
+        "Castle must NOT exclude iceberry on Update/|turn| before EOT upkeep"
+    );
+    obs_castle.ingest_line("|upkeep", &dex);
     assert!(Observer::is_item_excluded_for_slot(&dex, obs_castle.mons(), 0, dex.items.id("iceberry")));
     assert!(!Observer::is_item_excluded_for_slot(&dex, obs_castle.mons(), 0, dex.items.id("bitterberry")));
 
-    // Castle mode: Burn ALSO excludes iceberry (ID 81) and NEVER excludes bitterberry
+    // Castle mode: Burn ALSO excludes iceberry (ID 81) on EOT upkeep and NEVER excludes bitterberry
     let mut obs_brn = Observer::new(&b_castle, 0);
     for line in [
         "|switch|p1a: Snorlax|Snorlax, L50, M|266/266",
         "|switch|p2a: Snorlax|Snorlax, L50, M|266/266",
         "|-status|p2a: Snorlax|brn",
+        "|upkeep",
         "|turn|2",
     ] {
         obs_brn.ingest_line(line, &dex);
@@ -1171,4 +1179,692 @@ fn castle_player_channel_exact_hp_with_protocol_open_and_blind_agents() {
     let bc: SearchChoice = blind_agent.choose(&b, &dex, 0, &legal);
     assert!(legal.contains(&oc), "OpenAgent returned illegal choice {oc:?}");
     assert!(legal.contains(&bc), "BlindAgent returned illegal choice {bc:?}");
+}
+
+#[test]
+fn castle_observer_self_confusion_ko_preserves_iceberry_and_upkeep_excludes_all_six() {
+    let dex = load_dex();
+    let own = vec![
+        make_set("Lapras", 50, "Leftovers", &["Ice Beam", "Surf", "Rest", "Sleep Talk"]),
+        make_set("Snorlax", 50, "Mint Berry", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+    ];
+    let foe = vec![
+        make_set("Dragonite", 55, "Ice Berry", &["Outrage", "Thunderbolt", "Fire Blast", "Rest"]),
+        make_set("Snorlax", 50, "Leftovers", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+    ];
+    let b = Battle::from_fixture_with_ruleset(
+        &dex,
+        "1,2,3,4",
+        &own,
+        &foe,
+        Ruleset::castle_free(),
+    )
+    .unwrap();
+    let lap_hp = b.sides[0].roster[0].base_maxhp;
+    let dni_hp = b.sides[1].roster[0].base_maxhp;
+    let lax_hp = b.sides[1].roster[1].base_maxhp;
+    let mut obs = Observer::new(&b, 0);
+    // Dragonite self-confuses after Outrage, then Lapras KOs it with Ice Beam before EOT:
+    // Castle never gave Dragonite a living-foe or EOT opportunity to eat Ice Berry.
+    for line in [
+        format!("|switch|p1a: Lapras|Lapras, L50, M|{lap_hp}/{lap_hp}"),
+        format!("|switch|p2a: Dragonite|Dragonite, L55, M|{dni_hp}/{dni_hp}"),
+        "|turn|1".to_string(),
+        "|move|p2a: Dragonite|Outrage|p1a: Lapras".to_string(),
+        format!("|-damage|p1a: Lapras|{}/{lap_hp}", lap_hp - 60),
+        "|-start|p2a: Dragonite|confusion|[fatigue]".to_string(),
+        "|move|p1a: Lapras|Ice Beam|p2a: Dragonite".to_string(),
+        "|-damage|p2a: Dragonite|0 fnt".to_string(),
+        "|faint|p2a: Dragonite".to_string(),
+        "|upkeep".to_string(),
+        format!("|switch|p2a: Snorlax|Snorlax, L50, M|{lax_hp}/{lax_hp}"),
+        "|turn|2".to_string(),
+    ] {
+        obs.ingest_line(&line, &dex);
+    }
+    assert!(
+        !Observer::is_item_excluded_for_slot(&dex, obs.mons(), 0, dex.items.id("iceberry")),
+        "Castle must NOT falsely exclude Ice Berry after Outrage self-confusion + KO"
+    );
+    let pool = MetaPool {
+        teams: vec![MetaTeam { id: "true-dnite".into(), sets: foe.clone(), weight: None }],
+    };
+    let mut belief = Belief::new(&dex, &pool, &obs);
+    belief.sync(&dex, &obs);
+    assert_eq!(belief.alive(), &[0], "True Ice Berry Dragonite candidate must survive");
+
+    // Non-faint Castle upkeep excludes PRZCure/PSNCure/Ice/Burnt/Mint/Miracle cleanly
+    // while keeping unrelated status berries and inert Bitter Berry eligible.
+    let all_status_berries = [
+        "przcureberry",
+        "psncureberry",
+        "iceberry",
+        "burntberry",
+        "mintberry",
+        "bitterberry",
+    ];
+    for (status_line, expected_excluded) in [
+        ("|-status|p2a: Dragonite|par", "przcureberry"),
+        ("|-status|p2a: Dragonite|psn", "psncureberry"),
+        ("|-status|p2a: Dragonite|tox", "psncureberry"),
+        ("|-status|p2a: Dragonite|brn", "iceberry"),
+        ("|-status|p2a: Dragonite|frz", "burntberry"),
+        ("|-status|p2a: Dragonite|slp", "mintberry"),
+    ] {
+        let mut o = Observer::new(&b, 0);
+        for line in [
+            format!("|switch|p1a: Lapras|Lapras, L50, M|{lap_hp}/{lap_hp}"),
+            format!("|switch|p2a: Dragonite|Dragonite, L55, M|{dni_hp}/{dni_hp}"),
+            "|turn|1".to_string(),
+            status_line.to_string(),
+            "|upkeep".to_string(),
+        ] {
+            o.ingest_line(&line, &dex);
+        }
+        assert!(
+            Observer::is_item_excluded_for_slot(&dex, o.mons(), 0, dex.items.id(expected_excluded)),
+            "Castle non-faint upkeep must exclude {expected_excluded} for {status_line}"
+        );
+        assert!(
+            Observer::is_item_excluded_for_slot(&dex, o.mons(), 0, dex.items.id("miracleberry")),
+            "Castle non-faint upkeep must exclude miracleberry for {status_line}"
+        );
+        for other in all_status_berries {
+            if other != expected_excluded {
+                assert!(
+                    !Observer::is_item_excluded_for_slot(&dex, o.mons(), 0, dex.items.id(other)),
+                    "Castle upkeep for {status_line} must NOT exclude unrelated berry {other}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn castle_observer_and_importer_sketch_preserves_true_team_and_replaces_slot() {
+    let dex = load_dex();
+    let mk_g = |species: &str, level: u8, item: &str, gender: &str, moves: &[&str]| -> PokemonSet {
+        serde_json::from_value(serde_json::json!({
+            "name": species,
+            "species": species,
+            "level": level,
+            "item": item,
+            "gender": gender,
+            "moves": moves,
+            "ivs": { "hp": 30, "atk": 30, "def": 30, "spa": 30, "spd": 30, "spe": 30 },
+            "evs": { "hp": 255, "atk": 255, "def": 255, "spa": 255, "spd": 255, "spe": 255 }
+        }))
+        .unwrap()
+    };
+    let own = vec![
+        mk_g("Jolteon", 50, "Leftovers", "M", &["Agility", "Thunderbolt", "Baton Pass", "Substitute"]),
+        mk_g("Snorlax", 55, "Mint Berry", "M", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+        mk_g("Zapdos", 50, "Miracle Berry", "N", &["Thunderbolt", "Drill Peck", "Rest", "Sleep Talk"]),
+        mk_g("Starmie", 50, "Gold Berry", "N", &["Surf", "Psychic", "Recover", "Rapid Spin"]),
+        mk_g("Raikou", 50, "Magnet", "N", &["Thunderbolt", "Roar", "Rest", "Sleep Talk"]),
+        mk_g("Exeggutor", 50, "Pink Bow", "M", &["Psychic", "Giga Drain", "Stun Spore", "Explosion"]),
+    ];
+    let foe = vec![
+        mk_g("Smeargle", 50, "Gold Berry", "M", &["Sketch", "Spore", "Baton Pass", "Recover"]),
+        mk_g("Snorlax", 55, "Leftovers", "M", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+        mk_g("Zapdos", 50, "Magnet", "N", &["Thunderbolt", "Drill Peck", "Rest", "Sleep Talk"]),
+        mk_g("Starmie", 50, "Miracle Berry", "N", &["Surf", "Psychic", "Recover", "Rapid Spin"]),
+        mk_g("Raikou", 50, "Mint Berry", "N", &["Thunderbolt", "Roar", "Rest", "Sleep Talk"]),
+        mk_g("Exeggutor", 50, "Pink Bow", "M", &["Psychic", "Giga Drain", "Stun Spore", "Explosion"]),
+    ];
+
+    // 1. Live engine battle + Observer::observe() + pinned Belief
+    let mut b = Battle::from_fixture_with_ruleset(
+        &dex,
+        "1,2,3,4",
+        &own,
+        &foe,
+        Ruleset::castle_free(),
+    )
+    .unwrap();
+    let jolt_hp = b.sides[0].roster[0].base_maxhp;
+    let lax_own_hp = b.sides[0].roster[1].base_maxhp;
+    let zap_own_hp = b.sides[0].roster[2].base_maxhp;
+    let smear_hp = b.sides[1].roster[0].base_maxhp;
+    let lax_foe_hp = b.sides[1].roster[1].base_maxhp;
+    let mut obs = Observer::new(&b, 0);
+    let mut belief = Belief::pinned_checked(&dex, "true-smeargle", &foe, &obs).unwrap();
+    b.choose(&dex, 0, "team 1,2,3").unwrap();
+    b.choose(&dex, 1, "team 1,2,3").unwrap();
+    obs.observe(&b, &dex);
+    belief.sync_checked(&dex, &obs).unwrap();
+
+    // Turn 1: Jolteon uses Agility (faster), Smeargle uses Sketch -> copies Agility
+    b.choose(&dex, 0, "move 1").unwrap();
+    b.choose(&dex, 1, "move 1").unwrap();
+    obs.observe(&b, &dex);
+    belief.sync_checked(&dex, &obs).unwrap();
+
+    // Turn 2: Smeargle uses its Sketched Agility (slot 1 is now Agility!)
+    b.choose(&dex, 0, "move 1").unwrap();
+    b.choose(&dex, 1, "move 1").unwrap();
+    obs.observe(&b, &dex);
+    belief
+        .sync_checked(&dex, &obs)
+        .expect("Using a Castle Sketched move must NOT eliminate the true submitted team");
+    let sketch_id = dex.moves.id("sketch").unwrap();
+    let agility_id = dex.moves.id("agility").unwrap();
+    assert!(obs.mons()[0].revealed_moves.contains(&sketch_id));
+    assert!(!obs.mons()[0].revealed_moves.contains(&agility_id));
+
+    // 2. ProtocolAgent + impossible duplicate-move candidate rejection + determinization + PositionSpec round-trip
+    let mut impossible_foe = foe.clone();
+    impossible_foe[0] =
+        mk_g("Smeargle", 50, "Gold Berry", "M", &["Sketch", "Agility", "Baton Pass", "Recover"]);
+    let pool = MetaPool {
+        teams: vec![
+            MetaTeam { id: "true-smeargle".into(), sets: foe.clone(), weight: None },
+            MetaTeam { id: "impossible-dup-agility".into(), sets: impossible_foe, weight: None },
+        ],
+    };
+    let mut agent = ProtocolAgent::new_with_ruleset(
+        &dex,
+        0,
+        pool.clone(),
+        RmConfig::default(),
+        17,
+        Ruleset::castle_free(),
+    );
+    agent.set_own_team(own.clone());
+    let mut proto_lines: Vec<String> = Vec::new();
+    for (p, team) in [("p1", &own), ("p2", &foe)] {
+        for s in team {
+            let g = s.gender.as_deref().unwrap_or("");
+            let gpart = if g == "M" || g == "F" { format!(", {g}") } else { String::new() };
+            proto_lines.push(format!("|poke|{p}|{}, L{}{gpart}|item", s.species, s.level));
+        }
+    }
+    proto_lines.extend([
+        "|start".to_string(),
+        format!("|switch|p1a: Jolteon|Jolteon, L50, M|{jolt_hp}/{jolt_hp}"),
+        format!("|switch|p2a: Smeargle|Smeargle, L50, M|{smear_hp}/{smear_hp}"),
+        "|turn|1".to_string(),
+        "|move|p1a: Jolteon|Agility|p1a: Jolteon".to_string(),
+        "|move|p2a: Smeargle|Sketch|p1a: Jolteon".to_string(),
+        "|-activate|p2a: Smeargle|move: Sketch|Agility".to_string(),
+        "|upkeep".to_string(),
+        "|turn|2".to_string(),
+        format!("|switch|p2a: Snorlax|Snorlax, L55, M|{lax_foe_hp}/{lax_foe_hp}"),
+        "|move|p1a: Jolteon|Agility|p1a: Jolteon".to_string(),
+        "|upkeep".to_string(),
+        "|turn|3".to_string(),
+        format!("|switch|p2a: Smeargle|Smeargle, L50, M|{smear_hp}/{smear_hp}"),
+        "|move|p1a: Jolteon|Agility|p1a: Jolteon".to_string(),
+        "|upkeep".to_string(),
+        "|turn|4".to_string(),
+        "|move|p1a: Jolteon|Agility|p1a: Jolteon".to_string(),
+        "|move|p2a: Smeargle|Agility|p2a: Smeargle".to_string(),
+        "|upkeep".to_string(),
+        "|turn|5".to_string(),
+    ]);
+    for l in &proto_lines {
+        agent.push_line(&dex, l);
+    }
+    let req_json = serde_json::json!({
+        "active": [{
+            "moves": [
+                { "move": "Agility", "id": "agility", "pp": 44, "maxpp": 48, "disabled": false },
+                { "move": "Thunderbolt", "id": "thunderbolt", "pp": 24, "maxpp": 24, "disabled": false },
+                { "move": "Baton Pass", "id": "batonpass", "pp": 64, "maxpp": 64, "disabled": false },
+                { "move": "Substitute", "id": "substitute", "pp": 16, "maxpp": 16, "disabled": false }
+            ]
+        }],
+        "side": {
+            "name": "P1",
+            "id": "p1",
+            "pokemon": [
+                { "ident": "p1: Jolteon", "details": "Jolteon, L50, M", "condition": format!("{jolt_hp}/{jolt_hp}"), "active": true, "item": "leftovers" },
+                { "ident": "p1: Snorlax", "details": "Snorlax, L55, M", "condition": format!("{lax_own_hp}/{lax_own_hp}"), "active": false, "item": "mintberry" },
+                { "ident": "p1: Zapdos", "details": "Zapdos, L50", "condition": format!("{zap_own_hp}/{zap_own_hp}"), "active": false, "item": "miracleberry" }
+            ]
+        }
+    })
+    .to_string();
+    assert!(agent.on_request(&dex, &req_json).unwrap());
+    assert_eq!(
+        agent.belief().unwrap().alive(),
+        &[0],
+        "Candidate submitting both Sketch and copied Agility must be rejected"
+    );
+    let synth = agent.battle().unwrap();
+    let sm_slot0 = &synth.sides[1].roster[0].move_slots[0];
+    assert_eq!(sm_slot0.id, agility_id, "Synthesized Castle Smeargle must hold Sketched Agility");
+    assert_eq!(sm_slot0.maxpp, 48, "Agility maxpp on Castle = 30 * 8 / 5 = 48");
+    assert_eq!(sm_slot0.pp, 47, "One post-Sketch use must deduct 1 PP from Agility");
+
+    // Determinization MUST preserve Sketched Agility (47/48) instead of restoring spent Sketch!
+    let mut det_rng = SplitMix64::new(33);
+    let det = agent
+        .belief()
+        .unwrap()
+        .determinize(&dex, synth, agent.observer().unwrap(), &mut det_rng);
+    let det_sm_moves: Vec<_> = det.sides[1].roster[0].move_slots.iter().map(|m| (m.id, m.pp, m.maxpp)).collect();
+    assert!(
+        det_sm_moves.iter().any(|&(id, pp, maxpp)| id == agility_id && pp == 47 && maxpp == 48),
+        "Determinized Castle Smeargle must retain Sketched Agility at 47/48 PP: {det_sm_moves:?}"
+    );
+    assert!(
+        !det_sm_moves.iter().any(|&(id, _, _)| id == sketch_id),
+        "Determinized Castle Smeargle must NOT restore spent Sketch: {det_sm_moves:?}"
+    );
+    // Search root stepping must consider Agility and never spent Sketch for opponent Smeargle
+    agent.step(&dex, 128);
+    let replies: Vec<String> = agent
+        .search()
+        .unwrap()
+        .root_matrix()
+        .into_iter()
+        .map(|(_, c, _, _)| c.to_input(&dex))
+        .collect();
+    assert!(
+        replies.iter().any(|r| r == "move agility"),
+        "Castle search must offer Sketched Agility in opponent replies: {replies:?}"
+    );
+    assert!(
+        !replies.iter().any(|r| r == "move sketch"),
+        "Castle search must NOT offer spent Sketch in opponent replies: {replies:?}"
+    );
+
+    // PositionSpec round-trip: reload and feed ANOTHER Agility use -> still not recorded as submitted move!
+    let spec = agent.to_position_spec(&dex).unwrap();
+    assert_eq!(spec.sides[1].mons[0].sketch_overlay.as_deref(), Some("agility"));
+    let mut obs_rt = Observer::from_position(&dex, &spec).unwrap();
+    obs_rt.ingest_line("|move|p2a: Smeargle|Agility|p2a: Smeargle", &dex);
+    assert!(
+        !obs_rt.mons()[0].revealed_moves.contains(&agility_id),
+        "Restored Observer from PositionSpec must continue ignoring Sketched Agility uses"
+    );
+    // PS PositionSpec must fail-closed on sketch_overlay
+    let mut ps_spec = spec.clone();
+    ps_spec.ruleset = None;
+    assert!(ps_spec.check().is_err(), "PS PositionSpec must reject sketch_overlay");
+
+    // 3. Own-side Smeargle PositionSpec reload with `pp` omitted must offer Agility 48/48, NOT Struggle!
+    let mut own_smear_team = foe.clone();
+    own_smear_team[0] = mk_g("Smeargle", 50, "Gold Berry", "M", &["Sketch"]);
+    let mut own_agent = ProtocolAgent::new_with_ruleset(
+        &dex,
+        1,
+        MetaPool { teams: vec![MetaTeam { id: "own".into(), sets: own.clone(), weight: None }] },
+        RmConfig::default(),
+        19,
+        Ruleset::castle_free(),
+    );
+    own_agent.set_own_team(own_smear_team.clone());
+    for l in [
+        "|poke|p1|Jolteon, L50, M|item",
+        "|poke|p1|Snorlax, L55, M|item",
+        "|poke|p1|Zapdos, L50|item",
+        "|poke|p1|Starmie, L50|item",
+        "|poke|p1|Raikou, L50|item",
+        "|poke|p1|Exeggutor, L50, M|item",
+        "|poke|p2|Smeargle, L50, M|item",
+        "|poke|p2|Snorlax, L55, M|item",
+        "|poke|p2|Zapdos, L50|item",
+        "|poke|p2|Starmie, L50|item",
+        "|poke|p2|Raikou, L50|item",
+        "|poke|p2|Exeggutor, L50, M|item",
+        "|start",
+        &format!("|switch|p1a: Jolteon|Jolteon, L50, M|{jolt_hp}/{jolt_hp}"),
+        &format!("|switch|p2a: Smeargle|Smeargle, L50, M|{smear_hp}/{smear_hp}"),
+        "|turn|1",
+        "|move|p1a: Jolteon|Agility|p1a: Jolteon",
+        "|move|p2a: Smeargle|Sketch|p1a: Jolteon",
+        "|-activate|p2a: Smeargle|move: Sketch|Agility",
+        "|upkeep",
+        "|turn|2",
+    ] {
+        own_agent.push_line(&dex, l);
+    }
+    let own_req = serde_json::json!({
+        "active": [{
+            "moves": [
+                { "move": "Agility", "id": "agility", "pp": 48, "maxpp": 48, "disabled": false }
+            ]
+        }],
+        "side": {
+            "name": "P2",
+            "id": "p2",
+            "pokemon": [
+                { "ident": "p2: Smeargle", "details": "Smeargle, L50, M", "condition": format!("{smear_hp}/{smear_hp}"), "active": true, "item": "goldberry" },
+                { "ident": "p2: Snorlax", "details": "Snorlax, L55, M", "condition": format!("{lax_foe_hp}/{lax_foe_hp}"), "active": false, "item": "leftovers" },
+                { "ident": "p2: Zapdos", "details": "Zapdos, L50", "condition": format!("{zap_own_hp}/{zap_own_hp}"), "active": false, "item": "magnet" }
+            ]
+        }
+    })
+    .to_string();
+    assert!(own_agent.on_request(&dex, &own_req).unwrap());
+    let mut own_spec = own_agent.to_position_spec(&dex).unwrap();
+    own_spec.sides[1].mons[0].pp.clear(); // Omit explicit pp rows!
+    let mut reloaded = ProtocolAgent::new_with_ruleset(
+        &dex,
+        1,
+        MetaPool { teams: vec![MetaTeam { id: "own".into(), sets: own, weight: None }] },
+        RmConfig::default(),
+        23,
+        Ruleset::castle_free(),
+    );
+    reloaded.set_position(&dex, &own_spec).unwrap();
+    let re_battle = reloaded.battle().unwrap();
+    assert_eq!(re_battle.sides[1].roster[0].move_slots[0].id, agility_id);
+    assert_eq!(re_battle.sides[1].roster[0].move_slots[0].pp, 48);
+    let own_actions: Vec<String> = reloaded
+        .search()
+        .unwrap()
+        .actions()
+        .iter()
+        .map(|c| c.to_input(&dex))
+        .collect();
+    assert!(
+        own_actions.iter().any(|a| a == "move agility"),
+        "Reloaded own-side Smeargle with omitted pp must offer Agility, not Struggle: {own_actions:?}"
+    );
+    assert!(!own_actions.iter().any(|a| a == "move struggle"));
+}
+
+#[test]
+fn belief_fallback_set_filters_impossible_hp_carrier_by_observed_maxhp() {
+    let dex = load_dex();
+    let own = vec![make_set("Snorlax", 55, "Leftovers", &["Body Slam", "Earthquake", "Curse", "Rest"])];
+    // Discriminating off-pool carriers with distinct accompanying moves:
+    // - High-weight HP Fire Zapdos (201 HP max) carries Drill Peck
+    // - Lower-weight HP Ice Zapdos (215 HP max) carries Whirlwind
+    let zap_fire_dp = serde_json::from_value::<PokemonSet>(serde_json::json!({
+        "name": "Zapdos", "species": "Zapdos", "level": 55, "item": "Leftovers", "gender": "N",
+        "moves": ["Thunderbolt", "Hidden Power Fire", "Drill Peck", "Rest"],
+        "ivs": { "hp": 6, "atk": 28, "def": 24, "spa": 30, "spd": 30, "spe": 30 },
+        "evs": { "hp": 255, "atk": 255, "def": 255, "spa": 255, "spd": 255, "spe": 255 }
+    }))
+    .unwrap();
+    let zap_ice_ww = serde_json::from_value::<PokemonSet>(serde_json::json!({
+        "name": "Zapdos", "species": "Zapdos", "level": 55, "item": "Leftovers", "gender": "N",
+        "moves": ["Thunderbolt", "Hidden Power Ice", "Whirlwind", "Rest"],
+        "ivs": { "hp": 30, "atk": 30, "def": 26, "spa": 30, "spd": 30, "spe": 30 },
+        "evs": { "hp": 255, "atk": 255, "def": 255, "spa": 255, "spd": 255, "spe": 255 }
+    }))
+    .unwrap();
+    // Opponent is off-pool (uses Snorlax Lv50 companion not matching the pool's companion).
+    let foe_true = vec![
+        zap_ice_ww.clone(),
+        make_set("Snorlax", 50, "Mint Berry", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+    ];
+    let mut b = Battle::from_fixture_with_ruleset(
+        &dex,
+        "1,2,3,4",
+        &own,
+        &foe_true,
+        Ruleset::castle_free(),
+    )
+    .unwrap();
+    b.sides[1].roster[0].is_active = true;
+    b.sides[1].roster[0].previously_switched_in = 1;
+    b.sides[1].roster[0].base_move_slots[0].used = true; // Thunderbolt revealed
+
+    let dummy = make_set("Starmie", 50, "Miracle Berry", &["Surf", "Psychic", "Recover", "Rapid Spin"]);
+    let pool = MetaPool {
+        teams: vec![
+            MetaTeam { id: "fire-heavy".into(), sets: vec![zap_fire_dp, dummy.clone()], weight: Some(100.0) },
+            MetaTeam { id: "ice-light".into(), sets: vec![zap_ice_ww, dummy], weight: Some(1.0) },
+        ],
+    };
+    let mut obs = Observer::new(&b, 0);
+    obs.observe(&b, &dex);
+    assert_eq!(obs.mons()[0].observed_maxhp, Some(215));
+
+    let mut belief = Belief::new(&dex, &pool, &obs);
+    belief.sync(&dex, &obs);
+    assert!(belief.is_fallback());
+    let mut rng = SplitMix64::new(77);
+    let det = belief.determinize(&dex, &b, &obs, &mut rng);
+    let ww_id = dex.moves.id("whirlwind").unwrap();
+    let dp_id = dex.moves.id("drillpeck").unwrap();
+    let det_moves: Vec<_> = det.sides[1].roster[0].base_move_slots.iter().map(|m| m.id).collect();
+    assert!(
+        det_moves.contains(&ww_id) && !det_moves.contains(&dp_id),
+        "At observed_maxhp == 215, impossible HP Fire carrier (Drill Peck) must not win fallback loadout: {det_moves:?}"
+    );
+
+    // Novel move combination (Thunderbolt + Detect + Rest revealed): impossible HP Fire
+    // carrier must NOT push Drill Peck into Castle co-occurrence scoring (across 32 draws).
+    let mut foe_novel = foe_true.clone();
+    foe_novel[0].moves = vec![
+        "Thunderbolt".into(),
+        "Detect".into(),
+        "Rest".into(),
+        "Whirlwind".into(),
+    ];
+    let mut b_novel = Battle::from_fixture_with_ruleset(
+        &dex,
+        "1,2,3,4",
+        &own,
+        &foe_novel,
+        Ruleset::castle_free(),
+    )
+    .unwrap();
+    b_novel.sides[1].roster[0].is_active = true;
+    b_novel.sides[1].roster[0].previously_switched_in = 1;
+    b_novel.sides[1].roster[0].base_move_slots[0].used = true; // Thunderbolt
+    b_novel.sides[1].roster[0].base_move_slots[1].used = true; // Detect
+    b_novel.sides[1].roster[0].base_move_slots[2].used = true; // Rest
+    let mut obs_novel = Observer::new(&b_novel, 0);
+    obs_novel.observe(&b_novel, &dex);
+    let mut belief_novel = Belief::new(&dex, &pool, &obs_novel);
+    belief_novel.sync(&dex, &obs_novel);
+    let mut novel_rng = SplitMix64::new(79);
+    let mut saw_ww = false;
+    for _ in 0..32 {
+        let det_novel = belief_novel.determinize(&dex, &b_novel, &obs_novel, &mut novel_rng);
+        let novel_moves: Vec<_> =
+            det_novel.sides[1].roster[0].base_move_slots.iter().map(|m| m.id).collect();
+        assert!(
+            !novel_moves.contains(&dp_id),
+            "Castle novel move combination must exclude impossible HP Fire carrier (Drill Peck): {novel_moves:?}"
+        );
+        if novel_moves.contains(&ww_id) {
+            saw_ww = true;
+        }
+    }
+    assert!(saw_ww, "Castle novel move combination should sample Whirlwind from legal HP Ice carrier");
+}
+
+#[test]
+fn castle_return_and_frustration_fixed_102_bp_across_compact_and_evaluators() {
+    use nc2000_bot::eval::expected_hit_fraction;
+    use nc2000_engine::compact::CompactBattle;
+
+    let dex = load_dex();
+    let mut ret_h0 = make_set("Snorlax", 50, "Leftovers", &["Return", "Rest"]);
+    ret_h0.happiness = Some(0);
+    let mut frust_h255 = make_set("Snorlax", 50, "Leftovers", &["Frustration", "Rest"]);
+    frust_h255.happiness = Some(255);
+    let mut ret_h255 = make_set("Snorlax", 50, "Leftovers", &["Return", "Rest"]);
+    ret_h255.happiness = Some(255);
+
+    let b_cs_ret = Battle::from_fixture_with_ruleset(
+        &dex,
+        "1,2,3,4",
+        std::slice::from_ref(&ret_h0),
+        std::slice::from_ref(&ret_h255),
+        Ruleset::castle_free(),
+    )
+    .unwrap();
+    let b_cs_frust = Battle::from_fixture_with_ruleset(
+        &dex,
+        "1,2,3,4",
+        std::slice::from_ref(&frust_h255),
+        std::slice::from_ref(&ret_h255),
+        Ruleset::castle_free(),
+    )
+    .unwrap();
+    let b_ps_ret = Battle::from_fixture_with_ruleset(
+        &dex,
+        "1,2,3,4",
+        std::slice::from_ref(&ret_h0),
+        std::slice::from_ref(&ret_h255),
+        Ruleset::PsStadium2,
+    )
+    .unwrap();
+
+    let (t_cs_ret, _) = CompactBattle::from_battle(&b_cs_ret, &dex);
+    let (t_cs_frust, _) = CompactBattle::from_battle(&b_cs_frust, &dex);
+    let (t_ps_ret, _) = CompactBattle::from_battle(&b_ps_ret, &dex);
+    assert_eq!(t_cs_ret.move_specs[0][0].base_power, 102, "Castle Return must be 102 BP even at happiness=0");
+    assert_eq!(t_cs_frust.move_specs[0][0].base_power, 102, "Castle Frustration must be 102 BP even at happiness=255");
+    assert_eq!(t_ps_ret.move_specs[0][0].base_power, 0, "PS Return at happiness=0 stays 0 BP");
+
+    let p0 = nc2000_engine::state::PokeId { side: 0, slot: 0 };
+    let p1 = nc2000_engine::state::PokeId { side: 1, slot: 0 };
+    let ret_id = dex.moves.id("return").unwrap();
+    let frust_id = dex.moves.id("frustration").unwrap();
+    let e_cs_ret = expected_hit_fraction(&b_cs_ret, &dex, p0, p1, ret_id);
+    let e_cs_frust = expected_hit_fraction(&b_cs_frust, &dex, p0, p1, frust_id);
+    let e_ps_ret = expected_hit_fraction(&b_ps_ret, &dex, p0, p1, ret_id);
+    assert!(e_cs_ret > 0.25, "Castle eval Return (happiness=0) must compute 102 BP damage, got {e_cs_ret}");
+    assert!((e_cs_ret - e_cs_frust).abs() < 1e-9, "Castle Return and Frustration must match identically");
+    assert_eq!(e_ps_ret, 0.0, "PS eval Return (happiness=0) must remain 0.0");
+
+    // RosterCompactCache cross-ruleset reuse must honor guard_is_castle
+    use nc2000_engine::compact::RosterCompactCache;
+    let ps_cache = RosterCompactCache::from_battle(&b_ps_ret, &dex);
+    let (t_cs_with_ps_cache, _) =
+        CompactBattle::from_battle_with_roster_cache(&b_cs_ret, &dex, Some(&ps_cache));
+    assert_eq!(
+        t_cs_with_ps_cache.move_specs[0][0].base_power, 102,
+        "Castle CompactBattle must not reuse PS 0-BP RosterCompactCache entry"
+    );
+    let cs_cache = RosterCompactCache::from_battle(&b_cs_ret, &dex);
+    let (t_ps_with_cs_cache, _) =
+        CompactBattle::from_battle_with_roster_cache(&b_ps_ret, &dex, Some(&cs_cache));
+    assert_eq!(
+        t_ps_with_cs_cache.move_specs[0][0].base_power, 0,
+        "PS CompactBattle must not reuse Castle 102-BP RosterCompactCache entry"
+    );
+}
+
+#[test]
+fn castle_native_blind_and_open_agents_ignore_ps_baked_tables() {
+    use nc2000_bot::blind::{BlindAgent, OpenAgent};
+    use nc2000_bot::preview::{MatrixEst, PairSolution, PairTable, TableSet, SPACE_VERSION};
+    use nc2000_bot::Agent;
+    use nc2000_engine::battle::SearchChoice;
+    use std::sync::Arc;
+
+    let dex = load_dex();
+    let own = sample_six(&dex);
+    let foe = sample_six(&dex);
+    let pool = Arc::new(MetaPool {
+        teams: vec![MetaTeam { id: "t0".into(), sets: own.clone(), weight: None }],
+    });
+    let mut table_set = TableSet::from_pool(&dex, &pool);
+    let actions = table_set.actions().to_vec();
+    let sentinel = [6u8, 4, 5];
+    let sent_idx = actions.iter().position(|&a| a == sentinel).unwrap();
+    let mut p = vec![0.0f64; actions.len()];
+    p[sent_idx] = 1.0;
+    table_set
+        .add_pair(PairTable {
+            team_a: "t0".into(),
+            team_b: "t0".into(),
+            actions,
+            space_version: SPACE_VERSION,
+            screen: MatrixEst::new(1, 1),
+            support: [vec![sent_idx], vec![sent_idx]],
+            refine: MatrixEst::new(1, 1),
+            sol: PairSolution {
+                p_a: p.clone(),
+                p_b: p,
+                argmax_a: sent_idx,
+                argmax_b: sent_idx,
+                value: 0.5,
+                guarantee_mixed_a: 0.5,
+                guarantee_argmax_a: 0.5,
+                guarantee_mixed_b: 0.5,
+                guarantee_argmax_b: 0.5,
+            },
+            cfg: BakeCfg {
+                screen_games: 1,
+                refine_games: 1,
+                support: 1,
+                skuct_iters: 1,
+                advisor_iters: 1,
+                advisor_runs: 1,
+                eps: 0.1,
+                max_turns: 500,
+                seed: 1,
+            },
+            secs: 0.0,
+        })
+        .unwrap();
+    let tables = Arc::new(table_set);
+
+    // PS mode uses the baked table and returns the sentinel policy [6, 5, 4] with prob 1.0
+    let mut b_ps = Battle::from_fixture_with_ruleset(&dex, "1,2,3,4", &own, &foe, Ruleset::PsStadium2)
+        .unwrap();
+    let legal_ps = b_ps.legal_choices(&dex, 0);
+    let mut cfg = RmConfig::default();
+    cfg.iterations = 16;
+    let mut open_ps = OpenAgent::new(cfg.clone(), Some(tables.clone()), 1);
+    let pol_ps = open_ps.root_policy(&b_ps, &dex, 0, &legal_ps);
+    let sent_pos = legal_ps.iter().position(|c| *c == SearchChoice::Team(sentinel)).unwrap();
+    assert!((pol_ps[sent_pos] - 1.0).abs() < 1e-9, "PS OpenAgent must still serve baked table");
+
+    // Castle mode MUST ignore PS baked tables in both choose() and root_policy()
+    let mut b_cs = Battle::from_fixture_with_ruleset(&dex, "1,2,3,4", &own, &foe, Ruleset::castle_free())
+        .unwrap();
+    let legal_cs = b_cs.legal_choices(&dex, 0);
+    let mut open_cs = OpenAgent::new(cfg.clone(), Some(tables.clone()), 1);
+    let mut open_cs_notbl = OpenAgent::new(cfg.clone(), None, 1);
+    assert_eq!(
+        open_cs.choose(&b_cs, &dex, 0, &legal_cs),
+        open_cs_notbl.choose(&b_cs, &dex, 0, &legal_cs),
+        "Castle OpenAgent must ignore supplied PS baked tables"
+    );
+    let mut blind_cs = BlindAgent::new(cfg.clone(), pool.clone(), Some(tables), 1);
+    let mut blind_cs_notbl = BlindAgent::new(cfg, pool, None, 1);
+    assert_eq!(
+        blind_cs.root_policy(&b_cs, &dex, 0, &legal_cs),
+        blind_cs_notbl.root_policy(&b_cs, &dex, 0, &legal_cs),
+        "Castle BlindAgent::root_policy must ignore supplied PS baked tables"
+    );
+}
+
+#[test]
+fn castle_legality_cache_separates_team_size_and_same_id_mutations() {
+    let dex = load_dex();
+    let full = sample_six(&dex);
+    let sub2 = full[..2].to_vec();
+    let mut illegal_same_id = full.clone();
+    illegal_same_id[0] =
+        make_set("Snorlax", 55, "Leftovers", &["Lovely Kiss", "Body Slam", "Earthquake", "Rest"]);
+
+    // 1. Sub-2-mon team is allowed against a 2-mon synthetic obs, but rejected against a 6-mon obs!
+    let b2 = Battle::from_fixture_with_ruleset(&dex, "1,2,3,4", &sub2, &sub2, Ruleset::castle_free())
+        .unwrap();
+    let b6 = Battle::from_fixture_with_ruleset(&dex, "1,2,3,4", &full, &full, Ruleset::castle_free())
+        .unwrap();
+    let obs2 = Observer::new(&b2, 0);
+    let obs6 = Observer::new(&b6, 0);
+    let sub_pool = MetaPool {
+        teams: vec![MetaTeam { id: "same-id".into(), sets: sub2.clone(), weight: None }],
+    };
+    assert_eq!(Belief::new(&dex, &sub_pool, &obs2).pool_candidate_count(), 1);
+    assert_eq!(Belief::new(&dex, &sub_pool, &obs6).pool_candidate_count(), 0);
+    // Repeat after cache warm-up to prove cached entry preserves team-size distinction
+    assert_eq!(Belief::new(&dex, &sub_pool, &obs2).pool_candidate_count(), 1);
+    assert_eq!(Belief::new(&dex, &sub_pool, &obs6).pool_candidate_count(), 0);
+
+    // 2. Two teams sharing the exact same team id ("same-id") with legal vs NYPC-illegal sets
+    let legal_pool = MetaPool {
+        teams: vec![MetaTeam { id: "same-id".into(), sets: full, weight: None }],
+    };
+    let illegal_pool = MetaPool {
+        teams: vec![MetaTeam { id: "same-id".into(), sets: illegal_same_id, weight: None }],
+    };
+    assert_eq!(Belief::new(&dex, &legal_pool, &obs6).pool_candidate_count(), 1);
+    assert_eq!(Belief::new(&dex, &illegal_pool, &obs6).pool_candidate_count(), 0);
 }
