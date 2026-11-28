@@ -186,7 +186,7 @@ const wsUrl = (() => {
 
 // ------------------------------------------------------------------ teams
 // Own team and opponent belief are separate files (docs/TEAM-POOL-REBUILD-PLAN.md).
-const ownPoolText = fs.readFileSync(path.join(REPO, 'data/team-pool-v3/team-pool.json'), 'utf8');
+const ownPoolText = fs.readFileSync(path.join(REPO, 'data/team-pool-v4/team-pool.json'), 'utf8');
 const ownPool = JSON.parse(ownPoolText);
 const poolJson = fs.readFileSync(path.join(REPO, 'data/belief-pool-v3/belief-pool.json'), 'utf8');
 

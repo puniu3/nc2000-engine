@@ -159,7 +159,6 @@ export interface PoolTeam {
   rank: number;
   species: string[];
   levels: number[];
-  nash?: boolean;
   evolved?: boolean;
   provenance: {
     source?: string;

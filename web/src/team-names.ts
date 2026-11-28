@@ -6,7 +6,61 @@ export interface TeamNameEntry {
 }
 
 export const CATALOG_TEAM_NAMES: Record<string, TeamNameEntry> = {
-  // Flagship strongest core (team-pool-v3)
+  // Curated 10-shell (15-team) strong pool (team-pool-v4)
+  "pb131-c3r-fbhera-magzap-refcloy": {
+    ja: "磁石雷55サンダー・55バンギ・鉢巻無し起死回生ヘラ (pb-131)",
+    en: "Magnet 55 Zapdos · 55 Tyranitar · EndRev Heracross (pb-131)",
+  },
+  "s07-c8-mcoatrode-fbwak-delax-thunzap": {
+    ja: "ミラコマルマイン・大文字55ガラ・55ケンタ・雷55サンダー (sample-07)",
+    en: "Mirror Coat Electrode · FB 55 Marowak · 55 Tauros · Thunder 55 Zapdos (sample-07)",
+  },
+  "apex-c3r-fbhera-twstar-refcloy": {
+    ja: "55寝言カビ・爆破4Wゲンガー・リフパル・電磁波スターミー (apex A)",
+    en: "55 RestTalk Snorlax · Boom 4-Atk Gengar · Reflect Cloyster · TWave Starmie (apex A)",
+  },
+  "apex-c5-perishgar-3atkstar-fbwak-curcloy": {
+    ja: "55寝言カビ・滅びゲンガー・鈍いパル・大文字ガラ (apex B)",
+    en: "55 RestTalk Snorlax · Perish Gengar · Curse Cloyster · Fire Blast Marowak (apex B)",
+  },
+  "ayagen-m-zap50": {
+    ja: "8番道路ジム改 (55ゲンガー・55フーディン・50サンダー)",
+    en: "Route 8 Gym Rev (55 Gengar / 55 Alakazam / 50 Zapdos)",
+  },
+  "pb63-c3-restlax-4atkgar-wwzap": {
+    ja: "55眠る鈍いカビ・4W55ゲンガー・吹き飛ばしサンダー (pb-63 A)",
+    en: "55 Rest Curse Snorlax · 4-Atk 55 Gengar · WW Zapdos (pb-63 A)",
+  },
+  "pb63-c3b-sdlax-4atkgar-dpzap": {
+    ja: "55自爆鈍いカビ・4W55ゲンガー・ドリくちサンダー (pb-63 B)",
+    en: "55 SD Curse Snorlax · 4-Atk 55 Gengar · Drill Peck Zapdos (pb-63 B)",
+  },
+  "rraikou-m-cune50": {
+    ja: "ソード＆シールド改 (リフ55ライコウ・55ガラ・50スイクン A)",
+    en: "Sword & Shield Rev (Reflect 55 Raikou · 55 Marowak · 50 Suicune A)",
+  },
+  "rraikou-c1-roarkou-roarcune-fblax": {
+    ja: "ソード＆シールド改 (吠える55ライコウ・吠えるスイクン・大文字カビ B)",
+    en: "Sword & Shield Rev (Roar 55 Raikou · Roar Suicune · FB Snorlax B)",
+  },
+  "pb85-m-cune50": {
+    ja: "寝言カビSA改 (55カビ・冷ビ寝言スイクン・リフサンダー A)",
+    en: "55 Snorlax SA Rev (RestTalk Snorlax · IB Suicune · Reflect Zapdos A)",
+  },
+  "pb85-c5-roartalkcune-wwzap": {
+    ja: "寝言カビSA改 (55カビ・吠える寝言スイクン・吹き飛ばしサンダー B)",
+    en: "55 Snorlax SA Rev (RestTalk Snorlax · Roar Suicune · WW Zapdos B)",
+  },
+  "pb85-c3r-sdlax-refcloy": {
+    ja: "寝言カビSA改 (55自爆鈍いカビ・リフパル・50スイクン C)",
+    en: "55 Snorlax SA Rev (SD Curse Snorlax · Reflect Cloyster · Suicune C)",
+  },
+  "pb87-c5-fblax-dpzap-crunchttar": {
+    ja: "ドリくち55サンダー・噛み砕く55バンギ・大文字カビ (pb-87)",
+    en: "Drill Peck 55 Zapdos · Crunch 55 Tyranitar · FB Snorlax (pb-87)",
+  },
+
+  // Historical catalog teams (retained for display if loaded as a custom pool)
   "s0053-lefties-hpi": {
     ja: "残飯めざ氷55サンダー・大文字55ガラガラ (s0053)",
     en: "Lefties HP-Ice 55 Zapdos · Fire Blast 55 Marowak (s0053)",

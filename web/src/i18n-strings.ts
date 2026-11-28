@@ -17,11 +17,7 @@ export interface UIStrings {
   languageLabel: string;
   // custom teams (M14)
   customBadge: string;
-  nashBadge: string;
   evolvedBadge: string;
-  poolNashCategory: string;
-  poolEvolvedCategory: string;
-  poolClassicCategory: string;
   viewSets: string;
   customSection: string;
   addCustom: string;
@@ -114,13 +110,6 @@ export interface UIStrings {
   settingsLabel: string;
   settingsTitle: string;
   settingsValue: (pool: string, prior: string) => string;
-  // the conclusion mode (`?nash`, info-mode.ts): blind rules, but the
-  // opponent is drawn from the solved mixture and nothing on the screen is
-  // configurable. The mixture's weights are shown, deliberately: the claim
-  // is that knowing the distribution does not help, so hiding it would be
-  // demonstrating something weaker than what was proved.
-  nashMixNote: string;
-  nashSource: (file: string) => string;
   // community belief prior (M18): a distribution table that fills in an
   // unidentifiable opponent's sets. Loaded by hand, never automatically.
   priorLabel: string;
@@ -156,13 +145,6 @@ export interface UIStrings {
   // it also rewires the belief.
   poolLabel: string;
   poolBundled: (n: number) => string;
-  // where the bot's party comes from when no pool file is loaded
-  drawSourceLabel: string;
-  drawCatalog: (n: number) => string;
-  drawNash: (n: number) => string;
-  drawPrevNashSummary: string;
-  drawPrevNashR1: (n: number) => string;
-  drawOldNash: (n: number) => string;
   // the start screen's link to the party evaluator (`?evaluate`) and PDINPUT
   evaluateLink: string;
   pdinputLink: string;
@@ -334,11 +316,7 @@ const EN: UIStrings = {
   close: "Close",
   languageLabel: "Language",
   customBadge: "custom",
-  nashBadge: "Nash",
   evolvedBadge: "Evolved",
-  poolNashCategory: "Nash equilibrium",
-  poolEvolvedCategory: "Evolved",
-  poolClassicCategory: "Classic & community",
   viewSets: "View sets",
   customSection: "Saved custom teams",
   addCustom: "+ Import a custom team",
@@ -421,12 +399,6 @@ const EN: UIStrings = {
   settingsLabel: "Setup",
   settingsTitle: "Setup",
   settingsValue: (pool, prior) => `${pool} · ${prior}`,
-  nashMixNote:
-    "These weights were computed for an earlier version of the bot. " +
-    "Equilibrium for the current version has not been established. The bot " +
-    "samples afresh every battle, so its party stays hidden until the game " +
-    "ends — the odds do not.",
-  nashSource: (file) => `Solution: ${file}`,
   priorLabel: "Belief prior",
   priorNone: "None",
   priorHelp:
@@ -454,12 +426,6 @@ const EN: UIStrings = {
   settingsValueWithPickPrior: (pool, prior, pickPrior) => `${pool} · ${prior} · ${pickPrior}`,
   poolLabel: "Team pool",
   poolBundled: (n) => `Built-in (${n} ${n === 1 ? "party" : "parties"})`,
-  drawSourceLabel: "Where the opponent comes from",
-  drawCatalog: (n) => `Built-in (${n} ${n === 1 ? "party" : "parties"})`,
-  drawNash: (n) => `Solved mixture (${n} ${n === 1 ? "party" : "parties"})`,
-  drawPrevNashSummary: "Previous Nash mixtures (2)",
-  drawPrevNashR1: (n) => `Old mixture r1 (${n} ${n === 1 ? "party" : "parties"})`,
-  drawOldNash: (n) => `Old mixture v3 (${n} ${n === 1 ? "party" : "parties"})`,
   evaluateLink: "Measure a party's strength",
   pdinputLink: "Import party pool to PDINPUT.cgi",
   poolLoaded: (name, n) => `${name} (${n} ${n === 1 ? "team" : "teams"})`,
@@ -624,11 +590,7 @@ const JA: UIStrings = {
   close: "閉じる",
   languageLabel: "言語",
   customBadge: "カスタム",
-  nashBadge: "Nash均衡",
   evolvedBadge: "進化論生まれ",
-  poolNashCategory: "Nash均衡",
-  poolEvolvedCategory: "進化論生まれ",
-  poolClassicCategory: "既存・コミュニティ",
   viewSets: "構成を表示",
   customSection: "保存済みカスタムチーム",
   addCustom: "+ カスタムチームを取り込む",
@@ -709,11 +671,6 @@ const JA: UIStrings = {
   settingsLabel: "設定",
   settingsTitle: "設定",
   settingsValue: (pool, prior) => `${pool} · ${prior}`,
-  nashMixNote:
-    "以前のボットで計算した選出確率です。現在のボットで均衡が成り立つことは" +
-    "確認できていません。ボットは毎回引き直すので、今どれと当たっているかは" +
-    "終局まで伏せられます。確率は最初から公開です。",
-  nashSource: (file) => `解: ${file}`,
   priorLabel: "相手構成の事前分布",
   priorNone: "なし",
   priorHelp:
@@ -741,12 +698,6 @@ const JA: UIStrings = {
   settingsValueWithPickPrior: (pool, prior, pickPrior) => `${pool} · ${prior} · ${pickPrior}`,
   poolLabel: "チームプール",
   poolBundled: (n) => `標準(${n}パーティ)`,
-  drawSourceLabel: "相手パーティの抽選元",
-  drawCatalog: (n) => `標準(${n}パーティ)`,
-  drawNash: (n) => `結論の混合戦略(${n}パーティ)`,
-  drawPrevNashSummary: "以前の混合戦略 (2種)",
-  drawPrevNashR1: (n) => `旧混合戦略 r1(${n}パーティ)`,
-  drawOldNash: (n) => `旧混合戦略 v3(${n}パーティ)`,
   evaluateLink: "パーティの強さを測る",
   pdinputLink: "PDINPUT.cgi にパーティプールを取り込む",
   poolLoaded: (name, n) => `${name}(${n}チーム)`,

@@ -6,14 +6,12 @@
 // blind search policy. The default adaptive battle budget is configured in
 // data/live-search.json. `/` and its alias `?blind` are the same door.
 //
-// Three team files, three questions (docs/TEAM-POOL-REBUILD-PLAN.md):
-// - the catalog (team-pool-v2): the built-in parties a human can pick, and
+// Two team files, two questions (docs/TEAM-POOL-REBUILD-PLAN.md):
+// - the catalog (team-pool-v4): the built-in parties a human can pick, and
 //   the party the bot brings — both Random draws use its draw weights;
 // - the opponent prior (belief-pool-v3): what the bot assumes about the
-//   party it faces, on every door;
-// - the solved mixture (meta-nash-v3 / kodoku-r3): the bot's draw when
-//   ?nash or selected in setup, and a draw choice on the play door.
-// None of them is read in another's place. A pool file the user loads in
+//   party it faces, on every door.
+// Neither is read in the other's place. A pool file the user loads in
 // the setup panel is an explicit override of the lists and the bot's draw
 // (drawn uniformly, because that file is what they chose to face); it never
 // replaces the prior. The bot's draw lives in one place, `drawOpponent`,
@@ -26,21 +24,11 @@ import {
   fetchCatalog,
   fetchDexJson,
   fetchI18nJa,
-  fetchNashArtifact,
-  fetchPrevNashR1Artifact,
-  fetchOldNashArtifact,
 } from "./data";
 import { loadSetDex } from "./set-info";
 import { randomPoolTeam, type SelectedTeam } from "./pool-pick";
-import { drawNashTeam, parseNashArtifact, type NashMix } from "./nash-mix";
 import { drawCatalogTeam, parseCatalog, type Catalog } from "./own-pool";
 import { readDoor, type Door } from "./info-mode";
-import {
-  initialDrawSource,
-  readDrawSourceFromQuery,
-  storeDrawSource,
-  type DrawSource,
-} from "./draw-source";
 import {
   clearStoredPool,
   loadStoredPool,
@@ -106,23 +94,14 @@ export function App() {
   // The lists in play: the catalog, or a pool file the user loaded.
   const [loadedPool, setLoadedPool] = useState<LoadedPool | null>(null);
   const [game, setGame] = useState<GameSpec | null>(null);
-  // The solved mixture: the `?nash` draw, and a draw choice on the play door.
-  // Never null once boot succeeded — a mixture that cannot load or validate
-  // fails the page.
-  const [nashMix, setNashMix] = useState<NashMix | null>(null);
-  const [prevNashR1Mix, setPrevNashR1Mix] = useState<NashMix | null>(null);
-  const [oldNashMix, setOldNashMix] = useState<NashMix | null>(null);
-  const [drawSource, setDrawSource] = useState<DrawSource>(initialDrawSource);
   // The shipped opponent prior: the blind searcher's candidate set only.
   const [beliefJson, setBeliefJson] = useState<string | null>(null);
   const [loc, setLoc] = useState<Locale>(locale());
   // A table the user once picked by hand; nothing here ever fetches one on
   // its own (docs/community-belief-prior-design.md).
-  const [prior, setPrior] = useState<StoredPrior | null>(
-    () => (readDrawSourceFromQuery() !== null ? null : loadStoredPrior()),
-  );
+  const [prior, setPrior] = useState<StoredPrior | null>(loadStoredPrior);
   const [pickPrior, setPickPrior] = useState<StoredPrior | null>(
-    () => (readDrawSourceFromQuery() !== null ? null : loadStoredPickPrior()),
+    loadStoredPickPrior,
   );
 
   useEffect(() => {
@@ -131,14 +110,11 @@ export function App() {
         // JP name tables and the set-sheet dex load alongside the engine;
         // both swallow failures (missing tables just mean English names /
         // sheets without move meta).
-        const [, catalogText, , , nashText, prevNashR1Text, oldNashText, beliefPd] = await Promise.all([
+        const [, catalogText, , , beliefPd] = await Promise.all([
           loadEngine(),
           fetchCatalog(),
           loadJaNames(fetchI18nJa),
           loadSetDex(fetchDexJson),
-          fetchNashArtifact(),
-          fetchPrevNashR1Artifact(),
-          fetchOldNashArtifact(),
           fetchBeliefPool(),
         ]);
         // Parsed after the engine is up, because validating a team file is
@@ -147,18 +123,8 @@ export function App() {
         const parsed = parseCatalog(catalogText);
         if (!parsed.ok) throw new Error(parsed.errors.join("; "));
         setCatalog(parsed.catalog);
-        const mix = parseNashArtifact(nashText);
-        if (!mix.ok) throw new Error(mix.errors.join("; "));
-        setNashMix(mix.mix);
-        const prevR1Mix = parseNashArtifact(prevNashR1Text);
-        if (!prevR1Mix.ok) throw new Error(prevR1Mix.errors.join("; "));
-        setPrevNashR1Mix(prevR1Mix.mix);
-        const oldMix = parseNashArtifact(oldNashText);
-        if (!oldMix.ok) throw new Error(oldMix.errors.join("; "));
-        setOldNashMix(oldMix.mix);
         setBeliefJson(beliefPd.poolJson);
-        const hasNashQuery = readDrawSourceFromQuery() !== null;
-        setLoadedPool((!hasNashQuery ? restoreStoredPool() : null) ?? parsed.catalog.pool);
+        setLoadedPool(restoreStoredPool() ?? parsed.catalog.pool);
         setStatus("ready");
       } catch (e) {
         setError(String(e));
@@ -174,15 +140,7 @@ export function App() {
       </div>
     );
   }
-  if (
-    status === "error" ||
-    !loadedPool ||
-    !catalog ||
-    !nashMix ||
-    !prevNashR1Mix ||
-    !oldNashMix ||
-    !beliefJson
-  ) {
+  if (status === "error" || !loadedPool || !catalog || !beliefJson) {
     return (
       <div class="center-screen">
         <div class="error-box">
@@ -214,19 +172,8 @@ export function App() {
 
   /** The bot's party when nobody pinned one, in one place because the start
    * screen and every rematch must roll the same way. */
-  const drawOpponent = (): SelectedTeam => {
-    if (custom) return randomPoolTeam(activePool.pool);
-    const drawn =
-      drawSource === "nash"
-        ? drawNashTeam(nashMix)
-        : drawSource === "nash-r1"
-          ? drawNashTeam(prevNashR1Mix)
-          : drawSource === "nash-v3"
-            ? drawNashTeam(oldNashMix)
-            : drawCatalogTeam(catalog);
-    const cat = catalog.teams.find((t) => t.id === drawn.id);
-    return cat ? { id: drawn.id, sets: cat.sets } : drawn;
-  };
+  const drawOpponent = (): SelectedTeam =>
+    custom ? randomPoolTeam(activePool.pool) : drawCatalogTeam(catalog);
   /** The human's "Random": the catalog's draw weights, or uniform over a
    * loaded file — the same rule as the bot's draw from the same lists. */
   const drawHuman = (): SelectedTeam =>
@@ -242,14 +189,6 @@ export function App() {
         onLocale={(l) => {
           setLocale(l);
           setLoc(l);
-        }}
-        nashMix={nashMix}
-        prevNashR1Mix={prevNashR1Mix}
-        oldNashMix={oldNashMix}
-        drawSource={drawSource}
-        onDrawSource={(s) => {
-          storeDrawSource(s);
-          setDrawSource(s);
         }}
         drawOpponent={drawOpponent}
         drawHuman={drawHuman}

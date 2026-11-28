@@ -5,15 +5,15 @@ import type { EvaluationRun } from "../src/evaluate-core";
 test.use({ locale: "ja-JP", actionTimeout: 10000 });
 
 const route = `${process.env.NC2000_E2E_BASE ?? "/"}?evaluate`;
-/** The default opponents are the shipped Nash mixture, read from the same
- * file the page fetches so the suite follows a re-solved mixture. */
-const nash = JSON.parse(
+/** The default opponents are the shipped 10-shell party pool, read from the
+ * same file the page fetches so the suite follows pool updates. */
+const defaultPool = JSON.parse(
   readFileSync(
-    new URL("../../data/team-pool-v3/flagship-mixture.json", import.meta.url),
+    new URL("../../data/team-pool-v4/team-pool.json", import.meta.url),
     "utf8",
   ),
-) as { teams: { id: string; weight: number; sets: unknown[] }[] };
-const nashTotal = nash.teams.reduce((a, t) => a + t.weight, 0);
+) as { teams: { id: string; drawWeight: number; sets: unknown[] }[] };
+const poolTotal = defaultPool.teams.reduce((a, t) => a + t.drawWeight, 0);
 const player = [{ species: "Mewtwo", level: 100, moves: ["Psychic"] }];
 const opponent = [{ species: "Magikarp", level: 1, moves: ["Splash"] }];
 
@@ -84,7 +84,7 @@ test("warnings allow illegal parties, invalid data blocks execution", async ({
       ),
     });
   await expect(page.getByRole("alert")).toContainText("出やすさ");
-  await expect(page.locator(".eval-opponent strong")).toHaveCount(nash.teams.length);
+  await expect(page.locator(".eval-opponent strong")).toHaveCount(defaultPool.teams.length);
 });
 
 test("local wasm plays both sides, resumes in memory, separates changed configurations and exports", async ({
@@ -266,7 +266,7 @@ test("results stay out of browser storage and reset on reload or tab closure", a
   await boot(reopened);
   await expect(reopened.getByLabel("このタブの計測")).toHaveCount(0);
   await expect(reopened.getByLabel("自分のパーティ", { exact: true })).toHaveValue("");
-  await expect(reopened.locator(".eval-opponent strong")).toHaveCount(nash.teams.length);
+  await expect(reopened.locator(".eval-opponent strong")).toHaveCount(defaultPool.teams.length);
   await expect(reopened.getByRole("button", { name: "計測を開始", exact: true })).toBeVisible();
   await expect(reopened.getByText("結果は自動保存されません。", { exact: false })).toBeVisible();
 });
@@ -335,7 +335,7 @@ test("relaxed high-level preview survives blind search and reaches outcomes", as
   expect(result.pairs[0].games.map((g) => g.outcome)).toEqual(["win", "win"]);
 });
 
-test("ordinary six-Pokemon party completes against the default Nash mixture", async ({
+test("ordinary six-Pokemon party completes against the default party pool", async ({
   page,
 }) => {
   await boot(page);
@@ -355,7 +355,7 @@ test("ordinary six-Pokemon party completes against the default Nash mixture", as
   const result = await exported(page);
   expect(result.config.player.relaxed).toBe(false);
   expect(result.config.player.warnings).toEqual([]);
-  expect(nash.teams.map((t) => t.id)).toContain(result.pairs[0].opponent);
+  expect(defaultPool.teams.map((t) => t.id)).toContain(result.pairs[0].opponent);
   expect(result.pairs[0].games).toHaveLength(2);
 });
 
@@ -500,19 +500,19 @@ test("editing an imported party preserves custom stats and exposes no technical 
   await expect(page.getByLabel("考える回数", { exact: true })).toHaveCount(0);
 });
 
-test("opponent panel shows the mixture's parties and probabilities, with JSON as its only edit control", async ({
+test("opponent panel shows the pool's parties and probabilities, with JSON as its only edit control", async ({
   page,
 }) => {
   await page.goto(route);
   const panel = page.getByRole("region", { name: "対戦相手の設定" });
   await expect(panel.locator(".eval-opponent strong")).toHaveText(
-    nash.teams.map((_, i) => `基本の相手${i + 1}`),
+    defaultPool.teams.map((_, i) => `基本の相手${i + 1}`),
   );
   await expect(panel.locator(".eval-opponent span")).toHaveText(
-    nash.teams.map((t) => `${((t.weight / nashTotal) * 100).toFixed(1)}%`),
+    defaultPool.teams.map((t) => `${((t.drawWeight / poolTotal) * 100).toFixed(1)}%`),
   );
   await expect(panel.locator(".eval-opponent-roster li")).toHaveCount(
-    nash.teams.length * 6,
+    defaultPool.teams.length * 6,
   );
   await expect(panel.locator("input")).toHaveCount(1);
   await expect(panel.locator("input")).toHaveAttribute("type", "file");
@@ -533,7 +533,7 @@ test("saved opponent settings load back unchanged and edit the distribution", as
   await page.goto(route);
   const panel = page.getByRole("region", { name: "対戦相手の設定" });
   await expect(panel.locator(".eval-opponent strong")).toHaveCount(
-    nash.teams.length,
+    defaultPool.teams.length,
   );
   const download = page.waitForEvent("download");
   await panel
@@ -545,7 +545,7 @@ test("saved opponent settings load back unchanged and edit the distribution", as
   const saved = JSON.parse(text) as {
     teams: { id: string; weight: number; sets: unknown[] }[];
   };
-  expect(saved.teams.map((t) => t.id)).toEqual(nash.teams.map((t) => t.id));
+  expect(saved.teams.map((t) => t.id)).toEqual(defaultPool.teams.map((t) => t.id));
   expect(saved.teams.every((t) => t.sets.length === 6)).toBe(true);
 
   saved.teams[0].id = "edited";
@@ -557,7 +557,7 @@ test("saved opponent settings load back unchanged and edit the distribution", as
   });
   await expect(panel.locator(".eval-opponent strong")).toHaveText([
     "edited",
-    ...nash.teams.slice(1).map((_, i) => `基本の相手${i + 2}`),
+    ...defaultPool.teams.slice(1).map((_, i) => `基本の相手${i + 2}`),
   ]);
   await expect(panel.locator(".eval-opponent span").first()).toHaveText("0.0%");
 
@@ -567,6 +567,6 @@ test("saved opponent settings load back unchanged and edit the distribution", as
     buffer: Buffer.from(text),
   });
   await expect(panel.locator(".eval-opponent span")).toHaveText(
-    nash.teams.map((t) => `${((t.weight / nashTotal) * 100).toFixed(1)}%`),
+    defaultPool.teams.map((t) => `${((t.drawWeight / poolTotal) * 100).toFixed(1)}%`),
   );
 });

@@ -36,7 +36,7 @@ try {
     await wasm.default();
     const dex = new wasm.Dex();
     const poolJson = await (await fetch("/data/belief-pool-v3/belief-pool.json")).text();
-    const catalog = await (await fetch("/data/team-pool-v3/team-pool.json")).json();
+    const catalog = await (await fetch("/data/team-pool-v4/team-pool.json")).json();
     const teams = catalog.teams.slice(0, 2).map((team) => JSON.stringify(team.sets));
     const seed = 7;
     const expected = (iterations, c) => {

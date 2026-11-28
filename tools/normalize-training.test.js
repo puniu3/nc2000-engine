@@ -61,7 +61,7 @@ test('Return and Frustration have maximum power rather than default happiness', 
 });
 test('native exhaustive adversarial certificate covers current products', () => {
 	const report=require('../data/training-v3/verification.json');
-	assert.deepEqual(report.issues,[]);assert.equal(report.catalog_teams_with_exact_prior_support,33);
+	assert.deepEqual(report.issues,[]);assert.equal(report.catalog_teams_with_exact_prior_support,15);
 	assert.equal(report.dv_tuples_per_class,65536);
 	let sets=0;
 	for(const [p,hash] of Object.entries(report.inputs)) {

@@ -741,7 +741,7 @@ fn belief_castle_legality_filtering_and_warning_tolerance() {
     let pool: MetaPool =
         serde_json::from_str(include_str!("../../../data/belief-pool-v3/belief-pool.json"))
             .unwrap();
-    assert_eq!(pool.teams.len(), 520);
+    assert_eq!(pool.teams.len(), 527);
 
     let team = sample_six(&dex);
     let b_ps = Battle::from_fixture_with_ruleset(&dex, "1,2,3,4", &team, &team, Ruleset::PsStadium2)
@@ -750,8 +750,8 @@ fn belief_castle_legality_filtering_and_warning_tolerance() {
     let belief_ps = Belief::new(&dex, &pool, &obs_ps);
     assert_eq!(
         belief_ps.pool_candidate_count(),
-        520,
-        "PS belief pool must stay 100% unchanged (520 teams)"
+        527,
+        "PS belief pool must stay 100% unchanged (527 teams)"
     );
 
     let b_castle = Battle::from_fixture_with_ruleset(
@@ -766,8 +766,8 @@ fn belief_castle_legality_filtering_and_warning_tolerance() {
     let belief_castle = Belief::new(&dex, &pool, &obs_castle);
     assert_eq!(
         belief_castle.pool_candidate_count(),
-        520 - 19,
-        "Castle belief pool must filter exact 19/520 illegal teams (501 kept)"
+        527 - 19,
+        "Castle belief pool must filter exact 19/527 illegal teams (508 kept)"
     );
 
     // Embedded supplemental.json: PS keeps all 43, Castle rejects exact 17/43 (26 kept)

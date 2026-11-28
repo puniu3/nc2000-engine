@@ -112,7 +112,7 @@ async function poolFixture(
           teams: { id: string; sets: FixtureSet[] }[];
         };
       };
-      const catalog = await get("/data/team-pool-v3/team-pool.json");
+      const catalog = await get("/data/team-pool-v4/team-pool.json");
       const prior = await get("/data/belief-pool-v3/belief-pool.json");
       // Only id + sets: the minimum the contract accepts, and the shape the
       // Rust side actually reads (crates/bot/src/preview.rs). Deep copies —
@@ -178,7 +178,7 @@ async function seedStorage(page: Page) {
     if (sessionStorage.getItem("nc2000-e2e-seeded") === "1") return;
     sessionStorage.setItem("nc2000-e2e-seeded", "1");
     localStorage.setItem("nc2000-locale", "en");
-    localStorage.removeItem("nc2000-team-pool-v3");
+    localStorage.removeItem("nc2000-team-pool-v4");
     localStorage.removeItem("nc2000-start-picks");
     localStorage.removeItem("nc2000-custom-teams");
     localStorage.removeItem("nc2000-belief-prior");
@@ -333,7 +333,7 @@ test("a pool file replaces the lists, survives a reload, and gives way to the ca
     await closeModal(page);
     await expectPickerPool(page, fx);
     const stored = await page.evaluate(() =>
-      localStorage.getItem("nc2000-team-pool-v3"),
+      localStorage.getItem("nc2000-team-pool-v4"),
     );
     expect(stored, "an accepted pool is persisted").not.toBeNull();
     expect((JSON.parse(stored!) as { name: string }).name).toBe(FIXTURE_NAME);
@@ -358,7 +358,7 @@ test("a pool file replaces the lists, survives a reload, and gives way to the ca
     );
     await closeModal(page);
     expect(
-      await page.evaluate(() => localStorage.getItem("nc2000-team-pool-v3")),
+      await page.evaluate(() => localStorage.getItem("nc2000-team-pool-v4")),
     ).toBeNull();
   });
 
@@ -396,7 +396,7 @@ test("a file with an unplayable team changes nothing", async ({ page }) => {
   );
   await closeModal(page);
   expect(
-    await page.evaluate(() => localStorage.getItem("nc2000-team-pool-v3")),
+    await page.evaluate(() => localStorage.getItem("nc2000-team-pool-v4")),
   ).toBeNull();
   expect(errors).toEqual([]);
 });
@@ -445,43 +445,5 @@ test("a swapped pool plays a full blind game", async ({ page }) => {
   await playToOutcome(page);
   await expect(page.locator(".end-banner")).toBeVisible();
 
-  expect(errors).toEqual([]);
-});
-
-// ------------------------------------------ nash plays the catalog lists
-test("a loaded pool never reaches ?nash, and survives for the play door", async ({
-  page,
-}) => {
-  const errors = guardConsole(page);
-  await seedStorage(page);
-  await page.goto("/");
-  await expect(page.locator(".start-screen")).toBeVisible();
-
-  const fx = await poolFixture(page);
-  await loadPool(page, FIXTURE_NAME, fx.json);
-  await expect(setupValue(page)).toContainText(`${FIXTURE_NAME} (2 teams)`);
-  await closeModal(page);
-  await expectPickerPool(page, fx);
-
-  // ?nash opens the normal screen with the Nash mixture selected as bot:
-  // its lists are the catalog whatever the play door was handed, and its
-  // settings button reports the Nash mixture instead of the custom pool file.
-  await page.goto("/?nash");
-  await expect(page.locator(".start-screen")).toBeVisible();
-  await expect(page.locator('[data-party="settings"]')).toHaveCount(1);
-  await expect(setupValue(page)).toContainText("Solved mixture");
-  await page.locator('[data-party="human"]').click();
-  await expect(page.locator("dialog.modal [data-team]")).toHaveCount(
-    fx.catalog,
-  );
-  await closeModal(page);
-  // Not played, not deleted: the record is the user's.
-  expect(
-    await page.evaluate(() => localStorage.getItem("nc2000-team-pool-v3")),
-  ).not.toBeNull();
-
-  await page.goto("/");
-  await expect(setupValue(page)).toContainText(`${FIXTURE_NAME} (2 teams)`);
-  await expectPickerPool(page, fx);
   expect(errors).toEqual([]);
 });

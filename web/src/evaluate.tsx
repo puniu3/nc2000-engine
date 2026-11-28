@@ -4,13 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { loadEngine, randomSeed32 } from "./engine";
 import {
   fetchBeliefPool,
+  fetchCatalog,
   fetchI18nJa,
-  fetchNashArtifact,
-  fetchPrevNashR1Artifact,
-  fetchOldNashArtifact,
   fetchDexJson,
 } from "./data";
-import { readNashVariant } from "./info-mode";
 import {
   loadJaNames,
   locale,
@@ -195,19 +192,14 @@ export function Evaluate() {
   useEffect(() => {
     void (async () => {
       try {
-        const variant = readNashVariant();
-        const [, nash, pool, , dex] = await Promise.all([
+        const [, catalogText, pool, , dex] = await Promise.all([
           loadEngine(),
-          variant === "v3"
-            ? fetchOldNashArtifact()
-            : variant === "r1"
-              ? fetchPrevNashR1Artifact()
-              : fetchNashArtifact(),
+          fetchCatalog(),
           fetchBeliefPool(),
           loadJaNames(fetchI18nJa),
           fetchDexJson(),
         ]);
-        const draft = importDistribution(nash);
+        const draft = importDistribution(catalogText);
         draft.forEach((d, i) => defaultLabels.set(d.id, i + 1));
         const hash = await sha256(pool.poolJson);
         if (!alive.current) return;

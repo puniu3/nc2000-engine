@@ -28,7 +28,7 @@ try {
     await loadEngine();
     const dex = new wasm.Dex();
     const beliefJson = await (await fetch("/data/belief-pool-v3/belief-pool.json")).text();
-    const catalog = await (await fetch("/data/team-pool-v3/team-pool.json")).json();
+    const catalog = await (await fetch("/data/team-pool-v4/team-pool.json")).json();
     const team = sets => readTeam(JSON.stringify(sets));
     const makeRun = (player, opponent, previewIterations, iterations, turnLimit) => ({
       version: 2, id: "worker-check", createdAt: "2026-10-24", seed: 9182,

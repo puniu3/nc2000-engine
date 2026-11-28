@@ -886,10 +886,7 @@ function OwnTeamPicker(props: { pool: MetaPool; onPick: (sets: SetLike[]) => voi
       {tab === "pool" && (
         <ul class="solver-team-list">
           {props.pool.teams.map((t) => {
-            const tags = [
-              t.nash ? ui().nashBadge : "",
-              t.evolved ? ui().evolvedBadge : "",
-            ].filter(Boolean);
+            const tags = [t.evolved ? ui().evolvedBadge : ""].filter(Boolean);
             return (
               <li key={t.id}>
                 <button class="solver-team-btn" onClick={() => props.onPick(t.sets as SetLike[])}>
@@ -963,10 +960,7 @@ function FoeRosterPicker(props: {
     <div class="solver-picker">
       <ul class="solver-team-list">
         {props.pool.teams.map((t) => {
-          const tags = [
-            t.nash ? ui().nashBadge : "",
-            t.evolved ? ui().evolvedBadge : "",
-          ].filter(Boolean);
+          const tags = [t.evolved ? ui().evolvedBadge : ""].filter(Boolean);
           return (
             <li key={t.id}>
               <button

@@ -2,16 +2,16 @@
   "baseline": "data/belief-pool-v3/bake-prior.json",
   "inputs": {
     "data/belief-pool-v3/bake-prior.json": "1c0a1d544be667282ed94f891f7fd1d533c324fd7c18c85d530a1cd9d47da6d5",
-    "data/team-pool-v3/team-pool.json": "59ca210b8e5b3ccc047bd8846eb0be83d97376d25aa1b7eb337e9c2f3d91342c",
+    "data/team-pool-v4/team-pool.json": "4c484715e4ef9850354648ca580cc2ebb9aa45595aed5cfd1b55303e003c48a1",
     "data/team-inventory-v1/inventory.json": "0a02fe4e28024e2d02a9723ba616a6ce9605c8677c134d1440c7976fa7b33c85",
     "data/partybox-v0/teams.json": "99b8c916fe68368f604d045202b044fcb3b46956bda7dd9ef10e3a4f3031e0a0",
     "data/kodoku-r3/majinjima-assassins.json": "6d053432e8acd9b0124b792a68aca85c7adbf3504fef1b1205bd66a72b09282c",
     "data/community-rentals-v0/teams.json": "d081ac265f64370fd4a6790cf0eb54c806e8b7bf5ec789c37f9409254f1b50dd",
     "data/training-v3/supplemental.json": "7d9f8563a685d9b5c28ec409155c189087b167f6f2ec74f00c7ccc526230d908"
   },
-  "parties": 520,
-  "human": 516,
-  "generated": 4,
+  "parties": 527,
+  "human": 514,
+  "generated": 13,
   "removedGenerated": [
     "nb-sample-13-0",
     "nb-sample-12-0",
@@ -40,54 +40,92 @@
     "ev-r1-rand-0-0",
     "apex-c08-surgical-142",
     "red-v10-s1105-r2-s0142",
+    "apex-c04-bug-3atkstar-boomgen",
     "red-v5-r1-s0097",
     "red-v10-s1105-r1-s0148",
+    "deme-r1-00-s0030",
     "red-v10-s1105-r2-s0155",
     "sib-r1-n4-red-v6-r1-s0064-s07",
     "sib-r1-n4-red-v6-r1-s0064-s07-lowatk"
   ],
   "additions": [
     {
-      "id": "s0053-lefties-hpi",
-      "source": "data/team-pool-v3/team-pool.json",
+      "id": "pb131-c3r-fbhera-magzap-refcloy",
+      "source": "data/team-pool-v4/team-pool.json",
       "weight": 0.25,
-      "shell": "[[\"cloyster\",50,\"M\",true],[\"electrode\",50,\"N\",true],[\"marowak\",55,\"M\",true],[\"snorlax\",50,\"M\",true],[\"suicune\",55,\"N\",true],[\"zapdos\",55,\"N\",true]]"
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"heracross\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"steelix\",50,\"M\",true],[\"tyranitar\",55,\"M\",true],[\"zapdos\",55,\"N\",true]]"
     },
     {
-      "id": "s0053-lefties-dp",
-      "source": "data/team-pool-v3/team-pool.json",
+      "id": "s07-c8-mcoatrode-fbwak-delax-thunzap",
+      "source": "data/team-pool-v4/team-pool.json",
       "weight": 0.25,
-      "shell": "[[\"cloyster\",50,\"M\",true],[\"electrode\",50,\"N\",true],[\"marowak\",55,\"M\",true],[\"snorlax\",50,\"M\",true],[\"suicune\",55,\"N\",true],[\"zapdos\",55,\"N\",true]]"
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"electrode\",50,\"N\",true],[\"marowak\",55,\"M\",true],[\"snorlax\",50,\"M\",true],[\"tauros\",55,\"M\",true],[\"zapdos\",55,\"N\",true]]"
     },
     {
-      "id": "mjj-2014-offantom",
-      "source": "data/team-pool-v3/team-pool.json",
-      "weight": 1,
-      "shell": "[[\"charizard\",55,\"M\",true],[\"cloyster\",50,\"M\",true],[\"electrode\",50,\"N\",true],[\"porygon2\",55,\"N\",true],[\"snorlax\",50,\"M\",true],[\"tauros\",55,\"M\",true]]"
-    },
-    {
-      "id": "pb-122-known-catalog",
-      "source": "data/team-pool-v3/team-pool.json",
-      "weight": 1,
-      "shell": "[[\"cloyster\",50,\"M\",true],[\"electrode\",50,\"N\",true],[\"exeggutor\",50,\"M\",true],[\"jolteon\",50,\"F\",true],[\"marowak\",55,\"M\",true],[\"raikou\",55,\"N\",true]]"
-    },
-    {
-      "id": "mjj-type-QA-moudoku",
-      "source": "data/team-pool-v3/team-pool.json",
-      "weight": 1,
-      "shell": "[[\"crobat\",55,\"M\",true],[\"exeggutor\",50,\"M\",true],[\"gengar\",55,\"M\",true],[\"nidoking\",55,\"M\",true],[\"snorlax\",50,\"M\",true],[\"victreebel\",55,\"M\",true]]"
-    },
-    {
-      "id": "pb-66-known-catalog",
-      "source": "data/team-pool-v3/team-pool.json",
+      "id": "apex-c3r-fbhera-twstar-refcloy",
+      "source": "data/team-pool-v4/team-pool.json",
       "weight": 0.25,
-      "shell": "[[\"cloyster\",50,\"M\",true],[\"gengar\",50,\"F\",true],[\"snorlax\",55,\"M\",true],[\"starmie\",50,\"N\",true],[\"steelix\",50,\"M\",true],[\"zapdos\",50,\"N\",true]]"
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"gengar\",50,\"M\",true],[\"heracross\",50,\"M\",true],[\"marowak\",50,\"M\",true],[\"snorlax\",55,\"M\",true],[\"starmie\",50,\"N\",true]]"
     },
     {
-      "id": "mjj-2015-ayagen-known-catalog",
-      "source": "data/team-pool-v3/team-pool.json",
-      "weight": 1,
-      "shell": "[[\"alakazam\",55,\"F\",true],[\"exeggutor\",50,\"M\",true],[\"gengar\",55,\"F\",true],[\"snorlax\",50,\"M\",true],[\"suicune\",50,\"N\",true],[\"umbreon\",50,\"F\",true]]"
+      "id": "apex-c5-perishgar-3atkstar-fbwak-curcloy",
+      "source": "data/team-pool-v4/team-pool.json",
+      "weight": 0.25,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"gengar\",50,\"M\",true],[\"heracross\",50,\"M\",true],[\"marowak\",50,\"M\",true],[\"snorlax\",55,\"M\",true],[\"starmie\",50,\"N\",true]]"
+    },
+    {
+      "id": "ayagen-m-zap50",
+      "source": "data/team-pool-v4/team-pool.json",
+      "weight": 0.25,
+      "shell": "[[\"alakazam\",55,\"F\",true],[\"exeggutor\",50,\"M\",true],[\"gengar\",55,\"F\",true],[\"snorlax\",50,\"M\",true],[\"suicune\",50,\"N\",true],[\"zapdos\",50,\"N\",true]]"
+    },
+    {
+      "id": "pb63-c3-restlax-4atkgar-wwzap",
+      "source": "data/team-pool-v4/team-pool.json",
+      "weight": 0.25,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"gengar\",55,\"M\",true],[\"heracross\",50,\"M\",true],[\"marowak\",50,\"M\",true],[\"snorlax\",55,\"M\",true],[\"zapdos\",50,\"N\",true]]"
+    },
+    {
+      "id": "pb63-c3b-sdlax-4atkgar-dpzap",
+      "source": "data/team-pool-v4/team-pool.json",
+      "weight": 0.25,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"gengar\",55,\"M\",true],[\"heracross\",50,\"M\",true],[\"marowak\",50,\"M\",true],[\"snorlax\",55,\"M\",true],[\"zapdos\",50,\"N\",true]]"
+    },
+    {
+      "id": "rraikou-m-cune50",
+      "source": "data/team-pool-v4/team-pool.json",
+      "weight": 0.25,
+      "shell": "[[\"heracross\",50,\"M\",true],[\"machamp\",50,\"M\",true],[\"marowak\",55,\"M\",true],[\"raikou\",55,\"N\",true],[\"snorlax\",50,\"M\",true],[\"suicune\",50,\"N\",true]]"
+    },
+    {
+      "id": "rraikou-c1-roarkou-roarcune-fblax",
+      "source": "data/team-pool-v4/team-pool.json",
+      "weight": 0.25,
+      "shell": "[[\"heracross\",50,\"M\",true],[\"machamp\",50,\"M\",true],[\"marowak\",55,\"M\",true],[\"raikou\",55,\"N\",true],[\"snorlax\",50,\"M\",true],[\"suicune\",50,\"N\",true]]"
+    },
+    {
+      "id": "pb85-m-cune50",
+      "source": "data/team-pool-v4/team-pool.json",
+      "weight": 0.25,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"machamp\",50,\"M\",true],[\"snorlax\",55,\"M\",true],[\"steelix\",50,\"M\",true],[\"suicune\",50,\"N\",true],[\"zapdos\",50,\"N\",true]]"
+    },
+    {
+      "id": "pb85-c5-roartalkcune-wwzap",
+      "source": "data/team-pool-v4/team-pool.json",
+      "weight": 0.25,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"machamp\",50,\"M\",true],[\"snorlax\",55,\"M\",true],[\"steelix\",50,\"M\",true],[\"suicune\",50,\"N\",true],[\"zapdos\",50,\"N\",true]]"
+    },
+    {
+      "id": "pb85-c3r-sdlax-refcloy",
+      "source": "data/team-pool-v4/team-pool.json",
+      "weight": 0.25,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"machamp\",50,\"M\",true],[\"snorlax\",55,\"M\",true],[\"steelix\",50,\"M\",true],[\"suicune\",50,\"N\",true],[\"zapdos\",50,\"N\",true]]"
+    },
+    {
+      "id": "pb87-c5-fblax-dpzap-crunchttar",
+      "source": "data/team-pool-v4/team-pool.json",
+      "weight": 0.25,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"marowak\",50,\"M\",true],[\"miltank\",50,\"F\",true],[\"snorlax\",50,\"M\",true],[\"tyranitar\",55,\"M\",true],[\"zapdos\",55,\"N\",true]]"
     },
     {
       "id": "rental-cban-1",
@@ -1404,6 +1442,12 @@
       "shell": "[[\"aerodactyl\",55,\"M\",true],[\"electrode\",50,\"N\",true],[\"forretress\",50,\"M\",true],[\"misdreavus\",55,\"M\",true],[\"quagsire\",55,\"M\",true],[\"raticate\",55,\"M\",true]]"
     },
     {
+      "id": "mjj-2014-offantom",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"charizard\",55,\"M\",true],[\"cloyster\",50,\"M\",true],[\"electrode\",50,\"N\",true],[\"porygon2\",55,\"N\",true],[\"snorlax\",50,\"M\",true],[\"tauros\",55,\"M\",true]]"
+    },
+    {
       "id": "mjj-2014-kairos",
       "source": "data/kodoku-r3/majinjima-assassins.json",
       "weight": 1,
@@ -1722,6 +1766,12 @@
       "shell": "[[\"cloyster\",50,\"M\",true],[\"houndoom\",55,\"F\",true],[\"murkrow\",55,\"M\",true],[\"snorlax\",50,\"M\",true],[\"tyranitar\",55,\"M\",true],[\"umbreon\",55,\"M\",true]]"
     },
     {
+      "id": "mjj-type-QA-moudoku",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"crobat\",55,\"M\",true],[\"exeggutor\",50,\"M\",true],[\"gengar\",55,\"M\",true],[\"nidoking\",55,\"M\",true],[\"snorlax\",50,\"M\",true],[\"victreebel\",55,\"M\",true]]"
+    },
+    {
       "id": "mjj-type-QA-iwadarake",
       "source": "data/kodoku-r3/majinjima-assassins.json",
       "weight": 1,
@@ -1846,6 +1896,12 @@
       "source": "data/training-v3/supplemental.json",
       "weight": 1,
       "shell": "[[\"heracross\",50,\"M\",true],[\"machamp\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"steelix\",50,\"M\",true],[\"tyranitar\",55,\"M\",true],[\"zapdos\",55,\"N\",true]]"
+    },
+    {
+      "id": "supp-deme-r1-00-s0030",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"marowak\",50,\"M\",true],[\"raikou\",55,\"N\",true],[\"skarmory\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"suicune\",50,\"N\",true],[\"tyranitar\",55,\"M\",true]]"
     },
     {
       "id": "supp-deme-r1-04-s0021",
@@ -2036,108 +2092,12 @@
   ],
   "duplicateSourceAliases": [
     {
-      "source": "data/team-pool-v3/team-pool.json",
-      "id": "pb-84"
-    },
-    {
-      "source": "data/team-pool-v3/team-pool.json",
-      "id": "rental-cban-8"
-    },
-    {
-      "source": "data/team-pool-v3/team-pool.json",
+      "source": "data/team-pool-v4/team-pool.json",
       "id": "pb-6"
     },
     {
-      "source": "data/team-pool-v3/team-pool.json",
-      "id": "pb-131"
-    },
-    {
-      "source": "data/team-pool-v3/team-pool.json",
-      "id": "pb-87"
-    },
-    {
-      "source": "data/team-pool-v3/team-pool.json",
-      "id": "sample-14"
-    },
-    {
-      "source": "data/team-pool-v3/team-pool.json",
-      "id": "pb-63"
-    },
-    {
-      "source": "data/team-pool-v3/team-pool.json",
-      "id": "mjj-2014-thdrcomb"
-    },
-    {
-      "source": "data/team-pool-v3/team-pool.json",
-      "id": "sample-07"
-    },
-    {
-      "source": "data/team-pool-v3/team-pool.json",
-      "id": "apex-c04-bug-3atkstar-boomgen"
-    },
-    {
-      "source": "data/team-pool-v3/team-pool.json",
-      "id": "sample-08"
-    },
-    {
-      "source": "data/team-pool-v3/team-pool.json",
-      "id": "deme-r1-00-s0030"
-    },
-    {
-      "source": "data/team-pool-v3/team-pool.json",
-      "id": "pb-96"
-    },
-    {
-      "source": "data/team-pool-v3/team-pool.json",
-      "id": "pb-85"
-    },
-    {
-      "source": "data/team-pool-v3/team-pool.json",
+      "source": "data/team-pool-v4/team-pool.json",
       "id": "sample-12"
-    },
-    {
-      "source": "data/team-pool-v3/team-pool.json",
-      "id": "sample-17-orig"
-    },
-    {
-      "source": "data/team-pool-v3/team-pool.json",
-      "id": "sample-11"
-    },
-    {
-      "source": "data/team-pool-v3/team-pool.json",
-      "id": "sample-06"
-    },
-    {
-      "source": "data/team-pool-v3/team-pool.json",
-      "id": "mjj-2020-rraikou"
-    },
-    {
-      "source": "data/team-pool-v3/team-pool.json",
-      "id": "mjj-2010-garap-a"
-    },
-    {
-      "source": "data/team-pool-v3/team-pool.json",
-      "id": "sample-02"
-    },
-    {
-      "source": "data/team-pool-v3/team-pool.json",
-      "id": "sample-09"
-    },
-    {
-      "source": "data/team-pool-v3/team-pool.json",
-      "id": "sample-22-orig"
-    },
-    {
-      "source": "data/team-pool-v3/team-pool.json",
-      "id": "hc75-top8-tsuru"
-    },
-    {
-      "source": "data/team-pool-v3/team-pool.json",
-      "id": "rental-cban-13"
-    },
-    {
-      "source": "data/team-pool-v3/team-pool.json",
-      "id": "pb-89"
     },
     {
       "source": "data/team-inventory-v1/inventory.json",
@@ -2961,10 +2921,6 @@
     },
     {
       "source": "data/kodoku-r3/majinjima-assassins.json",
-      "id": "mjj-2014-offantom"
-    },
-    {
-      "source": "data/kodoku-r3/majinjima-assassins.json",
       "id": "mjj-2014-thdrcomb"
     },
     {
@@ -3006,10 +2962,6 @@
     {
       "source": "data/kodoku-r3/majinjima-assassins.json",
       "id": "mjj-2010-garap"
-    },
-    {
-      "source": "data/kodoku-r3/majinjima-assassins.json",
-      "id": "mjj-type-QA-moudoku"
     },
     {
       "source": "data/community-rentals-v0/teams.json",
@@ -3090,10 +3042,6 @@
     {
       "source": "data/community-rentals-v0/teams.json",
       "id": "rental-cban-27"
-    },
-    {
-      "source": "data/training-v3/supplemental.json",
-      "id": "supp-deme-r1-00-s0030"
     }
   ],
   "excludedInvalidFormat": [

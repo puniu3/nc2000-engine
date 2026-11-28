@@ -89,11 +89,11 @@ fn castle_ruleset_cross_check_against_belief_pools() {
     let root = repo_root();
     let castle = Ruleset::castle_tournament();
 
-    // 1. data/belief-pool-v3/belief-pool.json: expect 19 / 520 Castle-illegal teams
+    // 1. data/belief-pool-v3/belief-pool.json: expect 19 / 527 Castle-illegal teams
     let bp_text = std::fs::read_to_string(root.join("data/belief-pool-v3/belief-pool.json")).unwrap();
     let bp: Value = serde_json::from_str(&bp_text).unwrap();
     let bp_teams = bp["teams"].as_array().unwrap();
-    assert_eq!(bp_teams.len(), 520);
+    assert_eq!(bp_teams.len(), 527);
 
     let mut bp_illegal_ids: Vec<String> = Vec::new();
     let mut bp_illegal_sets = 0usize;
@@ -118,7 +118,7 @@ fn castle_ruleset_cross_check_against_belief_pools() {
     assert_eq!(
         bp_illegal_ids.len(),
         19,
-        "expected 19/520 Castle-illegal teams in belief-pool-v3, got {}: {bp_illegal_ids:?}",
+        "expected 19/527 Castle-illegal teams in belief-pool-v3, got {}: {bp_illegal_ids:?}",
         bp_illegal_ids.len()
     );
     assert_eq!(bp_illegal_sets, 25, "expected 25 Castle-illegal sets in belief-pool-v3");

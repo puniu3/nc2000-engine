@@ -31,7 +31,7 @@ const materialShell = material => shellOf(material.map(p => [p[0], p[1], p[2], !
 const read = p => JSON.parse(fs.readFileSync(p));
 const digest = s => crypto.createHash('sha256').update(s).digest('hex');
 const baselinePath = 'data/belief-pool-v3/bake-prior.json';
-const baseline = read(baselinePath), catalog = read('data/team-pool-v3/team-pool.json');
+const baseline = read(baselinePath), catalog = read('data/team-pool-v4/team-pool.json');
 const dex = read('data/gen2stadium2.json'), engineDex = new wasm.Dex(), validator = new wasm.Validator(engineDex);
 const identity = sets => JSON.stringify(teamMaterial(sets, dex));
 const catalogTypes = new Set(catalog.teams.map(t => identity(t.sets)));
@@ -40,7 +40,7 @@ const removed = baseline.teams.filter(t => !retained.includes(t)).map(t => t.id)
 const teams = structuredClone(retained), types = new Set(teams.map(t => identity(t.sets))), ids = new Set(teams.map(t => t.id));
 const additions = [], aliases = [], excluded = [];
 const sources = [
- ['catalog', 'data/team-pool-v3/team-pool.json'],
+ ['catalog', 'data/team-pool-v4/team-pool.json'],
  ['inventory', 'data/team-inventory-v1/inventory.json'],
  ['partybox', 'data/partybox-v0/teams.json'],
  ['majinjima', 'data/kodoku-r3/majinjima-assassins.json'],
@@ -74,7 +74,7 @@ try {
 for (const t of teams) if (t.provenance.origin !== 'human' && !catalogTypes.has(identity(t.sets))) throw Error(`Off-catalog generated party: ${t.id}`);
 for (const t of catalog.teams) if (!types.has(identity(t.sets))) throw Error(`Missing catalog type: ${t.id}`);
 const out = {...baseline, generator: 'tools/belief-pool-v3.py build -> tools/build-known-prior.mjs',
- note: 'Known real-world parties including variants; generated parties only when their exact sets occur in the current catalog. Existing admitted weights are retained; new real-world types default to weight 1. Duplicate source aliases do not add mass. Invalid-format parties are listed in known-expansion.json. Catalog and Nash draws are unchanged.',
+ note: 'Known real-world parties including variants; generated parties only when their exact sets occur in the current catalog (team-pool-v4). Existing admitted weights are retained; new real-world types default to weight 1. Duplicate source aliases do not add mass. Invalid-format parties are listed in known-expansion.json.',
  membershipPolicy: 'known-real-and-catalog-generated-v1', teams};
 const proof = {baseline: baselinePath, inputs: Object.fromEntries([baselinePath, ...sources.map(([,p])=>p)].map(p=>[p,digest(fs.readFileSync(p))])),
  parties: teams.length, human: teams.filter(t=>t.provenance.origin==='human').length,

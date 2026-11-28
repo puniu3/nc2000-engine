@@ -59,11 +59,16 @@ export type PoolParse =
   | { ok: true; pool: MetaPool; poolJson: string; teams: number }
   | { ok: false; errors: string[] };
 
-/** Records under the previous key were loaded when `/` still played the
- * bundled open-sheet lists; they are removed rather than restored, so no
- * file saved by an older build can stand in for the catalog unannounced. */
-const LS_KEY = "nc2000-team-pool-v3";
-const LS_RETIRED_KEYS = ["nc2000-team-pool", "nc2000-team-pool-v2"];
+/** Records under previous keys were saved against older pools or the retired
+ * Nash draw selector; they are removed rather than restored, so no stale
+ * preference can stand in for the current catalog unannounced. */
+const LS_KEY = "nc2000-team-pool-v4";
+const LS_RETIRED_KEYS = [
+  "nc2000-team-pool",
+  "nc2000-team-pool-v2",
+  "nc2000-team-pool-v3",
+  "nc2000-bot-draw",
+];
 
 /** Exactly six, always: the format picks 3 of 6 under a 155 total-level cap,
  * and both rules read the party as a fixed-size thing. */
@@ -190,7 +195,6 @@ export function parsePoolText(text: string): PoolParse {
       rank: typeof src.rank === "number" ? src.rank : i + 1,
       species: mons.map((m) => m.species ?? "?"),
       levels: mons.map((m) => m.level ?? 55),
-      ...(src.nash ? { nash: true } : {}),
       ...(src.evolved ? { evolved: true } : {}),
       provenance:
         src.provenance && typeof src.provenance === "object"

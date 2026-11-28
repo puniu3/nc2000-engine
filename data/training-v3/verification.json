@@ -1,7 +1,10 @@
 {
   "inputs": {
+    "data/team-pool-v4/team-pool.json": "4c484715e4ef9850354648ca580cc2ebb9aa45595aed5cfd1b55303e003c48a1",
+    "data/belief-pool-v3/belief-pool.json": "02bacbc453dd76e6d2fc277b3d93d5e01d1413042ed1a7c6602dff2de35b8ba7",
+    "data/team-pool-v4/flagship-mixture.json": "4959153336dc403e129b3be54ce9bf9bf1775481fc762fd49e66066d244f74b6",
+    "data/team-pool-v4/environment-pool-32.json": "a24d8ba46471854950ce576c2626d765ef24602baa2dd98f3daa923071ad5968",
     "data/team-pool-v3/team-pool.json": "59ca210b8e5b3ccc047bd8846eb0be83d97376d25aa1b7eb337e9c2f3d91342c",
-    "data/belief-pool-v3/belief-pool.json": "c30b8910957c88f1f16293a5a1f7ec6cfb373717bfe39403e307f06140f0b45a",
     "data/team-pool-v3/flagship-mixture.json": "07fba0d2447fb5cf46facf67879c24722e605567af73e46beecf190d81ed96e9",
     "data/team-pool-v2/team-pool.json": "5b7b7189e6c01b56285386bf03dc5837c26c58c9a0065cd7c08283c15029f56b",
     "data/kodoku-r3/conclusion-equilibrium-deme.json": "dc4eba46a6291d52c4985a124d3a50ccfca3891220a8a431652ab2a1ef36c437",
@@ -11,15 +14,15 @@
     "data/training-v3/rentals.json": "651cfa7a3f05d8264fa2fd6f0e7faa951de59346f002171e148b8d1e13412000"
   },
   "code_and_rules": {
-    "crates/bot/examples/verify_training.rs": "e87cda0367f25fb541434c343d0110f259eda7d73b1ab8fed5d0eaf21e956b79",
+    "crates/bot/examples/verify_training.rs": "07cd5220923a27e7ecb9a05e601e50fa3128e4288287a2ac44d7a9b5828996de",
     "tools/normalize-training.js": "75e7618dfef6dbe8be45745749806459b2a9375af628270da15a9a8b4bf5756e",
     "data/gen2stadium2.json": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
     "data/learnsets-gen2.json": "8f288150ce10b2698c2100381c3daed6a3a56389bb4fe7169cf3b54407d0d0c4"
   },
-  "checked_sets": 4056,
-  "unique_adversarial_classes": 717,
+  "checked_sets": 4476,
+  "unique_adversarial_classes": 719,
   "dv_tuples_per_class": 65536,
-  "catalog_teams_with_exact_prior_support": 33,
+  "catalog_teams_with_exact_prior_support": 15,
   "excluded_sets": 47,
   "excluded_fallback_rentals": [
     "rental-cban-16",

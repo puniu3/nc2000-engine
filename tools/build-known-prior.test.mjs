@@ -20,22 +20,30 @@ function teamMaterial(sets, dex) {
   }).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'en'));
 }
 
-test('deployed expansion keeps only catalog-generated types for team-pool-v3', () => {
+test('deployed expansion keeps only catalog-generated types for team-pool-v4', () => {
   const dex = read('data/gen2stadium2.json');
   const pool = read('data/belief-pool-v3/belief-pool.json');
-  const catalog = read('data/team-pool-v3/team-pool.json');
+  const catalog = read('data/team-pool-v4/team-pool.json');
   const types = new Set(catalog.teams.map(t => JSON.stringify(teamMaterial(t.sets, dex))));
   for (const t of pool.teams) {
     if (t.provenance.origin !== 'human') {
       assert.ok(types.has(JSON.stringify(teamMaterial(t.sets, dex))), t.id);
     }
   }
-  assert.ok(pool.teams.some(t => t.id === 's0053-lefties-hpi'));
-  assert.ok(pool.teams.some(t => t.id === 's0053-lefties-dp'));
+  for (const t of catalog.teams) {
+    assert.ok(
+      pool.teams.some(u => JSON.stringify(teamMaterial(u.sets, dex)) === JSON.stringify(teamMaterial(t.sets, dex))),
+      `missing catalog team in prior: ${t.id}`,
+    );
+  }
+  assert.ok(pool.teams.some(t => t.id === 'pb131-c3r-fbhera-magzap-refcloy'));
+  assert.ok(pool.teams.some(t => t.id === 'apex-c3r-fbhera-twstar-refcloy'));
+  assert.ok(pool.teams.some(t => t.id === 'apex-c5-perishgar-3atkstar-fbwak-curcloy'));
+  assert.ok(pool.teams.some(t => t.id === 'ayagen-m-zap50'));
   assert.ok(pool.teams.some(t => t.id === 'mjj-2022-nrsk'));
   assert.ok(pool.teams.some(t => t.id === 'mjj-gym-Tokiwa'));
   assert.ok(pool.teams.some(t => t.id === 'mjj-2026-kabegon'));
   assert.ok(pool.teams.some(t => t.id === 'mjj-type-QA-fuhen'));
   assert.ok(pool.teams.some(t => t.id === 'mjj-2022-hapimu-v1' && t.weight < 1));
-  assert.equal(pool.teams.length, 520);
+  assert.equal(pool.teams.length, 527);
 });

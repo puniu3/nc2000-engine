@@ -3,24 +3,16 @@
 This document defines the three-role team-data architecture and offline build
 pipeline for blind play (`search-profiles.json`).
 
-## Three distinct team-data roles
+## Two distinct team-data roles
 
 Never substitute one artifact for another ([`web/src/data.ts`](../web/src/data.ts),
 [`web/src/app.tsx`](../web/src/app.tsx)):
 
-1. **Catalog (`data/team-pool-v3/team-pool.json`; historical `data/team-pool-v2/team-pool.json`)**: Playable built-in party list
-   for humans and ordinary bot draws (`drawWeight`). Built-in player options and
-   the ordinary bot draw share exact canonical sets.
+1. **Catalog / Pool (`data/team-pool-v4/team-pool.json`; historical `team-pool-v3`, `team-pool-v2`)**: Curated 10-shell (`15`-team) equal-weight (`1/10` per shell) playable built-in party pool for humans, bot draws (`drawWeight`), PDINPUT export, and `?evaluate` default opponents. Built-in player options and the bot draw share exact canonical sets. Separate `?nash` / Nash mixture draw selectors have been withdrawn.
 2. **Opponent prior (`data/belief-pool-v3/belief-pool.json`)**: Broad known-party
    candidate pool used by `Belief` across all doors and tools. Own-pool
    pruning never strips legal/human-facing archetypes out of the opponent prior.
-3. **Primary mixture (`data/team-pool-v3/flagship-mixture.json` primary;
-   `data/kodoku-r3/conclusion-equilibrium-deme.json`,
-   `data/kodoku-r3/conclusion-equilibrium-r1.json`, and
-   `data/meta-nash-v3/pool-artifact.json` historical)**: Weighted party draw
-   tables when `?nash` / mixture selection is active. The
-   [adaptive bot audit](../data/nash-refresh-v1/README.md) records the measured
-   responses to the historical draw and the five-strategy candidate.
+   Preserved 32-shell environment knowledge also lives in `data/team-pool-v4/environment-pool-32.json`.
 
 Information mode (`blind` vs historical `open` for fork/kifu replay), search
 coefficients (`data/search-profiles.json`), and production iteration budgets
@@ -61,6 +53,6 @@ subsequent `training-v3` normalization and prior expansion are complete and live
 For current artifact counts, fingerprints, and verification outputs, consult the
 authoritative data directories directly rather than duplicating snapshots here:
 
-- Catalog: [`data/team-pool-v2/README.md`](../data/team-pool-v2/README.md)
+- Catalog: [`data/team-pool-v4/README.md`](../data/team-pool-v4/README.md)
 - Opponent prior: [`data/belief-pool-v3/README.md`](../data/belief-pool-v3/README.md)
 - Training & spread checks: [`data/training-v3/README.md`](../data/training-v3/README.md)

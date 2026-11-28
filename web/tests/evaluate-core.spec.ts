@@ -13,7 +13,6 @@ import {
   type PairResult,
 } from "../src/evaluate-core";
 import { readDoor } from "../src/info-mode";
-import { readDrawSourceFromQuery } from "../src/draw-source";
 
 const pair = (
   index: number,
@@ -60,14 +59,6 @@ test("evaluator URL is isolated and blind", () => {
   expect(readDoor("?blind=0")).toBe("play");
   expect(readDoor("?fork=4296-t11&evaluate")).toBe("fork");
   expect(readDoor("?fork")).toBe("fork");
-
-  expect(readDrawSourceFromQuery("?nash")).toBe("nash");
-  expect(readDrawSourceFromQuery("?nash=v3")).toBe("nash-v3");
-  expect(readDrawSourceFromQuery("?nash=old")).toBe("nash-v3");
-  expect(readDrawSourceFromQuery("?nash=0")).toBe("catalog");
-  expect(readDrawSourceFromQuery("?nash=false")).toBe("catalog");
-  expect(readDrawSourceFromQuery("?nash=catalog")).toBe("catalog");
-  expect(readDrawSourceFromQuery("")).toBeNull();
 });
 test("weights normalize without overflow and reject invalid distributions", () => {
   expect(

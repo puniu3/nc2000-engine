@@ -23,7 +23,7 @@ try {
     await wasm.default();
     const dex = new wasm.Dex();
     const poolJson = await (await fetch("/data/belief-pool-v3/belief-pool.json")).text();
-    const catalog = await (await fetch("/data/team-pool-v3/team-pool.json")).json();
+    const catalog = await (await fetch("/data/team-pool-v4/team-pool.json")).json();
     const teams = catalog.teams.slice(0, 2).map(t => JSON.stringify(t.sets));
     const seed = 7, budget = 512, rows = [];
     const equal = (a, b, label) => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(label); };

@@ -1,7 +1,6 @@
-// A shipped file of teams, each with a draw probability — the shape both the
-// catalog (team-pool-v2, `drawWeight`) and the Nash mixture (meta-nash-v3,
-// `weight`) take — validated into something that can play, and the draw
-// that samples it.
+// A shipped file of teams, each with a draw probability — the shape the
+// catalog (team-pool-v4, `drawWeight`) takes — validated into something
+// that can play, and the draw that samples it.
 //
 // Strict both ways: a team that does not validate, or a weight that is not
 // a non-negative number, refuses the whole file. These files are build

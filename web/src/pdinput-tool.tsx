@@ -57,9 +57,9 @@ const COPY: Record<Locale, CopyStrings> = {
     eyebrow: "psense.lib.net / PDINPUT.cgi 連携",
     heading: "パーティプール自動インポーター",
     intro:
-      "標準パーティプール（team-pool-v3 全33構築）を psense.lib.net/_/PDINPUT.cgi の Cookie 形式（26フィールド PD レコード）に変換し、ブラウザへ一括または個別に自動登録します。",
+      "標準パーティプール（team-pool-v4 10シェル・全15構築）を psense.lib.net/_/PDINPUT.cgi の Cookie 形式（26フィールド PD レコード）に変換し、ブラウザへ一括または個別に自動登録します。",
     limitNote:
-      `※ psense.lib.net（Apache 1.3.39）の Cookie ヘッダ上限（8,190 bytes）により、1度に保持できるのは最大 ${PDINPUT_MAX_BATCH_SIZE} パーティ（約7.7KB）です。18パーティ以上登録すると 400 Bad Request になるため、全33パーティは前半（1〜17）と後半（18〜33）、または任意の最大17パーティに分けて取り込みます。`,
+      `※ psense.lib.net（Apache 1.3.39）の Cookie ヘッダ上限（8,190 bytes）により、1度に保持できるのは最大 ${PDINPUT_MAX_BATCH_SIZE} パーティ（約7.7KB）です。team-pool-v4 の全15構築は1バッチ（約6.8KB）でそのまま一括登録できます。`,
     batchSelectLabel: "取り込むバッチ（最大17パーティ）",
     batchPartLabel: (idx, start, end, count, bytes) =>
       `パート ${idx}（#${start}〜#${end} · ${count}構築 · ${bytes.toLocaleString()} B）`,
@@ -99,9 +99,9 @@ const COPY: Record<Locale, CopyStrings> = {
     eyebrow: "psense.lib.net / PDINPUT.cgi Integration",
     heading: "Automated Party Pool Importer",
     intro:
-      "Encodes the built-in party pool (team-pool-v3, all 33 teams) into psense.lib.net/_/PDINPUT.cgi's 26-field PD cookie format and automatically imports them into your browser.",
+      "Encodes the built-in party pool (team-pool-v4, 10 shells / 15 teams) into psense.lib.net/_/PDINPUT.cgi's 26-field PD cookie format and automatically imports them into your browser.",
     limitNote:
-      `Note: Because psense.lib.net runs Apache 1.3.39 with an 8,190-byte Cookie header limit, at most ${PDINPUT_MAX_BATCH_SIZE} parties (~7.7 KB) can be stored at once before triggering 400 Bad Request. The 33-team catalog is split into Part 1 (1–17) and Part 2 (18–33), or any custom selection up to 17 teams.`,
+      `Note: Because psense.lib.net runs Apache 1.3.39 with an 8,190-byte Cookie header limit, at most ${PDINPUT_MAX_BATCH_SIZE} parties (~7.7 KB) can be stored at once before triggering 400 Bad Request. All 15 teams in team-pool-v4 fit in a single batch (~6.8 KB).`,
     batchSelectLabel: "Batch preset (max 17 teams)",
     batchPartLabel: (idx, start, end, count, bytes) =>
       `Part ${idx} (#${start}–#${end} · ${count} teams · ${bytes.toLocaleString()} B)`,

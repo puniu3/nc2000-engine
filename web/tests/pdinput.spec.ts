@@ -205,7 +205,7 @@ test("auditCastleTeamForPdinput warns on inert Bitter Berry / Dragon Fang withou
   expect(dupReport.errors[0].code).toBe("item-clause");
 });
 
-test("?pdinput renders all 33 teams, splits into 2 safe batches under 8KB, and generates installer script", async ({
+test("?pdinput renders all 15 teams in 1 safe batch under 8KB and generates installer script", async ({
   page,
 }) => {
   const errors: string[] = [];
@@ -214,27 +214,18 @@ test("?pdinput renders all 33 teams, splits into 2 safe batches under 8KB, and g
   await page.goto(`${base}?pdinput`);
   await expect(page.getByTestId("pdinput-page")).toBeVisible();
   await expect(page.getByTestId("pdinput-batch-1")).toBeVisible();
-  await expect(page.getByTestId("pdinput-batch-2")).toBeVisible();
+  await expect(page.getByTestId("pdinput-batch-2")).toHaveCount(0);
 
-  // Batch 1 is selected by default: 17 teams, under 8000 bytes
+  // Batch 1 holds all 15 teams of team-pool-v4, under 8000 bytes
   const summary = page.getByTestId("pdinput-selection-summary");
-  await expect(summary).toContainText("17 / 17");
+  await expect(summary).toContainText("15 / 17");
   const b1Match = (await summary.textContent())?.match(/([\d,]+)\s*\/\s*8,000 B/);
   expect(b1Match).toBeTruthy();
   const b1Bytes = Number(b1Match![1].replace(/,/g, ""));
-  expect(b1Bytes).toBeGreaterThan(7000);
+  expect(b1Bytes).toBeGreaterThan(6000);
   expect(b1Bytes).toBeLessThanOrEqual(8000);
 
-  // Switching to Batch 2 selects the remaining 16 teams (18..33)
-  await page.getByTestId("pdinput-batch-2").click();
-  await expect(summary).toContainText("16 / 17");
-  const b2Match = (await summary.textContent())?.match(/([\d,]+)\s*\/\s*8,000 B/);
-  expect(b2Match).toBeTruthy();
-  const b2Bytes = Number(b2Match![1].replace(/,/g, ""));
-  expect(b2Bytes).toBeGreaterThan(6500);
-  expect(b2Bytes).toBeLessThanOrEqual(8000);
-
-  // Script textarea holds a valid javascript: one-liner with 16 entries
+  // Script textarea holds a valid javascript: one-liner with all 15 entries
   const scriptVal = await page.getByTestId("pdinput-script-text").inputValue();
   expect(scriptVal.startsWith("javascript:(()=>{")).toBe(true);
   expect(scriptVal).toContain("1_x_");

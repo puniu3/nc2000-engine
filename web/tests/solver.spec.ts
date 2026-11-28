@@ -39,7 +39,7 @@ interface PoolTeamJson {
 
 const pool = JSON.parse(
   readFileSync(
-    new URL("../../data/team-pool-v3/team-pool.json", import.meta.url),
+    new URL("../../data/team-pool-v4/team-pool.json", import.meta.url),
     "utf8",
   ),
 ) as { teams: PoolTeamJson[] };

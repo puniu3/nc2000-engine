@@ -1,9 +1,9 @@
-// The shipped catalog (data/team-pool-v2/team-pool.json): the parties
-// selected for this bot's ordinary pool under data/team-selection-v2. One
-// file answers two questions with identical ids and exact sets — which
-// built-in parties a human can pick on the start screen, and which party
-// the bot brings when nobody pinned one — and both Random paths (the
-// human's and the bot's) draw it by its `drawWeight`.
+// The shipped catalog (data/team-pool-v4/team-pool.json): the curated
+// 10-shell (15-team) equal-weight strong generalist pool. One file answers
+// two questions with identical ids and exact sets — which built-in parties
+// a human can pick on the start screen, and which party the bot brings when
+// nobody pinned one — and both Random paths (the human's and the bot's) draw
+// it by its `drawWeight`.
 //
 // It is NOT the bot's picture of its opponent (the opponent prior,
 // belief-pool-v3).
@@ -32,7 +32,6 @@ export type CatalogParse =
 interface CatalogEntry {
   id: string;
   label?: string;
-  nash?: boolean;
   evolved?: boolean;
   provenance?: {
     source?: string;
@@ -55,7 +54,6 @@ export function parseCatalog(text: string): CatalogParse {
       rank: i + 1,
       species: t.species,
       levels: t.levels,
-      nash: Boolean(entry?.nash),
       evolved: Boolean(entry?.evolved || p.origin === "evolved"),
       provenance: { source: [p.source, p.version].filter(Boolean).join(" · ") },
       sets: t.sets,

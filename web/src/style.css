@@ -401,21 +401,6 @@ dialog.modal::backdrop {
 .custom-section h3 {
   margin-bottom: 0;
 }
-/* The nash mixture's cards are divs, not buttons: nothing in that panel is
-   selectable. `.team-card` takes its border from the generic button rule, so
-   the non-interactive twin has to restate it — and the weight, which sits in
-   the slot a pool card gives the rank, is what the eye should land on. */
-.nash-card {
-  border: 1px solid var(--line);
-}
-.nash-card .team-rank {
-  color: var(--accent);
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
-}
-.nash-source {
-  margin: 10px 0 0;
-}
 
 .team-card.custom-card {
   border: 1px solid var(--line);
@@ -2106,28 +2091,6 @@ td.solver-cell {
   border-color: var(--accent);
   color: var(--text);
   font-weight: 600;
-}
-.draw-choice + .nash-mix {
-  margin-bottom: 12px;
-}
-.old-nash-details {
-  margin-bottom: 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 6px 10px;
-}
-.old-nash-summary {
-  cursor: pointer;
-  font-size: 0.82rem;
-  color: var(--text-dim);
-  user-select: none;
-  padding: 2px 0;
-}
-.old-nash-details[open] .old-nash-summary {
-  margin-bottom: 8px;
-}
-.old-nash-choice {
-  margin-bottom: 6px;
 }
 
 /* A quiet text link under the start column: another tool, not a step of

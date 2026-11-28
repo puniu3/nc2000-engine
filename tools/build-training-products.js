@@ -31,6 +31,7 @@ for (const [source, output] of [
 		teams: full.map(t => ({ ...t, sets: normalizeTraining(t.sets, dex) })) });
 }
 cp.execFileSync(process.execPath, ['tools/build-team-products-v3.js'], { stdio: 'inherit' });
+cp.execFileSync(process.execPath, ['tools/build-team-products-v4.js'], { stdio: 'inherit' });
 cp.execFileSync('python3', ['tools/belief-pool-v3.py', 'build'], { stdio: 'inherit' });
 cp.execFileSync(process.execPath, ['tools/build-team-products-v2.js'], { stdio: 'inherit' });
 const catalog = read('data/team-pool-v2/team-pool.json');

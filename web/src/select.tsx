@@ -14,23 +14,14 @@
 //
 // Setup is a single modal, not two buttons: the team pool and the belief
 // prior are the same question asked twice — which teams the bot may be
-// facing, and what it assumes about a team it cannot identify. The pool half
-// also says where the bot's party comes from: the built-in parties by their
-// draw weights, or the solved Nash mixture; a loaded pool file overrides
-// both. Inside, each
+// facing, and what it assumes about a team it cannot identify. Inside, each
 // half keeps its own heading, controls and report box: someone who just
 // loaded a pool file must not read the prior's verdict as a verdict on
 // their file.
-//
-// The play screen ships as the standard screen. `?nash` sets the bot's draw
-// source to the solved Nash mixture, and the mixture details are viewable
-// inside Opponent & Setup.
 
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { MetaPool, PickPriorReport, PoolTeam, PriorReport } from "./types";
 import type { SelectedTeam } from "./app";
-import type { NashMix, NashTeam } from "./nash-mix";
-import type { DrawSource } from "./draw-source";
 import {
   clearStoredPool,
   parsePoolText,
@@ -136,63 +127,6 @@ function TeamCard(props: {
       )}
     </div>
   );
-}
-
-/** The solved mixture, read-only (`?nash`). Cards, not buttons: nothing here
- * is selectable, and a card that looks pressable in a panel with no pick to
- * make would be the screen's one lie. Species and levels only — the sets are
- * blind until the game ends, exactly as they are for a pool foe. */
-function NashMixPanel(props: { mix: NashMix }) {
-  return (
-    <div class="nash-mix" data-testid="nash-mix">
-      <p class="modal-note">{ui().nashMixNote}</p>
-      <div class="team-list">
-        {props.mix.teams.map((t, i) => (
-          <NashCard key={t.id} team={t} index={i} />
-        ))}
-      </div>
-      {props.mix.source && (
-        <p class="modal-note nash-source">
-          {ui().nashSource(props.mix.source)}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function NashCard(props: { team: NashTeam; index: number }) {
-  const { team, index } = props;
-  const isEvolved =
-    team.id.startsWith("red-") ||
-    team.id.startsWith("deme-") ||
-    team.id.startsWith("sib-") ||
-    team.id.startsWith("apex-");
-  return (
-    <div class="team-card nash-card" data-team={index} data-nash={team.id}>
-      <div class="team-card-head">
-        <span class="team-rank">{pct(team.weight)}</span>
-        <span class="team-id">{team.id}</span>
-        {isEvolved && <span class="team-tier">{ui().evolvedBadge}</span>}
-      </div>
-      <div class="team-species">
-        {team.species.map((sp, i) => (
-          <span class="species-chip" key={i}>
-            {speciesName(sp)}{" "}
-            <small>
-              <Lvl n={team.levels[i]} />
-            </small>
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** One decimal, which is the precision the study publishes and the precision
- * the weights are stored at; a bare integer would round two of the three arms
- * into looking equal. */
-function pct(w: number): string {
-  return `${(w * 100).toFixed(1)}%`;
 }
 
 // ------------------------------------------------- custom teams (M14)
@@ -463,20 +397,6 @@ function HumanPicker(props: {
   onCustomsChange: (list: CustomTeam[], picked?: CustomTeam) => void;
 }) {
   const { teams, choice, customs } = props;
-  const categories = useMemo(() => {
-    const hasSpecial = teams.some((t) => t.nash || t.evolved);
-    if (!hasSpecial) {
-      return [{ title: null, items: teams }];
-    }
-    const nash = teams.filter((t) => t.nash);
-    const evolved = teams.filter((t) => !t.nash && t.evolved);
-    const classic = teams.filter((t) => !t.nash && !t.evolved);
-    return [
-      { title: ui().poolNashCategory, items: nash },
-      { title: ui().poolEvolvedCategory, items: evolved },
-      { title: ui().poolClassicCategory, items: classic },
-    ].filter((cat) => cat.items.length > 0);
-  }, [teams]);
 
   return (
     <>
@@ -495,25 +415,17 @@ function HumanPicker(props: {
         onCustomsChange={props.onCustomsChange}
       />
       <h3>{ui().poolSection}</h3>
-      {categories.map((cat, catIdx) => (
-        <div class="pool-category" key={catIdx}>
-          {cat.title && <h4 class="pool-category-title">{cat.title}</h4>}
-          <div class="team-list">
-            {cat.items.map((t) => {
-              const originalIndex = teams.indexOf(t);
-              return (
-                <TeamCard
-                  key={t.id}
-                  team={t}
-                  index={originalIndex >= 0 ? originalIndex : 0}
-                  selected={choice.kind === "pool" && choice.id === t.id}
-                  onTap={() => props.onPick({ kind: "pool", id: t.id })}
-                />
-              );
-            })}
-          </div>
-        </div>
-      ))}
+      <div class="team-list">
+        {teams.map((t, i) => (
+          <TeamCard
+            key={t.id}
+            team={t}
+            index={i}
+            selected={choice.kind === "pool" && choice.id === t.id}
+            onTap={() => props.onPick({ kind: "pool", id: t.id })}
+          />
+        ))}
+      </div>
     </>
   );
 }
@@ -754,28 +666,8 @@ function PoolPanel(props: {
   loaded: LoadedPool;
   catalog: LoadedPool;
   onPool: (p: LoadedPool) => void;
-  drawSource: DrawSource;
-  onDrawSource: (s: DrawSource) => void;
-  nashMix: NashMix;
-  prevNashR1Mix: NashMix;
-  oldNashMix: NashMix;
 }) {
   const [result, setResult] = useState<PoolResult | null>(null);
-  const fileLoaded = props.loaded.name !== null;
-  const isPrevNash =
-    !fileLoaded &&
-    (props.drawSource === "nash-r1" || props.drawSource === "nash-v3");
-
-  /** Picking a draw source is picking the built-in lists again: a loaded
-   * file would otherwise keep overriding the choice just made. */
-  function chooseDraw(source: DrawSource) {
-    if (fileLoaded) {
-      clearStoredPool();
-      props.onPool(props.catalog);
-      setResult(null);
-    }
-    props.onDrawSource(source);
-  }
 
   function adopt(name: string, text: string) {
     const parsed = parsePoolText(text);
@@ -793,56 +685,6 @@ function PoolPanel(props: {
 
   return (
     <div class="pool-panel">
-      <div class="draw-choice" role="group" aria-label={ui().drawSourceLabel}>
-        {(["catalog", "nash"] as const).map((source) => (
-          <button
-            key={source}
-            class="draw-choice-btn"
-            data-draw={source}
-            aria-pressed={!fileLoaded && props.drawSource === source}
-            onClick={() => chooseDraw(source)}
-          >
-            {source === "catalog"
-              ? ui().drawCatalog(props.catalog.pool.teams.length)
-              : ui().drawNash(props.nashMix.teams.length)}
-          </button>
-        ))}
-      </div>
-      {!fileLoaded && props.drawSource === "nash" && (
-        <NashMixPanel mix={props.nashMix} />
-      )}
-      <details
-        class="old-nash-details"
-        data-testid="old-nash-details"
-        open={isPrevNash}
-      >
-        <summary class="old-nash-summary">{ui().drawPrevNashSummary}</summary>
-        <div
-          class="draw-choice old-nash-choice"
-          role="group"
-          aria-label={ui().drawPrevNashSummary}
-        >
-          {(["nash-r1", "nash-v3"] as const).map((source) => (
-            <button
-              key={source}
-              class="draw-choice-btn"
-              data-draw={source}
-              aria-pressed={!fileLoaded && props.drawSource === source}
-              onClick={() => chooseDraw(source)}
-            >
-              {source === "nash-r1"
-                ? ui().drawPrevNashR1(props.prevNashR1Mix.teams.length)
-                : ui().drawOldNash(props.oldNashMix.teams.length)}
-            </button>
-          ))}
-        </div>
-        {!fileLoaded && props.drawSource === "nash-r1" && (
-          <NashMixPanel mix={props.prevNashR1Mix} />
-        )}
-        {!fileLoaded && props.drawSource === "nash-v3" && (
-          <NashMixPanel mix={props.oldNashMix} />
-        )}
-      </details>
       <p class="modal-note">{ui().poolHelp}</p>
       <div class="pool-actions">
         {/* Same construction as the prior panel's picker: a real <label>
@@ -925,11 +767,6 @@ function SetupPanel(props: {
   loaded: LoadedPool;
   catalog: LoadedPool;
   onPool: (p: LoadedPool) => void;
-  drawSource: DrawSource;
-  onDrawSource: (s: DrawSource) => void;
-  nashMix: NashMix;
-  prevNashR1Mix: NashMix;
-  oldNashMix: NashMix;
   prior: StoredPrior | null;
   onPrior: (p: StoredPrior | null) => void;
   pickPrior: StoredPrior | null;
@@ -943,11 +780,6 @@ function SetupPanel(props: {
           loaded={props.loaded}
           catalog={props.catalog}
           onPool={props.onPool}
-          drawSource={props.drawSource}
-          onDrawSource={props.onDrawSource}
-          nashMix={props.nashMix}
-          prevNashR1Mix={props.prevNashR1Mix}
-          oldNashMix={props.oldNashMix}
         />
       </section>
       <section class="setup-section">
@@ -976,14 +808,6 @@ export function StartScreen(props: {
   onPool: (p: LoadedPool) => void;
   locale: Locale;
   onLocale: (l: Locale) => void;
-  /** The solved mixture: `NashMixPanel` inside Opponent & Setup. */
-  nashMix: NashMix;
-  /** The preserved r1 and v3 Nash mixtures, collapsed under <details>. */
-  prevNashR1Mix: NashMix;
-  oldNashMix: NashMix;
-  /** Where the bot's party comes from when no pool file is loaded. */
-  drawSource: DrawSource;
-  onDrawSource: (s: DrawSource) => void;
   /** The bot's draw, owned by app.tsx so that pressing Start and taking a
    * rematch roll by the same rule. */
   drawOpponent: () => SelectedTeam;
@@ -1112,13 +936,7 @@ export function StartScreen(props: {
               const poolStr =
                 props.loadedPool.name !== null
                   ? ui().poolLoaded(props.loadedPool.name, teams.length)
-                  : props.drawSource === "nash"
-                    ? ui().drawNash(props.nashMix.teams.length)
-                    : props.drawSource === "nash-r1"
-                      ? ui().drawPrevNashR1(props.prevNashR1Mix.teams.length)
-                      : props.drawSource === "nash-v3"
-                        ? ui().drawOldNash(props.oldNashMix.teams.length)
-                        : ui().poolBundled(teams.length);
+                  : ui().poolBundled(teams.length);
               const priorStr = props.prior ? props.prior.name : ui().priorNone;
               return props.pickPrior !== null
                 ? ui().settingsValueWithPickPrior(poolStr, priorStr, props.pickPrior.name)
@@ -1157,11 +975,6 @@ export function StartScreen(props: {
             loaded={props.loadedPool}
             catalog={props.catalogPool}
             onPool={props.onPool}
-            drawSource={props.drawSource}
-            onDrawSource={props.onDrawSource}
-            nashMix={props.nashMix}
-            prevNashR1Mix={props.prevNashR1Mix}
-            oldNashMix={props.oldNashMix}
             prior={props.prior}
             onPrior={props.onPrior}
             pickPrior={props.pickPrior}

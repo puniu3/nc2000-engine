@@ -49,42 +49,18 @@ export async function fetchRecordPool(): Promise<PoolData> {
   return { pool: JSON.parse(poolJson) as MetaPool, poolJson };
 }
 
-/** The shipped mixture: the `?nash` draw and the play door's Nash draw
- * choice. Returned as text because nash-mix.ts is what decides what the file
- * means — and because a draw that names the mixture cannot quietly become a
- * plainer one, this throws: the caller lets it reach the boot error box. */
-export async function fetchNashArtifact(): Promise<string> {
-  const res = await fetch(dataUrl("team-pool-v3/flagship-mixture.json"));
-  if (!res.ok) throw new Error(`nash artifact fetch failed: ${res.status}`);
-  return res.text();
-}
-
-/** The previous Full-Combination Bayesian Preview Nash r1 mixture
- * (conclusion-equilibrium-r1), collapsed under <details> alongside v3. */
-export async function fetchPrevNashR1Artifact(): Promise<string> {
-  const res = await fetch(dataUrl("kodoku-r3/conclusion-equilibrium-r1.json"));
-  if (!res.ok) throw new Error(`prev nash r1 artifact fetch failed: ${res.status}`);
-  return res.text();
-}
-
-/** The previous v3 Nash mixture (meta-nash-v3), collapsed under <details>. */
-export async function fetchOldNashArtifact(): Promise<string> {
-  const res = await fetch(dataUrl("meta-nash-v3/pool-artifact.json"));
-  if (!res.ok) throw new Error(`old nash artifact fetch failed: ${res.status}`);
-  return res.text();
-}
-
 /** The shipped catalog (own-pool.ts decides what it means): the built-in
- * parties on the start screen and the bot's ordinary draw. A page that
- * cannot load it fails rather than quietly drawing from some other list. */
+ * parties on the start screen, the bot's ordinary draw, and the party
+ * evaluator's default opponent distribution. A page that cannot load it
+ * fails rather than quietly drawing from some other list. */
 export async function fetchCatalog(): Promise<string> {
-  const res = await fetch(dataUrl("team-pool-v3/team-pool.json"));
+  const res = await fetch(dataUrl("team-pool-v4/team-pool.json"));
   if (!res.ok) throw new Error(`team catalog fetch failed: ${res.status}`);
   return res.text();
 }
 
 /** The shipped opponent prior (data/belief-pool-v3): the candidate set, with
- * weights, that every searcher narrows its opponent down to — play, nash,
+ * weights, that every searcher narrows its opponent down to — play,
  * the solver, the evaluator and kifu continuations alike, whatever pool file
  * the user loaded. Belief-only: the catalog and every draw never read it.
  * Strict: a page that cannot load it fails rather than quietly playing

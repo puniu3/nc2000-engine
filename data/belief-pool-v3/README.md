@@ -1,12 +1,12 @@
 # belief-pool-v3 — the known-party opponent prior
 
-`belief-pool.json` (`522` entries) is the deployed known-party opponent prior:
+`belief-pool.json` (`527` entries) is the deployed known-party opponent prior:
 real-world parties including variants, plus generated sets only when present in
-the current playable catalog. Together with the bundled zero-prior Gen 2 species
+the current playable catalog (`data/team-pool-v4/team-pool.json`). Together with the bundled zero-prior Gen 2 species
 supplement (`crates/bot/src/belief_supplement_v1.json`) and off-pool EV/IV
 spread synthesis (`crates/bot/src/belief.rs`), it forms `Belief`'s prior
-baseline across all blind doors and tools. The catalog and Nash draw mixtures
-remain separate (`data/team-pool-v2/`, `data/kodoku-r3/`). `bake-prior.json`
+baseline across all blind doors and tools. The playable catalog remains separate
+(`data/team-pool-v4/`). `bake-prior.json`
 (`221` entries) preserves the earlier snapshot for provenance and historical
 comparisons.
 
@@ -15,7 +15,7 @@ comparisons.
 It retains admitted baseline weights, adds admitted real-world types with
 weight 1, collapses duplicate source aliases without adding mass, and applies
 shared [`training-v3`](../training-v3/README.md) normalization across all sets
-(including exact full-set/stat support for all 33 current catalog parties).
+(including exact full-set/stat support for all 15 current catalog parties).
 Authoritative counts, sources, exclusions for invalid-format parties, and file
 hashes live in `known-expansion.json` (excluded records are never silently
 converted into different legal parties). For native verification, run `cargo test`.

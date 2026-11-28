@@ -26,6 +26,7 @@ on:
       - "tools/build-known-prior*"
       - "tools/build-team-products-v2.js"
       - "tools/build-team-products-v3.js"
+      - "tools/build-team-products-v4.js"
       - "tools/optimize-low-attack*"
       - "docs/PREVIEW-CACHE.md"
       - "README.md"
@@ -79,7 +80,7 @@ jobs:
       - name: Verify normalized training and exact prior coverage
         run: |
           node tools/build-training-products.js
-          git diff --exit-code -- data/team-pool-v3/team-pool.json data/team-pool-v3/flagship-mixture.json data/belief-pool-v3/known-expansion.json data/belief-pool-v3/belief-pool.json data/team-pool-v2/team-pool.json data/team-selection-v2/reference.json data/meta-nash-v3/pool-artifact.json data/kodoku-r3/conclusion-equilibrium-deme.json data/kodoku-r3/conclusion-equilibrium-r1.json data/training-v3/supplemental.json data/training-v3/rentals.json data/team-pool-v2/preview-nash-matrix.json
+          git diff --exit-code -- data/team-pool-v4/team-pool.json data/team-pool-v4/flagship-mixture.json data/team-pool-v4/environment-pool-32.json data/team-pool-v3/team-pool.json data/team-pool-v3/flagship-mixture.json data/belief-pool-v3/known-expansion.json data/belief-pool-v3/belief-pool.json data/team-pool-v2/team-pool.json data/team-selection-v2/reference.json data/meta-nash-v3/pool-artifact.json data/kodoku-r3/conclusion-equilibrium-deme.json data/kodoku-r3/conclusion-equilibrium-r1.json data/training-v3/supplemental.json data/training-v3/rentals.json data/team-pool-v2/preview-nash-matrix.json
           cargo run --quiet -p nc2000-bot --example verify_training -- target/training-verification.json
           cmp data/training-v3/verification.json target/training-verification.json
           node --test tools/normalize-training.test.js tools/optimize-low-attack.test.js tools/build-known-prior.test.mjs
@@ -106,26 +107,17 @@ jobs:
           # "load the sample table" button fetches it at runtime.
           cp data/belief-prior-v0.sample.json web/dist/data/
           # Team rebuild (docs/TEAM-POOL-REBUILD-PLAN.md): the shipped
-          # files ONLY — the catalog (human lists + bot draw), the opponent
-          # prior, and the flagship / historical mixtures. Measurements and the
-          # reference inventory stay in the repo as audit trail, not payload.
-          mkdir -p web/dist/data/team-pool-v3 web/dist/data/team-pool-v2 web/dist/data/belief-pool-v3 web/dist/data/meta-nash-v3 web/dist/data/kodoku-r3
-          cp data/team-pool-v3/team-pool.json data/team-pool-v3/flagship-mixture.json web/dist/data/team-pool-v3/
-          cp data/team-pool-v2/team-pool.json web/dist/data/team-pool-v2/
+          # files ONLY — the 10-shell catalog (human lists + bot draw +
+          # evaluator opponents) and the opponent prior. Retired Nash mixtures,
+          # measurements, and environment archives stay in the repo, not payload.
+          mkdir -p web/dist/data/team-pool-v4 web/dist/data/belief-pool-v3
+          cp data/team-pool-v4/team-pool.json web/dist/data/team-pool-v4/
           cp data/belief-pool-v3/belief-pool.json web/dist/data/belief-pool-v3/
-          cp data/meta-nash-v3/pool-artifact.json web/dist/data/meta-nash-v3/
-          cp data/kodoku-r3/conclusion-equilibrium-r1.json web/dist/data/kodoku-r3/
-          cp data/kodoku-r3/conclusion-equilibrium-deme.json web/dist/data/kodoku-r3/
           # `?fork=NAME` documents; each one carries a player's full team.
           cp -r data/forks web/dist/data/
           test -s web/dist/data/gen2stadium2.json
-          test -s web/dist/data/team-pool-v3/team-pool.json
-          test -s web/dist/data/team-pool-v3/flagship-mixture.json
-          test -s web/dist/data/team-pool-v2/team-pool.json
+          test -s web/dist/data/team-pool-v4/team-pool.json
           test -s web/dist/data/belief-pool-v3/belief-pool.json
-          test -s web/dist/data/meta-nash-v3/pool-artifact.json
-          test -s web/dist/data/kodoku-r3/conclusion-equilibrium-r1.json
-          test -s web/dist/data/kodoku-r3/conclusion-equilibrium-deme.json
 
       - name: Verify live browser worker search and policies
         working-directory: web

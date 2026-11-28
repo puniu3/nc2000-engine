@@ -109,17 +109,19 @@ export function importDistribution(text: string): OpponentDraft[] {
   if (!raw || !Array.isArray(raw.teams))
     throw new ToolError("invalidDistribution");
   const drafts = raw.teams.map(
-    (e: { id?: unknown; weight?: unknown; sets?: unknown }) => {
+    (e: { id?: unknown; weight?: unknown; drawWeight?: unknown; sets?: unknown }) => {
+      const weight =
+        typeof e?.weight === "number" ? e.weight : e?.drawWeight;
       if (
         !e ||
         typeof e.id !== "string" ||
-        typeof e.weight !== "number" ||
+        typeof weight !== "number" ||
         !Array.isArray(e.sets)
       )
         throw new ToolError("incompleteOpponent");
       return {
         id: e.id,
-        weight: String(e.weight),
+        weight: String(weight),
         text: JSON.stringify(e.sets, null, 2),
       };
     },
