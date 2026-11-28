@@ -319,6 +319,39 @@ impl PickDistribution {
             .iter()
             .position(|action| action == &self.preview.last().unwrap().0)
     }
+
+    /// Exact probability vector over `actions` matching `sample_preview`.
+    /// Returns `None` if `actions` is empty, if any prior choice is not in `actions`,
+    /// or if the non-smoothed mass has no choices.
+    pub(crate) fn preview_probs(&self, actions: &[SearchChoice]) -> Option<Vec<f64>> {
+        if actions.is_empty()
+            || self
+                .preview
+                .iter()
+                .any(|(choice, _)| !actions.contains(choice))
+        {
+            return None;
+        }
+        let scale = 1.0 - self.smoothing;
+        if self.preview.is_empty() && scale > 0.0 {
+            return None;
+        }
+        let n = actions.len() as f64;
+        let mut probs = vec![self.smoothing / n; actions.len()];
+        for (choice, probability) in &self.preview {
+            if let Some(pos) = actions.iter().position(|action| action == choice) {
+                probs[pos] += scale * probability;
+            }
+        }
+        let sum: f64 = probs.iter().sum();
+        if sum <= 0.0 {
+            return None;
+        }
+        for p in &mut probs {
+            *p /= sum;
+        }
+        Some(probs)
+    }
 }
 
 #[cfg(test)]
@@ -441,5 +474,51 @@ mod tests {
             .filter(|_| general.sample(&mut rng) == 11)
             .count();
         assert!((8800..9200).contains(&count));
+    }
+
+    #[test]
+    fn preview_probs_matches_sample_preview_and_rejects_illegal_or_empty() {
+        let (mut prior, preview, roster) = fixture();
+        // Add a general row sharing the same choice so duplicate-entry accumulation is tested.
+        prior.rows.insert(
+            ("team".into(), Vec::new(), 1),
+            vec![
+                Choice {
+                    species: ["a".into(), "b".into(), "c".into()],
+                    count: 10,
+                },
+                Choice {
+                    species: ["b".into(), "a".into(), "c".into()],
+                    count: 10,
+                },
+            ],
+        );
+        let dist = prior.condition("team", &preview, 1, &roster, 0).unwrap();
+        let actions = [
+            SearchChoice::Team([1, 2, 3]),
+            SearchChoice::Team([2, 1, 3]),
+            SearchChoice::Team([3, 1, 2]),
+        ];
+        let probs = dist.preview_probs(&actions).expect("valid preview probs");
+        assert_eq!(probs.len(), actions.len());
+        assert!((probs.iter().sum::<f64>() - 1.0).abs() < 1e-12);
+        // Verify empirical sampling matches analytical probabilities tightly.
+        let mut rng = SplitMix64::new(12345);
+        let mut counts = [0usize; 3];
+        let trials = 20_000usize;
+        for _ in 0..trials {
+            counts[dist.sample_preview(&actions, &mut rng).unwrap()] += 1;
+        }
+        for i in 0..actions.len() {
+            let emp = (counts[i] as f64) / (trials as f64);
+            assert!(
+                (emp - probs[i]).abs() < 0.012,
+                "action {i}: empirical {emp:.4} vs exact {:.4}",
+                probs[i]
+            );
+        }
+        // Rejects illegal choices and empty action slices.
+        assert_eq!(dist.preview_probs(&actions[1..]), None);
+        assert_eq!(dist.preview_probs(&[]), None);
     }
 }

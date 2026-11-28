@@ -409,6 +409,338 @@ pub fn solve_bayesian_rm_plus(
     }
 }
 
+/// Multi-World Bayesian RM+ solver supporting per-world fixed opponent preview priors.
+///
+/// - When every world has `opp_priors[w] == None`, dispatches directly to
+///   `solve_bayesian_rm_plus` for 0-ULP bit-exact invariance on default PS & Castle.
+/// - When every world has `opp_priors[w] == Some(q_w)`, computes the exact closed-form
+///   Bayesian best response `\max_i \sum_w \pi_w E_{j \sim q_w}[V_w[i, j]]` with `duality_gap = 0`.
+/// - When some worlds have `Some(q_w)` and others `None` (partial prior coverage), solves
+///   the exact hybrid Bayesian equilibrium: fixed `q_w` in prioritized worlds and adversarial
+///   minimax RM+ in unprioritized worlds.
+pub fn solve_bayesian_rm_plus_with_priors(
+    n_own: usize,
+    worlds: &[(f64, usize, &[f64])],
+    opp_priors: &[Option<&[f64]>],
+    sweeps: u32,
+) -> BayesianRmSolution {
+    assert!(n_own > 0 && !worlds.is_empty());
+    assert_eq!(worlds.len(), opp_priors.len());
+    if opp_priors.iter().all(Option::is_none) {
+        return solve_bayesian_rm_plus(n_own, worlds, sweeps);
+    }
+
+    let n_w = worlds.len();
+    let norm_prior = |m: usize, qp: &[f64]| -> Vec<f64> {
+        debug_assert_eq!(qp.len(), m);
+        let mut q = vec![0.0f64; m];
+        let mut s = 0.0;
+        for j in 0..m {
+            let v = qp[j].max(0.0);
+            q[j] = v;
+            s += v;
+        }
+        if s > 0.0 {
+            let inv = 1.0 / s;
+            for x in &mut q {
+                *x *= inv;
+            }
+        } else if m > 0 {
+            let u = 1.0 / (m as f64);
+            for x in &mut q {
+                *x = u;
+            }
+        }
+        q
+    };
+
+    if opp_priors.iter().all(Option::is_some) {
+        let opp_policies: Vec<Vec<f64>> = (0..n_w)
+            .map(|w| norm_prior(worlds[w].1, opp_priors[w].unwrap()))
+            .collect();
+        let mut row_vs_q = vec![0.0f64; n_own];
+        for w in 0..n_w {
+            let (pi_w, m, vals) = worlds[w];
+            if m == 0 || pi_w <= 0.0 {
+                continue;
+            }
+            let q = &opp_policies[w];
+            for i in 0..n_own {
+                let row = &vals[i * m..(i + 1) * m];
+                let mut acc = 0.0;
+                for j in 0..m {
+                    acc += row[j] * q[j];
+                }
+                row_vs_q[i] += pi_w * acc;
+            }
+        }
+        let best_i = (0..n_own)
+            .max_by(|&a, &b| row_vs_q[a].total_cmp(&row_vs_q[b]).then_with(|| b.cmp(&a)))
+            .unwrap_or(0);
+        let mut own_policy = vec![0.0f64; n_own];
+        own_policy[best_i] = 1.0;
+        let mut col_vs_p: Vec<Vec<f64>> = Vec::with_capacity(n_w);
+        let mut world_values = Vec::with_capacity(n_w);
+        for w in 0..n_w {
+            let (_, m, vals) = worlds[w];
+            let cp = vals[best_i * m..(best_i + 1) * m].to_vec();
+            let mut vw = 0.0;
+            for j in 0..m {
+                vw += cp[j] * opp_policies[w][j];
+            }
+            world_values.push(vw);
+            col_vs_p.push(cp);
+        }
+        let value = row_vs_q[best_i];
+        let row_guarantees = row_vs_q.clone();
+        return BayesianRmSolution {
+            own_policy,
+            opp_policies,
+            value,
+            duality_gap: 0.0,
+            row_guarantees,
+            row_vs_q,
+            col_vs_p,
+            world_values,
+        };
+    }
+
+    // Hybrid case: some worlds fixed to `opp_priors[w]`, others adversarial RM+.
+    let mut r_own = vec![0.0f64; n_own];
+    let mut avg_own = vec![0.0f64; n_own];
+    let mut p_cur = vec![1.0 / (n_own as f64); n_own];
+
+    let mut r_opp: Vec<Vec<f64>> = worlds.iter().map(|&(_, m, _)| vec![0.0; m]).collect();
+    let mut avg_opp: Vec<Vec<f64>> = worlds.iter().map(|&(_, m, _)| vec![0.0; m]).collect();
+    let mut q_cur: Vec<Vec<f64>> = (0..n_w)
+        .map(|w| {
+            let m = worlds[w].1;
+            if let Some(qp) = opp_priors[w] {
+                norm_prior(m, qp)
+            } else {
+                vec![1.0 / (m.max(1) as f64); m]
+            }
+        })
+        .collect();
+
+    let mut row_ev = vec![0.0f64; n_own];
+    let mut col_ev: Vec<Vec<f64>> = worlds.iter().map(|&(_, m, _)| vec![0.0; m]).collect();
+    let mut weight_sum = 0.0f64;
+
+    let steps = sweeps.max(1);
+    for t in 1..=steps {
+        let tw = f64::from(t);
+        weight_sum += tw;
+
+        let r_sum: f64 = r_own.iter().sum();
+        if r_sum > 1e-15 {
+            let inv = 1.0 / r_sum;
+            for i in 0..n_own {
+                p_cur[i] = r_own[i] * inv;
+            }
+        } else {
+            let u = 1.0 / (n_own as f64);
+            for p in &mut p_cur {
+                *p = u;
+            }
+        }
+        for i in 0..n_own {
+            avg_own[i] += tw * p_cur[i];
+        }
+
+        for w in 0..n_w {
+            if opp_priors[w].is_some() {
+                continue;
+            }
+            let (_, m, vals) = worlds[w];
+            if m == 0 {
+                continue;
+            }
+            let cev = &mut col_ev[w];
+            for j in 0..m {
+                cev[j] = 0.0;
+            }
+            for i in 0..n_own {
+                let pi = p_cur[i];
+                if pi > 0.0 {
+                    let row = &vals[i * m..(i + 1) * m];
+                    for j in 0..m {
+                        cev[j] += pi * row[j];
+                    }
+                }
+            }
+            let q = &mut q_cur[w];
+            let mut val_w = 0.0;
+            for j in 0..m {
+                val_w += q[j] * cev[j];
+            }
+            let ro = &mut r_opp[w];
+            let mut ro_sum = 0.0;
+            for j in 0..m {
+                let nr = (ro[j] + (val_w - cev[j])).max(0.0);
+                ro[j] = nr;
+                ro_sum += nr;
+            }
+            if ro_sum > 1e-15 {
+                let inv = 1.0 / ro_sum;
+                for j in 0..m {
+                    q[j] = ro[j] * inv;
+                }
+            } else {
+                let u = 1.0 / (m as f64);
+                for x in q.iter_mut() {
+                    *x = u;
+                }
+            }
+            let ao = &mut avg_opp[w];
+            for j in 0..m {
+                ao[j] += tw * q[j];
+            }
+        }
+
+        for x in &mut row_ev {
+            *x = 0.0;
+        }
+        for w in 0..n_w {
+            let (pi_w, m, vals) = worlds[w];
+            if m == 0 || pi_w <= 0.0 {
+                continue;
+            }
+            let q = &q_cur[w];
+            for i in 0..n_own {
+                let row = &vals[i * m..(i + 1) * m];
+                let mut acc = 0.0;
+                for j in 0..m {
+                    acc += row[j] * q[j];
+                }
+                row_ev[i] += pi_w * acc;
+            }
+        }
+        let mut val_cur = 0.0;
+        for i in 0..n_own {
+            val_cur += p_cur[i] * row_ev[i];
+        }
+        for i in 0..n_own {
+            r_own[i] = (r_own[i] + (row_ev[i] - val_cur)).max(0.0);
+        }
+    }
+
+    let inv_w = 1.0 / weight_sum.max(1.0);
+    let mut own_policy: Vec<f64> = avg_own.iter().map(|&v| v * inv_w).collect();
+    let p_sum: f64 = own_policy.iter().sum();
+    if p_sum > 0.0 {
+        for p in &mut own_policy {
+            *p /= p_sum;
+        }
+    }
+    let opp_policies: Vec<Vec<f64>> = (0..n_w)
+        .map(|w| {
+            if opp_priors[w].is_some() {
+                q_cur[w].clone()
+            } else {
+                let mut q: Vec<f64> = avg_opp[w].iter().map(|&v| v * inv_w).collect();
+                let s: f64 = q.iter().sum();
+                if s > 0.0 {
+                    for x in &mut q {
+                        *x /= s;
+                    }
+                }
+                q
+            }
+        })
+        .collect();
+
+    let mut row_vs_q = vec![0.0f64; n_own];
+    let mut row_guarantees = vec![0.0f64; n_own];
+    let mut col_vs_p: Vec<Vec<f64>> = Vec::with_capacity(n_w);
+    let mut world_values = Vec::with_capacity(n_w);
+    let mut lower_bound = 0.0;
+
+    for w in 0..n_w {
+        let (pi_w, m, vals) = worlds[w];
+        let is_fixed = opp_priors[w].is_some();
+        let mut cp = vec![0.0f64; m];
+        for i in 0..n_own {
+            let row = &vals[i * m..(i + 1) * m];
+            let mut rmin = f64::INFINITY;
+            let mut r_q = 0.0;
+            let pi = own_policy[i];
+            for j in 0..m {
+                let v = row[j];
+                if v < rmin {
+                    rmin = v;
+                }
+                r_q += v * opp_policies[w][j];
+                if pi > 0.0 {
+                    cp[j] += pi * v;
+                }
+            }
+            row_guarantees[i] += pi_w * if is_fixed { r_q } else { rmin };
+            row_vs_q[i] += pi_w * r_q;
+        }
+        let min_cp = cp.iter().copied().fold(f64::INFINITY, f64::min);
+        let mut vw = 0.0;
+        for j in 0..m {
+            vw += cp[j] * opp_policies[w][j];
+        }
+        lower_bound += pi_w * if is_fixed { vw } else { min_cp };
+        world_values.push(vw);
+        col_vs_p.push(cp);
+    }
+    let upper_bound = row_vs_q.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    let value: f64 = own_policy
+        .iter()
+        .zip(&row_vs_q)
+        .map(|(&p, &u)| p * u)
+        .sum();
+    let duality_gap = (upper_bound - lower_bound).max(0.0);
+
+    BayesianRmSolution {
+        own_policy,
+        opp_policies,
+        value,
+        duality_gap,
+        row_guarantees,
+        row_vs_q,
+        col_vs_p,
+        world_values,
+    }
+}
+
+fn select_prior_opp_support(opp_prior: &[f64], opp_ev: &[f64], k: usize) -> Vec<usize> {
+    let m = opp_prior.len();
+    if m <= k {
+        return (0..m).collect();
+    }
+    let mut order: Vec<usize> = (0..m).collect();
+    order.sort_by(|&a, &b| {
+        opp_prior[b]
+            .total_cmp(&opp_prior[a])
+            .then_with(|| opp_ev[b].total_cmp(&opp_ev[a]))
+            .then_with(|| a.cmp(&b))
+    });
+    order.truncate(k);
+    order
+}
+
+fn restrict_opp_prior(opp_prior: Option<&[f64]>, cols: &[usize]) -> Option<Vec<f64>> {
+    let qp = opp_prior?;
+    let mut sub: Vec<f64> = cols.iter().map(|&j| qp[j].max(0.0)).collect();
+    let sum: f64 = sub.iter().sum();
+    if sum > 0.0 {
+        let inv = 1.0 / sum;
+        for x in &mut sub {
+            *x *= inv;
+        }
+    } else if !sub.is_empty() {
+        let u = 1.0 / (sub.len() as f64);
+        for x in &mut sub {
+            *x = u;
+        }
+    }
+    Some(sub)
+}
+
 fn shed_dust(p: &mut [f64], ratio: f64) {
     let pmax = p.iter().copied().fold(0.0f64, f64::max);
     if pmax <= 0.0 {
@@ -1092,6 +1424,7 @@ struct PreviewWorldData {
     weight: f64,
     opp_canon: Vec<(usize, [u8; 3])>,
     opp_tactical: [bool; 6],
+    opp_prior: Option<Vec<f64>>,
     compact: Option<(CompactPreviewRoster, PreviewTempoCache)>,
     stage1_vals: Vec<f64>, // row-major `[n_own * n_opp]` from `side`'s perspective
 }
@@ -1174,7 +1507,8 @@ pub fn solve_cf_preview(
 
     // Determinize all Turn-0 opponent worlds first and verify CompactPreviewRoster coverage
     // BEFORE Stage 1 so unsupported worlds never get silently dropped or burn dead Battle loops.
-    let mut det_worlds: Vec<(f64, Battle)> = Vec::with_capacity(world_plan.len());
+    let mut det_worlds: Vec<(crate::belief::TeamPlanPick, f64, Battle)> =
+        Vec::with_capacity(world_plan.len());
     let mut all_compact = !world_plan.is_empty();
     for &(plan_pick, weight) in &world_plan {
         let mut sim_w = base.clone();
@@ -1185,7 +1519,7 @@ pub fn solve_cf_preview(
             all_compact = false;
             break;
         }
-        det_worlds.push((weight, sim_w));
+        det_worlds.push((plan_pick, weight, sim_w));
     }
 
     if !all_compact {
@@ -1226,12 +1560,25 @@ pub fn solve_cf_preview(
     let mut worlds: Vec<PreviewWorldData> = Vec::with_capacity(det_worlds.len());
     let eg_weights = EvalWeights::default();
 
-    for (weight, mut sim_w) in det_worlds {
-        let (_, opp_canon) = canonical_preview_actions(dex, &mut sim_w, opp);
+    let use_opp_prior = belief.has_preview_prior(obs);
+    for (plan_pick, weight, mut sim_w) in det_worlds {
+        let (opp_legal, opp_canon) = canonical_preview_actions(dex, &mut sim_w, opp);
         let n_opp = opp_canon.len();
         if n_opp == 0 {
             continue;
         }
+        let opp_prior = if use_opp_prior {
+            let opp_order_matters = party_order_matters(dex, &sim_w.sides[opp].roster);
+            belief.preview_prior_probs_canonical(
+                plan_pick,
+                obs,
+                &opp_legal,
+                &opp_canon,
+                opp_order_matters,
+            )
+        } else {
+            None
+        };
         let opp_tactical = lead_tactical_flags(dex, &sim_w, opp);
         let roster = CompactPreviewRoster::from_battle(&sim_w, dex, None);
         let pcache = PreviewTempoCache::build_for_preview_roster(
@@ -1258,6 +1605,7 @@ pub fn solve_cf_preview(
             weight,
             opp_canon,
             opp_tactical,
+            opp_prior,
             compact: Some((roster, pcache)),
             stage1_vals,
         });
@@ -1314,7 +1662,8 @@ pub fn solve_cf_preview(
         .iter()
         .map(|w| (w.weight, w.opp_canon.len(), w.stage1_vals.as_slice()))
         .collect();
-    let sol1 = solve_bayesian_rm_plus(n_own, &s1_slices, cfg.rm_sweeps_stage1);
+    let s1_priors: Vec<Option<&[f64]>> = worlds.iter().map(|w| w.opp_prior.as_deref()).collect();
+    let sol1 = solve_bayesian_rm_plus_with_priors(n_own, &s1_slices, &s1_priors, cfg.rm_sweeps_stage1);
     let stage1_ms = elapsed_ms(t_total);
 
     if matches!(cfg.policy_mode, PreviewPolicyMode::Stage1Only) || cfg.total_iters == 0 {
@@ -1328,17 +1677,29 @@ pub fn solve_cf_preview(
             .iter()
             .map(|w| {
                 let m = w.opp_canon.len();
-                let mut mn = f64::INFINITY;
-                for j in 0..m {
-                    let mut v = 0.0;
-                    for i in 0..n_own {
-                        v += p[i] * w.stage1_vals[i * m + j];
+                if let Some(ref qp) = w.opp_prior {
+                    let mut ev = 0.0;
+                    for j in 0..m {
+                        let mut v = 0.0;
+                        for i in 0..n_own {
+                            v += p[i] * w.stage1_vals[i * m + j];
+                        }
+                        ev += qp[j] * v;
                     }
-                    if v < mn {
-                        mn = v;
+                    w.weight * ev
+                } else {
+                    let mut mn = f64::INFINITY;
+                    for j in 0..m {
+                        let mut v = 0.0;
+                        for i in 0..n_own {
+                            v += p[i] * w.stage1_vals[i * m + j];
+                        }
+                        if v < mn {
+                            mn = v;
+                        }
                     }
+                    w.weight * mn
                 }
-                w.weight * mn
             })
             .sum();
         let draw = rng.next_f64();
@@ -1431,6 +1792,10 @@ pub fn solve_cf_preview(
         let wd = &worlds[w_id];
         let m = wd.opp_canon.len();
         let opp_ev: Vec<f64> = sol1.col_vs_p[w_id].iter().map(|&v| 1.0 - v).collect();
+        if let Some(ref qp) = wd.opp_prior {
+            s_opp.push(select_prior_opp_support(qp, &opp_ev, k_eff));
+            continue;
+        }
         let mut opp_guar = vec![1.0f64; m];
         for j in 0..m {
             let mut mx = 0.0f64;
@@ -1510,6 +1875,7 @@ pub fn solve_cf_preview(
         let mut mats: Vec<Vec<f64>> = Vec::with_capacity(n_w2 + n_tail);
         let mut col_lens: Vec<usize> = Vec::with_capacity(n_w2 + n_tail);
         let mut w_list: Vec<f64> = Vec::with_capacity(n_w2 + n_tail);
+        let mut sub_priors: Vec<Option<Vec<f64>>> = Vec::with_capacity(n_w2 + n_tail);
         for wi in 0..n_w2 {
             let w_id = s2_world_ids[wi];
             let wd = &worlds[w_id];
@@ -1530,6 +1896,7 @@ pub fn solve_cf_preview(
             mats.push(mat);
             col_lens.push(k_opp);
             w_list.push(s2_post_weights[wi]);
+            sub_priors.push(restrict_opp_prior(wd.opp_prior.as_deref(), &s_opp[wi]));
         }
         for (ti, &w_id) in tail_world_ids.iter().enumerate() {
             let wd = &worlds[w_id];
@@ -1542,11 +1909,13 @@ pub fn solve_cf_preview(
             mats.push(mat);
             col_lens.push(m_full);
             w_list.push(tail_post_weights[ti]);
+            sub_priors.push(wd.opp_prior.clone());
         }
         let slices: Vec<(f64, usize, &[f64])> = (0..mats.len())
             .map(|idx| (w_list[idx], col_lens[idx], mats[idx].as_slice()))
             .collect();
-        let sol = solve_bayesian_rm_plus(k_me, &slices, sweeps);
+        let prior_refs: Vec<Option<&[f64]>> = sub_priors.iter().map(|p| p.as_deref()).collect();
+        let sol = solve_bayesian_rm_plus_with_priors(k_me, &slices, &prior_refs, sweeps);
         (mats, sol)
     };
 
@@ -1613,6 +1982,9 @@ pub fn solve_cf_preview(
             let do_step_w = coarse_per_w[wi].clamp(64, cfg.do_iters.max(192));
             let w_id = s2_world_ids[wi];
             let wd = &worlds[w_id];
+            if wd.opp_prior.is_some() {
+                continue;
+            }
             let m_full = wd.opp_canon.len();
             let mut outside: Vec<(usize, f64)> = Vec::new();
             for j in 0..m_full {
@@ -1981,6 +2353,34 @@ pub fn solve_cf_preview(
     for wi in 0..n_w2 {
         let k_opp = s_opp[wi].len();
         let mat = &final_mats[wi];
+        let w_id = s2_world_ids[wi];
+        if let Some(q_sub) = restrict_opp_prior(worlds[w_id].opp_prior.as_deref(), &s_opp[wi]) {
+            let mut ev_w = 0.0;
+            let mut var_w = 0.0;
+            for cj in 0..k_opp {
+                let opp_j = s_opp[wi][cj];
+                let qj = q_sub[cj];
+                if qj <= 0.0 {
+                    continue;
+                }
+                let mut mean_j = 0.0;
+                let mut var_j = 0.0;
+                for ri in 0..k_me {
+                    let pr = p_mix[ri];
+                    if pr > 0.0 {
+                        let v = mat[ri * k_opp + cj];
+                        mean_j += pr * v;
+                        let n_c = cells.get(&(wi, s_me[ri], opp_j)).map_or(1, |c| c.total_n.max(1));
+                        var_j += (pr * pr) * (0.25 / f64::from(n_c));
+                    }
+                }
+                ev_w += qj * mean_j;
+                var_w += (qj * qj) * var_j;
+            }
+            mixed_guarantee += s2_post_weights[wi] * ev_w;
+            mixed_guarantee_lcb += s2_post_weights[wi] * (ev_w - lcb_z * var_w.sqrt());
+            continue;
+        }
         let mut min_col = f64::INFINITY;
         let mut min_col_lcb = f64::INFINITY;
         for cj in 0..k_opp {
@@ -2010,6 +2410,26 @@ pub fn solve_cf_preview(
     for (ti, &w_id) in tail_world_ids.iter().enumerate() {
         let m_full = worlds[w_id].opp_canon.len();
         let mat = &final_mats[n_w2 + ti];
+        if let Some(ref qp) = worlds[w_id].opp_prior {
+            let mut ev_w = 0.0;
+            for cj in 0..m_full {
+                let qj = qp[cj];
+                if qj <= 0.0 {
+                    continue;
+                }
+                let mut mean_j = 0.0;
+                for ri in 0..k_me {
+                    let pr = p_mix[ri];
+                    if pr > 0.0 {
+                        mean_j += pr * mat[ri * m_full + cj];
+                    }
+                }
+                ev_w += qj * mean_j;
+            }
+            mixed_guarantee += tail_post_weights[ti] * ev_w;
+            mixed_guarantee_lcb += tail_post_weights[ti] * ev_w;
+            continue;
+        }
         let mut min_col = f64::INFINITY;
         for cj in 0..m_full {
             let mut mean_j = 0.0;
@@ -2322,9 +2742,10 @@ impl SteppedCfPreview {
         my_acts: &[SearchChoice],
         my_mask: Option<&[bool]>,
         c_ucb: f64,
+        use_opp_prior: bool,
         rng: &mut SplitMix64,
     ) -> Option<Self> {
-        Self::try_new_with_calib(
+        Self::try_new_with_calib_and_prior(
             base,
             dex,
             belief,
@@ -2334,6 +2755,7 @@ impl SteppedCfPreview {
             my_mask,
             c_ucb,
             Some(TrajCalibConfig::default()),
+            use_opp_prior,
             rng,
         )
     }
@@ -2349,6 +2771,36 @@ impl SteppedCfPreview {
         my_mask: Option<&[bool]>,
         c_ucb: f64,
         calib_cfg: Option<TrajCalibConfig>,
+        rng: &mut SplitMix64,
+    ) -> Option<Self> {
+        let use_opp_prior = belief.has_preview_prior(obs);
+        Self::try_new_with_calib_and_prior(
+            base,
+            dex,
+            belief,
+            obs,
+            side,
+            my_acts,
+            my_mask,
+            c_ucb,
+            calib_cfg,
+            use_opp_prior,
+            rng,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn try_new_with_calib_and_prior(
+        base: &Battle,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &crate::observe::Observer,
+        side: usize,
+        my_acts: &[SearchChoice],
+        my_mask: Option<&[bool]>,
+        c_ucb: f64,
+        calib_cfg: Option<TrajCalibConfig>,
+        use_opp_prior: bool,
         rng: &mut SplitMix64,
     ) -> Option<Self> {
         if base.request_state != RequestState::TeamPreview {
@@ -2400,7 +2852,8 @@ impl SteppedCfPreview {
             return None;
         }
 
-        let mut det_worlds: Vec<(f64, Battle)> = Vec::with_capacity(world_plan.len());
+        let mut det_worlds: Vec<(crate::belief::TeamPlanPick, f64, Battle)> =
+            Vec::with_capacity(world_plan.len());
         for &(plan_pick, weight) in &world_plan {
             let mut sim_w = base.clone();
             sim_w.set_log_enabled(false);
@@ -2409,7 +2862,7 @@ impl SteppedCfPreview {
             if !is_compact_preview_supported(&sim_w, dex) {
                 return None;
             }
-            det_worlds.push((weight, sim_w));
+            det_worlds.push((plan_pick, weight, sim_w));
         }
 
         let calib_active = calib_cfg
@@ -2417,12 +2870,24 @@ impl SteppedCfPreview {
             .is_some_and(|cc| cc.calib_frac > 0.0 && cfg.total_iters >= 1024);
         let mut worlds: Vec<PreviewWorldData> = Vec::with_capacity(det_worlds.len());
         let mut all_metas: Vec<WorldInteractMeta> = Vec::with_capacity(det_worlds.len());
-        for (weight, mut sim_w) in det_worlds {
-            let (_, opp_canon) = canonical_preview_actions(dex, &mut sim_w, opp);
+        for (plan_pick, weight, mut sim_w) in det_worlds {
+            let (opp_legal, opp_canon) = canonical_preview_actions(dex, &mut sim_w, opp);
             let n_opp = opp_canon.len();
             if n_opp == 0 {
                 continue;
             }
+            let opp_prior = if use_opp_prior {
+                let opp_order_matters = party_order_matters(dex, &sim_w.sides[opp].roster);
+                belief.preview_prior_probs_canonical(
+                    plan_pick,
+                    obs,
+                    &opp_legal,
+                    &opp_canon,
+                    opp_order_matters,
+                )
+            } else {
+                None
+            };
             let opp_tactical = lead_tactical_flags(dex, &sim_w, opp);
             let party_lens = [sim_w.sides[0].party.len(), sim_w.sides[1].party.len()];
             let roster = CompactPreviewRoster::from_battle(&sim_w, dex, None);
@@ -2447,6 +2912,7 @@ impl SteppedCfPreview {
                 weight,
                 opp_canon,
                 opp_tactical,
+                opp_prior,
                 compact: Some((roster, pcache)),
                 stage1_vals,
             });
@@ -2469,7 +2935,14 @@ impl SteppedCfPreview {
             .iter()
             .map(|w| (w.weight, w.opp_canon.len(), w.stage1_vals.as_slice()))
             .collect();
-        let sol1 = solve_bayesian_rm_plus(n_own, &s1_slices, cfg.rm_sweeps_stage1);
+        let s1_priors: Vec<Option<&[f64]>> =
+            worlds.iter().map(|w| w.opp_prior.as_deref()).collect();
+        let sol1 = solve_bayesian_rm_plus_with_priors(
+            n_own,
+            &s1_slices,
+            &s1_priors,
+            cfg.rm_sweeps_stage1,
+        );
 
         let mut ordered_worlds: Vec<usize> = (0..worlds.len()).collect();
         ordered_worlds.sort_by(|&a, &b| worlds[b].weight.total_cmp(&worlds[a].weight));
@@ -2517,6 +2990,10 @@ impl SteppedCfPreview {
             let wd = &worlds[w_id];
             let m = wd.opp_canon.len();
             let opp_ev: Vec<f64> = sol1.col_vs_p[w_id].iter().map(|&v| 1.0 - v).collect();
+            if let Some(ref qp) = wd.opp_prior {
+                s_opp.push(select_prior_opp_support(qp, &opp_ev, k_eff));
+                continue;
+            }
             let mut opp_guar = vec![1.0f64; m];
             for j in 0..m {
                 let mut mx = 0.0f64;
@@ -2925,25 +3402,30 @@ impl SteppedCfPreview {
                         best_i = i;
                     }
                 }
-                let mut best_j = 0usize;
-                let mut best_sj = f64::INFINITY;
-                for j in 0..m {
-                    if used_j.contains(&j) {
-                        continue;
+                let best_j = if let Some(ref qp) = self.worlds[w_id].opp_prior {
+                    sample_dist(qp, rng.next_f64())
+                } else {
+                    let mut best_j = 0usize;
+                    let mut best_sj = f64::INFINITY;
+                    for j in 0..m {
+                        if used_j.contains(&j) {
+                            continue;
+                        }
+                        let sc = score_triple(
+                            self.worlds[w_id].opp_canon[j].1,
+                            &cal.opp_mon_cnt[wi],
+                            &cal.opp_lead_cnt[wi],
+                            &cal.opp_bench_pair_cnt[wi],
+                        ) + rng.next_f64() * 0.05;
+                        if sc < best_sj {
+                            best_sj = sc;
+                            best_j = j;
+                        }
                     }
-                    let sc = score_triple(
-                        self.worlds[w_id].opp_canon[j].1,
-                        &cal.opp_mon_cnt[wi],
-                        &cal.opp_lead_cnt[wi],
-                        &cal.opp_bench_pair_cnt[wi],
-                    ) + rng.next_f64() * 0.05;
-                    if sc < best_sj {
-                        best_sj = sc;
-                        best_j = j;
-                    }
-                }
+                    used_j.push(best_j);
+                    best_j
+                };
                 used_i.push(best_i);
-                used_j.push(best_j);
                 pairs.push((best_i, best_j));
             }
         } else {
@@ -2991,7 +3473,10 @@ impl SteppedCfPreview {
             let slices: Vec<(f64, usize, &[f64])> = (0..n_w2)
                 .map(|w| (self.s2_alloc_weights[w], col_lens[w], mats[w].as_slice()))
                 .collect();
-            let sol = solve_bayesian_rm_plus(n_own, &slices, 250);
+            let priors: Vec<Option<&[f64]>> = (0..n_w2)
+                .map(|w| self.worlds[self.s2_world_ids[w]].opp_prior.as_deref())
+                .collect();
+            let sol = solve_bayesian_rm_plus_with_priors(n_own, &slices, &priors, 250);
             let cal = self.calib.as_ref().unwrap();
 
             // 1. Paired own challenger vs incumbent against equilibrium opponent.
@@ -3012,15 +3497,26 @@ impl SteppedCfPreview {
             // 2. Paired opp challenger vs incumbent against equilibrium own pick.
             let i_tgt = sample_dist(&sol.own_policy, rng.next_f64());
             let j_inc = sample_dist(&sol.opp_policies[wi], rng.next_f64());
-            let mut opp_cands: Vec<(usize, f64)> = (0..m)
-                .filter(|&j| j != j_inc)
-                .map(|j| {
-                    let n = cal.obs_s1_n[wi][i_tgt * m + j];
-                    (j, (1.0 - sol.col_vs_p[wi][j]) + 0.08 / f64::from(n + 1).sqrt())
-                })
-                .collect();
-            opp_cands.sort_by(|a, b| b.1.total_cmp(&a.1));
-            let j_ch = opp_cands.first().map_or(j_inc, |&(j, _)| j);
+            let j_ch = if let Some(ref qp) = self.worlds[w_id].opp_prior {
+                (0..m)
+                    .filter(|&j| j != j_inc)
+                    .max_by(|&a, &b| {
+                        let sa = qp[a] / f64::from(cal.obs_s1_n[wi][i_tgt * m + a] + 1).sqrt();
+                        let sb = qp[b] / f64::from(cal.obs_s1_n[wi][i_tgt * m + b] + 1).sqrt();
+                        sa.total_cmp(&sb)
+                    })
+                    .unwrap_or(j_inc)
+            } else {
+                let mut opp_cands: Vec<(usize, f64)> = (0..m)
+                    .filter(|&j| j != j_inc)
+                    .map(|j| {
+                        let n = cal.obs_s1_n[wi][i_tgt * m + j];
+                        (j, (1.0 - sol.col_vs_p[wi][j]) + 0.08 / f64::from(n + 1).sqrt())
+                    })
+                    .collect();
+                opp_cands.sort_by(|a, b| b.1.total_cmp(&a.1));
+                opp_cands.first().map_or(j_inc, |&(j, _)| j)
+            };
             pairs.push((i_tgt, j_inc));
             pairs.push((i_tgt, j_ch));
         }
@@ -3170,7 +3666,14 @@ impl SteppedCfPreview {
             .iter()
             .map(|w| (w.weight, w.opp_canon.len(), w.stage1_vals.as_slice()))
             .collect();
-        let sol1 = solve_bayesian_rm_plus(n_own, &s1_slices, self.cfg.rm_sweeps_stage1);
+        let s1_priors: Vec<Option<&[f64]>> =
+            self.worlds.iter().map(|w| w.opp_prior.as_deref()).collect();
+        let sol1 = solve_bayesian_rm_plus_with_priors(
+            n_own,
+            &s1_slices,
+            &s1_priors,
+            self.cfg.rm_sweeps_stage1,
+        );
         let k_eff = if n_w2 >= 4 {
             self.cfg.support_k.min(8)
         } else {
@@ -3204,25 +3707,29 @@ impl SteppedCfPreview {
             let wd = &self.worlds[w_id];
             let m = wd.opp_canon.len();
             let opp_ev: Vec<f64> = sol1.col_vs_p[w_id].iter().map(|&v| 1.0 - v).collect();
-            let mut opp_guar = vec![1.0f64; m];
-            for j in 0..m {
-                let mut mx = 0.0f64;
-                for i in 0..n_own {
-                    let v = wd.stage1_vals[i * m + j];
-                    if v > mx {
-                        mx = v;
+            let mut so = if let Some(ref qp) = wd.opp_prior {
+                select_prior_opp_support(qp, &opp_ev, k_cal)
+            } else {
+                let mut opp_guar = vec![1.0f64; m];
+                for j in 0..m {
+                    let mut mx = 0.0f64;
+                    for i in 0..n_own {
+                        let v = wd.stage1_vals[i * m + j];
+                        if v > mx {
+                            mx = v;
+                        }
                     }
+                    opp_guar[j] = 1.0 - mx;
                 }
-                opp_guar[j] = 1.0 - mx;
-            }
-            let mut so = select_diverse_support(
-                &wd.opp_canon,
-                &sol1.opp_policies[w_id],
-                &opp_ev,
-                &opp_guar,
-                &wd.opp_tactical,
-                k_cal,
-            );
+                select_diverse_support(
+                    &wd.opp_canon,
+                    &sol1.opp_policies[w_id],
+                    &opp_ev,
+                    &opp_guar,
+                    &wd.opp_tactical,
+                    k_cal,
+                )
+            };
             if cc.union_raw_support {
                 for &raw_j in &self.s_opp[wi] {
                     if so.len() >= k_eff {
@@ -3453,7 +3960,9 @@ impl SteppedCfPreview {
         let mut mats: Vec<Vec<f64>> = Vec::with_capacity(n_w2 + n_tail);
         let mut col_lens: Vec<usize> = Vec::with_capacity(n_w2 + n_tail);
         let mut w_list: Vec<f64> = Vec::with_capacity(n_w2 + n_tail);
+        let mut sub_priors: Vec<Option<Vec<f64>>> = Vec::with_capacity(n_w2 + n_tail);
         for wi in 0..n_w2 {
+            let w_id = self.s2_world_ids[wi];
             let k_opp = self.s_opp[wi].len();
             let mut mat = vec![0.5f64; k_me * k_opp];
             for (ri, &own_i) in self.s_me.iter().enumerate() {
@@ -3464,6 +3973,10 @@ impl SteppedCfPreview {
             mats.push(mat);
             col_lens.push(k_opp);
             w_list.push(self.s2_post_weights[wi]);
+            sub_priors.push(restrict_opp_prior(
+                self.worlds[w_id].opp_prior.as_deref(),
+                &self.s_opp[wi],
+            ));
         }
         for (ti, &w_id) in self.tail_world_ids.iter().enumerate() {
             let wd = &self.worlds[w_id];
@@ -3476,11 +3989,13 @@ impl SteppedCfPreview {
             mats.push(mat);
             col_lens.push(m_full);
             w_list.push(self.tail_post_weights[ti]);
+            sub_priors.push(wd.opp_prior.clone());
         }
         let slices: Vec<(f64, usize, &[f64])> = (0..mats.len())
             .map(|idx| (w_list[idx], col_lens[idx], mats[idx].as_slice()))
             .collect();
-        let sol = solve_bayesian_rm_plus(k_me, &slices, sweeps);
+        let prior_refs: Vec<Option<&[f64]>> = sub_priors.iter().map(|p| p.as_deref()).collect();
+        let sol = solve_bayesian_rm_plus_with_priors(k_me, &slices, &prior_refs, sweeps);
         (mats, sol)
     }
 
@@ -3490,6 +4005,9 @@ impl SteppedCfPreview {
             return Vec::new();
         }
         let wd = &self.worlds[self.s2_world_ids[wi]];
+        if wd.opp_prior.is_some() {
+            return Vec::new();
+        }
         let m_full = wd.opp_canon.len();
         let mut outside: Vec<(usize, f64)> = Vec::new();
         for j in 0..m_full {
@@ -4028,13 +4546,15 @@ impl SteppedCfPreview {
                             .collect();
                         if let Some(pure_r) = pure_r_opt {
                             let own_i = self.s_me[pure_r];
-                            if let Some(worst_cj) = (0..self.s_opp[wi].len()).min_by(|&a, &b| {
-                                let va = self.cell_val_mine(wi, own_i, self.s_opp[wi][a]);
-                                let vb = self.cell_val_mine(wi, own_i, self.s_opp[wi][b]);
-                                va.total_cmp(&vb)
-                            }) {
-                                if !active_cols.contains(&worst_cj) {
-                                    active_cols.push(worst_cj);
+                            if self.worlds[self.s2_world_ids[wi]].opp_prior.is_none() {
+                                if let Some(worst_cj) = (0..self.s_opp[wi].len()).min_by(|&a, &b| {
+                                    let va = self.cell_val_mine(wi, own_i, self.s_opp[wi][a]);
+                                    let vb = self.cell_val_mine(wi, own_i, self.s_opp[wi][b]);
+                                    va.total_cmp(&vb)
+                                }) {
+                                    if !active_cols.contains(&worst_cj) {
+                                        active_cols.push(worst_cj);
+                                    }
                                 }
                             }
                         }
@@ -4276,7 +4796,14 @@ impl SteppedCfPreview {
                 let slices: Vec<(f64, usize, &[f64])> = (0..mats.len())
                     .map(|idx| (w_list[idx], col_lens[idx], mats[idx].as_slice()))
                     .collect();
-                let sol = solve_bayesian_rm_plus(k_me, &slices, sweeps);
+                let mut priors: Vec<Option<&[f64]>> = Vec::with_capacity(n_w2 + n_tail);
+                for &w_id in &self.s2_world_ids {
+                    priors.push(self.worlds[w_id].opp_prior.as_deref());
+                }
+                for &w_id in &self.tail_world_ids {
+                    priors.push(self.worlds[w_id].opp_prior.as_deref());
+                }
+                let sol = solve_bayesian_rm_plus_with_priors(k_me, &slices, &priors, sweeps);
                 let mut p_mix = sol.own_policy.clone();
                 shed_dust(&mut p_mix, cc.bootstrap_dust);
                 let use_mix = p_mix.iter().filter(|&&x| x > 0.0).count() > 1;
@@ -4324,18 +4851,29 @@ impl SteppedCfPreview {
                 let draws = cc.bootstrap_draws;
                 let mut col_lens: Vec<usize> = Vec::with_capacity(n_w2 + n_tail);
                 let mut w_list: Vec<f64> = Vec::with_capacity(n_w2 + n_tail);
+                let mut boot_priors_owned: Vec<Option<Vec<f64>>> =
+                    Vec::with_capacity(n_w2 + n_tail);
                 for wi in 0..n_w2 {
+                    let w_id = self.s2_world_ids[wi];
                     col_lens.push(if use_full_opp {
-                        self.worlds[self.s2_world_ids[wi]].opp_canon.len()
+                        self.worlds[w_id].opp_canon.len()
                     } else {
                         self.s_opp[wi].len()
                     });
                     w_list.push(self.s2_post_weights[wi]);
+                    boot_priors_owned.push(if use_full_opp {
+                        self.worlds[w_id].opp_prior.clone()
+                    } else {
+                        restrict_opp_prior(self.worlds[w_id].opp_prior.as_deref(), &self.s_opp[wi])
+                    });
                 }
                 for (ti, &w_id) in self.tail_world_ids.iter().enumerate() {
                     col_lens.push(self.worlds[w_id].opp_canon.len());
                     w_list.push(self.tail_post_weights[ti]);
+                    boot_priors_owned.push(self.worlds[w_id].opp_prior.clone());
                 }
+                let boot_prior_refs: Vec<Option<&[f64]>> =
+                    boot_priors_owned.iter().map(|p| p.as_deref()).collect();
 
                 for _ in 0..draws {
                     let mut w_sum = 0.0;
@@ -4503,7 +5041,12 @@ impl SteppedCfPreview {
                     let slices: Vec<(f64, usize, &[f64])> = (0..bmats.len())
                         .map(|idx| (w_list[idx], col_lens[idx], bmats[idx].as_slice()))
                         .collect();
-                    let bsol = solve_bayesian_rm_plus(k_me, &slices, 500);
+                    let bsol = solve_bayesian_rm_plus_with_priors(
+                        k_me,
+                        &slices,
+                        &boot_prior_refs,
+                        500,
+                    );
                     let inv_d = 1.0 / (draws as f64);
                     for ri in 0..k_me {
                         avg_p[ri] += bsol.own_policy[ri] * inv_d;
@@ -4533,12 +5076,49 @@ impl SteppedCfPreview {
         let mut mixed_guarantee = 0.0;
         let mut mixed_guarantee_lcb = 0.0;
         for wi in 0..n_w2 {
+            let w_id = self.s2_world_ids[wi];
             let k_opp = if use_full_opp {
-                self.worlds[self.s2_world_ids[wi]].opp_canon.len()
+                self.worlds[w_id].opp_canon.len()
             } else {
                 self.s_opp[wi].len()
             };
             let mat = &final_mats[wi];
+            let q_prior = if use_full_opp {
+                self.worlds[w_id].opp_prior.clone()
+            } else {
+                restrict_opp_prior(self.worlds[w_id].opp_prior.as_deref(), &self.s_opp[wi])
+            };
+            if let Some(q_w) = q_prior {
+                let mut ev_w = 0.0;
+                let mut var_w = 0.0;
+                for cj in 0..k_opp {
+                    let qj = q_w[cj];
+                    if qj <= 0.0 {
+                        continue;
+                    }
+                    let opp_j = if use_full_opp { cj } else { self.s_opp[wi][cj] };
+                    let mut mean_j = 0.0;
+                    let mut var_j = 0.0;
+                    for ri in 0..k_me {
+                        let pr = p_mix[ri];
+                        if pr > 0.0 {
+                            let v = mat[ri * k_opp + cj];
+                            mean_j += pr * v;
+                            if let Some(c) = self.cells.get(&(wi, self.s_me[ri], opp_j)) {
+                                let n_c = c.total_n.max(1);
+                                var_j += (pr * pr) * (0.25 / f64::from(n_c));
+                            } else if !use_full_opp {
+                                var_j += (pr * pr) * 0.25;
+                            }
+                        }
+                    }
+                    ev_w += qj * mean_j;
+                    var_w += (qj * qj) * var_j;
+                }
+                mixed_guarantee += self.s2_post_weights[wi] * ev_w;
+                mixed_guarantee_lcb += self.s2_post_weights[wi] * (ev_w - lcb_z * var_w.sqrt());
+                continue;
+            }
             let mut min_col = f64::INFINITY;
             let mut min_col_lcb = f64::INFINITY;
             for cj in 0..k_opp {
@@ -4572,6 +5152,26 @@ impl SteppedCfPreview {
         for (ti, &w_id) in self.tail_world_ids.iter().enumerate() {
             let m_full = self.worlds[w_id].opp_canon.len();
             let mat = &final_mats[n_w2 + ti];
+            if let Some(ref qp) = self.worlds[w_id].opp_prior {
+                let mut ev_w = 0.0;
+                for cj in 0..m_full {
+                    let qj = qp[cj];
+                    if qj <= 0.0 {
+                        continue;
+                    }
+                    let mut mean_j = 0.0;
+                    for ri in 0..k_me {
+                        let pr = p_mix[ri];
+                        if pr > 0.0 {
+                            mean_j += pr * mat[ri * m_full + cj];
+                        }
+                    }
+                    ev_w += qj * mean_j;
+                }
+                mixed_guarantee += self.tail_post_weights[ti] * ev_w;
+                mixed_guarantee_lcb += self.tail_post_weights[ti] * ev_w;
+                continue;
+            }
             let mut min_col = f64::INFINITY;
             for cj in 0..m_full {
                 let mut mean_j = 0.0;
@@ -4603,8 +5203,10 @@ impl SteppedCfPreview {
         let mut mats: Vec<Vec<f64>> = Vec::with_capacity(n_w2 + n_tail);
         let mut col_lens: Vec<usize> = Vec::with_capacity(n_w2 + n_tail);
         let mut w_list: Vec<f64> = Vec::with_capacity(n_w2 + n_tail);
+        let mut priors: Vec<Option<&[f64]>> = Vec::with_capacity(n_w2 + n_tail);
         for wi in 0..n_w2 {
-            let m_full = self.worlds[self.s2_world_ids[wi]].opp_canon.len();
+            let w_id = self.s2_world_ids[wi];
+            let m_full = self.worlds[w_id].opp_canon.len();
             let mut mat = vec![0.5f64; k_me * m_full];
             for (ri, &own_i) in self.s_me.iter().enumerate() {
                 for opp_j in 0..m_full {
@@ -4614,6 +5216,7 @@ impl SteppedCfPreview {
             mats.push(mat);
             col_lens.push(m_full);
             w_list.push(self.s2_post_weights[wi]);
+            priors.push(self.worlds[w_id].opp_prior.as_deref());
         }
         for (ti, &w_id) in self.tail_world_ids.iter().enumerate() {
             let wd = &self.worlds[w_id];
@@ -4626,11 +5229,12 @@ impl SteppedCfPreview {
             mats.push(mat);
             col_lens.push(m_full);
             w_list.push(self.tail_post_weights[ti]);
+            priors.push(wd.opp_prior.as_deref());
         }
         let slices: Vec<(f64, usize, &[f64])> = (0..mats.len())
             .map(|idx| (w_list[idx], col_lens[idx], mats[idx].as_slice()))
             .collect();
-        let sol = solve_bayesian_rm_plus(k_me, &slices, sweeps);
+        let sol = solve_bayesian_rm_plus_with_priors(k_me, &slices, &priors, sweeps);
         (mats, sol)
     }
 
@@ -6457,6 +7061,7 @@ impl SteppedTrajPreview {
                 weight,
                 opp_canon,
                 opp_tactical,
+                opp_prior: None,
                 compact: Some((roster, pcache)),
                 stage1_vals,
             });
@@ -9074,5 +9679,226 @@ mod tests {
             assert!(pick.starts_with("team "), "expected team choice, got {pick:?}");
             b.choose(&dex, 0, &pick).expect("Castle preview choice must be legal in Battle");
         }
+    }
+
+    #[test]
+    fn solve_bayesian_rm_plus_with_priors_invariance_best_response_and_hybrid() {
+        // 1. All-None fast path is 0-ULP bit-identical to `solve_bayesian_rm_plus`.
+        let w0 = [0.5, 0.2, 0.8, 0.7, 0.5, 0.3, 0.1, 0.9, 0.5];
+        let w1 = [0.4, 0.6, 0.7, 0.3, 0.2, 0.9];
+        let worlds = [(0.6, 3usize, w0.as_slice()), (0.4, 2usize, w1.as_slice())];
+        let base = solve_bayesian_rm_plus(3, &worlds, 400);
+        let none = solve_bayesian_rm_plus_with_priors(3, &worlds, &[None, None], 400);
+        assert_eq!(base.own_policy, none.own_policy);
+        assert_eq!(base.opp_policies, none.opp_policies);
+        assert_eq!(base.value.to_bits(), none.value.to_bits());
+        assert_eq!(base.duality_gap.to_bits(), none.duality_gap.to_bits());
+        assert_eq!(base.row_guarantees, none.row_guarantees);
+
+        // 2. All-Some computes exact closed-form Bayesian best response with 0 duality gap.
+        let q0 = [0.1, 0.8, 0.1];
+        let q1 = [0.25, 0.75];
+        let br = solve_bayesian_rm_plus_with_priors(3, &worlds, &[Some(&q0), Some(&q1)], 400);
+        assert_eq!(br.duality_gap, 0.0);
+        assert_eq!(br.opp_policies[0], q0);
+        assert_eq!(br.opp_policies[1], q1);
+        let expected_ev = |i: usize| -> f64 {
+            let e0: f64 = (0..3).map(|j| w0[i * 3 + j] * q0[j]).sum();
+            let e1: f64 = (0..2).map(|j| w1[i * 2 + j] * q1[j]).sum();
+            0.6 * e0 + 0.4 * e1
+        };
+        let evs = [expected_ev(0), expected_ev(1), expected_ev(2)];
+        let best_i = (0..3)
+            .max_by(|&a, &b| evs[a].total_cmp(&evs[b]))
+            .unwrap();
+        assert_eq!(br.own_policy[best_i], 1.0);
+        assert!((br.value - evs[best_i]).abs() < 1e-12);
+        for i in 0..3 {
+            assert!((br.row_vs_q[i] - evs[i]).abs() < 1e-12);
+            assert!((br.row_guarantees[i] - evs[i]).abs() < 1e-12);
+        }
+
+        // 3. Hybrid (world 0 fixed to q0, world 1 adversarial matching pennies):
+        //    world 0 gives row 0 = 0.9, row 1 = 0.5 against q0=[1, 0];
+        //    world 1 is 2x2 matching pennies [1, 0; 0, 1].
+        //    With weights (0.5, 0.5): maximizing 0.5*(0.9 p + 0.5(1-p)) + 0.5*min(p, 1-p)
+        //    peaks at p = 0.5 (value = 0.5*0.7 + 0.5*0.5 = 0.60), NOT pure row 0 (value = 0.45)!
+        let hw0 = [0.9, 0.1, 0.5, 0.5];
+        let hw1 = [1.0, 0.0, 0.0, 1.0];
+        let hworlds = [(0.5, 2usize, hw0.as_slice()), (0.5, 2usize, hw1.as_slice())];
+        let hq0 = [1.0, 0.0];
+        let hsol = solve_bayesian_rm_plus_with_priors(2, &hworlds, &[Some(&hq0), None], 1000);
+        assert_eq!(hsol.opp_policies[0], hq0);
+        assert!(hsol.duality_gap < 1e-3, "duality gap {}", hsol.duality_gap);
+        assert!((hsol.value - 0.60).abs() < 5e-3, "value {}", hsol.value);
+        assert!(
+            (hsol.own_policy[0] - 0.5).abs() < 0.03,
+            "own_policy {:?}",
+            hsol.own_policy
+        );
+    }
+
+    #[test]
+    fn stepped_cf_preview_consumes_belief_prior_and_pick_prior_without_legacy_downgrade() {
+        use crate::player::PlayerChannel;
+        use crate::preview::{MetaPool, MetaTeam};
+        use crate::{BeliefPrior, BlindSearch, PickPrior, ProtocolAgent, RmConfig};
+        use nc2000_engine::rules::Ruleset;
+        use std::sync::Arc;
+
+        let dex = conformance::load_dex();
+        let t_a = vec![
+            mk("Snorlax", 55, "Leftovers", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+            mk("Zapdos", 50, "Bright Powder", &["Thunderbolt", "Drill Peck", "Rest", "Sleep Talk"]),
+            mk("Cloyster", 50, "Gold Berry", &["Surf", "Spikes", "Explosion", "Rapid Spin"]),
+            mk("Marowak", 50, "Thick Club", &["Earthquake", "Rock Slide", "Swords Dance", "Body Slam"]),
+            mk("Gengar", 50, "Quick Claw", &["Thunderbolt", "Ice Punch", "Hypnosis", "Explosion"]),
+            mk("Skarmory", 50, "Mint Berry", &["Drill Peck", "Whirlwind", "Rest", "Curse"]),
+        ];
+        let t_b = vec![
+            mk("Raikou", 50, "Magnet", &["Thunderbolt", "Protect", "Roar", "Rest"]),
+            mk("Suicune", 50, "Mint Berry", &["Surf", "Ice Beam", "Rest", "Sleep Talk"]),
+            mk("Exeggutor", 50, "Quick Claw", &["Psychic", "Giga Drain", "Sleep Powder", "Explosion"]),
+            mk("Tyranitar", 55, "Miracle Berry", &["Rock Slide", "Crunch", "Earthquake", "Pursuit"]),
+            mk("Snorlax", 50, "Leftovers", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+            mk("Umbreon", 50, "Gold Berry", &["Pursuit", "Charm", "Rest", "Baton Pass"]),
+        ];
+        // Also test `party_order_matters` (Beat Up) folding with an off-pool team.
+        let mut t_b_beatup = t_b.clone();
+        t_b_beatup[5].moves = vec!["Beat Up".into(), "Pursuit".into(), "Rest".into(), "Charm".into()];
+
+        let in_pool = MetaPool {
+            teams: vec![MetaTeam {
+                id: "tb_castle".into(),
+                sets: t_b.clone(),
+                weight: Some(1.0),
+            }],
+        };
+        let empty_pool = MetaPool { teams: Vec::new() };
+
+        // A. Off-pool `BeliefPrior.lead` under BOTH PS and `castle-free`:
+        //    must keep `SteppedCfPreview` active (no LegacyRollout downgrade!),
+        //    must stay slice-invariant, and must shift preview evaluation across opposite priors.
+        let prior_lead_raikou = Arc::new(BeliefPrior::from_json(
+            r#"{"species":{"raikou":{"lead":0.99},"exeggutor":{"lead":0.01},"tyranitar":{"lead":0.01},"suicune":{"lead":0.01},"snorlax":{"lead":0.01},"umbreon":{"lead":0.01}}}"#,
+        ));
+        let prior_lead_egg = Arc::new(BeliefPrior::from_json(
+            r#"{"species":{"raikou":{"lead":0.01},"exeggutor":{"lead":0.99},"tyranitar":{"lead":0.01},"suicune":{"lead":0.01},"snorlax":{"lead":0.01},"umbreon":{"lead":0.01}}}"#,
+        ));
+        for ruleset in [Ruleset::default(), Ruleset::castle_free()] {
+            let run_blind_prior = |prior: Arc<BeliefPrior>, opp_sets: &[PokemonSet], chunk: u32| {
+                let b = Battle::from_fixture_with_ruleset(&dex, "1,2,3,4", &t_a, opp_sets, ruleset).unwrap();
+                let (mut lp, mut obs) = LocalPlayer::new_with_own_sets(&b, &dex, 0, t_a.clone()).unwrap();
+                lp.observe(&b, &dex, &mut obs).unwrap();
+                let mut belief = Belief::new(&dex, &empty_pool, &obs);
+                belief.set_prior(prior);
+                belief.sync(&dex, &obs);
+                assert!(belief.has_preview_prior(&obs));
+                let pos = lp.position(&dex, &mut belief, &obs, &mut SplitMix64::new(42)).unwrap();
+                let mut bs = BlindSearch::from_observation(&pos, &dex, RmConfig::default(), 0, 0xCAFE_0001);
+                bs.prune_preview_aliases(&dex);
+                bs.set_opponent_preview_prior(true);
+                let mut rem = 256u32;
+                while rem > 0 {
+                    let s = chunk.min(rem);
+                    bs.step(&dex, &belief, &obs, s);
+                    rem -= s;
+                }
+                assert!(
+                    bs.uses_cf_preview(),
+                    "{ruleset:?}: BlindSearch with BeliefPrior.lead must stay on SteppedCfPreview"
+                );
+                (bs.best().unwrap(), bs.preview_execution_policy().unwrap())
+            };
+            let (pick_r1, pol_r1) = run_blind_prior(prior_lead_raikou.clone(), &t_b, 256);
+            let (pick_r2, pol_r2) = run_blind_prior(prior_lead_raikou.clone(), &t_b, 16);
+            assert_eq!(pick_r1, pick_r2, "{ruleset:?}: slice invariance failed");
+            assert_eq!(pol_r1.actions(), pol_r2.actions());
+            assert!(
+                pol_r1.source().starts_with("cf-preview-"),
+                "expected cf-preview source, got {}",
+                pol_r1.source()
+            );
+            // Beat Up opponent (`opp_order_matters == true`) also activates cleanly.
+            let (_, pol_bu) = run_blind_prior(prior_lead_raikou.clone(), &t_b_beatup, 128);
+            assert!(pol_bu.source().starts_with("cf-preview-"));
+
+            let (pick_e, _) = run_blind_prior(prior_lead_egg.clone(), &t_b, 256);
+            // Check Stage-1/calibrated Nash value explicitly differs across opposite lead priors.
+            let b_cmp = Battle::from_fixture_with_ruleset(&dex, "1,2,3,4", &t_a, &t_b, ruleset).unwrap();
+            let (mut lp_a, mut obs_a) = LocalPlayer::new_with_own_sets(&b_cmp, &dex, 0, t_a.clone()).unwrap();
+            lp_a.observe(&b_cmp, &dex, &mut obs_a).unwrap();
+            let mut bel_a = Belief::new(&dex, &empty_pool, &obs_a);
+            bel_a.set_prior(prior_lead_raikou.clone());
+            bel_a.sync(&dex, &obs_a);
+            let mut bel_b = Belief::new(&dex, &empty_pool, &obs_a);
+            bel_b.set_prior(prior_lead_egg.clone());
+            bel_b.sync(&dex, &obs_a);
+            let pos_a = lp_a.position(&dex, &mut bel_a, &obs_a, &mut SplitMix64::new(9)).unwrap();
+            let mut m_acts = pos_a.model().clone();
+            let acts = m_acts.legal_choices(&dex, 0);
+            let sa = SteppedCfPreview::try_new_with_calib(
+                pos_a.model(), &dex, &bel_a, &obs_a, 0, &acts, None, 0.4, None, &mut SplitMix64::new(7),
+            ).unwrap();
+            let sb = SteppedCfPreview::try_new_with_calib(
+                pos_a.model(), &dex, &bel_b, &obs_a, 0, &acts, None, 0.4, None, &mut SplitMix64::new(7),
+            ).unwrap();
+            assert!(
+                (sa.nash_value(0) - sb.nash_value(0)).abs() > 1e-4 || pick_r1 != pick_e,
+                "{ruleset:?}: SteppedCfPreview did not respond to opposite BeliefPrior.lead"
+            );
+        }
+
+        // B. In-pool `PickPrior` through `ProtocolAgent` under `castle-free`:
+        //    keeps `SteppedCfPreview` active and shifts policy across opposite PickPriors.
+        let make_pick_prior = |fav: [&str; 3]| -> Arc<PickPrior> {
+            let text = serde_json::json!({
+                "schema": "nc2000-pick-prior-v1",
+                "smoothing": 0.001,
+                "backoff_strength": 1.0,
+                "source": {},
+                "rows": [{
+                    "team": "tb_castle",
+                    "enemy_preview": [],
+                    "side": 1,
+                    "choices": [{ "species": fav, "count": 500 }]
+                }]
+            })
+            .to_string();
+            Arc::new(PickPrior::from_json(&text).unwrap())
+        };
+        let pp_a = make_pick_prior(["raikou", "suicune", "snorlax"]);
+        let pp_b = make_pick_prior(["tyranitar", "exeggutor", "umbreon"]);
+        let run_proto_pp = |pp: Arc<PickPrior>| {
+            let mut b = Battle::from_fixture_with_ruleset(
+                &dex, "1,2,3,4", &t_a, &t_b, Ruleset::castle_free(),
+            ).unwrap();
+            let mut ch = PlayerChannel::new(0);
+            let frame = ch.frame(&mut b, &dex).unwrap();
+            let req_json = serde_json::to_string(&frame.request).unwrap();
+            let mut agent = ProtocolAgent::new_with_ruleset(
+                &dex, 0, in_pool.clone(), RmConfig::default(), 777, Ruleset::castle_free(),
+            );
+            agent.set_own_team(t_a.clone());
+            agent.set_pick_prior(pp);
+            for line in &frame.lines {
+                agent.push_line(&dex, line);
+            }
+            assert!(agent.on_request(&dex, &req_json).unwrap());
+            agent.step(&dex, 256).unwrap();
+            let pol = agent.preview_execution_policy(&dex).unwrap();
+            assert!(
+                pol.source().starts_with("cf-preview-"),
+                "PickPrior under castle-free must stay on SteppedCfPreview, got {}",
+                pol.source()
+            );
+            agent.best(&dex).unwrap()
+        };
+        let pick_pp_a = run_proto_pp(pp_a);
+        let pick_pp_b = run_proto_pp(pp_b);
+        assert_ne!(
+            pick_pp_a, pick_pp_b,
+            "Castle ProtocolAgent with opposite PickPriors must shift Team Preview choice"
+        );
     }
 }

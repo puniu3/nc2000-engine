@@ -137,7 +137,7 @@ try {
         choices: [{ species: fav.map(i => toId(foeTeam.sets[i].species)), count: 500 }],
       }],
     });
-    const pickPriorA = makePickPrior([0, 1, 2]);
+    const pickPriorA = makePickPrior([0, 2, 3]);
     const pickPriorB = makePickPrior([3, 4, 5]);
     const runPickWorker = async (pickPriorJson) => {
       const worker = new BotWorker();
@@ -160,10 +160,12 @@ try {
         const res = await worker.search(1, budget, seed, false);
         const refRoot = JSON.parse(reference.rootPolicy());
         for (const row of refRoot.actions) row.input = battle.resolveChoice(1, row.input);
+        const refBest = battle.resolveChoice(1, reference.best());
         equal(report, refRep, "worker pickPrior report mismatch");
         equal(res.src, "search", "pickPrior must run live Team Preview search");
         equal(res.policy, refRoot, "worker pickPrior policy diverged from reference");
-        return res.policy;
+        equal(res.best, refBest, "worker pickPrior best diverged from reference");
+        return { best: res.best, playPolicy: res.playPolicy };
       } finally {
         worker.terminate(); channel.free(); reference.free(); battle.free();
       }
@@ -171,7 +173,7 @@ try {
     const polA = await runPickWorker(pickPriorA);
     const polB = await runPickWorker(pickPriorB);
     if (JSON.stringify(polA) === JSON.stringify(polB))
-      throw new Error("BotWorker Team Preview policy did not change across opposite PickPriors");
+      throw new Error("BotWorker Team Preview decision did not change across opposite PickPriors");
     rows.push({ path: "pick-prior", mode: "legacy", decisions: 2, shifted: true });
     dex.free();
     return rows;

@@ -1028,13 +1028,17 @@ pub struct BlindSearch {
 
 impl BlindSearch {
     pub fn set_opponent_preview_prior(&mut self, enabled: bool) {
-        self.opponent_preview_prior = enabled;
-        if enabled {
-            self.cf_preview = None;
-            if self.is_preview() && self.cfg.settlement.uses_cf_value_puct() {
-                self.cfg.settlement = crate::accounting::LeafSettlementMode::LegacyRollout;
+        if self.opponent_preview_prior != enabled {
+            self.opponent_preview_prior = enabled;
+            if self.done == 0 {
+                self.cf_preview = None;
             }
         }
+    }
+
+    /// True when Team Preview is currently driven by `SteppedCfPreview`.
+    pub fn uses_cf_preview(&self) -> bool {
+        self.cf_preview.is_some()
     }
 
     pub fn with_max_worlds(mut self, k: usize) -> Self {
@@ -2075,7 +2079,6 @@ impl BlindSearch {
     ) -> f64 {
         if self.is_preview()
             && self.cfg.settlement.uses_cf_value_puct()
-            && !self.opponent_preview_prior
             && !self.cf_preview_disabled
             && leaf.is_none()
             && trace.is_none()
@@ -2091,6 +2094,7 @@ impl BlindSearch {
                         &self.my_acts,
                         self.my_mask.as_deref(),
                         self.cfg.c,
+                        self.opponent_preview_prior,
                         &mut self.rng,
                     )
                     .map(Box::new);
@@ -2125,7 +2129,7 @@ impl BlindSearch {
                 return val0;
             }
         } else if self.is_preview() && self.cfg.settlement.uses_cf_value_puct() {
-            // Decoupled preview UCB1 fallback (`step_observed`/`step_with_leaf`/prior) uses
+            // Decoupled preview UCB1 fallback (`step_observed`/`step_with_leaf`) uses
             // `LegacyRollout`, matching pre-`CfValuePuct` preview behavior.
             self.cf_preview = None;
             self.cf_preview_disabled = true;
@@ -2674,7 +2678,6 @@ impl BlindSearch {
             }
             if self.is_preview()
                 && self.cfg.settlement.uses_cf_value_puct()
-                && !self.opponent_preview_prior
                 && !self.cf_preview_disabled
             {
                 self.step_one_impl(dex, belief, obs, None, None);

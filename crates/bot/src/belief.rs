@@ -1376,6 +1376,113 @@ impl Belief {
         None
     }
 
+    /// Exact probability vector over full legal opponent Team Preview `actions`,
+    /// matching `sample_preview_prior(pick, obs, actions, rng)`.
+    pub(crate) fn preview_prior_probs(
+        &self,
+        pick: Option<usize>,
+        obs: &Observer,
+        actions: &[nc2000_engine::battle::SearchChoice],
+    ) -> Option<Vec<f64>> {
+        if let Some(probs) = self
+            .pick_draws
+            .as_ref()
+            .filter(|(revision, _)| *revision == obs.revision())
+            .and_then(|(_, plans)| pick.and_then(|i| plans.get(i)?.as_ref()))
+            .and_then(|dist| dist.preview_probs(actions))
+        {
+            return Some(probs);
+        }
+        if pick.is_none() && self.synced == Some(obs.revision()) {
+            if let Some(lw) = &self.fallback_lead_weights {
+                if actions.is_empty() {
+                    return None;
+                }
+                let mut scores = Vec::with_capacity(actions.len());
+                let mut raw_sum = 0.0f64;
+                for action in actions {
+                    let s = match action {
+                        nc2000_engine::battle::SearchChoice::Team(slots) => {
+                            let a = slots[0];
+                            if !(1..=6).contains(&a) {
+                                0.0
+                            } else {
+                                let lead_w = lw[(a - 1) as usize];
+                                let team_w: f64 = slots
+                                    .iter()
+                                    .filter(|&&slot| (1..=6).contains(&slot))
+                                    .map(|&slot| lw[(slot - 1) as usize])
+                                    .sum();
+                                if team_w > 0.0 { lead_w / team_w } else { 0.0 }
+                            }
+                        }
+                        _ => 0.0,
+                    };
+                    raw_sum += s;
+                    scores.push(s);
+                }
+                let n = actions.len() as f64;
+                let mut probs: Vec<f64> = scores
+                    .into_iter()
+                    .map(|raw| {
+                        let norm = if raw_sum > 0.0 { raw / raw_sum } else { 1.0 / n };
+                        0.85 * norm + 0.15 / n
+                    })
+                    .collect();
+                let sum: f64 = probs.iter().sum();
+                if sum > 0.0 {
+                    for p in &mut probs {
+                        *p /= sum;
+                    }
+                    return Some(probs);
+                }
+            }
+        }
+        None
+    }
+
+    /// Exact probability vector over canonical opponent Team Preview choices `opp_canon`,
+    /// folded from `opp_legal` using the exact same bench-order equivalence as
+    /// `canonical_preview_actions`.
+    pub(crate) fn preview_prior_probs_canonical(
+        &self,
+        plan_pick: TeamPlanPick,
+        obs: &Observer,
+        opp_legal: &[nc2000_engine::battle::SearchChoice],
+        opp_canon: &[(usize, [u8; 3])],
+        opp_order_matters: bool,
+    ) -> Option<Vec<f64>> {
+        let legal_probs = self.preview_prior_probs(plan_pick.pool_index(), obs, opp_legal)?;
+        if opp_canon.is_empty() {
+            return None;
+        }
+        let canon_key = |mut t: [u8; 3]| -> [u8; 3] {
+            if !opp_order_matters && t[2] != 0 && t[1] > t[2] {
+                t.swap(1, 2);
+            }
+            t
+        };
+        let mut canon_probs = vec![0.0f64; opp_canon.len()];
+        for (&ch, &prob) in opp_legal.iter().zip(legal_probs.iter()) {
+            let nc2000_engine::battle::SearchChoice::Team(t) = ch else {
+                continue;
+            };
+            let key = canon_key(t);
+            if let Some(pos) = opp_canon.iter().position(|&(_, ct)| canon_key(ct) == key) {
+                canon_probs[pos] += prob;
+            }
+        }
+        let sum: f64 = canon_probs.iter().sum();
+        if sum > 0.0 {
+            for p in &mut canon_probs {
+                *p /= sum;
+            }
+            Some(canon_probs)
+        } else {
+            None
+        }
+    }
+
     /// Which fallback roster slots the installed prior currently governs, in
     /// observer roster order (`false` = today's deterministic filler). Empty
     /// when nothing is governed. A coverage surface for the M18 gate.
