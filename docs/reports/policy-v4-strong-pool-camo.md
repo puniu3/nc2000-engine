@@ -9,9 +9,11 @@
   - We therefore reorganized [`data/team-pool-v4/team-pool.json`](../../data/team-pool-v4/team-pool.json) and [`data/team-pool-v4/flagship-mixture.json`](../../data/team-pool-v4/flagship-mixture.json) into a **curated 10-shell equal-weight (`1/10 = 10.0%` per shell, `15` total teams) Strong Generalist Bot Pool (`P_strong10`)**, declaring honestly that every shell in the pool is broadly strong across the NC2000 metagame.
   - All **22 trimmed shells** (including `rental-cban-13`, `pb-89`, `offantom-m-wak50`, and lower-tier archetypes) remain preserved intact as permanent metagame knowledge in [`data/team-pool-v4/environment-pool-32.json`](../../data/team-pool-v4/environment-pool-32.json) alongside untouched [`data/belief-pool-v3/`](../../data/belief-pool-v3/) and [`data/team-pool-v3/`](../../data/team-pool-v3/).
 - **Frozen Zero-Leakage Certification (`Stage 6d`, `2,400` Strict LIVE Games, Brand-New Cryptographic Domain)**:
-  - **`P_strong10` vs Uncamouflaged `Plain10` (`1,200` mirrored games, exact `10×10` matrix)**: **`52.50% ± 1.37%`** (**`+2.50 pp`, `z = +1.82`, one-sided `p = 0.0343`**). Every sub-bucket beat `Plain10` (`camouflaged-4`: `52.29%`, `upgraded-3`: `52.78%`, `base-3`: `52.50%`), and 6 of 7 modified shells outperformed their own plain counterparts by `+4.16 pp` to `+11.67 pp`.
+  - **`P_strong10` vs Uncamouflaged `Plain10` (`1,200` mirrored games, exact `10×10` matrix)**:
+    - **Pure modified-shell causal block (`mod7 (Strong)` vs `mod7 (Plain)`, `588` games)**: **`53.40% ± 2.05%`** (**`+3.40 pp`, `z = +1.66`, one-sided `p = 0.0484`**).
+    - **De-noised full-pool lift (`1,092` non-mirror games, setting exact identical `base3 × base3` mirror to true `50.00%`)**: **`51.75% ± 1.33%`** (**`+1.75 pp`, `z = +1.32`, one-sided `p = 0.0937`**). Raw `1,200g` headline `52.50% ± 1.37%` includes `+0.75 pp` of random mirror variance from the `108g` identical `base3 × base3` block (`58.33% ± 4.53%`).
   - **`P_strong10` vs Certified 7-Shell Plain Nash `p_clean7` (`1,200` mirrored games, exact `STRAT60`)**: **`49.34% ± 1.45%`** (`z = -0.46`; `modified-7` = **`50.17%`**).
-  - **Cross-Ruleset Castle Legality & Stealth**: `15/15` bot teams and `33/33` preserved environment teams pass BOTH `gen2stadium2` and `castle` WASM `Validator`, strict JP NC2000 cartridge blacklist, `training-v3` (`changedTeams: 0`), `6/6` Turn-0 signatures, `6/6` `HP_IV` Castle stealth, `6/6` intra-cluster identical items, and a 16-game live `castle-tournament` `nash_refresh` smoke (`32/32` live sides, `0` belief errors, `0` caps/ties).
+  - **Cross-Ruleset Castle Legality & Stealth**: `15/15` bot teams and `33/33` preserved environment teams pass BOTH `gen2stadium2` and `castle` WASM `Validator`, strict JP NC2000 cartridge blacklist, `training-v3` (`changedTeams: 0`), `6/6` Turn-0 signatures, `6/6` `HP_IV` Castle stealth, `6/6` intra-cluster identical items, and a genuine 16-game live `castle-tournament` (`policyEpoch: "castle-policy-v4"`, `previewCache: false`) `nash_refresh` smoke (`32/32` live sides, `0` belief errors, `0` caps/ties).
 
 ---
 
@@ -35,7 +37,7 @@
 | 5 | `s5-gen5-camo` | 2,400 | 4,800 | 0 | 0 | CRN screen of 5 additional generalists vs uniform-12 meta (`sample-12` base `57.3%`; `pb-6` base `54.2%`, camo `-2.60 pp`; `pb84` base beat variants; `pb-89` & `offantom` flagged weak) |
 | 6 | `s6-cert-strong12` | 3,552 | 7,104 | 0 | 0 | **Zero-leakage 12-shell audit**: caught `-12.8 pp` poison pill `apex-c2b` (`45.3%` vs `apex-c3r 58.1%`) and weak bottom-2 shells (`pb-89 42.9%`, `offantom 45.3%`); proved Top-10 beat `Cut20` by `+4.9 pp` |
 | 6c | `s6c-apex-camo` | 1,560 | 3,120 | 0 | 0 | **Lv55-RestTalk-fixed `apex` CRN (`Plain10`, `K=60`)**: **`apex-mix50-c3r-c5`** achieved **`D_CAMO = +8.75 ± 3.87 pp (z = +2.262, p = 0.0119)`**, `u_mix = 54.17%`, `D_SUPER = +7.50 pp`, `frag = 3.33 pp` |
-| 6d | `s6d-final-strong10` | 2,400 | 4,800 | 0 | 0 | **Final Frozen Certification of `P_strong10`**: `52.50% ± 1.37%` vs `Plain10` (`+2.50 pp, z = +1.82, p = 0.0343`); `49.34% ± 1.45%` vs `p_clean7` (`modified-7 50.17%`) |
+| 6d | `s6d-final-strong10` | 2,400 | 4,800 | 0 | 0 | **Final Frozen Certification of `P_strong10`**: `mod7 vs mod7` **`53.40% ± 2.05%` (`+3.40 pp, z=+1.66, p=0.0484`)**; de-noised `P_strong10 vs Plain10` **`51.75% ± 1.33%`** (raw `52.50%`); `49.34% ± 1.45%` vs `p_clean7` (`modified-7 50.17%`) |
 | **Total** | **17 stages** | **51,556** | **103,112** | **0** | **0** | **100.0% strict NO-CACHE LIVE `policy-v4`, 0 belief errors, 0 caps/ties** |
 
 ---
@@ -66,31 +68,37 @@ Four robust empirical laws emerged across `51,556` LIVE games:
 
 ## 5. Final Frozen Zero-Leakage Certification (`Stage 6d`, `2,400` Strict LIVE Games)
 
-### 5.1 Overall Benchmarks (`domain: nc2000-policy-v4-strong10-v2-20261128::stage6d-final-cert`)
+### 5.1 Overall Benchmarks & `B2` 4-Block Mirror-Noise Decomposition (`domain: nc2000-policy-v4-strong10-v2-20261128::stage6d-final-cert`)
 
-| Benchmark | Games | `P_strong10` Win Rate | `Δ` vs `50%` | `z` | One-sided `p` |
-|---|---:|---:|---:|---:|---:|
-| **`B2`: `P_strong10` vs Uncamouflaged `Plain10`** (`10×10`, `12g/cell`) | **1,200** | **`52.50% ± 1.37%`** | **`+2.50 pp`** | **`+1.82`** | **`0.0343`** |
-| **`B1`: `P_strong10` vs Certified 7-Shell Plain Nash `p_clean7`** (`STRAT60`) | **1,200** | **`49.34% ± 1.45%`** | `-0.66 pp` | `-0.46` | `0.6756` |
-| Sub-bucket: `camouflaged_4` (`pb63`, `apex`, `rraikou`, `pb85`) | 480+480 | `48.22%` (`B1`) / **`52.29%`** (`B2`) | `+2.29 pp` (`B2`) | — | — |
-| Sub-bucket: `upgraded_singleton_3` (`pb-131`, `sample-07`, `pb-87`) | 360+360 | **`52.77%`** (`B1`) / **`52.78%`** (`B2`) | `+2.78 pp` (`B2`) | — | — |
-| Sub-bucket: `modified_7` (all 7 upgraded/camouflaged shells) | 840+840 | **`50.17%`** (`B1`) / **`52.50%`** (`B2`) | `+2.50 pp` (`B2`) | — | — |
-| Sub-bucket: `clean_base_3` (`pb-6`, `ayagen-m-zap50`, `sample-12`) | 360+360 | `47.40%` (`B1`) / **`52.50%`** (`B2`) | `+2.50 pp` (`B2`) | — | — |
+Because `3` of the `10` shells (`base3`: `pb-6`, `sample-12`, `ayagen-m-zap50`) are identical between `P_strong10` and `Plain10`, the `108`-game `base3 × base3` block has exact mathematical expectation `50.00%` (its empirical `58.33% ± 4.53%` is pure random mirror variance that adds `+0.75 pp` to the raw `B2` average and `+2.50 pp` to `clean_base_3`). Decomposing `B2` into all four blocks isolates the true causal upgrade/camouflage effect cleanly:
+
+| Benchmark / Block | Games | `P_strong10` Win Rate | `Δ` vs `50%` | `z` | One-sided `p` | Interpretation |
+|---|---:|---:|---:|---:|---:|---|
+| **`B2` Block 1: `mod7 (Strong)` vs `mod7 (Plain)`** | **588** | **`53.40% ± 2.05%`** | **`+3.40 pp`** | **`+1.66`** | **`0.0484`** | Pure causal lift among the 7 modified shells |
+| **`B2` Block 2: `mod7 (Strong)` vs `base3 (Plain)`** | 252 | `50.40% ± 3.45%` | `+0.40 pp` | `+0.12` | `0.4542` | Modified 7 vs unmodified 3 |
+| **`B2` Block 3: `base3 (Strong=Plain)` vs `mod7 (Plain)`** | 252 | `50.00% ± 3.24%` | `0.00 pp` | `0.00` | `0.5000` | Exact complement baseline |
+| **`B2` Block 4: `base3` vs `base3` (identical mirror)** | 108 | `58.33% ± 4.53%` | `+8.33 pp` | `+1.84` | — | **True EV = `50.00%` exact** (random mirror noise) |
+| **`B2` De-noised `P_strong10` vs `Plain10` (`base3×base3 := 50%`)** | **1,092** | **`51.75% ± 1.33%`** | **`+1.75 pp`** | **`+1.32`** | **`0.0937`** | Unbiased mirror-adjusted net lift over `Plain10` |
+| `B2` Raw `P_strong10` vs `Plain10` (`10×10`, `12g/cell`) | 1,200 | `52.50% ± 1.37%` | `+2.50 pp` | `+1.82` | `0.0343` | Raw sample mean (includes `+0.75 pp` mirror noise) |
+| **`B1`: `P_strong10` vs Certified 7-Shell Plain Nash `p_clean7`** | **1,200** | **`49.34% ± 1.45%`** | `-0.66 pp` | `-0.46` | `0.6756` | `modified-7` = **`50.17%`**, `upgraded-3` = **`52.77%`** |
 
 ### 5.2 Per-Shell & Per-Variant Results (`120g B1 + 120g B2 = 240g` per Shell)
 
-| Shell (`variantCluster`) | Mode | `B1` vs `p_clean7` | `B2` vs `Plain10` | `Plain10` Opp EV | `B2` Gain vs Own Plain | Variant Realizations (`B1` / `B2`) |
+> [!NOTE]
+> In `B2`, `Row EV` measures each `P_strong10` shell against `Plain10`, whereas `Plain10 Col EV` measures each `Plain10` shell against `P_strong10`. Because the two opponent distributions differ (and `base3` rows include the noisy `base3 × base3` mirror block), `Row EV − Plain10 Col EV` is a descriptive cross-benchmark margin rather than a matched-opponent CRN contrast.
+
+| Shell (`variantCluster`) | Mode | `B1` vs `p_clean7` | `B2` Row EV (`vs Plain10`) | `Plain10` Col EV (`vs Strong10`) | `B2` Row − Col Margin | Variant Realizations (`B1` / `B2`) |
 |---|---|---:|---:|---:|---:|---|
-| **`pb-131`** | `upgrade-singleton` | `60.63 ± 5.13%` | `57.50 ± 4.76%` | `45.83%` | **`+11.67 pp`** | `c3r`: `60.8%` / `57.5%` |
-| **`pb-6`** | `base-singleton` | `50.69 ± 4.36%` | `59.17 ± 4.46%` | `55.83%` | `+3.34 pp` | base: `50.8%` / `59.2%` |
-| **`sample-07`** | `upgrade-singleton` | `52.22 ± 4.86%` | `53.33 ± 4.12%` | `49.17%` | **`+4.16 pp`** | `c8`: `52.5%` / `53.3%` |
-| **`apex-c04`** | `camo-2way-50-50` | `51.23 ± 4.78%` | `53.33 ± 4.15%` | `47.50%` | **`+5.83 pp`** | `c3r`: `55.0%`/`48.3%`, `c5`: `46.7%`/`58.3%` (pooled `51.7%` vs `52.5%`!) |
-| **`ayagen-m-zap50`** | `base-singleton` | `48.93 ± 4.09%` | `54.17 ± 4.58%` | `42.50%` | `+11.67 pp` | base: `48.3%` / `54.2%` |
-| **`pb63-m-gar55`** | `camo-2way-50-50` | `51.19 ± 4.58%` | `50.83 ± 4.46%` | `46.67%` | **`+4.16 pp`** | `c3`: `43.3%`/`46.7%`, `c3b`: `58.3%`/`55.0%` |
-| **`rraikou-m-cune50`** | `camo-2way-80-20` | `42.24 ± 4.42%` | `55.83 ± 3.63%` | `50.00%` | **`+5.83 pp`** | `A0`: `45.8%`/`58.3%`, `c1`: `29.2%`/`45.8%` |
-| **`pb85-m-cune50`** | `camo-3way-50-35-15` | `48.23 ± 4.54%` | `49.17 ± 4.39%` | `42.50%` | **`+6.67 pp`** | `A0`: `50.0%`/`53.3%`, `c5`: `45.2%`/`42.9%`, `c3r`: `50.0%`/`50.0%` |
+| **`pb-131`** | `upgrade-singleton` | `60.63 ± 5.13%` | `57.50 ± 4.76%` | `45.83%` | `+11.67 pp` | `c3r`: `60.8%` / `57.5%` |
+| **`pb-6`** | `base-singleton` | `50.69 ± 4.36%` | `59.17 ± 4.46%` | `55.83%` | `+3.34 pp` *(mirror)* | base: `50.8%` / `59.2%` |
+| **`sample-07`** | `upgrade-singleton` | `52.22 ± 4.86%` | `53.33 ± 4.12%` | `49.17%` | `+4.16 pp` | `c8`: `52.5%` / `53.3%` |
+| **`apex-c04`** | `camo-2way-50-50` | `51.23 ± 4.78%` | `53.33 ± 4.15%` | `47.50%` | `+5.83 pp` | `c3r`: `55.0%`/`48.3%`, `c5`: `46.7%`/`58.3%` (pooled `51.7%` vs `52.5%`) |
+| **`ayagen-m-zap50`** | `base-singleton` | `48.93 ± 4.09%` | `54.17 ± 4.58%` | `42.50%` | `+11.67 pp` *(mirror + opp diff)* | base: `48.3%` / `54.2%` |
+| **`pb63-m-gar55`** | `camo-2way-50-50` | `51.19 ± 4.58%` | `50.83 ± 4.46%` | `46.67%` | `+4.16 pp` | `c3`: `43.3%`/`46.7%`, `c3b`: `58.3%`/`55.0%` |
+| **`rraikou-m-cune50`** | `camo-2way-80-20` | `42.24 ± 4.42%` | `55.83 ± 3.63%` | `50.00%` | `+5.83 pp` | `A0`: `45.8%`/`58.3%`, `c1`: `29.2%`/`45.8%` |
+| **`pb85-m-cune50`** | `camo-3way-50-35-15` | `48.23 ± 4.54%` | `49.17 ± 4.39%` | `42.50%` | `+6.67 pp` | `A0`: `50.0%`/`53.3%`, `c5`: `45.2%`/`42.9%`, `c3r`: `50.0%`/`50.0%` |
 | **`pb-87`** | `upgrade-singleton` | `45.45 ± 4.26%` | `47.50 ± 4.27%` | `51.67%` | `-4.17 pp` | `c5`: `45.8%` / `47.5%` (`+6.49 pp` CRN in `s2b+s2c`) |
-| **`sample-12`** | `base-singleton` | `42.58 ± 4.85%` | `44.17 ± 4.49%` | `43.33%` | `+0.84 pp` | base: `43.3%` / `44.2%` (`57.3%` `s5`, `50.0%` `s6`) |
+| **`sample-12`** | `base-singleton` | `42.58 ± 4.85%` | `44.17 ± 4.49%` | `43.33%` | `+0.84 pp` *(mirror)* | base: `43.3%` / `44.2%` (`57.3%` `s5`, `50.0%` `s6`) |
 
 ---
 

@@ -9,7 +9,7 @@
   "report": "docs/reports/policy-v4-strong-pool-camo.md",
   "priorNashReport": "docs/reports/policy-v4-nash-certification.md",
   "poolPhilosophy": "Curated 10-shell equal-weight (1/10 = 10% per shell) Strong Generalist Bot Pool. Retreats deliberately from brittle self-play exact-Nash support claims: every shell in this pool is empirically verified broadly strong across the NC2000 policy-v4 metagame, excluding narrow specialist assassins (e.g., rental-cban-13) and lower-tier shells (preserved intact in environment-pool-32.json). Low-poison 6/6-same-item camouflage is applied exclusively to the 4 shells where CRN proved net positive rent without weak-twin drag.",
-  "verification": "51,556 strict NO-CACHE LIVE policy-v4 games across Stages 1–6d (103,112/103,112 preview.source=live, 0 belief mismatches, 0 caps/ties), culminating in Stage 6d frozen zero-leakage certification (2,400 LIVE games: P_strong10 beats uncamouflaged Plain10 at 52.50% ± 1.37%, +2.50 pp, z = +1.82, p = 0.0343; holds 49.34% ± 1.45% [modified-7 50.17%] against the certified 7-shell plain Nash p_clean7; plus 16-game castle-tournament live smoke covering all 15/15 teams with 0 errors).",
+  "verification": "51,556 strict NO-CACHE LIVE policy-v4 games across Stages 1–6d (103,112/103,112 preview.source=live, 0 belief mismatches, 0 caps/ties), culminating in Stage 6d frozen zero-leakage certification (2,400 LIVE games: P_strong10 vs Plain10 de-noised causal lift 51.75% ± 1.33% [+1.75 pp, z = +1.32, p = 0.0937] after fixing exact identical base3xbase3 mirror=50% [raw 1,200g: 52.50% ± 1.37%], with modified-7 vs plain-modified-7 at 53.40% ± 2.05% [+3.40 pp, z = +1.66, p = 0.0484]; holds 49.34% ± 1.45% [modified-7 50.17%] against certified 7-shell plain Nash p_clean7; plus 16-game genuine castle-tournament / castle-policy-v4 live smoke covering all 15/15 teams with 0 errors).",
   "provisionalUniformCore": false,
   "certifiedNash": false,
   "equalWeightStrongPool": true,
@@ -38,13 +38,57 @@
    "stage6dLiveSides": 4800,
    "stage6dBeliefErrors": 0,
    "stage6dCapsTies": 0,
-   "vsPlain10": {
+   "vsPlain10Raw": {
     "games": 1200,
     "U": 0.525,
     "se": 0.0137,
     "deltaPp": 2.5,
     "z": 1.82,
-    "p1s": 0.03425
+    "p1s": 0.03425,
+    "note": "includes 108g identical base3xbase3 mirror noise (+8.33 pp)"
+   },
+   "vsPlain10Denoised": {
+    "nonMirrorGames": 1092,
+    "U": 0.5175,
+    "se": 0.0133,
+    "deltaPp": 1.75,
+    "z": 1.32,
+    "p1s": 0.0937,
+    "note": "replaces exact identical base3xbase3 block (true EV=50.00%) with exact 0.50"
+   },
+   "vsPlain10Blocks": {
+    "mod7VsMod7": {
+     "games": 588,
+     "U": 0.534,
+     "se": 0.0205,
+     "deltaPp": 3.4,
+     "z": 1.66,
+     "p1s": 0.0484
+    },
+    "mod7VsBase3": {
+     "games": 252,
+     "U": 0.504,
+     "se": 0.0345,
+     "deltaPp": 0.4,
+     "z": 0.12,
+     "p1s": 0.4542
+    },
+    "base3VsMod7": {
+     "games": 252,
+     "U": 0.5,
+     "se": 0.0324,
+     "deltaPp": 0,
+     "z": 0,
+     "p1s": 0.5
+    },
+    "base3VsBase3Mirror": {
+     "games": 108,
+     "U": 0.5833,
+     "se": 0.0453,
+     "deltaPp": 8.33,
+     "z": 1.84,
+     "trueEv": 0.5
+    }
    },
    "vsCertifiedPlainNash7": {
     "games": 1200,
@@ -58,7 +102,7 @@
     "camouflaged4": 0.5229,
     "upgradedSingleton3": 0.5278,
     "modified7": 0.525,
-    "cleanBase3": 0.525
+    "cleanBase3RawIncludesMirror": 0.525
    },
    "apexCamoCrnStage6c": {
     "cluster": "apex-mix50-c3r-c5",
@@ -74,6 +118,9 @@
    },
    "campaignTotalStrictLiveGames": 51556,
    "castleTournamentSmoke": {
+    "ruleset": "castle-tournament",
+    "policyEpoch": "castle-policy-v4",
+    "previewCache": false,
     "games": 16,
     "teamsCovered": 15,
     "liveSides": 32,
@@ -1562,7 +1609,7 @@
     "parent": "pb63-m-gar55",
     "mode": "camo-2way-50-50",
     "stages": "s1/s2c/s6/s6d",
-    "source": "NC2000 policy-v4 Strong Pool (pb63-m-gar55 -> pb63-c3-restlax-4atkgar-wwzap: Rest/Curse Lax55 + 4-Atk Boom Gar55 + WW Zap50 (6/6 same items with pb63-c3b))",
+    "source": "NC2000 policy-v4 Strong Pool (pb63-m-gar55 -> pb63-c3-restlax-4atkgar-wwzap: Rest/Curse Lax55 + 4-Atk Gar55 (Shadow Ball/TBolt/IP/FP) + WW Zap50 (6/6 same items with pb63-c3b))",
     "url": "docs/reports/policy-v4-strong-pool-variants.json",
     "version": "v4-strong10-pb63-c3-restlax-4atkgar-wwzap"
    },
@@ -1798,7 +1845,7 @@
     "parent": "pb63-m-gar55",
     "mode": "camo-2way-50-50",
     "stages": "s2c/s6/s6d",
-    "source": "NC2000 policy-v4 Strong Pool (pb63-m-gar55 -> pb63-c3b-sdlax-4atkgar-dpzap: DE/Curse/EQ/SD Lax55 + 4-Atk Boom Gar55 + DP Zap50 (6/6 same items with pb63-c3))",
+    "source": "NC2000 policy-v4 Strong Pool (pb63-m-gar55 -> pb63-c3b-sdlax-4atkgar-dpzap: DE/Curse/EQ/SD Lax55 + 4-Atk Gar55 (Shadow Ball/TBolt/IP/FP) + DP Zap50 (6/6 same items with pb63-c3))",
     "url": "docs/reports/policy-v4-strong-pool-variants.json",
     "version": "v4-strong10-pb63-c3b-sdlax-4atkgar-dpzap"
    },

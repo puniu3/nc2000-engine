@@ -5029,8 +5029,8 @@ struct PoolSetsOnlyEntry {
 /// Zero-leakage `CF-V_net v3` CRN Midgame + Turn-1 Compositional Pair Collector (`collect-cf-v3`).
 ///
 /// - Loads `data/belief-pool-v3/belief-pool.json` and STRICTLY excludes every team matching ANY
-///   `data/team-pool-v4/team-pool.json` team by canonical order-insensitive hash OR species+levels
-///   shell signature.
+///   `data/team-pool-v4/environment-pool-32.json` or `data/team-pool-v4/team-pool.json` team by
+///   canonical order-insensitive hash OR species+levels shell signature.
 /// - Splits clean teams by `canonical_team_hash % 5`: `!= 0` (train) vs `== 0` (pure unseen val),
 ///   drawing `(1 - val_frac)` games from `train x train` and `val_frac` from `val x val` (zero cross-leakage).
 /// - Labels BOTH Midgame CF pairs (`turn >= 2`, `alive >= 4`) and Turn-1 Compositional CF pairs
@@ -5076,20 +5076,21 @@ fn run_collect_cf_v3(dex: &Dex, args: &[String]) {
 
     let root = repo_root();
     let bpool = load_meta_pool(&root.join("data/belief-pool-v3/belief-pool.json"));
-    let tp4_txt = std::fs::read_to_string(root.join("data/team-pool-v4/team-pool.json"))
-        .expect("read data/team-pool-v4/team-pool.json");
-    let tp4: PoolSetsOnlyFile = serde_json::from_str(&tp4_txt).expect("parse team-pool-v4");
-
-    let tp4_hashes: HashSet<u64> = tp4
-        .teams
-        .iter()
-        .map(|t| canonical_team_hash(&t.sets))
-        .collect();
-    let tp4_shells: HashSet<Vec<(String, u8)>> = tp4
-        .teams
-        .iter()
-        .map(|t| species_level_signature(&t.sets))
-        .collect();
+    let mut tp4_hashes: HashSet<u64> = HashSet::new();
+    let mut tp4_shells: HashSet<Vec<(String, u8)>> = HashSet::new();
+    for rel in [
+        "data/team-pool-v4/environment-pool-32.json",
+        "data/team-pool-v4/team-pool.json",
+    ] {
+        let txt = std::fs::read_to_string(root.join(rel))
+            .unwrap_or_else(|e| panic!("read {rel}: {e}"));
+        let pool: PoolSetsOnlyFile =
+            serde_json::from_str(&txt).unwrap_or_else(|e| panic!("parse {rel}: {e}"));
+        for t in &pool.teams {
+            tp4_hashes.insert(canonical_team_hash(&t.sets));
+            tp4_shells.insert(species_level_signature(&t.sets));
+        }
+    }
 
     let mut excluded_exact = 0usize;
     let mut excluded_shell_only = 0usize;

@@ -10,7 +10,7 @@
    "mode": "camo-2way-50-50",
    "intraShellWeight": 0.5,
    "stages": "s1/s2c/s6/s6d",
-   "change": "Rest/Curse Lax55 + 4-Atk Boom Gar55 + WW Zap50 (6/6 same items with pb63-c3b)",
+   "change": "Rest/Curse Lax55 + 4-Atk Gar55 (Shadow Ball/TBolt/IP/FP) + WW Zap50 (6/6 same items with pb63-c3b)",
    "sets": [
     {
      "name": "Snorlax",
@@ -212,7 +212,7 @@
    "mode": "camo-2way-50-50",
    "intraShellWeight": 0.5,
    "stages": "s2c/s6/s6d",
-   "change": "DE/Curse/EQ/SD Lax55 + 4-Atk Boom Gar55 + DP Zap50 (6/6 same items with pb63-c3)",
+   "change": "DE/Curse/EQ/SD Lax55 + 4-Atk Gar55 (Shadow Ball/TBolt/IP/FP) + DP Zap50 (6/6 same items with pb63-c3)",
    "sets": [
     {
      "name": "Snorlax",

@@ -579,13 +579,20 @@ function main() {
 		stage6dLiveSides: 4800,
 		stage6dBeliefErrors: 0,
 		stage6dCapsTies: 0,
-		vsPlain10: { games: 1200, U: 0.5250, se: 0.0137, deltaPp: 2.50, z: 1.82, p1s: 0.03425 },
+		vsPlain10Raw: { games: 1200, U: 0.5250, se: 0.0137, deltaPp: 2.50, z: 1.82, p1s: 0.03425, note: 'includes 108g identical base3xbase3 mirror noise (+8.33 pp)' },
+		vsPlain10Denoised: { nonMirrorGames: 1092, U: 0.5175, se: 0.0133, deltaPp: 1.75, z: 1.32, p1s: 0.0937, note: 'replaces exact identical base3xbase3 block (true EV=50.00%) with exact 0.50' },
+		vsPlain10Blocks: {
+			mod7VsMod7: { games: 588, U: 0.5340, se: 0.0205, deltaPp: 3.40, z: 1.66, p1s: 0.0484 },
+			mod7VsBase3: { games: 252, U: 0.5040, se: 0.0345, deltaPp: 0.40, z: 0.12, p1s: 0.4542 },
+			base3VsMod7: { games: 252, U: 0.5000, se: 0.0324, deltaPp: 0.00, z: 0.00, p1s: 0.5000 },
+			base3VsBase3Mirror: { games: 108, U: 0.5833, se: 0.0453, deltaPp: 8.33, z: 1.84, trueEv: 0.5000 },
+		},
 		vsCertifiedPlainNash7: { games: 1200, U: 0.4934, se: 0.0145, deltaPp: -0.66, z: -0.46, modified7U: 0.5017 },
 		byModeVsPlain10: {
 			camouflaged4: 0.5229,
 			upgradedSingleton3: 0.5278,
 			modified7: 0.5250,
-			cleanBase3: 0.5250,
+			cleanBase3RawIncludesMirror: 0.5250,
 		},
 		apexCamoCrnStage6c: {
 			cluster: 'apex-mix50-c3r-c5',
@@ -600,7 +607,16 @@ function main() {
 			fragPp: 3.33,
 		},
 		campaignTotalStrictLiveGames: 51556,
-		castleTournamentSmoke: { games: 16, teamsCovered: 15, liveSides: 32, beliefErrors: 0, capsTies: 0 },
+		castleTournamentSmoke: {
+			ruleset: 'castle-tournament',
+			policyEpoch: 'castle-policy-v4',
+			previewCache: false,
+			games: 16,
+			teamsCovered: 15,
+			liveSides: 32,
+			beliefErrors: 0,
+			capsTies: 0,
+		},
 	};
 
 	const catalogDoc = {
@@ -614,7 +630,7 @@ function main() {
 			report: 'docs/reports/policy-v4-strong-pool-camo.md',
 			priorNashReport: 'docs/reports/policy-v4-nash-certification.md',
 			poolPhilosophy: 'Curated 10-shell equal-weight (1/10 = 10% per shell) Strong Generalist Bot Pool. Retreats deliberately from brittle self-play exact-Nash support claims: every shell in this pool is empirically verified broadly strong across the NC2000 policy-v4 metagame, excluding narrow specialist assassins (e.g., rental-cban-13) and lower-tier shells (preserved intact in environment-pool-32.json). Low-poison 6/6-same-item camouflage is applied exclusively to the 4 shells where CRN proved net positive rent without weak-twin drag.',
-			verification: '51,556 strict NO-CACHE LIVE policy-v4 games across Stages 1–6d (103,112/103,112 preview.source=live, 0 belief mismatches, 0 caps/ties), culminating in Stage 6d frozen zero-leakage certification (2,400 LIVE games: P_strong10 beats uncamouflaged Plain10 at 52.50% ± 1.37%, +2.50 pp, z = +1.82, p = 0.0343; holds 49.34% ± 1.45% [modified-7 50.17%] against the certified 7-shell plain Nash p_clean7; plus 16-game castle-tournament live smoke covering all 15/15 teams with 0 errors).',
+			verification: '51,556 strict NO-CACHE LIVE policy-v4 games across Stages 1–6d (103,112/103,112 preview.source=live, 0 belief mismatches, 0 caps/ties), culminating in Stage 6d frozen zero-leakage certification (2,400 LIVE games: P_strong10 vs Plain10 de-noised causal lift 51.75% ± 1.33% [+1.75 pp, z = +1.32, p = 0.0937] after fixing exact identical base3xbase3 mirror=50% [raw 1,200g: 52.50% ± 1.37%], with modified-7 vs plain-modified-7 at 53.40% ± 2.05% [+3.40 pp, z = +1.66, p = 0.0484]; holds 49.34% ± 1.45% [modified-7 50.17%] against certified 7-shell plain Nash p_clean7; plus 16-game genuine castle-tournament / castle-policy-v4 live smoke covering all 15/15 teams with 0 errors).',
 			provisionalUniformCore: false,
 			certifiedNash: false,
 			equalWeightStrongPool: true,
@@ -655,7 +671,7 @@ function main() {
 		active_shells: 10,
 		support_size: flagshipTeams.length,
 		trainingPolicy: 'training-v3',
-		measurementStatus: 'Curated 10-shell equal-weight (1/10 per shell, 15 teams) Strong Generalist Bot Pool with targeted low-poison 6/6-same-item camouflage (4 shells) and CRN-verified set upgrades (3 shells). Frozen zero-leakage Stage 6d certification (2,400 strict NO-CACHE LIVE policy-v4 games, 4,800/4,800 live preview sides, 0 belief mismatches, 0 caps/ties): 52.50% ± 1.37% vs uncamouflaged Plain10 (+2.50 pp, z = +1.82, p = 0.0343; camouflaged-4 52.29%, upgraded-3 52.78%, base-3 52.50%), 49.34% ± 1.45% vs certified 7-shell plain Nash p_clean7 (modified-7 50.17%). All 22 cut shells preserved intact in data/team-pool-v4/environment-pool-32.json.',
+		measurementStatus: 'Curated 10-shell equal-weight (1/10 per shell, 15 teams) Strong Generalist Bot Pool with targeted low-poison 6/6-same-item camouflage (4 shells) and CRN-verified set upgrades (3 shells). Frozen zero-leakage Stage 6d certification (2,400 strict NO-CACHE LIVE policy-v4 games, 4,800/4,800 live preview sides, 0 belief mismatches, 0 caps/ties): vs uncamouflaged Plain10, modified-7 vs plain-modified-7 scores 53.40% ± 2.05% (+3.40 pp, z = +1.66, p = 0.0484) and de-noised full-pool lift (setting exact identical base3xbase3 mirror=50.00%) is 51.75% ± 1.33% (+1.75 pp, z = +1.32, p = 0.0937; raw 1,200g 52.50% ± 1.37%); vs certified 7-shell plain Nash p_clean7, 49.34% ± 1.45% (modified-7 50.17%). All 22 cut shells preserved intact in data/team-pool-v4/environment-pool-32.json.',
 		certification: certificationSummary,
 		teams: flagshipTeams,
 	};

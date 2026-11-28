@@ -10,20 +10,64 @@
  "active_shells": 10,
  "support_size": 15,
  "trainingPolicy": "training-v3",
- "measurementStatus": "Curated 10-shell equal-weight (1/10 per shell, 15 teams) Strong Generalist Bot Pool with targeted low-poison 6/6-same-item camouflage (4 shells) and CRN-verified set upgrades (3 shells). Frozen zero-leakage Stage 6d certification (2,400 strict NO-CACHE LIVE policy-v4 games, 4,800/4,800 live preview sides, 0 belief mismatches, 0 caps/ties): 52.50% ± 1.37% vs uncamouflaged Plain10 (+2.50 pp, z = +1.82, p = 0.0343; camouflaged-4 52.29%, upgraded-3 52.78%, base-3 52.50%), 49.34% ± 1.45% vs certified 7-shell plain Nash p_clean7 (modified-7 50.17%). All 22 cut shells preserved intact in data/team-pool-v4/environment-pool-32.json.",
+ "measurementStatus": "Curated 10-shell equal-weight (1/10 per shell, 15 teams) Strong Generalist Bot Pool with targeted low-poison 6/6-same-item camouflage (4 shells) and CRN-verified set upgrades (3 shells). Frozen zero-leakage Stage 6d certification (2,400 strict NO-CACHE LIVE policy-v4 games, 4,800/4,800 live preview sides, 0 belief mismatches, 0 caps/ties): vs uncamouflaged Plain10, modified-7 vs plain-modified-7 scores 53.40% ± 2.05% (+3.40 pp, z = +1.66, p = 0.0484) and de-noised full-pool lift (setting exact identical base3xbase3 mirror=50.00%) is 51.75% ± 1.33% (+1.75 pp, z = +1.32, p = 0.0937; raw 1,200g 52.50% ± 1.37%); vs certified 7-shell plain Nash p_clean7, 49.34% ± 1.45% (modified-7 50.17%). All 22 cut shells preserved intact in data/team-pool-v4/environment-pool-32.json.",
  "certification": {
   "stage6dDomain": "nc2000-policy-v4-strong10-v2-20261128::stage6d-final-cert",
   "stage6dGames": 2400,
   "stage6dLiveSides": 4800,
   "stage6dBeliefErrors": 0,
   "stage6dCapsTies": 0,
-  "vsPlain10": {
+  "vsPlain10Raw": {
    "games": 1200,
    "U": 0.525,
    "se": 0.0137,
    "deltaPp": 2.5,
    "z": 1.82,
-   "p1s": 0.03425
+   "p1s": 0.03425,
+   "note": "includes 108g identical base3xbase3 mirror noise (+8.33 pp)"
+  },
+  "vsPlain10Denoised": {
+   "nonMirrorGames": 1092,
+   "U": 0.5175,
+   "se": 0.0133,
+   "deltaPp": 1.75,
+   "z": 1.32,
+   "p1s": 0.0937,
+   "note": "replaces exact identical base3xbase3 block (true EV=50.00%) with exact 0.50"
+  },
+  "vsPlain10Blocks": {
+   "mod7VsMod7": {
+    "games": 588,
+    "U": 0.534,
+    "se": 0.0205,
+    "deltaPp": 3.4,
+    "z": 1.66,
+    "p1s": 0.0484
+   },
+   "mod7VsBase3": {
+    "games": 252,
+    "U": 0.504,
+    "se": 0.0345,
+    "deltaPp": 0.4,
+    "z": 0.12,
+    "p1s": 0.4542
+   },
+   "base3VsMod7": {
+    "games": 252,
+    "U": 0.5,
+    "se": 0.0324,
+    "deltaPp": 0,
+    "z": 0,
+    "p1s": 0.5
+   },
+   "base3VsBase3Mirror": {
+    "games": 108,
+    "U": 0.5833,
+    "se": 0.0453,
+    "deltaPp": 8.33,
+    "z": 1.84,
+    "trueEv": 0.5
+   }
   },
   "vsCertifiedPlainNash7": {
    "games": 1200,
@@ -37,7 +81,7 @@
    "camouflaged4": 0.5229,
    "upgradedSingleton3": 0.5278,
    "modified7": 0.525,
-   "cleanBase3": 0.525
+   "cleanBase3RawIncludesMirror": 0.525
   },
   "apexCamoCrnStage6c": {
    "cluster": "apex-mix50-c3r-c5",
@@ -53,6 +97,9 @@
   },
   "campaignTotalStrictLiveGames": 51556,
   "castleTournamentSmoke": {
+   "ruleset": "castle-tournament",
+   "policyEpoch": "castle-policy-v4",
+   "previewCache": false,
    "games": 16,
    "teamsCovered": 15,
    "liveSides": 32,

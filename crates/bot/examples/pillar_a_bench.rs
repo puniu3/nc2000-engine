@@ -3342,7 +3342,8 @@ fn main() {
 
     let root = repo_root();
     let dex = conformance::load_dex();
-    let cat_txt = std::fs::read_to_string(root.join("data/team-pool-v4/team-pool.json")).unwrap();
+    let cat_txt =
+        std::fs::read_to_string(root.join("data/team-pool-v4/environment-pool-32.json")).unwrap();
     let cat: CatalogFile = serde_json::from_str(&cat_txt).unwrap();
     let team_map: HashMap<String, Vec<PokemonSet>> =
         cat.teams.into_iter().map(|t| (t.id, t.sets)).collect();
